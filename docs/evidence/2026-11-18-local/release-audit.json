@@ -1,0 +1,43 @@
+{
+  "at": "2026-11-17T19:53:17.748Z",
+  "status": "PASS",
+  "completedTasks": 20,
+  "localLinksChecked": 39,
+  "prototypeHashes": {
+    "index.html": "27a65cdfc744de68b29d853a7493203a6c56050f2a6ccd29267fb0038be1151d",
+    "styles.css": "fd1ca640e1ca61786386fc90319b0d5467c40d2e4be69123b803928d20b57435",
+    "app.js": "036653e91f36c7196e4d98665b782ae2ac35b13e726f2b2edc486da71f4db95a"
+  },
+  "sourceHashes": {
+    "index.html": "0a0bb4ecbb82e508ec5c85bf647c01011056bba6f096b343892dd7f077e93f2f",
+    "styles.css": "8ab5504b33976f51fe9f48f2036733bb18c03500455887d16e245636dc0401c3",
+    "app.js": "df177ad2858874263c2d3277db7a624cacc437474fb86e0ef7e074031eb57be8",
+    "package.json": "71a4e1496e9f28d89c7223f927b61f2935ed5eb7d5fef7168e0ed532b04ec095",
+    "package-lock.json": "bd9e274dae8e2c3fef077731ad9c9d6a17cd21f483ce4bf32b21711ee89c9f09",
+    "tsconfig.json": "9d349a2143c88575c9aae354dfe6b70444ecf1759b23a4d7d1f03f30866ce980",
+    "server/agent.ts": "c59eea3b64572eadb45e13e6c46883efb44244d72fb2394762c68aa5b9415466",
+    "server/app.ts": "4c70129fb0555a08306ffa2528243c873d7d273066e2993a44e8a904fadaeb64",
+    "server/artifacts.ts": "93641d976efd9a5b844d9b0948be53412c7be97066c3a2982ae42c3e40d1a87a",
+    "server/commands.ts": "1f24e1329ba5e6f15031a99e490ec213cfebaafdb228d31ce2ccecbee957faee",
+    "server/files.ts": "b3d64d139f86da52710dc0066e6e26be3f3fa48ec62bbba0d8c6fbb7e78516de",
+    "server/main.ts": "507a52a9f9535583b7365a8ecb21779794da39f03f15d8de8a3ea65bc2d4df70",
+    "server/permissions.ts": "47b402d092ae8094f95013d4d00c535550fee796849864e9136a83f5e917dcde",
+    "server/store.ts": "cd07f22e27aacbf5324e95ef7f00e9aac451e2210d4f50e46f1f4891e3f7308f",
+    "shared/types.ts": "9905276216a09de6485d664c15b4225622354603a8897dcdb9667fc60b71aa94",
+    "tests/app.test.ts": "b6a04cd241cf20c247ef5e027fa1efe492df09cc7f39410fd52c41d9a2ce14e8",
+    "scripts/verify-live.ts": "a8dbab9ada9b7cc9152da500e581b32a4524f0fe292870e7a50ceb5b407a4897"
+  },
+  "knownCredentialScan": "PASS",
+  "normalStartup": {
+    "url": "http://127.0.0.1:4317",
+    "projects": 0,
+    "sessions": 0,
+    "runs": 0,
+    "artifacts": 0,
+    "model": "gpt-6.1-sol",
+    "gatewayAvailable": true,
+    "commandsAvailable": true
+  },
+  "screenshots": "NOT_COMPLETED",
+  "notes": "No external deployment or push; normal app data is separate from acceptance data."
+}

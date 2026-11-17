@@ -36,10 +36,10 @@
 <li><a href="#decisions">16 待技术验证的事项</a></li>
 <li><a href="#sources">17 资料来源与维护规则</a></li>
 </ol>
-<div class="nav-links"><a href="../index.html">打开设计原型 ↗</a><a href="../README.md">阅读项目入口 ↗</a><a href="development-tasks.md">开发任务清单 ↗</a><a href="../image.png">查看原始参考图 ↗</a></div>
+<div class="nav-links"><a href="../prototype/index.html">打开归档设计原型 ↗</a><a href="../README.md">阅读项目入口 ↗</a><a href="development-tasks.md">开发任务清单 ↗</a><a href="../image.png">查看原始参考图 ↗</a></div>
 </nav>
 <main class="document"><article>
-<header><p class="eyebrow">PRODUCT &amp; ENGINEERING HANDOFF</p><h1>AI 工作台<br>产品与开发交接说明</h1><p class="lead">以当前 atelier. 交互设计为基线，将对话、执行、审批与成果串成可以逐步实现、验证和交付的产品闭环。</p><div class="meta"><span class="tag">设计基线：第二轮优化版</span><span class="tag">目标：个人开发者 · 本机项目</span><span class="tag proposed">真实 SDK 尚未接入</span></div></header>
+<header><p class="eyebrow">PRODUCT &amp; ENGINEERING HANDOFF</p><h1>AI 工作台<br>产品与开发交接说明</h1><p class="lead">以当前 atelier. 交互设计为基线，将对话、执行、审批与成果串成可以逐步实现、验证和交付的产品闭环。</p><div class="meta"><span class="tag">设计基线：第二轮优化版</span><span class="tag">目标：个人开发者 · 本机项目</span><span class="tag">本机首版已接入真实 SDK</span></div></header>
 <section id="overview"><span class="section-number">01 / START HERE</span><h2>阅读说明与交付范围</h2>
 <p>本文是本项目产品需求与开发交接的主文档，保留前述功能说明书的完整范围，并补充设计规格、源码定位、接口建议与实现缺口。配套 <a href="development-tasks.md">任务清单</a>用于拆分实施工作，<a href="../README.md">README</a>用于了解项目入口和文件结构。</p>
 <div class="note"><p><strong>三种信息必须区分：</strong>“原型现状”来自现有源码；“目标需求”是正式产品需要达到的行为；“建议方案 / 待验证”尚未通过真实 SDK 或运行环境验证，不能当作已存在的能力。</p></div>
@@ -50,7 +50,7 @@
 <tr><td>开发入口与任务清单</td><td><code>README.md</code>、<code>docs/development-tasks.md</code></td><td>本次整理；Markdown，可直接放入代码仓库</td></tr>
 <tr><td>移交压缩包</td><td><code>atelier-handoff.zip</code></td><td>收录上述设计、参考素材和文档；不包含宿主内部文件</td></tr>
 </tbody></table></div>
-<p>此轮整理保留现有产品源码。未实现后端、数据库、真实文件读写、真实 SDK 调用或生产部署；未执行浏览器预览、自动化测试或 PDF 导出。文档中的验收项是后续开发要求，不代表已经通过。</p>
+<div class="note"><p><strong>本机首版更新 · 2026-11-18：</strong>T01—T20 已按个人本机范围实施并留下验收证据，使用 npm start 启动真实工作台。当前实现、验证层次与限制见 <a href="local-release.md">本机首版完成记录</a>，实际接口见 <a href="implementation-contract.md">接口约定</a>。本文保留初始设计需求；下文“原型现状”和原型函数映射指 prototype/ 中的归档快照，不再代表根目录应用尚未实现。截图工具未完成截图，不宣称像素级视觉验收或外部生产部署完成。</p></div>
 </section>
 <section id="product"><span class="section-number">02 / PRODUCT</span><h2>产品定位与用户目标</h2>
 <p>面向个人开发者的 AI 工作台，底层封装 Claude Agent SDK。用户在自己授权的项目目录中委托 Agent 阅读代码、分析问题、提出修改，在必要时审批文件操作与命令执行，最终获得可追踪的过程与可复用的成果。</p>
@@ -170,7 +170,7 @@
 <p>持久化位置由选定部署环境的配置与数据目录合同决定，本说明不指定宿主数据目录。备份、迁移和保留策略需在选择数据库后定义。</p>
 </section>
 <section id="api"><span class="section-number">10 / PROPOSED API</span><h2>建议 HTTP 接口</h2>
-<div class="note caution"><p>以下路径是开发建议，当前项目没有这些 HTTP 服务。实施时可调整命名，但必须保留身份校验、授权、幂等、错误语义和状态查询能力。</p></div>
+<div class="note caution"><p>以下为初始接口建议；当前本机服务已实现主要能力，实际端点和字段以 implementation-contract.md 为准，包括全局 /api/events 事件流和独立工具输出接口。接口继续保留本机来源校验、授权、幂等、错误语义和状态查询。</p></div>
 <div class="table-wrap"><table><caption>建议端点与职责</caption><thead><tr><th>方法与路径</th><th>用途</th><th>关键契约</th></tr></thead><tbody>
 <tr><td><code>GET /api/projects</code></td><td>列出已授权项目</td><td>返回可用状态，不泄露未授权目录</td></tr>
 <tr><td><code>POST /api/projects</code></td><td>绑定用户选择的目录</td><td>目录选择机制按本机载体实现；服务端验证授权引用</td></tr>
@@ -234,7 +234,7 @@ Idempotency-Key: {clientRequestId}
 <ol><li>每个运行维护单调递增 seq，事件具备稳定 eventId；客户端按运行去重，不能全局混用序号。</li><li>重连时携带最后已应用游标，服务端补齐缺失事件。快照与订阅需共享一致的序列边界，避免订阅前后的空窗。</li><li>超过事件保留范围时返回“需要重新同步”，客户端读取完整快照再从对应游标继续。</li><li>收到终态后停止重复追加终态事件；审批已结束时迟到卡片不可再次可操作。</li><li>SDK 连接或进程丢失时先协调实际状态；不可恢复则记录 interrupted，不以页面重载推断 stopped。</li><li>对长工具输出做按需加载、分页和截断说明；原始内容有可达入口，不能静默丢弃关键错误。</li></ol>
 </section>
 <section id="source-map"><span class="section-number">12 / SOURCE MAP</span><h2>源码与功能映射</h2>
-<p>当前交互原型为静态 HTML + CSS + 原生 JavaScript，无 package.json、构建器或已配置服务端。打开根目录 index.html 即为入口，样式与脚本通过相对路径引用。</p>
+<p>初始交互原型现归档于 prototype/，仍可直接打开其中的 index.html。根目录已成为真实应用：前端通过本机 HTTP 服务访问 SDK、SQLite 与权限服务。以下函数映射保留为初始原型对照；当前实现以 README 和本机首版完成记录为准。</p>
 <div class="table-wrap"><table><caption>文件职责</caption><thead><tr><th>文件</th><th>职责</th><th>修改定位</th></tr></thead><tbody>
 <tr><td>index.html</td><td>三栏结构、导航、标签、输入框、侧栏与 dialog 容器</td><td>使用固定 DOM ID 和 data-action；脚本依赖这些标识，迁移时成组处理</td></tr>
 <tr><td>styles.css</td><td>布局基础、设计变量、组件样式、响应式和 reduced-motion</td><td>:root 为设计变量主入口；按组件分组；保留原生 hidden 与 closed-dialog 行为</td></tr>
@@ -310,10 +310,10 @@ Idempotency-Key: {clientRequestId}
 <p>打开原型时将 index.html、styles.css、app.js 保持在同一目录。文档无需外部字体或 CDN；HTML 文件可直接在浏览器阅读。将 ZIP 解压后从 README 开始，后续正式工程的安装 / 启动命令由选定技术栈补充，当前不提供不存在的构建命令。</p>
 </section>
 <section id="decisions"><span class="section-number">16 / OPEN DECISIONS</span><h2>待技术验证的事项</h2>
-<div class="note"><p><strong>T01 更新 · 2026-11-18：</strong>已完成独立 SDK 验证，14 项离线测试与 7 项真实场景通过。采用 Node 24.21.0、Agent SDK 0.3.326 / CLI 2.1.326，经本机 Shunt 0.64.0 调用 gpt-6.1-sol。只读、工具事件、允许/拒绝、取消及跨进程续接已有证据；生产服务和界面接线仍待实现。详见 <a href="t01-sdk-validation.md">T01 验证报告与限制</a>。非 Claude 模型属于该组合的实测兼容；实际费用未知，结构化计划未验证，abort 可能不返回最终 result。</p></div>
+<div class="note"><p><strong>T01 更新 · 2026-11-18：</strong>已完成独立 SDK 验证，14 项离线测试与 7 项真实场景通过。采用 Node 24.21.0、Agent SDK 0.3.326 / CLI 2.1.326，经本机 Shunt 0.64.0 调用 gpt-6.1-sol。只读、工具事件、允许/拒绝、取消及跨进程续接已有证据；后续本机服务和界面接线也已完成，见本机首版完成记录。详见 <a href="t01-sdk-validation.md">T01 验证报告与限制</a>。非 Claude 模型属于该组合的实测兼容；实际费用仍未知；后续 T18 已验证 update_plan 结构化计划，abort 可能不返回最终 result。</p></div>
 <div class="table-wrap"><table><caption>接入前需要明确，但不阻塞本次资料交接</caption><thead><tr><th>事项</th><th>当前建议 / 假设</th><th>所需证据</th></tr></thead><tbody>
 <tr><td>运行载体</td><td>个人本机服务 + Web 界面；是否桌面壳待定</td><td>真实目录选择、进程生命周期、监听与身份策略</td></tr>
-<tr><td>SDK 与运行时</td><td>T01：Node 24.21.0、SDK 0.3.326、配套 CLI 2.1.326</td><td>已查官方文档并锁定依赖；独立实验有真实证据，产品适配尚未接入</td></tr>
+<tr><td>SDK 与运行时</td><td>T01：Node 24.21.0、SDK 0.3.326、配套 CLI 2.1.326</td><td>已查官方文档并锁定依赖；独立实验有真实证据，本机产品适配已接入，证据见本机首版完成记录</td></tr>
 <tr><td>认证方式</td><td>服务端受控配置</td><td>支持的认证流程、错误语义、凭据保管方式</td></tr>
 <tr><td>会话续接</td><td>应用 Session 与 SDK 标识分离</td><td>续接范围、有效期、服务重启后的恢复限制</td></tr>
 <tr><td>权限回调与 diff</td><td>按请求异步审批，绑定操作快照</td><td>真实回调参数、等待与取消能力、写前差异构建方式</td></tr>

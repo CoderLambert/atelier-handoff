@@ -1,0 +1,6 @@
+{
+  "source": "Chrome input keydown with Enter and isComposing:true; real HTTP run counts before and after",
+  "runsBefore": 9,
+  "runsAfter": 9,
+  "imeDidNotSubmit": true
+}

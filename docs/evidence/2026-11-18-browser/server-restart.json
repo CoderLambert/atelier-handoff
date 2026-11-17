@@ -1,0 +1,10 @@
+{
+  "source": "Chrome DOM and HTTP observation after stopping and restarting the acceptance server, without reloading the page",
+  "connection": "事件流已连接",
+  "sessionTitle": "请使用 Read 读取 README.md 和 src/hello.ts，告诉我",
+  "serverDraft": "草稿 A：服务重启后仍可保存。",
+  "messageCountAtObservation": 6,
+  "runCountAtObservation": 3,
+  "historyPreserved": true,
+  "draftSavedAfterReconnection": true
+}

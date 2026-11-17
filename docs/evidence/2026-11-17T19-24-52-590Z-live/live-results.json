@@ -1,0 +1,612 @@
+{
+  "at": "2026-11-17T19:25:17.524Z",
+  "source": "real application HTTP + SDK + Shunt",
+  "base": "http://127.0.0.1:4318",
+  "config": {
+    "gateway": "http://127.0.0.1:3001",
+    "model": "gpt-6.1-sol",
+    "maxTurns": 16,
+    "timeoutMs": 300000
+  },
+  "directory": "/tmp/atelier-live-suite-6RaGng",
+  "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+  "projectId": "2f2a1371-57fa-411a-861a-d598652b4de0",
+  "queryCount": 1,
+  "receipts": [
+    {
+      "run": {
+        "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+        "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+        "projectId": "2f2a1371-57fa-411a-861a-d598652b4de0",
+        "prompt": "Use list_files on the project root, then update_plan with one in_progress step. Create alpha.txt with exactly ALPHA and beta.txt with exactly BETA using write_file; you may request them in parallel, each needs separate approval. Publish final-tools.md with the actual results and mark the plan completed. Do not use commands or change any other files.",
+        "mode": "edit",
+        "status": "completed",
+        "createdAt": "2026-11-17T19:24:52.638Z",
+        "startedAt": "2026-11-17T19:24:52.645Z",
+        "endedAt": "2026-11-17T19:25:17.375Z",
+        "reason": null,
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [
+          {
+            "content": "Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.",
+            "status": "completed"
+          }
+        ],
+        "usage": {
+          "model": "gpt-6.1-sol",
+          "inputTokens": 3079,
+          "outputTokens": 488,
+          "cacheReadTokens": 9984,
+          "cacheCreationTokens": 0,
+          "sdkEstimateUsd": 0.03258699999999999,
+          "costEstimateUsd": null,
+          "pricingBasis": "unknown",
+          "complete": true
+        },
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_e4e8e990999240b7b51ada2e37af757a",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__list_files",
+          "inputSummary": "{\"path\":\"\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"\",\"items\":[{\"name\":\"marker.txt\",\"path\":\"marker.txt\",\"isDirectory\":false,\"size\":36},{\"name\":\"note.txt\",\"path\":\"note.txt\",\"isDirectory\":false,\"size\":9}]}",
+          "startedAt": "2026-11-17T19:24:56.154Z",
+          "endedAt": "2026-11-17T19:24:56.166Z",
+          "outputLength": 160,
+          "outputTruncated": false
+        },
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_6845266fb1124dcbb021767d49329433",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.\",\"status\":\"in_progress\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.\",\"status\":\"in_progress\"}]}",
+          "startedAt": "2026-11-17T19:24:59.414Z",
+          "endedAt": "2026-11-17T19:24:59.425Z",
+          "outputLength": 187,
+          "outputTruncated": false
+        },
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_015500adfd784750a18894378c634920",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__write_file",
+          "inputSummary": "{\"path\":\"alpha.txt\",\"content\":\"ALPHA\",\"reason\":\"Create alpha.txt with exactly ALPHA, without a trailing newline, as requested.\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"alpha.txt\",\"fingerprint\":\"73ab66a033c267e00b7429bb256f6deb2734ebc4cd4ff5b564a8c9f9b2c8a719\",\"applied\":true}",
+          "startedAt": "2026-11-17T19:25:03.271Z",
+          "endedAt": "2026-11-17T19:25:03.438Z",
+          "permissionId": "4b97f3ac-564c-4f06-a40e-3d3c8d89cad4",
+          "outputLength": 116,
+          "outputTruncated": false
+        },
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_463d1b5ba80941b7acd33950e8b13f66",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__write_file",
+          "inputSummary": "{\"path\":\"beta.txt\",\"content\":\"BETA\",\"reason\":\"Create beta.txt with exactly BETA, without a trailing newline, as requested.\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"beta.txt\",\"fingerprint\":\"639181fd63cbad6e274ecd205b79f5c3e7c11971cac617ee8bddcac6e79b20e7\",\"applied\":true}",
+          "startedAt": "2026-11-17T19:25:03.445Z",
+          "endedAt": "2026-11-17T19:25:03.601Z",
+          "permissionId": "ade5aafa-823a-4290-94fe-6549eaaf86b9",
+          "outputLength": 115,
+          "outputTruncated": false
+        },
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_0e956fbe1fa74500a8883e8ff6ce7320",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__publish_artifact",
+          "inputSummary": "{\"name\":\"final-tools.md\",\"content\":\"# Actual results\\n\\n- Listed the project root using `list_files`; it initially contained `marker.txt` and `note.txt`.\\n- Recorded a plan with one `in_progress` step.\\n- Created `alpha.txt` using `write_file`. The tool confirmed `applied: true`. Its exact content is `ALPHA` (5 bytes, no trailing newline).\\n- Created `beta.txt` using `write_file`. The tool confirmed `applied: true`. Its exact content is `BETA` (4 bytes, no trailing newline).\\n- No commands were used, and no other project files were changed.\\n\\nThis report is published as a downloadable artifact, not written into the project.\\n\"}",
+          "status": "succeeded",
+          "output": "{\"id\":\"f99f1f71-541f-4ff4-bcfa-16c8ba575ef1\",\"runId\":\"6f535e12-8cb2-464a-b25e-c89e02e1b825\",\"sessionId\":\"198c6a30-fd02-481d-b9bf-1f3bbac5cbf3\",\"projectId\":\"2f2a1371-57fa-411a-861a-d598652b4de0\",\"name\":\"final-tools.md\",\"mime\":\"text/markdown\",\"size\":589,\"fingerprint\":\"df02132eafb5891c15af3e45071be0537664cbf6634a7744646bd86d76fa79a5\",\"availability\":\"available\",\"createdAt\":\"2026-11-17T19:25:09.797Z\"}",
+          "startedAt": "2026-11-17T19:25:09.790Z",
+          "endedAt": "2026-11-17T19:25:09.801Z",
+          "outputLength": 399,
+          "outputTruncated": false
+        },
+        {
+          "id": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_527bb9b69ae64ceea581807428edaef4",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.\",\"status\":\"completed\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.\",\"status\":\"completed\"}]}",
+          "startedAt": "2026-11-17T19:25:13.339Z",
+          "endedAt": "2026-11-17T19:25:13.349Z",
+          "outputLength": 185,
+          "outputTruncated": false
+        }
+      ],
+      "permissions": [
+        {
+          "id": "4b97f3ac-564c-4f06-a40e-3d3c8d89cad4",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_015500adfd784750a18894378c634920",
+          "kind": "write",
+          "path": "alpha.txt",
+          "command": null,
+          "before": null,
+          "after": "ALPHA",
+          "diff": "--- /dev/null\n+++ alpha.txt\n+ALPHA",
+          "baseFingerprint": null,
+          "version": "944a551b-ccad-46ab-9c69-8bcd860e0402",
+          "status": "allowed",
+          "createdAt": "2026-11-17T19:25:03.279Z",
+          "expiresAt": "2026-11-17T19:27:03.279Z",
+          "reason": "Create alpha.txt with exactly ALPHA, without a trailing newline, as requested."
+        },
+        {
+          "id": "ade5aafa-823a-4290-94fe-6549eaaf86b9",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_463d1b5ba80941b7acd33950e8b13f66",
+          "kind": "write",
+          "path": "beta.txt",
+          "command": null,
+          "before": null,
+          "after": "BETA",
+          "diff": "--- /dev/null\n+++ beta.txt\n+BETA",
+          "baseFingerprint": null,
+          "version": "b53e7a8c-1d9d-4a85-8860-73efde498efe",
+          "status": "allowed",
+          "createdAt": "2026-11-17T19:25:03.451Z",
+          "expiresAt": "2026-11-17T19:27:03.451Z",
+          "reason": "Create beta.txt with exactly BETA, without a trailing newline, as requested."
+        }
+      ],
+      "artifacts": [
+        {
+          "id": "f99f1f71-541f-4ff4-bcfa-16c8ba575ef1",
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "projectId": "2f2a1371-57fa-411a-861a-d598652b4de0",
+          "name": "final-tools.md",
+          "mime": "text/markdown",
+          "size": 589,
+          "fingerprint": "df02132eafb5891c15af3e45071be0537664cbf6634a7744646bd86d76fa79a5",
+          "availability": "available",
+          "createdAt": "2026-11-17T19:25:09.797Z"
+        }
+      ],
+      "events": [
+        {
+          "id": 260,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T19:24:52.641Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 261,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T19:24:52.647Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 262,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T19:24:52.836Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 263,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T19:24:52.838Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 264,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T19:24:52.852Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__delete_file",
+              "mcp__atelier__edit_file",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__run_command",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan",
+              "mcp__atelier__write_file"
+            ],
+            "resumed": false
+          }
+        },
+        {
+          "id": 265,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 6,
+          "type": "tool.started",
+          "at": "2026-11-17T19:24:56.156Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_e4e8e990999240b7b51ada2e37af757a"
+          }
+        },
+        {
+          "id": 266,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 7,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:24:56.168Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_e4e8e990999240b7b51ada2e37af757a",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 267,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 8,
+          "type": "tool.started",
+          "at": "2026-11-17T19:24:59.416Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_6845266fb1124dcbb021767d49329433"
+          }
+        },
+        {
+          "id": 268,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 9,
+          "type": "plan.updated",
+          "at": "2026-11-17T19:24:59.423Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.",
+                "status": "in_progress"
+              }
+            ]
+          }
+        },
+        {
+          "id": 269,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 10,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:24:59.427Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_6845266fb1124dcbb021767d49329433",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 270,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 11,
+          "type": "tool.started",
+          "at": "2026-11-17T19:25:03.273Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_015500adfd784750a18894378c634920"
+          }
+        },
+        {
+          "id": 271,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 12,
+          "type": "permission.requested",
+          "at": "2026-11-17T19:25:03.283Z",
+          "payload": {
+            "permissionId": "4b97f3ac-564c-4f06-a40e-3d3c8d89cad4"
+          }
+        },
+        {
+          "id": 272,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 13,
+          "type": "permission.resolved",
+          "at": "2026-11-17T19:25:03.435Z",
+          "payload": {
+            "permissionId": "4b97f3ac-564c-4f06-a40e-3d3c8d89cad4",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 273,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 14,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:25:03.440Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_015500adfd784750a18894378c634920",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 274,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 15,
+          "type": "tool.started",
+          "at": "2026-11-17T19:25:03.447Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_463d1b5ba80941b7acd33950e8b13f66"
+          }
+        },
+        {
+          "id": 275,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 16,
+          "type": "permission.requested",
+          "at": "2026-11-17T19:25:03.458Z",
+          "payload": {
+            "permissionId": "ade5aafa-823a-4290-94fe-6549eaaf86b9"
+          }
+        },
+        {
+          "id": 276,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 17,
+          "type": "permission.resolved",
+          "at": "2026-11-17T19:25:03.597Z",
+          "payload": {
+            "permissionId": "ade5aafa-823a-4290-94fe-6549eaaf86b9",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 277,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 18,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:25:03.603Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_463d1b5ba80941b7acd33950e8b13f66",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 278,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 19,
+          "type": "tool.started",
+          "at": "2026-11-17T19:25:09.792Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_0e956fbe1fa74500a8883e8ff6ce7320"
+          }
+        },
+        {
+          "id": 279,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 20,
+          "type": "artifact.created",
+          "at": "2026-11-17T19:25:09.799Z",
+          "payload": {
+            "artifactId": "f99f1f71-541f-4ff4-bcfa-16c8ba575ef1"
+          }
+        },
+        {
+          "id": 280,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 21,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:25:09.803Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_0e956fbe1fa74500a8883e8ff6ce7320",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 281,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 22,
+          "type": "tool.started",
+          "at": "2026-11-17T19:25:13.342Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_527bb9b69ae64ceea581807428edaef4"
+          }
+        },
+        {
+          "id": 282,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 23,
+          "type": "plan.updated",
+          "at": "2026-11-17T19:25:13.348Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Create alpha.txt and beta.txt with the exact requested contents, then publish final-tools.md reporting the actual results.",
+                "status": "completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": 283,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 24,
+          "type": "tool.finished",
+          "at": "2026-11-17T19:25:13.351Z",
+          "payload": {
+            "toolCallId": "6f535e12-8cb2-464a-b25e-c89e02e1b825:call_527bb9b69ae64ceea581807428edaef4",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 284,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 25,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:16.060Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 285,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 26,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:16.221Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 286,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 27,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:16.541Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 287,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 28,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:16.860Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 288,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 29,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:16.941Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 289,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 30,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:17.101Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 290,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 31,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:17.261Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 291,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 32,
+          "type": "message.delta",
+          "at": "2026-11-17T19:25:17.341Z",
+          "payload": {
+            "messageId": "6b909a59-5679-4f7b-9bfa-6e41ea65f452"
+          }
+        },
+        {
+          "id": 292,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 33,
+          "type": "usage.updated",
+          "at": "2026-11-17T19:25:17.359Z",
+          "payload": {}
+        },
+        {
+          "id": 293,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 34,
+          "type": "process.exited",
+          "at": "2026-11-17T19:25:17.373Z",
+          "payload": {
+            "code": 0,
+            "signal": null
+          }
+        },
+        {
+          "id": 294,
+          "runId": "6f535e12-8cb2-464a-b25e-c89e02e1b825",
+          "sessionId": "198c6a30-fd02-481d-b9bf-1f3bbac5cbf3",
+          "seq": 35,
+          "type": "run.finished",
+          "at": "2026-11-17T19:25:17.378Z",
+          "payload": {
+            "status": "completed",
+            "reason": null
+          }
+        }
+      ]
+    }
+  ]
+}

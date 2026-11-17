@@ -1,0 +1,2115 @@
+{
+  "at": "2026-11-17T18:46:11.304Z",
+  "source": "real application HTTP + SDK + Shunt",
+  "base": "http://127.0.0.1:4318",
+  "config": {
+    "gateway": "http://127.0.0.1:3001",
+    "model": "gpt-6.1-sol",
+    "maxTurns": 16,
+    "timeoutMs": 300000
+  },
+  "directory": "/tmp/atelier-live-suite-xUJxTZ",
+  "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+  "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+  "queryCount": 6,
+  "receipts": [
+    {
+      "run": {
+        "id": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "Use Read to read marker.txt. State its exact marker and the exact marker in the attached document. Do not write files.",
+        "mode": "readonly",
+        "status": "completed",
+        "createdAt": "2026-11-17T18:44:49.466Z",
+        "startedAt": "2026-11-17T18:44:49.474Z",
+        "endedAt": "2026-11-17T18:44:56.651Z",
+        "reason": null,
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [
+          "4fb61b02-450e-496c-9b4e-99a3580ab3c9"
+        ],
+        "plan": [],
+        "usage": {
+          "model": "gpt-6.1-sol",
+          "inputTokens": 2694,
+          "outputTokens": 105,
+          "cacheReadTokens": 0,
+          "cacheCreationTokens": 0,
+          "sdkEstimateUsd": 0.016095,
+          "costEstimateUsd": null,
+          "pricingBasis": "unknown",
+          "complete": true
+        },
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b:call_0108c043d92443caa7fe5b5025c2a942",
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "Read",
+          "inputSummary": "{\"file_path\":\"/tmp/atelier-live-suite-xUJxTZ/marker.txt\"}",
+          "status": "succeeded",
+          "output": "{\"type\":\"text\",\"file\":{\"filePath\":\"/tmp/atelier-live-suite-xUJxTZ/marker.txt\",\"content\":\"ee3c62b2-d93e-41b0-ba5b-4411f3c54f45\",\"numLines\":1,\"startLine\":1,\"totalLines\":1}}",
+          "startedAt": "2026-11-17T18:44:53.154Z",
+          "endedAt": "2026-11-17T18:44:53.170Z"
+        }
+      ],
+      "permissions": [],
+      "artifacts": [],
+      "events": [
+        {
+          "id": 98,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:44:49.469Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 99,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:44:49.476Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 100,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:44:49.669Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 101,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:44:49.671Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 102,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:44:49.686Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan"
+            ],
+            "resumed": false
+          }
+        },
+        {
+          "id": 103,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "tool.started",
+          "at": "2026-11-17T18:44:53.156Z",
+          "payload": {
+            "toolCallId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b:call_0108c043d92443caa7fe5b5025c2a942"
+          }
+        },
+        {
+          "id": 104,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:44:53.172Z",
+          "payload": {
+            "toolCallId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b:call_0108c043d92443caa7fe5b5025c2a942",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 105,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:55.242Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 106,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:55.482Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 107,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:55.803Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 108,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:55.883Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 109,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:56.123Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 110,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 13,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:56.523Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 111,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 14,
+          "type": "message.delta",
+          "at": "2026-11-17T18:44:56.603Z",
+          "payload": {
+            "messageId": "39f0c64a-e22a-4d67-b492-095324c089d8"
+          }
+        },
+        {
+          "id": 112,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 15,
+          "type": "usage.updated",
+          "at": "2026-11-17T18:44:56.636Z",
+          "payload": {}
+        },
+        {
+          "id": 113,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 16,
+          "type": "process.exited",
+          "at": "2026-11-17T18:44:56.649Z",
+          "payload": {
+            "code": 0,
+            "signal": null
+          }
+        },
+        {
+          "id": 114,
+          "runId": "9b7115e7-57bc-44a6-b3b5-b04c859f0e4b",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 17,
+          "type": "run.finished",
+          "at": "2026-11-17T18:44:56.655Z",
+          "payload": {
+            "status": "completed",
+            "reason": null
+          }
+        }
+      ]
+    },
+    {
+      "run": {
+        "id": "86627617-8155-484b-841f-ba6909612713",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "Without using any tools, repeat the exact marker you read from marker.txt in the preceding turn.",
+        "mode": "readonly",
+        "status": "completed",
+        "createdAt": "2026-11-17T18:44:56.760Z",
+        "startedAt": "2026-11-17T18:44:56.766Z",
+        "endedAt": "2026-11-17T18:45:00.492Z",
+        "reason": null,
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [],
+        "usage": {
+          "model": "gpt-6.1-sol",
+          "inputTokens": 254,
+          "outputTokens": 29,
+          "cacheReadTokens": 1280,
+          "cacheCreationTokens": 0,
+          "sdkEstimateUsd": 0.0026349999999999985,
+          "costEstimateUsd": null,
+          "pricingBasis": "unknown",
+          "complete": true
+        },
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [],
+      "permissions": [],
+      "artifacts": [],
+      "events": [
+        {
+          "id": 115,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:44:56.761Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 116,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:44:56.767Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 117,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:44:56.954Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 118,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:44:56.957Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 119,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:44:56.974Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan"
+            ],
+            "resumed": true
+          }
+        },
+        {
+          "id": 120,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:00.049Z",
+          "payload": {
+            "messageId": "b4692fb1-8201-420d-af18-eebfd6242917"
+          }
+        },
+        {
+          "id": 121,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:00.130Z",
+          "payload": {
+            "messageId": "b4692fb1-8201-420d-af18-eebfd6242917"
+          }
+        },
+        {
+          "id": 122,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:00.289Z",
+          "payload": {
+            "messageId": "b4692fb1-8201-420d-af18-eebfd6242917"
+          }
+        },
+        {
+          "id": 123,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:00.450Z",
+          "payload": {
+            "messageId": "b4692fb1-8201-420d-af18-eebfd6242917"
+          }
+        },
+        {
+          "id": 124,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "usage.updated",
+          "at": "2026-11-17T18:45:00.475Z",
+          "payload": {}
+        },
+        {
+          "id": 125,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "process.exited",
+          "at": "2026-11-17T18:45:00.490Z",
+          "payload": {
+            "code": 0,
+            "signal": null
+          }
+        },
+        {
+          "id": 126,
+          "runId": "86627617-8155-484b-841f-ba6909612713",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "run.finished",
+          "at": "2026-11-17T18:45:00.496Z",
+          "payload": {
+            "status": "completed",
+            "reason": null
+          }
+        }
+      ]
+    },
+    {
+      "run": {
+        "id": "729b444c-bcc5-4255-880c-3e24d552945d",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "This is a controlled test. Use update_plan to record your actual steps. Read note.txt; use edit_file to replace ORIGINAL with APPROVED, preserving its newline. Use write_file to create scratch.txt containing TEMP, then use delete_file to delete scratch.txt. Each file operation needs separate user approval; wait for it. Publish a real document suite-report.md summarizing the actual operations via publish_artifact, and mark your plan complete. Do not run commands or touch other files.",
+        "mode": "edit",
+        "status": "completed",
+        "createdAt": "2026-11-17T18:45:00.569Z",
+        "startedAt": "2026-11-17T18:45:00.578Z",
+        "endedAt": "2026-11-17T18:45:47.338Z",
+        "reason": null,
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [
+          {
+            "content": "Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.",
+            "status": "completed"
+          },
+          {
+            "content": "Create scratch.txt containing TEMP, then delete it, with separate approvals.",
+            "status": "completed"
+          },
+          {
+            "content": "Publish suite-report.md documenting actual operations and complete the plan.",
+            "status": "completed"
+          }
+        ],
+        "usage": {
+          "model": "gpt-6.1-sol",
+          "inputTokens": 9816,
+          "outputTokens": 951,
+          "cacheReadTokens": 17152,
+          "cacheCreationTokens": 0,
+          "sdkEstimateUsd": 0.081431,
+          "costEstimateUsd": null,
+          "pricingBasis": "unknown",
+          "complete": true
+        },
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_24de228ab2f549839fd58fc3381fdab0",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"in_progress\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"pending\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"pending\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"in_progress\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"pending\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"pending\"}]}",
+          "startedAt": "2026-11-17T18:45:05.385Z",
+          "endedAt": "2026-11-17T18:45:05.399Z"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_9d5fcddbcb4b410eae0012121d8a7597",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "Read",
+          "inputSummary": "{\"file_path\":\"/tmp/atelier-live-suite-xUJxTZ/note.txt\"}",
+          "status": "succeeded",
+          "output": "{\"type\":\"text\",\"file\":{\"filePath\":\"/tmp/atelier-live-suite-xUJxTZ/note.txt\",\"content\":\"ORIGINAL\\n\",\"numLines\":2,\"startLine\":1,\"totalLines\":2}}",
+          "startedAt": "2026-11-17T18:45:08.132Z",
+          "endedAt": "2026-11-17T18:45:08.147Z"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_9e7516b3f79540d1b8e74ad79581f25a",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__edit_file",
+          "inputSummary": "{\"path\":\"note.txt\",\"oldText\":\"ORIGINAL\",\"newText\":\"APPROVED\",\"reason\":\"Replace ORIGINAL with APPROVED as requested, leaving the existing newline unchanged.\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"note.txt\",\"fingerprint\":\"82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3\",\"applied\":true}",
+          "startedAt": "2026-11-17T18:45:11.822Z",
+          "endedAt": "2026-11-17T18:45:11.955Z",
+          "permissionId": "336aa2d7-e9d7-47c9-a50a-59c5140d8716"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_1084ae5082ef4c64846f823fcab1fd5e",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"in_progress\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"pending\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"in_progress\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"pending\"}]}",
+          "startedAt": "2026-11-17T18:45:17.365Z",
+          "endedAt": "2026-11-17T18:45:17.379Z"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_5d3795dd0d3f43ad9d44bfefaaccc93c",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__write_file",
+          "inputSummary": "{\"path\":\"scratch.txt\",\"content\":\"TEMP\",\"reason\":\"Create the requested temporary file containing exactly TEMP, with no added newline.\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"scratch.txt\",\"fingerprint\":\"b969079f888367325aef6037380aa9c3e27e34fc8e90eaaab1e0b4a0218f7928\",\"applied\":true}",
+          "startedAt": "2026-11-17T18:45:20.412Z",
+          "endedAt": "2026-11-17T18:45:20.444Z",
+          "permissionId": "dc9d4d53-7111-47c2-b582-e0d5d4abf254"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_93826c647ad84908993ec66d1c851495",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__delete_file",
+          "inputSummary": "{\"path\":\"scratch.txt\",\"reason\":\"Delete the temporary scratch.txt just created with content TEMP, as requested.\"}",
+          "status": "succeeded",
+          "output": "{\"path\":\"scratch.txt\",\"deleted\":true}",
+          "startedAt": "2026-11-17T18:45:23.845Z",
+          "endedAt": "2026-11-17T18:45:23.934Z",
+          "permissionId": "96c73f38-8de2-40cc-85ac-fd1cec7a0b0b"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_01210c38a765446d98491981b50b357e",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"completed\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"in_progress\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"completed\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"in_progress\"}]}",
+          "startedAt": "2026-11-17T18:45:28.977Z",
+          "endedAt": "2026-11-17T18:45:28.986Z"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_a2969bebcbae4e1a8f3609071d835af0",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__publish_artifact",
+          "inputSummary": "{\"name\":\"suite-report.md\",\"content\":\"# Controlled Test Report\\n\\n## Actual operations\\n\\n1. Recorded the execution steps using `update_plan`.\\n2. Read `note.txt` using `Read`. It contained `ORIGINAL` followed by a newline.\\n3. Submitted a separate `edit_file` approval request replacing only `ORIGINAL` with `APPROVED`. The tool confirmed the edit was applied. The existing newline was preserved because it was outside the replaced text.\\n4. Submitted a separate `write_file` approval request creating `scratch.txt` containing exactly `TEMP`, with no added newline. The tool confirmed creation was applied.\\n5. Submitted a separate `delete_file` approval request for `scratch.txt`. The tool confirmed deletion.\\n6. Published this report as the document artifact `suite-report.md`.\\n\\n## Outcome\\n\\n- `note.txt`: `APPROVED` with its original newline preserved.\\n- `scratch.txt`: created and then deleted successfully.\\n- Each modifying file operation used its own controlled approval request, and each returned success before the next operation proceeded.\\n- No commands were run, and no other project files were accessed or modified.\\n\\nThe plan's file-operation steps were marked complete after their successful tool results. The final report step is to be marked complete after publication succeeds.\\n\"}",
+          "status": "succeeded",
+          "output": "{\"id\":\"816aec43-c16e-4492-9978-b72c331655c6\",\"runId\":\"729b444c-bcc5-4255-880c-3e24d552945d\",\"sessionId\":\"037f3e02-7948-41ff-80aa-0d5f6b379190\",\"projectId\":\"66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd\",\"name\":\"suite-report.md\",\"mime\":\"text/markdown\",\"size\":1247,\"fingerprint\":\"4037fb0404d81e38a05ff7b1685194ad0d678994311a4b2bb22ffd6c8097b114\",\"availability\":\"available\",\"createdAt\":\"2026-11-17T18:45:38.258Z\"}",
+          "startedAt": "2026-11-17T18:45:38.251Z",
+          "endedAt": "2026-11-17T18:45:38.263Z"
+        },
+        {
+          "id": "729b444c-bcc5-4255-880c-3e24d552945d:call_4649e02842054cda901dd837716cca1f",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__update_plan",
+          "inputSummary": "{\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"completed\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"completed\"}]}",
+          "status": "succeeded",
+          "output": "{\"recorded\":true,\"steps\":[{\"content\":\"Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.\",\"status\":\"completed\"},{\"content\":\"Create scratch.txt containing TEMP, then delete it, with separate approvals.\",\"status\":\"completed\"},{\"content\":\"Publish suite-report.md documenting actual operations and complete the plan.\",\"status\":\"completed\"}]}",
+          "startedAt": "2026-11-17T18:45:41.937Z",
+          "endedAt": "2026-11-17T18:45:41.958Z"
+        }
+      ],
+      "permissions": [
+        {
+          "id": "336aa2d7-e9d7-47c9-a50a-59c5140d8716",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_9e7516b3f79540d1b8e74ad79581f25a",
+          "kind": "edit",
+          "path": "note.txt",
+          "command": null,
+          "before": "ORIGINAL\n",
+          "after": "APPROVED\n",
+          "diff": "--- note.txt\n+++ note.txt\n-ORIGINAL\n-\n+APPROVED\n+",
+          "baseFingerprint": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+          "version": "b5b9506e-2fce-4391-8595-59585e5864ca",
+          "status": "allowed",
+          "createdAt": "2026-11-17T18:45:11.830Z",
+          "expiresAt": "2026-11-17T18:47:11.830Z",
+          "reason": "Replace ORIGINAL with APPROVED as requested, leaving the existing newline unchanged."
+        },
+        {
+          "id": "dc9d4d53-7111-47c2-b582-e0d5d4abf254",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_5d3795dd0d3f43ad9d44bfefaaccc93c",
+          "kind": "write",
+          "path": "scratch.txt",
+          "command": null,
+          "before": null,
+          "after": "TEMP",
+          "diff": "--- /dev/null\n+++ scratch.txt\n+TEMP",
+          "baseFingerprint": null,
+          "version": "850c4926-a9e7-45d0-a761-1abe65d0ac1d",
+          "status": "allowed",
+          "createdAt": "2026-11-17T18:45:20.423Z",
+          "expiresAt": "2026-11-17T18:47:20.423Z",
+          "reason": "Create the requested temporary file containing exactly TEMP, with no added newline."
+        },
+        {
+          "id": "96c73f38-8de2-40cc-85ac-fd1cec7a0b0b",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_93826c647ad84908993ec66d1c851495",
+          "kind": "delete",
+          "path": "scratch.txt",
+          "command": null,
+          "before": "TEMP",
+          "after": null,
+          "diff": "--- scratch.txt\n+++ /dev/null\n-TEMP",
+          "baseFingerprint": "b969079f888367325aef6037380aa9c3e27e34fc8e90eaaab1e0b4a0218f7928",
+          "version": "87e68435-4219-4d46-a6d1-b089aa5609c2",
+          "status": "allowed",
+          "createdAt": "2026-11-17T18:45:23.851Z",
+          "expiresAt": "2026-11-17T18:47:23.851Z",
+          "reason": "Delete the temporary scratch.txt just created with content TEMP, as requested."
+        }
+      ],
+      "artifacts": [
+        {
+          "id": "816aec43-c16e-4492-9978-b72c331655c6",
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+          "name": "suite-report.md",
+          "mime": "text/markdown",
+          "size": 1247,
+          "fingerprint": "4037fb0404d81e38a05ff7b1685194ad0d678994311a4b2bb22ffd6c8097b114",
+          "availability": "available",
+          "createdAt": "2026-11-17T18:45:38.258Z"
+        }
+      ],
+      "events": [
+        {
+          "id": 127,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:45:00.571Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 128,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "sdk.context_restarted",
+          "at": "2026-11-17T18:45:00.573Z",
+          "payload": {
+            "reason": "本轮权限范围或模型配置变化，保留应用历史并新建 SDK 上下文，避免沿用旧工具范围。"
+          }
+        },
+        {
+          "id": 129,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:45:00.580Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 130,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:00.755Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 131,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:00.757Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 132,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:45:00.771Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__delete_file",
+              "mcp__atelier__edit_file",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__run_command",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan",
+              "mcp__atelier__write_file"
+            ],
+            "resumed": false
+          }
+        },
+        {
+          "id": 133,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:02.984Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 134,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:03.063Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 135,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:03.224Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 136,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:03.545Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 137,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:04.265Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 138,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:05.388Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_24de228ab2f549839fd58fc3381fdab0"
+          }
+        },
+        {
+          "id": 139,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 13,
+          "type": "plan.updated",
+          "at": "2026-11-17T18:45:05.398Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.",
+                "status": "in_progress"
+              },
+              {
+                "content": "Create scratch.txt containing TEMP, then delete it, with separate approvals.",
+                "status": "pending"
+              },
+              {
+                "content": "Publish suite-report.md documenting actual operations and complete the plan.",
+                "status": "pending"
+              }
+            ]
+          }
+        },
+        {
+          "id": 140,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 14,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:05.401Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_24de228ab2f549839fd58fc3381fdab0",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 141,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 15,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:08.134Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_9d5fcddbcb4b410eae0012121d8a7597"
+          }
+        },
+        {
+          "id": 142,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 16,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:08.149Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_9d5fcddbcb4b410eae0012121d8a7597",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 143,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 17,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:11.824Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_9e7516b3f79540d1b8e74ad79581f25a"
+          }
+        },
+        {
+          "id": 144,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 18,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:45:11.837Z",
+          "payload": {
+            "permissionId": "336aa2d7-e9d7-47c9-a50a-59c5140d8716"
+          }
+        },
+        {
+          "id": 145,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 19,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:45:11.951Z",
+          "payload": {
+            "permissionId": "336aa2d7-e9d7-47c9-a50a-59c5140d8716",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 146,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 20,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:11.957Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_9e7516b3f79540d1b8e74ad79581f25a",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 147,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 21,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:17.369Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_1084ae5082ef4c64846f823fcab1fd5e"
+          }
+        },
+        {
+          "id": 148,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 22,
+          "type": "plan.updated",
+          "at": "2026-11-17T18:45:17.377Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.",
+                "status": "completed"
+              },
+              {
+                "content": "Create scratch.txt containing TEMP, then delete it, with separate approvals.",
+                "status": "in_progress"
+              },
+              {
+                "content": "Publish suite-report.md documenting actual operations and complete the plan.",
+                "status": "pending"
+              }
+            ]
+          }
+        },
+        {
+          "id": 149,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 23,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:17.381Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_1084ae5082ef4c64846f823fcab1fd5e",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 150,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 24,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:20.417Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_5d3795dd0d3f43ad9d44bfefaaccc93c"
+          }
+        },
+        {
+          "id": 151,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 25,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:45:20.430Z",
+          "payload": {
+            "permissionId": "dc9d4d53-7111-47c2-b582-e0d5d4abf254"
+          }
+        },
+        {
+          "id": 152,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 26,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:45:20.441Z",
+          "payload": {
+            "permissionId": "dc9d4d53-7111-47c2-b582-e0d5d4abf254",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 153,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 27,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:20.446Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_5d3795dd0d3f43ad9d44bfefaaccc93c",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 154,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 28,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:23.847Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_93826c647ad84908993ec66d1c851495"
+          }
+        },
+        {
+          "id": 155,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 29,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:45:23.856Z",
+          "payload": {
+            "permissionId": "96c73f38-8de2-40cc-85ac-fd1cec7a0b0b"
+          }
+        },
+        {
+          "id": 156,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 30,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:45:23.932Z",
+          "payload": {
+            "permissionId": "96c73f38-8de2-40cc-85ac-fd1cec7a0b0b",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 157,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 31,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:23.936Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_93826c647ad84908993ec66d1c851495",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 158,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 32,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:28.979Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_01210c38a765446d98491981b50b357e"
+          }
+        },
+        {
+          "id": 159,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 33,
+          "type": "plan.updated",
+          "at": "2026-11-17T18:45:28.985Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.",
+                "status": "completed"
+              },
+              {
+                "content": "Create scratch.txt containing TEMP, then delete it, with separate approvals.",
+                "status": "completed"
+              },
+              {
+                "content": "Publish suite-report.md documenting actual operations and complete the plan.",
+                "status": "in_progress"
+              }
+            ]
+          }
+        },
+        {
+          "id": 160,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 34,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:28.988Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_01210c38a765446d98491981b50b357e",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 161,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 35,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:38.254Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_a2969bebcbae4e1a8f3609071d835af0"
+          }
+        },
+        {
+          "id": 162,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 36,
+          "type": "artifact.created",
+          "at": "2026-11-17T18:45:38.261Z",
+          "payload": {
+            "artifactId": "816aec43-c16e-4492-9978-b72c331655c6"
+          }
+        },
+        {
+          "id": 163,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 37,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:38.265Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_a2969bebcbae4e1a8f3609071d835af0",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 164,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 38,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:41.941Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_4649e02842054cda901dd837716cca1f"
+          }
+        },
+        {
+          "id": 165,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 39,
+          "type": "plan.updated",
+          "at": "2026-11-17T18:45:41.953Z",
+          "payload": {
+            "plan": [
+              {
+                "content": "Read note.txt and replace ORIGINAL with APPROVED while preserving its newline, with edit approval.",
+                "status": "completed"
+              },
+              {
+                "content": "Create scratch.txt containing TEMP, then delete it, with separate approvals.",
+                "status": "completed"
+              },
+              {
+                "content": "Publish suite-report.md documenting actual operations and complete the plan.",
+                "status": "completed"
+              }
+            ]
+          }
+        },
+        {
+          "id": 166,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 40,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:41.961Z",
+          "payload": {
+            "toolCallId": "729b444c-bcc5-4255-880c-3e24d552945d:call_4649e02842054cda901dd837716cca1f",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 167,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 41,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:45.366Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 168,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 42,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:45.687Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 169,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 43,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:45.928Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 170,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 44,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.086Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 171,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 45,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.166Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 172,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 46,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.328Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 173,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 47,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.648Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 174,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 48,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.728Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 175,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 49,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:46.808Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 176,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 50,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:47.287Z",
+          "payload": {
+            "messageId": "81dbad0d-a2b7-45ca-9602-2bdd5e15f51c"
+          }
+        },
+        {
+          "id": 177,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 51,
+          "type": "usage.updated",
+          "at": "2026-11-17T18:45:47.320Z",
+          "payload": {}
+        },
+        {
+          "id": 178,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 52,
+          "type": "process.exited",
+          "at": "2026-11-17T18:45:47.335Z",
+          "payload": {
+            "code": 0,
+            "signal": null
+          }
+        },
+        {
+          "id": 179,
+          "runId": "729b444c-bcc5-4255-880c-3e24d552945d",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 53,
+          "type": "run.finished",
+          "at": "2026-11-17T18:45:47.342Z",
+          "payload": {
+            "status": "completed",
+            "reason": null
+          }
+        }
+      ]
+    },
+    {
+      "run": {
+        "id": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "Read note.txt, then attempt delete_file exactly once to delete note.txt. This is a denial test. If permission is denied, stop immediately and explain. Do not use any alternative or repeat the operation.",
+        "mode": "edit",
+        "status": "completed",
+        "createdAt": "2026-11-17T18:45:47.436Z",
+        "startedAt": "2026-11-17T18:45:47.444Z",
+        "endedAt": "2026-11-17T18:45:58.568Z",
+        "reason": null,
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [],
+        "usage": {
+          "model": "gpt-6.1-sol",
+          "inputTokens": 1208,
+          "outputTokens": 140,
+          "cacheReadTokens": 10752,
+          "cacheCreationTokens": 0,
+          "sdkEstimateUsd": 0.014915999999999999,
+          "costEstimateUsd": null,
+          "pricingBasis": "unknown",
+          "complete": true
+        },
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_1b59684b57b6451282f9645a48b6a264",
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "Read",
+          "inputSummary": "{\"file_path\":\"/tmp/atelier-live-suite-xUJxTZ/note.txt\"}",
+          "status": "succeeded",
+          "output": "{\"type\":\"text\",\"file\":{\"filePath\":\"/tmp/atelier-live-suite-xUJxTZ/note.txt\",\"content\":\"APPROVED\\n\",\"numLines\":2,\"startLine\":1,\"totalLines\":2}}",
+          "startedAt": "2026-11-17T18:45:50.949Z",
+          "endedAt": "2026-11-17T18:45:50.966Z"
+        },
+        {
+          "id": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_54f6258b9fd147029bc4d412c61de338",
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__delete_file",
+          "inputSummary": "{\"path\":\"note.txt\",\"reason\":\"Attempt deletion exactly once for the user's denial test; if permission is denied, stop without retrying or using alternatives.\"}",
+          "status": "denied",
+          "output": "此操作被拒绝、过期或取消；不要使用其他工具重试同一操作。",
+          "startedAt": "2026-11-17T18:45:54.976Z",
+          "endedAt": "2026-11-17T18:45:55.035Z",
+          "permissionId": "943d799a-f92b-443b-a582-2ea1f51a8620"
+        }
+      ],
+      "permissions": [
+        {
+          "id": "943d799a-f92b-443b-a582-2ea1f51a8620",
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_54f6258b9fd147029bc4d412c61de338",
+          "kind": "delete",
+          "path": "note.txt",
+          "command": null,
+          "before": "APPROVED\n",
+          "after": null,
+          "diff": "--- note.txt\n+++ /dev/null\n-APPROVED\n-",
+          "baseFingerprint": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+          "version": "5fa651da-03d6-4bb7-bda7-4114d4d407aa",
+          "status": "denied",
+          "createdAt": "2026-11-17T18:45:54.985Z",
+          "expiresAt": "2026-11-17T18:47:54.985Z",
+          "reason": "Attempt deletion exactly once for the user's denial test; if permission is denied, stop without retrying or using alternatives."
+        }
+      ],
+      "artifacts": [],
+      "events": [
+        {
+          "id": 180,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:45:47.438Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 181,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:45:47.446Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 182,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:47.638Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 183,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:47.641Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 184,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:45:47.659Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__delete_file",
+              "mcp__atelier__edit_file",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__run_command",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan",
+              "mcp__atelier__write_file"
+            ],
+            "resumed": true
+          }
+        },
+        {
+          "id": 185,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:50.951Z",
+          "payload": {
+            "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_1b59684b57b6451282f9645a48b6a264"
+          }
+        },
+        {
+          "id": 186,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:50.969Z",
+          "payload": {
+            "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_1b59684b57b6451282f9645a48b6a264",
+            "status": "succeeded"
+          }
+        },
+        {
+          "id": 187,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "tool.started",
+          "at": "2026-11-17T18:45:54.978Z",
+          "payload": {
+            "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_54f6258b9fd147029bc4d412c61de338"
+          }
+        },
+        {
+          "id": 188,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:45:54.990Z",
+          "payload": {
+            "permissionId": "943d799a-f92b-443b-a582-2ea1f51a8620"
+          }
+        },
+        {
+          "id": 189,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:45:55.024Z",
+          "payload": {
+            "permissionId": "943d799a-f92b-443b-a582-2ea1f51a8620",
+            "status": "denied"
+          }
+        },
+        {
+          "id": 190,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:55.028Z",
+          "payload": {
+            "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_54f6258b9fd147029bc4d412c61de338",
+            "status": "denied"
+          }
+        },
+        {
+          "id": 191,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:45:55.037Z",
+          "payload": {
+            "toolCallId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817:call_54f6258b9fd147029bc4d412c61de338",
+            "status": "denied"
+          }
+        },
+        {
+          "id": 192,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 13,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:57.542Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 193,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 14,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.022Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 194,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 15,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.102Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 195,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 16,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.182Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 196,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 17,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.342Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 197,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 18,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.423Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 198,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 19,
+          "type": "message.delta",
+          "at": "2026-11-17T18:45:58.504Z",
+          "payload": {
+            "messageId": "e9060e0d-97c9-488b-b085-ebbb0440e52d"
+          }
+        },
+        {
+          "id": 199,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 20,
+          "type": "usage.updated",
+          "at": "2026-11-17T18:45:58.551Z",
+          "payload": {}
+        },
+        {
+          "id": 200,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 21,
+          "type": "process.exited",
+          "at": "2026-11-17T18:45:58.566Z",
+          "payload": {
+            "code": 0,
+            "signal": null
+          }
+        },
+        {
+          "id": 201,
+          "runId": "6d25c749-3b2a-4b3e-a9e8-b182243d0817",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 22,
+          "type": "run.finished",
+          "at": "2026-11-17T18:45:58.571Z",
+          "payload": {
+            "status": "completed",
+            "reason": null
+          }
+        }
+      ]
+    },
+    {
+      "run": {
+        "id": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "Use write_file exactly once to create must-not-exist.txt containing SHOULD_NOT_APPEAR. Wait for approval.",
+        "mode": "edit",
+        "status": "stopped",
+        "createdAt": "2026-11-17T18:45:58.660Z",
+        "startedAt": "2026-11-17T18:45:58.666Z",
+        "endedAt": "2026-11-17T18:46:05.702Z",
+        "reason": "用户停止，进程已退出；已发生的修改保留。",
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [],
+        "usage": null,
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "9ebb72af-f190-4f27-ade1-a9543dfe54fe:call_2f758a3b88e643ffb663c7db4c4ddf02",
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__write_file",
+          "inputSummary": "{\"path\":\"must-not-exist.txt\",\"content\":\"SHOULD_NOT_APPEAR\",\"reason\":\"Create must-not-exist.txt containing exactly SHOULD_NOT_APPEAR, subject to user approval.\"}",
+          "status": "canceled",
+          "output": "This operation was aborted",
+          "startedAt": "2026-11-17T18:46:03.551Z",
+          "endedAt": "2026-11-17T18:46:03.688Z",
+          "permissionId": "567a1f89-dc9b-4990-abec-75152c1b583d"
+        }
+      ],
+      "permissions": [
+        {
+          "id": "567a1f89-dc9b-4990-abec-75152c1b583d",
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe:call_2f758a3b88e643ffb663c7db4c4ddf02",
+          "kind": "write",
+          "path": "must-not-exist.txt",
+          "command": null,
+          "before": null,
+          "after": "SHOULD_NOT_APPEAR",
+          "diff": "--- /dev/null\n+++ must-not-exist.txt\n+SHOULD_NOT_APPEAR",
+          "baseFingerprint": null,
+          "version": "e1d95101-047b-4c8d-88b2-5423ddb7a1c8",
+          "status": "canceled",
+          "createdAt": "2026-11-17T18:46:03.561Z",
+          "expiresAt": "2026-11-17T18:48:03.561Z",
+          "reason": "运行已停止或结束。"
+        }
+      ],
+      "artifacts": [],
+      "events": [
+        {
+          "id": 202,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:45:58.662Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 203,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:45:58.668Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 204,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:58.853Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 205,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:45:58.855Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 206,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:45:58.874Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__delete_file",
+              "mcp__atelier__edit_file",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__run_command",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan",
+              "mcp__atelier__write_file"
+            ],
+            "resumed": true
+          }
+        },
+        {
+          "id": 207,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "tool.started",
+          "at": "2026-11-17T18:46:03.553Z",
+          "payload": {
+            "toolCallId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe:call_2f758a3b88e643ffb663c7db4c4ddf02"
+          }
+        },
+        {
+          "id": 208,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:46:03.566Z",
+          "payload": {
+            "permissionId": "567a1f89-dc9b-4990-abec-75152c1b583d"
+          }
+        },
+        {
+          "id": 209,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:46:03.679Z",
+          "payload": {
+            "status": "stopping"
+          }
+        },
+        {
+          "id": 210,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:46:03.685Z",
+          "payload": {
+            "permissionId": "567a1f89-dc9b-4990-abec-75152c1b583d",
+            "status": "canceled"
+          }
+        },
+        {
+          "id": 211,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:46:03.689Z",
+          "payload": {
+            "toolCallId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe:call_2f758a3b88e643ffb663c7db4c4ddf02",
+            "status": "canceled"
+          }
+        },
+        {
+          "id": 212,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "process.exited",
+          "at": "2026-11-17T18:46:05.700Z",
+          "payload": {
+            "code": 143,
+            "signal": null
+          }
+        },
+        {
+          "id": 213,
+          "runId": "9ebb72af-f190-4f27-ade1-a9543dfe54fe",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "run.finished",
+          "at": "2026-11-17T18:46:05.705Z",
+          "payload": {
+            "status": "stopped",
+            "reason": "用户停止，进程已退出；已发生的修改保留。"
+          }
+        }
+      ]
+    },
+    {
+      "run": {
+        "id": "18426297-9f6c-4919-97ab-c168ff6bc232",
+        "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+        "projectId": "66aedbd5-6ed9-41b4-8dc0-a18b7b0fa3cd",
+        "prompt": "Call run_command exactly once with this exact command: printf started > heartbeat.txt; sleep 20; printf late > after-command.txt . The final period is punctuation, not part of the command. Use the reason \"verify command cancellation\". Do not use file tools or other commands. Wait for approval.",
+        "mode": "edit",
+        "status": "stopped",
+        "createdAt": "2026-11-17T18:46:05.810Z",
+        "startedAt": "2026-11-17T18:46:05.818Z",
+        "endedAt": "2026-11-17T18:46:11.193Z",
+        "reason": "用户停止，进程已退出；已发生的修改保留。",
+        "error": null,
+        "retryOf": null,
+        "contextPaths": [],
+        "attachmentIds": [],
+        "plan": [],
+        "usage": null,
+        "config": {
+          "gateway": "http://127.0.0.1:3001",
+          "model": "gpt-6.1-sol",
+          "maxTurns": 16,
+          "timeoutMs": 300000
+        }
+      },
+      "tools": [
+        {
+          "id": "18426297-9f6c-4919-97ab-c168ff6bc232:call_fdc401d01bd24c3a873468ab574cb734",
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "name": "mcp__atelier__run_command",
+          "inputSummary": "{\"command\":\"printf started > heartbeat.txt; sleep 20; printf late > after-command.txt\",\"reason\":\"verify command cancellation\"}",
+          "status": "failed",
+          "output": "命令已随运行停止。",
+          "startedAt": "2026-11-17T18:46:08.979Z",
+          "endedAt": "2026-11-17T18:46:09.182Z",
+          "permissionId": "19c9bf05-3513-4b1f-af49-5f630e7ba403"
+        }
+      ],
+      "permissions": [
+        {
+          "id": "19c9bf05-3513-4b1f-af49-5f630e7ba403",
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "toolCallId": "18426297-9f6c-4919-97ab-c168ff6bc232:call_fdc401d01bd24c3a873468ab574cb734",
+          "kind": "command",
+          "path": null,
+          "command": "printf started > heartbeat.txt; sleep 20; printf late > after-command.txt",
+          "before": null,
+          "after": null,
+          "diff": "printf started > heartbeat.txt; sleep 20; printf late > after-command.txt",
+          "baseFingerprint": null,
+          "version": "7db8f751-e9fb-4104-ba5d-c42503c8888d",
+          "status": "allowed",
+          "createdAt": "2026-11-17T18:46:08.990Z",
+          "expiresAt": "2026-11-17T18:48:08.990Z",
+          "reason": "verify command cancellation（隔离目录 /workspace，无网络，最长 60 秒）"
+        }
+      ],
+      "artifacts": [],
+      "events": [
+        {
+          "id": 214,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 1,
+          "type": "run.created",
+          "at": "2026-11-17T18:46:05.812Z",
+          "payload": {
+            "status": "queued"
+          }
+        },
+        {
+          "id": 215,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 2,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:46:05.820Z",
+          "payload": {
+            "status": "running"
+          }
+        },
+        {
+          "id": 216,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 3,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:46:06.015Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 217,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 4,
+          "type": "sdk.notice",
+          "at": "2026-11-17T18:46:06.018Z",
+          "payload": {
+            "type": "command_lifecycle",
+            "subtype": null
+          }
+        },
+        {
+          "id": 218,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 5,
+          "type": "sdk.initialized",
+          "at": "2026-11-17T18:46:06.037Z",
+          "payload": {
+            "model": "gpt-6.1-sol",
+            "version": "2.1.326",
+            "tools": [
+              "Read",
+              "mcp__atelier__delete_file",
+              "mcp__atelier__edit_file",
+              "mcp__atelier__list_files",
+              "mcp__atelier__publish_artifact",
+              "mcp__atelier__run_command",
+              "mcp__atelier__search_files",
+              "mcp__atelier__update_plan",
+              "mcp__atelier__write_file"
+            ],
+            "resumed": true
+          }
+        },
+        {
+          "id": 219,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 6,
+          "type": "tool.started",
+          "at": "2026-11-17T18:46:08.981Z",
+          "payload": {
+            "toolCallId": "18426297-9f6c-4919-97ab-c168ff6bc232:call_fdc401d01bd24c3a873468ab574cb734"
+          }
+        },
+        {
+          "id": 220,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 7,
+          "type": "permission.requested",
+          "at": "2026-11-17T18:46:08.995Z",
+          "payload": {
+            "permissionId": "19c9bf05-3513-4b1f-af49-5f630e7ba403"
+          }
+        },
+        {
+          "id": 221,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 8,
+          "type": "permission.resolved",
+          "at": "2026-11-17T18:46:09.024Z",
+          "payload": {
+            "permissionId": "19c9bf05-3513-4b1f-af49-5f630e7ba403",
+            "status": "allowed"
+          }
+        },
+        {
+          "id": 222,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 9,
+          "type": "run.status_changed",
+          "at": "2026-11-17T18:46:09.179Z",
+          "payload": {
+            "status": "stopping"
+          }
+        },
+        {
+          "id": 223,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 10,
+          "type": "tool.finished",
+          "at": "2026-11-17T18:46:09.184Z",
+          "payload": {
+            "toolCallId": "18426297-9f6c-4919-97ab-c168ff6bc232:call_fdc401d01bd24c3a873468ab574cb734",
+            "status": "failed"
+          }
+        },
+        {
+          "id": 224,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 11,
+          "type": "process.exited",
+          "at": "2026-11-17T18:46:11.191Z",
+          "payload": {
+            "code": 143,
+            "signal": null
+          }
+        },
+        {
+          "id": 225,
+          "runId": "18426297-9f6c-4919-97ab-c168ff6bc232",
+          "sessionId": "037f3e02-7948-41ff-80aa-0d5f6b379190",
+          "seq": 12,
+          "type": "run.finished",
+          "at": "2026-11-17T18:46:11.196Z",
+          "payload": {
+            "status": "stopped",
+            "reason": "用户停止，进程已退出；已发生的修改保留。"
+          }
+        }
+      ]
+    }
+  ]
+}

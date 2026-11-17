@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "at": "2026-11-17T19:29:43.332Z",
+  "checks": [
+    "active-run session switch and draft isolation",
+    "UI stop with process exit",
+    "server restart reconnection and saved history/drafts",
+    "native file upload and context selection/removal",
+    "375/768/1024/1440 layout bounds",
+    "720x500 equivalent 200% layout and short height",
+    "keyboard tabs and dialog focus",
+    "mobile Escape closes details and restores focus",
+    "unavailable gateway rejects before inference"
+  ],
+  "screenshots": "NOT_COMPLETED: screenshot tool timed out; no screenshot or pixel-level visual acceptance claimed",
+  "viewportDiagnostics": "Viewport records include ancillary focus diagnostics; keyboard acceptance uses the dedicated real-Escape and dialog checks."
+}

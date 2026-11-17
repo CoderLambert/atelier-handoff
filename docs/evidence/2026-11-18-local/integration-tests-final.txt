@@ -1,0 +1,17 @@
+
+> atelier-workbench@0.2.0 test
+> node --import tsx --test tests/*.test.ts
+
+✔ real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads, immutable artifacts and history (86.47931ms)
+✔ approval baseline change, duplicate decisions and cancel race cannot apply stale writes (5.523334ms)
+✔ restart persists distinct runs and invalidates ordinary pending approvals (4.568879ms)
+✔ project file access rejects traversal, symlinks and private files; create/delete stay inside project (1.605419ms)
+✔ isolated commands execute and abort without writing a late side-effect (77.974706ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 426.527679

@@ -1,0 +1,4 @@
+
+> atelier-workbench@0.2.0 check
+> tsc --noEmit && node --check app.js
+
