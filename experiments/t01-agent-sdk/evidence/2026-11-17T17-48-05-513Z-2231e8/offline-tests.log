@@ -1,0 +1,26 @@
+
+> atelier-t01-agent-sdk@0.1.0 offline
+> node --import tsx --test offline.test.ts
+
+✔ paths allow existing regular files and new leaves, reject traversal and similar prefixes (5.888274ms)
+✔ paths reject external, internal and dangling symlinks, including parents (1.183864ms)
+✔ paths reject hard links and directories as file targets (0.866404ms)
+✔ approval cancellation wins and all late or duplicate decisions are ignored (0.33578ms)
+✔ approval expiry produces a terminal denial, including already-aborted signals (5.491415ms)
+✔ write requires a matching snapshot; allowed input and file preview are exact (1.855873ms)
+✔ changing operation arguments after the hook denies the request (1.455021ms)
+✔ changing the file baseline while awaiting approval denies a previously approved edit (0.977536ms)
+✔ canceling in the async decision handler never grants the write (0.88487ms)
+✔ unknown tools and outside reads are denied by hooks even without a permission callback (0.772972ms)
+✔ tool parameter completion cannot mark execution successful; tool results correlate by ID (0.325829ms)
+✔ partial and completed text are separate; repeated complete blocks do not duplicate text (0.146667ms)
+✔ a tool error remains failure; unknown events and missing usage do not produce false success (0.057523ms)
+✔ streaming input wakes on new input and terminates without accepting late messages (0.602471ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 85.588847

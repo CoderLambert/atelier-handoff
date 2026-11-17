@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>atelier. 产品与开发交接说明</title>
+<style>
+:root{--bg:#f4f5f0;--surface:#fff;--fg:#242b23;--fg-2:#505b4b;--muted:#687260;--border:#dce2d5;--soft:#eef3e8;--accent:#466339;--warn:#886729;--warn-bg:#f7f2e7;--code:#f3f5ef;--font:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;--mono:ui-monospace,Consolas,monospace;--radius:8px;--space:8px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 var(--font);-webkit-font-smoothing:antialiased}a{color:var(--accent);text-underline-offset:4px}a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1504px;margin:auto}.navigation{position:sticky;top:0;height:100dvh;overflow:auto;padding:32px 24px;border-right:1px solid var(--border)}.brand{font:700 32px/1.2 Georgia,serif;letter-spacing:-1px;margin-bottom:8px}.brand span{color:var(--accent)}.navigation>p{font-size:13px;color:var(--muted);margin:0 0 24px}.navigation ol{list-style:none;padding:0;margin:0}.navigation li{margin:4px 0}.navigation a{display:block;padding:6px 0;color:var(--fg-2);font-size:13px;text-decoration:none}.navigation a:hover{color:var(--accent);text-decoration:underline}.nav-links{border-top:1px solid var(--border);margin-top:24px;padding-top:16px}.document{min-width:0;background:var(--surface);padding:48px clamp(24px,5vw,72px) 72px}.document>header{padding-bottom:32px;border-bottom:1px solid var(--border)}.eyebrow{font:12px/1.5 var(--mono);letter-spacing:2px;color:var(--accent)}h1{font-size:36px;line-height:1.4;letter-spacing:-1px;margin:16px 0}h2{font-size:24px;line-height:1.5;margin:0 0 20px;letter-spacing:-.5px}h3{font-size:18px;line-height:1.5;margin:28px 0 12px}p{margin:12px 0;max-width:78ch}.lead{color:var(--fg-2);font-size:18px;max-width:68ch}.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}.tag{display:inline-flex;padding:4px 10px;border-radius:4px;font-size:12px;background:var(--soft);color:var(--accent)}.tag.proposed{background:var(--warn-bg);color:var(--warn)}section{padding-top:40px;margin-top:8px;scroll-margin-top:24px}section+section{border-top:1px solid var(--border);margin-top:40px}.note{padding:16px 20px;background:var(--soft);border:1px solid var(--border);border-radius:var(--radius);margin:20px 0}.note p:first-child{margin-top:0}.note p:last-child{margin-bottom:0}.note.caution{background:var(--warn-bg)}.table-wrap{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:var(--radius)}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.7;min-width:600px}caption{text-align:left;padding:12px 16px;font-weight:600;background:var(--soft);border-bottom:1px solid var(--border)}th,td{text-align:left;vertical-align:top;padding:12px 16px;border-bottom:1px solid var(--border);overflow-wrap:anywhere}th{font-size:13px;color:var(--fg-2);background:var(--code);font-weight:600}tbody tr:last-child td{border-bottom:0}td:first-child{font-weight:500}ul,ol{padding-left:24px;margin:12px 0}li{margin:8px 0}code{font:13px/1.7 var(--mono);background:var(--code);padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{font:13px/1.8 var(--mono);padding:20px;background:var(--code);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere}pre code{padding:0}.flow{padding:20px;border:1px solid var(--border);background:var(--code);border-radius:var(--radius);font-size:15px;line-height:2}.section-number{font:13px/1.5 var(--mono);color:var(--accent);display:block;margin-bottom:8px}.source{font-size:13px;color:var(--muted)}footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}.checklist li::marker{color:var(--accent)}
+@media(max-width:1000px){.layout{grid-template-columns:200px minmax(0,1fr)}.navigation{padding:24px 16px}.document{padding:32px 24px 48px}h1{font-size:30px}}
+@media(max-width:767px){.layout{display:block}.navigation{position:static;height:auto;border-right:0;border-bottom:1px solid var(--border);padding:24px 20px}.navigation ol{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.navigation a{padding:8px 0}.nav-links{display:flex;flex-wrap:wrap;gap:16px}.document{padding:28px 20px 48px}h1{font-size:28px}h2{font-size:22px}.lead{font-size:16px}section{padding-top:32px}.note,pre{padding:16px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{@page{size:A4;margin:18mm 16mm}.layout{display:block}.navigation,.nav-links{display:none}body,.document{background:white}.document{padding:0;font-size:11pt;line-height:1.6}h1{font-size:25pt}h2{font-size:18pt}h3{font-size:13pt}h1,h2,h3{break-after:avoid}section{padding-top:20px;margin-top:0}section+section{margin-top:24px}table{min-width:0;font-size:9pt}th,td{padding:7px 8px}thead{display:table-header-group}tr,.note,.flow{break-inside:avoid}.table-wrap{overflow:visible;border-radius:0}pre{white-space:pre-wrap;font-size:9pt}a{color:inherit}p,li{orphans:3;widows:3}.tag{border:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="navigation" aria-label="文档目录">
+<div class="brand">atelier<span>.</span></div><p>产品与开发交接 · v1.0</p>
+<ol>
+<li><a href="#overview">01 阅读说明与交付范围</a></li>
+<li><a href="#product">02 产品定位与用户目标</a></li>
+<li><a href="#design">03 设计基线与信息架构</a></li>
+<li><a href="#features">04 功能范围 F01—F16</a></li>
+<li><a href="#flows">05 核心交互流程</a></li>
+<li><a href="#states">06 状态与并发规则</a></li>
+<li><a href="#permissions">07 审批与真实文件差异</a></li>
+<li><a href="#architecture">08 SDK 接入与模块边界</a></li>
+<li><a href="#data">09 数据模型与持久化</a></li>
+<li><a href="#api">10 建议 HTTP 接口</a></li>
+<li><a href="#events">11 事件流与断线恢复</a></li>
+<li><a href="#source-map">12 源码与功能映射</a></li>
+<li><a href="#gaps">13 原型缺口与已知限制</a></li>
+<li><a href="#acceptance">14 验收与测试策略</a></li>
+<li><a href="#delivery">15 开发阶段与交接方式</a></li>
+<li><a href="#decisions">16 待技术验证的事项</a></li>
+<li><a href="#sources">17 资料来源与维护规则</a></li>
+</ol>
+<div class="nav-links"><a href="../index.html">打开设计原型 ↗</a><a href="../README.md">阅读项目入口 ↗</a><a href="development-tasks.md">开发任务清单 ↗</a><a href="../image.png">查看原始参考图 ↗</a></div>
+</nav>
+<main class="document"><article>
+<header><p class="eyebrow">PRODUCT &amp; ENGINEERING HANDOFF</p><h1>AI 工作台<br>产品与开发交接说明</h1><p class="lead">以当前 atelier. 交互设计为基线，将对话、执行、审批与成果串成可以逐步实现、验证和交付的产品闭环。</p><div class="meta"><span class="tag">设计基线：第二轮优化版</span><span class="tag">目标：个人开发者 · 本机项目</span><span class="tag proposed">真实 SDK 尚未接入</span></div></header>
+<section id="overview"><span class="section-number">01 / START HERE</span><h2>阅读说明与交付范围</h2>
+<p>本文是本项目产品需求与开发交接的主文档，保留前述功能说明书的完整范围，并补充设计规格、源码定位、接口建议与实现缺口。配套 <a href="development-tasks.md">任务清单</a>用于拆分实施工作，<a href="../README.md">README</a>用于了解项目入口和文件结构。</p>
+<div class="note"><p><strong>三种信息必须区分：</strong>“原型现状”来自现有源码；“目标需求”是正式产品需要达到的行为；“建议方案 / 待验证”尚未通过真实 SDK 或运行环境验证，不能当作已存在的能力。</p></div>
+<div class="table-wrap"><table><caption>交接内容与事实状态</caption><thead><tr><th>内容</th><th>交接位置</th><th>状态</th></tr></thead><tbody>
+<tr><td>可编辑交互原型</td><td><code>index.html</code>、<code>styles.css</code>、<code>app.js</code></td><td>已有静态源码；模拟执行、审批和交付物</td></tr>
+<tr><td>原始参考素材</td><td><code>image.png</code></td><td>项目已有图片，供设计对照，不是新版界面截图</td></tr>
+<tr><td>完整开发说明</td><td><code>docs/development-guide.html</code></td><td>本次整理；可在浏览器阅读并使用浏览器打印</td></tr>
+<tr><td>开发入口与任务清单</td><td><code>README.md</code>、<code>docs/development-tasks.md</code></td><td>本次整理；Markdown，可直接放入代码仓库</td></tr>
+<tr><td>移交压缩包</td><td><code>atelier-handoff.zip</code></td><td>收录上述设计、参考素材和文档；不包含宿主内部文件</td></tr>
+</tbody></table></div>
+<p>此轮整理保留现有产品源码。未实现后端、数据库、真实文件读写、真实 SDK 调用或生产部署；未执行浏览器预览、自动化测试或 PDF 导出。文档中的验收项是后续开发要求，不代表已经通过。</p>
+</section>
+<section id="product"><span class="section-number">02 / PRODUCT</span><h2>产品定位与用户目标</h2>
+<p>面向个人开发者的 AI 工作台，底层封装 Claude Agent SDK。用户在自己授权的项目目录中委托 Agent 阅读代码、分析问题、提出修改，在必要时审批文件操作与命令执行，最终获得可追踪的过程与可复用的成果。</p>
+<p><strong>核心价值：</strong>看得懂当前进展，知道 Agent 准备做什么，能够控制关键操作，并找回任务结果。</p>
+<ul><li>代码分析：阅读现有实现，定位边界条件，提出可执行建议。</li><li>受控修改：展示改动范围，由用户确认后执行并报告实际结果。</li><li>文档整理：根据项目内容生成说明、报告或其他明确的交付物。</li><li>持续工作：在同一项目和会话中继续追问，恢复历史与未完成任务。</li></ul>
+<p>首版假设为个人、本机项目场景。团队协作、组织权限、多租户部署、多 Agent 调度、自动发布与后台无人值守任务暂不纳入首版。模型切换、多供应商、MCP / Skills 管理也不应仅因界面出现配置入口就视为已承诺能力。</p>
+</section>
+<section id="design"><span class="section-number">03 / DESIGN BASELINE</span><h2>设计基线与信息架构</h2>
+<p>延续用户参考图的浅色、鼠尾草绿与三栏工作区。第二轮优化强化阅读层级：对话先给关键发现，过程默认折叠；审批优先解释修改对象与原因；低频配置按需展开。本文记录当前实际样式，正式开发需沿用这一版，而不是早期深色设计系统示例。</p>
+<div class="table-wrap"><table><caption>区域与页面职责</caption><thead><tr><th>区域</th><th>内容与入口</th><th>交互规则</th></tr></thead><tbody>
+<tr><td>左侧工作空间</td><td>新建、搜索、会话、交付物、执行记录、项目与账户</td><td>会话切换保留当前草稿；搜索无结果有提示；运行状态与主体同步</td></tr>
+<tr><td>主会话标题</td><td>任务标题、状态、分支、会话详情</td><td>压缩辅助信息；不依靠颜色单独表达状态</td></tr>
+<tr><td>主内容标签</td><td>会话 / 执行轨迹 / 交付物</td><td>在同一会话内切换；会话内容先给结论，再展开计划与工具记录</td></tr>
+<tr><td>输入区</td><td>上下文、附件、任务输入、Claude 设置、更多选项</td><td>Enter 发送，Shift + Enter 换行；输入法组合期间不误发；低频权限入口收在菜单中</td></tr>
+<tr><td>右侧任务详情</td><td>概览 / 变更 / 事件</td><td>待审批卡优先；项目上下文、会话配置、工具权限、用量默认折叠</td></tr>
+<tr><td>详情弹窗</td><td>真实差异、成果预览、规则、项目与设置说明</td><td>明确关闭入口；Escape 关闭；关闭后恢复到有效触发控件</td></tr>
+<tr><td>窄屏导航</td><td>菜单与任务详情覆盖层</td><td>必须保留发送、停止、审批入口；正式版本补齐焦点管理与背景交互隔离</td></tr>
+</tbody></table></div>
+<h3>视觉变量与尺寸</h3>
+<div class="table-wrap"><table><caption>当前 styles.css 中的关键设计值</caption><thead><tr><th>项目</th><th>变量 / 实际值</th><th>用途</th></tr></thead><tbody>
+<tr><td>主背景与文本</td><td><code>--bg: #ffffff</code>；<code>--fg: #242b23</code></td><td>中间阅读区与主要内容</td></tr>
+<tr><td>侧栏与详情背景</td><td><code>--sidebar-bg: #f4f5f0</code>；<code>--aside-bg: #f8f9f5</code></td><td>区分工作区层级，避免重阴影</td></tr>
+<tr><td>主要操作</td><td><code>--accent: #466339</code>；<code>--accent-on: #ffffff</code></td><td>确认、发送、可操作焦点</td></tr>
+<tr><td>辅助文字与边界</td><td><code>--muted: #687260</code>；<code>--border: #dce2d5</code></td><td>低频信息与细分隔线</td></tr>
+<tr><td>字号</td><td>正文 16px；常用 UI 14px；次级控件 13px；辅助信息 12px；标题 24–28px</td><td>不恢复早期版本 7–10px 的辅助文字</td></tr>
+<tr><td>字体</td><td>系统中文无衬线；代码使用系统等宽回退；品牌字标 Georgia</td><td>无外部字体下载依赖；源码中的 JetBrains Mono 为字体栈名称，不代表已打包字体文件</td></tr>
+<tr><td>间距与圆角</td><td>4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48px；圆角 6 / 10 / 14px</td><td>基于共享变量调整，保留一致节奏</td></tr>
+<tr><td>桌面布局</td><td>左栏 232px；右栏 320px；中心弹性；顶部 56px</td><td>1700px 起侧栏调整至 248 / 352px；1279px 以下收紧至 208 / 296px</td></tr>
+<tr><td>响应式</td><td>1023px 以下详情抽屉；767px 以下导航抽屉；另有 700px 以下矮屏规则</td><td>需测试 375 / 768 / 1024 / 1440 宽度和矮屏，当前不是验收结果</td></tr>
+<tr><td>动效</td><td>160 / 220ms，ease-out；支持 reduced-motion</td><td>状态反馈为主，避免无目的装饰</td></tr>
+</tbody></table></div>
+<p>组件边界包括导航项、历史会话项、状态标记、消息块、发现列表、执行摘要、工具详情、审批卡、上下文标签、输入框、成果卡、折叠配置、详情弹窗。正式实现可拆为独立组件，继续复用这些职责，不必照搬当前单文件渲染方式。</p>
+</section>
+<section id="features"><span class="section-number">04 / REQUIREMENTS</span><h2>功能范围 F01—F16</h2>
+<p>P0 为首版闭环必需，P1 为核心链路稳定后补充。以下是目标功能，不等于当前原型已经具备真实能力。</p>
+<div class="table-wrap"><table><caption>完整功能需求及原型覆盖</caption><thead><tr><th>编号 / 级别</th><th>功能与目标规则</th><th>原型现状</th></tr></thead><tbody>
+<tr><td>F01 · P0</td><td><strong>项目绑定：</strong>选择授权目录，展示名称、路径、分支与可用状态；目录失效有恢复提示</td><td>固定 orbit-web 示例，项目按钮仅显示说明</td></tr>
+<tr><td>F02 · P0</td><td><strong>新建会话：</strong>会话绑定项目，保存消息、配置、运行历史；首条消息生成可修改标题</td><td>可新建并从首条输入截取标题；无重命名入口或服务端记录</td></tr>
+<tr><td>F03 · P0</td><td><strong>会话列表与搜索：</strong>按最近活动排序，支持标题搜索，反映各会话运行状态</td><td>本地标题过滤与状态显示；旧会话更新后未按活动时间重新排序</td></tr>
+<tr><td>F04 · P0</td><td><strong>连续对话：</strong>真实流式回复、追问与上下文续接；切换后保留草稿和执行状态</td><td>固定模板与模拟定时器；草稿只在内存保存</td></tr>
+<tr><td>F05 · P0</td><td><strong>上下文管理：</strong>添加、移除、查看授权文件与规则，区分附加、解析和实际读取状态</td><td>预设名称标签与部分增删；无真实读取、解析和完整移除流程</td></tr>
+<tr><td>F06 · P0</td><td><strong>文件附件：</strong>上传或授权引用，展示大小、类型、进度，限制体积和格式</td><td>文件选择器只显示文件名，不上传内容</td></tr>
+<tr><td>F07 · P0</td><td><strong>执行过程：</strong>真实工具名、对象、状态、耗时与结果；输入输出可展开并按需脱敏</td><td>折叠执行摘要、工具示例与事件列表</td></tr>
+<tr><td>F08 · P1</td><td><strong>执行计划：</strong>仅在存在可信结构化计划时展示步骤；不根据等待时间虚构进度</td><td>固定三步，按模拟状态推导完成数</td></tr>
+<tr><td>F09 · P0</td><td><strong>操作审批：</strong>展示真实操作，允许或拒绝本次；请求过期、取消和重复提交有处理</td><td>按钮改变本地状态，无 SDK 权限回调</td></tr>
+<tr><td>F10 · P0</td><td><strong>文件差异：</strong>真实路径、基线、增删内容；区分待应用、成功、拒绝与失败</td><td>固定登录表单差异，多任务仍会复用该示例</td></tr>
+<tr><td>F11 · P0</td><td><strong>停止与重试：</strong>停止需确认执行终止；重试不盲目重复有副作用的步骤</td><td>清除模拟定时器；无真实进程取消、停止中或撤销能力</td></tr>
+<tr><td>F12 · P0</td><td><strong>交付物：</strong>收集实际成果，按会话或项目查看、预览与下载；记录版本和可用状态</td><td>从模板生成 Markdown；预览为原始文本；无真实文件索引</td></tr>
+<tr><td>F13 · P0</td><td><strong>执行记录：</strong>每次运行独立记录起止时间、结果、审批与事件，关联所属会话</td><td>当前按会话列表展示；事件为字符串数组，无独立 Run</td></tr>
+<tr><td>F14 · P0</td><td><strong>会话恢复：</strong>刷新恢复服务端事实；重启区分可续接会话与中断运行</td><td>localStorage 保存部分会话；加载时 running 改成 stopped，不是真实恢复</td></tr>
+<tr><td>F15 · P1</td><td><strong>用量与费用：</strong>真实 token、模型与计价依据；缺失显示暂无数据，估算须标明</td><td>12.8k、6.4%、$0.042 为固定示例，已折叠并标注</td></tr>
+<tr><td>F16 · P1</td><td><strong>会话整理：</strong>重命名、归档、删除；运行中删除先处理运行；说明影响范围</td><td>只有演示数据重置，无单会话整理</td></tr>
+</tbody></table></div>
+</section>
+<section id="flows"><span class="section-number">05 / USER FLOWS</span><h2>核心交互流程</h2>
+<h3>首次使用与正常任务</h3><p class="flow">配置可用的执行环境 → 选择并授权项目 → 创建会话 → 输入任务 / 附加上下文 → 服务端创建消息与运行 → 展示真实文本和工具事件 → 如需权限则等待审批 → 执行终止 → 展示实际结果与成果</p>
+<p>首次配置和项目选择页面尚未设计完整。开发需补齐未配置、连接失败、目录失效与空工作空间状态。示例工作区名、Lambert 身份与 orbit-web 项目不是正式账号或项目系统。</p>
+<h3>文件修改与审批</h3><p class="flow">Agent 请求操作 → 服务端冻结操作与文件基线 → 页面展示范围、目的与差异 → 用户查看详情 → 允许 / 拒绝 → 服务端幂等记录决策 → SDK 执行或处理拒绝 → 页面展示真实结果</p>
+<p>拒绝一次操作后，Agent 可以解释、给出替代方案或结束当前运行。拒绝不是永久结束会话，也不自动等于整个任务失败。</p>
+<h3>连续追问与跨会话切换</h3><p>在同一 Session 下为每次提交创建新的 Run，不覆盖前一轮执行轨迹与交付物。切换会话不停止后台任务；会话列表继续更新。输入草稿与附件草稿按会话隔离，不能把一个会话的文件带入另一个会话。</p>
+<h3>异常与恢复</h3><p class="flow">断线 / 工具失败 / SDK 错误 → 保留已有内容 → 显示故障阶段和已发生操作 → 查询服务端状态 / 补齐事件 → 用户选择重试、重新发起或停止</p>
+<p>前端断网不代表运行失败。只有服务端确认的终态可以改变运行终态。SDK 进程退出或服务重启导致的中断不能伪装为用户主动停止。</p>
+<h3>成果闭环</h3><p>运行结束后展示结果摘要；只将明确生成的成果登记为 Artifact。用户可在当前会话或全局交付物中预览、下载和回到来源运行。项目里的全部源码不自动成为交付物。</p>
+</section>
+<section id="states"><span class="section-number">06 / STATE MODEL</span><h2>状态与并发规则</h2>
+<div class="table-wrap"><table><caption>目标领域对象与状态</caption><thead><tr><th>对象</th><th>建议状态</th><th>关键约束</th></tr></thead><tbody>
+<tr><td>Session</td><td>active / archived</td><td>长期容器；展示最近 Run 的状态，不永久标记“已完成”</td></tr>
+<tr><td>Run</td><td>queued / running / awaiting_permission / stopping / completed / stopped / failed / interrupted</td><td>终态不能由浏览器计时器推测；持久化真实终止原因</td></tr>
+<tr><td>ToolCall</td><td>queued / running / awaiting_permission / succeeded / failed / denied / canceled</td><td>成功必须有真实结果；拒绝保留决策与原因</td></tr>
+<tr><td>PermissionRequest</td><td>pending / allowed / denied / expired / canceled</td><td>终态决策不可重复应用；原子状态更新</td></tr>
+<tr><td>Artifact</td><td>available / unavailable</td><td>引用可追踪的文件版本；不可访问有明确解释</td></tr>
+<tr><td>UI 连接</td><td>connecting / connected / reconnecting / disconnected</td><td>与 Run 状态分离，连接中断不等于任务已停止</td></tr>
+</tbody></table></div>
+<p class="flow">queued → running ↔ awaiting_permission → running → completed / failed<br>活动运行 → stopping → stopped（确认终止后）<br>进程丢失或不可恢复重启 → interrupted（记录已完成操作）</p>
+<ul><li>首版同一会话只允许一个活动运行；重复提交返回明确冲突，不产生第二次副作用。</li><li>不同会话可独立执行；并发上限作为服务端配置，达到上限进入队列或返回忙碌状态。</li><li>同一项目中的冲突写入需串行化或验证文件基线，即便来自不同会话也不能静默覆盖。</li><li>执行中保留输入草稿，提供持续可用的停止入口；首版不支持未设计的中途插话或隐式队列。</li><li>等待审批时，输入内容保留并提示先处理审批，不能丢弃草稿或把文本当成权限决策。</li><li>停止与完成竞态以服务端最终结果为准；停止不撤销已发生写入。</li><li>同一运行可多次请求权限，每个请求独立；多个请求需可逐个处理，不能复用一个固定卡片的数据。</li></ul>
+<p>原型的 idle、waiting、done、denied 等是 UI 演示状态，不能直接作为正式领域模型。尤其应将“操作被拒绝”从运行整体状态中分离。</p>
+</section>
+<section id="permissions"><span class="section-number">07 / PERMISSION &amp; DIFF</span><h2>审批与真实文件差异</h2>
+<p>审批界面必须回答：准备做什么、影响哪里、允许的范围是什么。首版提供“允许本次”和“拒绝本次”；始终允许、自动审批、批量放行需另行设计。</p>
+<div class="table-wrap"><table><caption>不同操作的审批信息</caption><thead><tr><th>类型</th><th>必须展示</th><th>决策后的要求</th></tr></thead><tbody>
+<tr><td>修改文件</td><td>授权范围内的路径、文件基线、真实差异、目的、文件数</td><td>文件或操作发生变化时重新确认；只执行已审批操作</td></tr>
+<tr><td>创建 / 删除</td><td>对象路径、内容摘要或删除范围、恢复能力说明</td><td>不得把删除呈现为普通编辑；记录实际结果</td></tr>
+<tr><td>执行命令</td><td>命令原文、工作目录、目的；敏感参数脱敏</td><td>命令不得在前端审批后被静默替换；取消与超时有实际处理</td></tr>
+<tr><td>其他工具</td><td>工具名称、关键参数、访问对象与权限范围</td><td>工具适配层校验，不能仅依赖按钮状态</td></tr>
+</tbody></table></div>
+<ul><li>PermissionRequest 绑定 runId、toolCallId、操作快照与有效期。服务端验证当前用户或本地应用身份对该项目的权限。</li><li>前端只提交决定，不直接执行文件操作；按钮禁用不能代替服务端授权。</li><li>双击、网络重发和多窗口操作只能生效一次；过期、已处理或已取消的请求返回明确状态。</li><li>停止运行会取消其待审批请求；迟到的允许请求不能重启运行。</li><li>读取、写入、下载都必须验证路径范围，处理符号链接和目录穿越，不接受浏览器传入任意绝对路径。</li><li>操作过程中失败要报告部分完成情况；“失败”不保证没有任何写入。</li></ul>
+<div class="note caution"><p><strong>待 SDK 验证：</strong>当前版本权限回调是否提供可计算准确 diff 的信息、如何等待异步用户决策、如何取消等待。若无法在写入前取得可靠 diff，应补充受控执行 / 预演层，或展示准确操作预览并说明范围，不能使用固定示例替代真实差异。</p></div>
+</section>
+<section id="architecture"><span class="section-number">08 / ARCHITECTURE PROPOSAL</span><h2>SDK 接入与模块边界</h2>
+<p class="flow">Web 界面 ↔ 应用 HTTP / 事件服务 ↔ 运行调度与 SDK 适配层 ↔ 已授权项目与工具<br>应用服务 ↔ 持久化存储 / 附件与成果服务</p>
+<div class="table-wrap"><table><caption>建议职责拆分，尚未创建这些模块</caption><thead><tr><th>模块</th><th>负责</th><th>不应负责</th></tr></thead><tbody>
+<tr><td>Web UI</td><td>输入、渲染、草稿、可访问交互、提交审批</td><td>持有提供商密钥、直接执行 shell、决定真实权限</td></tr>
+<tr><td>项目与会话服务</td><td>授权项目、Session / Message 生命周期、查询历史</td><td>泄露宿主私有目录或直接耦合 SDK 原始帧</td></tr>
+<tr><td>运行服务</td><td>并发限制、Run 生命周期、取消、状态协调</td><td>通过前端定时器宣告完成</td></tr>
+<tr><td>SDK 适配层</td><td>发起执行、会话续接、工具与权限回调、取消、用量提取</td><td>将版本特有事件直接传播到所有页面</td></tr>
+<tr><td>权限服务</td><td>操作快照、有效期、幂等决策、文件基线验证</td><td>将任意客户端布尔值当作已授权</td></tr>
+<tr><td>文件 / 成果服务</td><td>受控读取、上传、真实差异、成果索引与下载</td><td>把项目全部文件当成果，或允许任意路径访问</td></tr>
+<tr><td>事件与存储</td><td>可重放事件、顺序、去重、快照、持久化</td><td>只用内存或浏览器缓存保存运行事实</td></tr>
+</tbody></table></div>
+<p>建议正式开发使用 TypeScript 维护共享 DTO 与状态联合类型，界面可以按现有组件边界迁移到选定前端框架。当前没有选定服务端框架、数据库、运行载体或 SDK 版本；这些是接入前的技术决策，不应将建议写成已落地依赖。</p>
+<p>密钥与提供商认证留在服务端受控配置，不进入网页源码、消息内容、事件日志或下载文件。本机服务也需限定监听范围、校验请求来源与应用身份；远程使用会增加部署和用户鉴权需求，不在首版假设中。</p>
+</section>
+<section id="data"><span class="section-number">09 / DATA CONTRACT</span><h2>数据模型与持久化</h2>
+<div class="table-wrap"><table><caption>建议核心实体</caption><thead><tr><th>实体</th><th>关键字段</th><th>持久化与约束</th></tr></thead><tbody>
+<tr><td>Project</td><td>id、name、authorizedRootRef、branch、availability、createdAt</td><td>目录授权由服务端建立；客户端只引用 projectId</td></tr>
+<tr><td>Session</td><td>id、projectId、title、status、config、createdAt、updatedAt</td><td>保存活动 / 归档信息；SDK 会话句柄由适配层持有并校验</td></tr>
+<tr><td>Message</td><td>id、sessionId、runId、role、contentBlocks、createdAt</td><td>内容块区分文本、工具引用、成果引用；保留原顺序</td></tr>
+<tr><td>Run</td><td>id、sessionId、triggerMessageId、status、startedAt、endedAt、reason、error</td><td>一次提交对应一次运行；每次重试另建 Run 并关联来源</td></tr>
+<tr><td>ToolCall</td><td>id、runId、name、inputSummary、status、outputRef、startedAt、endedAt</td><td>记录真实工具结果；大输出分页或按需加载</td></tr>
+<tr><td>PermissionRequest</td><td>id、runId、toolCallId、operationSnapshot、baseFingerprint、status、expiresAt、decidedAt</td><td>原子决策；操作与基线匹配；保留审批记录</td></tr>
+<tr><td>Attachment / ContextRef</td><td>id、sessionId、name、mimeType、size、sourceType、status、storageRef</td><td>区分上传完成、可解析、已附加与已读取；关联特定请求上下文快照</td></tr>
+<tr><td>Artifact</td><td>id、runId、projectId、name、mimeType、size、storageRef、fingerprint、availability</td><td>明确来源运行与文件版本；下载时再次校验访问权限</td></tr>
+<tr><td>Usage</td><td>runId、model、inputTokens、outputTokens、cacheUsage、costEstimate、pricingVersion</td><td>字段缺失用 null，不伪造 0；费用估算标明币种、时间与计价依据</td></tr>
+<tr><td>RunEvent</td><td>eventId、runId、seq、type、timestamp、payload、schemaVersion</td><td>序号在运行内递增；先持久化再可重放；敏感信息脱敏</td></tr>
+</tbody></table></div>
+<p>服务端是消息、运行、权限与成果的事实来源。浏览器保存草稿、展开状态与显示偏好；浏览器缓存失败时页面仍可使用，但不能承诺跨刷新保存。附件草稿按会话隔离，提交时冻结实际使用的上下文列表。</p>
+<p>持久化位置由选定部署环境的配置与数据目录合同决定，本说明不指定宿主数据目录。备份、迁移和保留策略需在选择数据库后定义。</p>
+</section>
+<section id="api"><span class="section-number">10 / PROPOSED API</span><h2>建议 HTTP 接口</h2>
+<div class="note caution"><p>以下路径是开发建议，当前项目没有这些 HTTP 服务。实施时可调整命名，但必须保留身份校验、授权、幂等、错误语义和状态查询能力。</p></div>
+<div class="table-wrap"><table><caption>建议端点与职责</caption><thead><tr><th>方法与路径</th><th>用途</th><th>关键契约</th></tr></thead><tbody>
+<tr><td><code>GET /api/projects</code></td><td>列出已授权项目</td><td>返回可用状态，不泄露未授权目录</td></tr>
+<tr><td><code>POST /api/projects</code></td><td>绑定用户选择的目录</td><td>目录选择机制按本机载体实现；服务端验证授权引用</td></tr>
+<tr><td><code>GET /api/sessions</code></td><td>搜索、分页与活动排序</td><td>projectId、query、cursor；稳定分页</td></tr>
+<tr><td><code>POST /api/sessions</code></td><td>创建会话</td><td>projectId 与允许的配置；返回 sessionId</td></tr>
+<tr><td><code>GET /api/sessions/:id</code></td><td>会话快照与当前运行</td><td>与消息分页、事件续传协同</td></tr>
+<tr><td><code>GET /api/sessions/:id/messages</code></td><td>读取历史消息</td><td>稳定消息 ID 与内容块顺序</td></tr>
+<tr><td><code>POST /api/sessions/:id/messages</code></td><td>提交用户输入并创建运行</td><td>同一幂等键只创建一次；活动运行冲突返回 409</td></tr>
+<tr><td><code>GET /api/runs/:id</code></td><td>查询运行真相</td><td>包含终态原因和当前待审批引用</td></tr>
+<tr><td><code>GET /api/runs/:id/events</code></td><td>订阅 / 补齐事件</td><td>推荐 SSE；从游标恢复，能与快照衔接</td></tr>
+<tr><td><code>POST /api/runs/:id/stop</code></td><td>请求停止</td><td>幂等；先返回停止请求状态，终态由后续事件确认</td></tr>
+<tr><td><code>GET /api/permissions/:id</code></td><td>读取审批详情</td><td>返回操作快照、基线与有效状态</td></tr>
+<tr><td><code>POST /api/permissions/:id/decision</code></td><td>提交 allow / deny</td><td>绑定操作版本；已决策或过期返回明确冲突</td></tr>
+<tr><td><code>GET /api/permissions/:id/diff</code></td><td>读取待审批真实差异</td><td>文本、大文件、二进制、创建和删除分别表示</td></tr>
+<tr><td><code>POST /api/sessions/:id/attachments</code></td><td>上传文件</td><td>体积 / 类型校验；返回 attachmentId 和处理状态</td></tr>
+<tr><td><code>DELETE /api/sessions/:id/attachments/:attachmentId</code></td><td>移除未提交的附件上下文</td><td>不删除已保存运行快照或原始项目文件</td></tr>
+<tr><td><code>GET /api/runs</code></td><td>查询执行记录</td><td>按 projectId / sessionId / 状态分页</td></tr>
+<tr><td><code>GET /api/artifacts</code></td><td>全局 / 会话成果列表</td><td>只返回授权且有实际来源的成果</td></tr>
+<tr><td><code>GET /api/artifacts/:id/content</code></td><td>预览成果内容</td><td>限定内容大小和 MIME；HTML 等主动内容隔离展示</td></tr>
+<tr><td><code>GET /api/artifacts/:id/download</code></td><td>下载成果</td><td>安全文件名、版本一致性、权限复核</td></tr>
+<tr><td><code>PATCH /api/sessions/:id</code> / <code>DELETE /api/sessions/:id</code></td><td>重命名、归档、删除（P1）</td><td>运行中的处理策略明确；删除不等于删除项目源码</td></tr>
+</tbody></table></div>
+<h3>提交任务示例（建议字段）</h3><pre><code>POST /api/sessions/{sessionId}/messages
+Idempotency-Key: {clientRequestId}
+
+{
+  "text": "检查登录表单的边界条件",
+  "contextRefs": ["context-id"],
+  "attachmentIds": ["attachment-id"]
+}
+
+202 Accepted
+{
+  "messageId": "message-id",
+  "runId": "run-id",
+  "status": "queued"
+}</code></pre>
+<p>服务端不能相信客户端声明的项目路径、工具权限或费用；所有上下文引用需在所属项目和会话中验证。认证载体、请求来源校验和具体凭据形式由部署方案确定。</p>
+<h3>错误语义</h3><p>统一返回可识别的 <code>code</code>、用户可读 <code>message</code>、可重试标记 <code>retryable</code> 与 <code>requestId</code>。建议区分 INVALID_INPUT、PROJECT_UNAVAILABLE、RUN_ACTIVE、PERMISSION_EXPIRED、OPERATION_CHANGED、SDK_UNAVAILABLE、UPLOAD_TOO_LARGE、ARTIFACT_UNAVAILABLE。客户端是否重试必须结合操作幂等性，不只依赖 retryable。</p>
+</section>
+<section id="events"><span class="section-number">11 / EVENT STREAM</span><h2>事件流与断线恢复</h2>
+<p>建议由适配层将 SDK 原始事件规范化，再由应用发布稳定事件。以下类型是应用协议建议，不声称 Claude Agent SDK 提供同名事件。</p>
+<div class="table-wrap"><table><caption>建议应用事件</caption><thead><tr><th>事件</th><th>主要数据与 UI 消费</th></tr></thead><tbody>
+<tr><td>run.created / run.status_changed</td><td>运行标识、状态和原因；同步标题、侧栏、执行记录</td></tr>
+<tr><td>message.delta / message.completed</td><td>messageId、blockId、增量顺序或最终快照；流式文本去重并稳定拼接</td></tr>
+<tr><td>tool.started / tool.updated / tool.finished</td><td>toolCallId、工具名、对象、真实状态、摘要与输出引用</td></tr>
+<tr><td>permission.requested / permission.resolved</td><td>permissionId、操作摘要、当前决策；呈现或关闭审批</td></tr>
+<tr><td>artifact.created / artifact.updated</td><td>artifactId、版本、文件状态；更新交付物列表</td></tr>
+<tr><td>usage.updated</td><td>真实用量字段；缺失维度保留 unknown，不填示例</td></tr>
+<tr><td>run.finished</td><td>最终状态、原因、时间与已完成操作摘要；完成不等于所有工具都成功</td></tr>
+</tbody></table></div>
+<pre><code>{
+  "schemaVersion": 1,
+  "eventId": "unique-event-id",
+  "runId": "run-id",
+  "seq": 42,
+  "type": "permission.requested",
+  "timestamp": "ISO-8601 timestamp",
+  "payload": { "permissionId": "permission-id" }
+}</code></pre>
+<ol><li>每个运行维护单调递增 seq，事件具备稳定 eventId；客户端按运行去重，不能全局混用序号。</li><li>重连时携带最后已应用游标，服务端补齐缺失事件。快照与订阅需共享一致的序列边界，避免订阅前后的空窗。</li><li>超过事件保留范围时返回“需要重新同步”，客户端读取完整快照再从对应游标继续。</li><li>收到终态后停止重复追加终态事件；审批已结束时迟到卡片不可再次可操作。</li><li>SDK 连接或进程丢失时先协调实际状态；不可恢复则记录 interrupted，不以页面重载推断 stopped。</li><li>对长工具输出做按需加载、分页和截断说明；原始内容有可达入口，不能静默丢弃关键错误。</li></ol>
+</section>
+<section id="source-map"><span class="section-number">12 / SOURCE MAP</span><h2>源码与功能映射</h2>
+<p>当前交互原型为静态 HTML + CSS + 原生 JavaScript，无 package.json、构建器或已配置服务端。打开根目录 index.html 即为入口，样式与脚本通过相对路径引用。</p>
+<div class="table-wrap"><table><caption>文件职责</caption><thead><tr><th>文件</th><th>职责</th><th>修改定位</th></tr></thead><tbody>
+<tr><td>index.html</td><td>三栏结构、导航、标签、输入框、侧栏与 dialog 容器</td><td>使用固定 DOM ID 和 data-action；脚本依赖这些标识，迁移时成组处理</td></tr>
+<tr><td>styles.css</td><td>布局基础、设计变量、组件样式、响应式和 reduced-motion</td><td>:root 为设计变量主入口；按组件分组；保留原生 hidden 与 closed-dialog 行为</td></tr>
+<tr><td>app.js</td><td>内存状态、本地缓存、渲染、事件代理、模拟执行与下载</td><td>正式开发重点替换模拟状态来源，拆分 Session / Run / ToolCall / Permission</td></tr>
+<tr><td>image.png</td><td>原始视觉参考</td><td>仅作为参考素材链接；当前界面由 HTML / CSS 绘制，不嵌入截图</td></tr>
+</tbody></table></div>
+<div class="table-wrap"><table><caption>关键函数与交互入口</caption><thead><tr><th>函数 / 数据</th><th>对应能力</th><th>正式开发处理</th></tr></thead><tbody>
+<tr><td>initial / statusMap</td><td>种子会话、演示状态映射</td><td>移入明确的开发夹具；正式运行不混入示例数据</td></tr>
+<tr><td>render / renderHistory</td><td>工作区与左栏状态</td><td>消费同一服务端快照，保持排序与活动状态一致</td></tr>
+<tr><td>renderConversation</td><td>消息、发现、折叠计划与工具详情</td><td>替换固定模板；按真实消息块与工具事件渲染</td></tr>
+<tr><td>renderComposer / drafts</td><td>输入草稿、上下文标签、发送状态</td><td>草稿持久化可选；附件和上下文按会话隔离</td></tr>
+<tr><td>renderAside / disclosureState</td><td>审批卡、上下文、事件、折叠详情</td><td>多审批请求、失效状态与跨窗口同步；展开状态可单独保存</td></tr>
+<tr><td>send / schedule / timers</td><td>任务提交与 1.8 秒模拟完成</td><td>用真实请求和事件流替代；移除定时宣告执行结果</td></tr>
+<tr><td>approve / deny / diff</td><td>本地审批与固定文件差异</td><td>接服务端权限、操作版本和真实 diff</td></tr>
+<tr><td>artifactName / artifactText / preview</td><td>模板 Markdown 预览与下载</td><td>真实成果索引、内容查询与下载服务</td></tr>
+<tr><td>renderCollection</td><td>全局成果与执行列表</td><td>独立运行记录、查询分页、真实时间与来源</td></tr>
+<tr><td>showDialog / closeDialog</td><td>详情弹窗与焦点恢复</td><td>迁移时保留键盘、关闭与焦点策略</td></tr>
+<tr><td>document 点击代理 / data-action</td><td>所有主要按钮行为</td><td>组件化后避免重复绑定，保持同一动作的一致行为</td></tr>
+<tr><td>save / atelier-workbench-v1</td><td>localStorage 会话缓存</td><td>只作偏好 / 演示缓存；生产事实迁移到服务端</td></tr>
+</tbody></table></div>
+<p>原型的“设置”显示演示说明并提供重置；“Agent”入口没有模型列表；“会话详情”也复用设置弹窗。这些入口不能作为完整设置产品的验收证据。</p>
+</section>
+<section id="gaps"><span class="section-number">13 / GAPS</span><h2>原型缺口与已知限制</h2>
+<p>以下是根据当前源码识别的交接事项，不是本轮浏览器测试结论。设计源码保持现状，后续按任务清单处理。</p>
+<div class="table-wrap"><table><caption>需要进入开发任务的差距</caption><thead><tr><th>差距</th><th>影响</th><th>处理方向</th></tr></thead><tbody>
+<tr><td>多个任务复用登录表单模板</td><td>新建任意任务仍可能展示相同发现、审批、diff 与成果；API / README 的部分结果仍不一致</td><td>以真实 Run 数据渲染；演示夹具按场景隔离</td></tr>
+<tr><td>会话与运行混在同一对象</td><td>后续消息不会生成完整的独立助手轮次；重试 / 追问可能覆盖成果标记</td><td>拆分领域对象与事件，追加历史而不覆盖</td></tr>
+<tr><td>附件是全局内存列表</td><td>切换会话时清空，不保存内容；不能当上传功能使用</td><td>按会话存附件草稿并实现服务端上传 / 引用</td></tr>
+<tr><td>草稿与展开状态仅内存</td><td>刷新后丢失；localStorage 被禁用时会话也只在内存</td><td>明确保存边界，提供可用性反馈；不把缓存当事实来源</td></tr>
+<tr><td>运行恢复依赖页面重载</td><td>加载时将 running 改成 stopped；后台真实运行无法跟踪</td><td>服务端协调状态、事件续传与中断恢复</td></tr>
+<tr><td>执行记录无运行时间与唯一身份</td><td>不能审计每一轮；“刚刚”等示例时间不会真实计算</td><td>保存 Run、事件时间与审批决策</td></tr>
+<tr><td>只折叠或显示，不是完整可访问组件</td><td>标签页缺少方向键导航；窄屏抽屉缺少完整焦点圈定、恢复与背景隔离</td><td>按可访问模式补齐；完成键盘与屏幕阅读器检查</td></tr>
+<tr><td>缺少滚动与大数据策略</td><td>消息增长、草稿高度变化、长历史与长输出可能影响定位与性能</td><td>只在用户接近底部时自动跟随；提供新消息提示；分页和按需加载</td></tr>
+<tr><td>未实现首次配置、项目选择与连接状态页</td><td>真实用户无法完成从空环境开始的路径</td><td>补齐设置与项目绑定流程、空态和故障恢复入口</td></tr>
+<tr><td>没有自动化测试与运行验证记录</td><td>源码交接不等于生产就绪</td><td>按下节验收；保留真实执行证据，不把待办标记为已通过</td></tr>
+</tbody></table></div>
+</section>
+<section id="acceptance"><span class="section-number">14 / ACCEPTANCE</span><h2>验收与测试策略</h2>
+<p>以下全部为待实施验收要求。正式开发应同时覆盖应用状态、HTTP 集成、SDK 适配及关键用户流程。</p>
+<ol class="checklist">
+<li><strong>A01 真实任务：</strong>绑定授权项目，新建会话，提交任务，接收真实流式回复并得到明确终态。</li>
+<li><strong>A02 会话切换：</strong>执行中切换会话再返回，消息、草稿、附件归属和运行状态一致；后台任务不因切换被停止。</li>
+<li><strong>A03 拒绝审批：</strong>写入前展示准确范围；拒绝后对应操作不发生；会话可继续。</li>
+<li><strong>A04 允许审批：</strong>重复点击与请求重发只执行一次；文件内容与审批快照一致；基线变化要求重新确认。</li>
+<li><strong>A05 停止：</strong>显示 stopping，真实终止后显示终态；已发生变更保留并可解释；停止后迟到审批无效。</li>
+<li><strong>A06 断线重连：</strong>丢失连接后查询服务端事实、补齐事件，无重复消息、工具或副作用。</li>
+<li><strong>A07 刷新与重启：</strong>刷新恢复历史；服务重启后区分可恢复与 interrupted；不得将未知运行误标为用户停止。</li>
+<li><strong>A08 成果：</strong>下载与预览来自真实成果，内容和版本一致；不存在或无权限时显示原因。</li>
+<li><strong>A09 可恢复错误：</strong>SDK 未配置、目录失效、上传失败、工具失败、权限过期都有具体处理入口。</li>
+<li><strong>A10 适配与键盘：</strong>375 / 768 / 1024 / 1440 宽度、矮屏、200% 缩放可完成关键操作；焦点可见、无意外陷阱，抽屉与弹窗可正确返回。</li>
+<li><strong>A11 数据一致：</strong>连续两轮分别保留消息、工具、审批与成果；历史排序根据真实更新时间。</li>
+<li><strong>A12 边界：</strong>目录穿越、符号链接越界、伪造项目引用被拒绝；凭据不出现在日志、消息与下载内容中。</li>
+<li><strong>A13 真实缺失：</strong>没有结构化计划时不造计划；没有 usage 时显示暂无；估算费用有计价说明。</li>
+<li><strong>A14 状态冲突：</strong>多窗口审批、停止与完成竞态、同项目并发写入不会静默覆盖或重复执行。</li>
+</ol>
+<div class="table-wrap"><table><caption>推荐测试层次</caption><thead><tr><th>层次</th><th>关注点</th><th>完成证据</th></tr></thead><tbody>
+<tr><td>单元 / 状态测试</td><td>事件归并、去重、状态转换、权限终态、路径验证</td><td>确定性断言，故障与竞态用例可复现</td></tr>
+<tr><td>HTTP 集成</td><td>持久化、权限幂等、上传、停止、游标恢复</td><td>真实数据库 / 临时文件夹边界，替身 SDK 不伪装真实调用</td></tr>
+<tr><td>SDK 适配契约</td><td>事件形状、授权等待、取消、续接、usage</td><td>固定 SDK 版本与脱敏记录；有限真实调用验证关键假设</td></tr>
+<tr><td>浏览器流程</td><td>任务→审批→成果，以及拒绝、断线、刷新和键盘</td><td>基于真实应用接口的端到端场景，不依赖页面内部改状态</td></tr>
+<tr><td>人工视觉与可用性</td><td>信息层级、滚动、窄屏、长文本和错误恢复</td><td>记录设备、宽高、实际问题与处理结果；不能用绿灯测试代替观察</td></tr>
+</tbody></table></div>
+</section>
+<section id="delivery"><span class="section-number">15 / DELIVERY PLAN</span><h2>开发阶段与交接方式</h2>
+<div class="table-wrap"><table><caption>建议开发顺序</caption><thead><tr><th>阶段</th><th>重点</th><th>退出条件</th></tr></thead><tbody>
+<tr><td>0 · 能力与工程基线</td><td>确定运行载体、SDK 版本与认证；验证读文件、事件、权限和取消；建立共享契约与测试入口</td><td>关键能力有证据，风险有明确处理，示例代码不被当作生产数据</td></tr>
+<tr><td>1 · 只读任务闭环</td><td>项目绑定、会话与 Run 持久化、流式回复、工具轨迹、停止和历史</td><td>真实只读任务可提交、追踪、停止，刷新后能恢复记录</td></tr>
+<tr><td>2 · 受控修改闭环</td><td>真实差异、权限请求、操作版本、取消与幂等，断线和重启协调</td><td>真实文件经审批修改；拒绝、竞态、重发和恢复满足约束</td></tr>
+<tr><td>3 · 可持续使用</td><td>附件上下文、真实成果、全局运行、首次配置与错误场景、可访问与响应式</td><td>全部 P0 场景通过，文档与实现一致</td></tr>
+<tr><td>4 · 增强能力</td><td>结构化计划、真实用量与估算、会话整理</td><td>对应 P1 验收完成，缺失 SDK 数据有诚实降级</td></tr>
+</tbody></table></div>
+<p>实施任务编号、依赖与完成条件见 <a href="development-tasks.md">development-tasks.md</a>。任务依赖比阶段名更精确；例如事件去重与权限模型应在 UI 接线前确定，不应推迟到最后一轮联调。</p>
+<p>打开原型时将 index.html、styles.css、app.js 保持在同一目录。文档无需外部字体或 CDN；HTML 文件可直接在浏览器阅读。将 ZIP 解压后从 README 开始，后续正式工程的安装 / 启动命令由选定技术栈补充，当前不提供不存在的构建命令。</p>
+</section>
+<section id="decisions"><span class="section-number">16 / OPEN DECISIONS</span><h2>待技术验证的事项</h2>
+<div class="note"><p><strong>T01 更新 · 2026-11-18：</strong>已完成独立 SDK 验证，14 项离线测试与 7 项真实场景通过。采用 Node 24.21.0、Agent SDK 0.3.326 / CLI 2.1.326，经本机 Shunt 0.64.0 调用 gpt-6.1-sol。只读、工具事件、允许/拒绝、取消及跨进程续接已有证据；生产服务和界面接线仍待实现。详见 <a href="t01-sdk-validation.md">T01 验证报告与限制</a>。非 Claude 模型属于该组合的实测兼容；实际费用未知，结构化计划未验证，abort 可能不返回最终 result。</p></div>
+<div class="table-wrap"><table><caption>接入前需要明确，但不阻塞本次资料交接</caption><thead><tr><th>事项</th><th>当前建议 / 假设</th><th>所需证据</th></tr></thead><tbody>
+<tr><td>运行载体</td><td>个人本机服务 + Web 界面；是否桌面壳待定</td><td>真实目录选择、进程生命周期、监听与身份策略</td></tr>
+<tr><td>SDK 与运行时</td><td>T01：Node 24.21.0、SDK 0.3.326、配套 CLI 2.1.326</td><td>已查官方文档并锁定依赖；独立实验有真实证据，产品适配尚未接入</td></tr>
+<tr><td>认证方式</td><td>服务端受控配置</td><td>支持的认证流程、错误语义、凭据保管方式</td></tr>
+<tr><td>会话续接</td><td>应用 Session 与 SDK 标识分离</td><td>续接范围、有效期、服务重启后的恢复限制</td></tr>
+<tr><td>权限回调与 diff</td><td>按请求异步审批，绑定操作快照</td><td>真实回调参数、等待与取消能力、写前差异构建方式</td></tr>
+<tr><td>停止执行</td><td>明确 stopping 到终态确认</td><td>取消 API、子进程处理和未终止工具的处置</td></tr>
+<tr><td>计划与 usage</td><td>仅有可信结构化数据才展示</td><td>版本支持范围、缺失与缓存 token 语义</td></tr>
+<tr><td>附件支持</td><td>首版先限定明确可解析类型与体积</td><td>实际 SDK 输入支持、解析成本、上传限制数值</td></tr>
+<tr><td>数据保留与并发</td><td>持久化事实；每会话单活动 Run</td><td>数据库、事件保留窗口、队列上限、备份与清理策略</td></tr>
+</tbody></table></div>
+</section>
+<section id="sources"><span class="section-number">17 / SOURCES &amp; MAINTENANCE</span><h2>资料来源与维护规则</h2>
+<ul><li>用户原始需求：参考所给界面，设计底层封装 Claude SDK 的 AI 工作台。</li><li>用户提供的原始参考图：项目文件 <a href="../image.png">image.png</a>。仅作为设计参考保留；作者和许可未提供，不宣称获得额外发布授权。</li><li>当前设计基线：本项目 <a href="../index.html">index.html</a>、<a href="../styles.css">styles.css</a> 与 <a href="../app.js">app.js</a> 的第二轮优化版本。</li><li>前文《产品开发功能说明书 v1.0》：定位、F01—F16、对象与状态、审批约束、验收和阶段划分已纳入本文。</li><li>初始交接中的 SDK/API 内容为应用侧设计建议；2026-11-18 的 T01 已补充官方文档核实与固定版本实测，来源和限制见 <a href="t01-sdk-validation.md">T01 验证报告</a>。本文建议的产品 HTTP 接口仍未实现。</li></ul>
+<p><strong>维护顺序：</strong>产品行为变更更新本文对应功能编号；实施进度与证据更新任务清单；文件与启动入口变更更新 README；设计变量只维护 styles.css；重新交接时从明确文件清单重新打包 ZIP。压缩包是快照，源码或文档后续修改不会自动同步进旧 ZIP。</p>
+<p>不将 .od-frames、宿主 artifact 元数据、内部运行输入或代理环境文件作为产品交接依赖。交付包不需要这些文件即可阅读设计和资料。</p>
+</section>
+<footer>atelier. · 产品与开发交接说明 v1.0<br>当前交付：设计源码与开发规格。生产接入与验收状态以实际实施证据为准。</footer>
+</article></main>
+</div>
+</body>
+</html>

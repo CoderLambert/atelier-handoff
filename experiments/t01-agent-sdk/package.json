@@ -1,0 +1,19 @@
+{
+  "name": "atelier-t01-agent-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.21.0 <25" },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "offline": "node --import tsx --test offline.test.ts",
+    "preflight": "node --import tsx run.ts --preflight",
+    "live": "node --import tsx run.ts"
+  },
+  "dependencies": { "@anthropic-ai/claude-agent-sdk": "0.3.326" },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

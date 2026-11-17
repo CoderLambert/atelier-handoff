@@ -1,0 +1,32 @@
+{
+  "at": "2026-11-17T17:56:31.355Z",
+  "status": "PASS",
+  "baseline": {
+    "index.html": "27a65cdfc744de68b29d853a7493203a6c56050f2a6ccd29267fb0038be1151d",
+    "styles.css": "fd1ca640e1ca61786386fc90319b0d5467c40d2e4be69123b803928d20b57435",
+    "app.js": "036653e91f36c7196e4d98665b782ae2ac35b13e726f2b2edc486da71f4db95a"
+  },
+  "sources": {
+    "run.ts": "33fb2323dfc9c36ceb56b82b8c8a53c07152b7258f7d9edf7e0330fea2d665a4",
+    "policy.ts": "6a1eef44daac52cdceefcfa6f9254ab176698caa35c9a70eb688101b9c43b018",
+    "events.ts": "8c1139a3885b295ea21ad5e961485babd789aaa821da78cfeb8b5c9cc02dd717",
+    "offline.test.ts": "0c71bb4939714f5f4d118b4d97028dada7099460eebb64943f397e181efe7701",
+    "package.json": "cd122fd2ed900f50474c85f12dfc9ecad85139be9d66605bf810bbfc0f7dfc26",
+    "package-lock.json": "b524a9d49d5b5703583900701f8c59c557d0f13ebcc9081d30335419ec4948da",
+    "tsconfig.json": "6d260a9df18e7cf32c51ba6f9d01844b3f6a81b8c074bcf164d18c526dba1123"
+  },
+  "checks": {
+    "allSevenCasesPass": true,
+    "queries": 7,
+    "inputs": 8,
+    "resumeAcrossDifferentExitedProcesses": true,
+    "unchangedOutsideSentinel": true,
+    "nonWriteScenariosUnchanged": true,
+    "knownCredentialScan": "PASS",
+    "cancelToExitMs": {
+      "cancel-permission": 2014,
+      "abort-generation": 2012
+    }
+  },
+  "actualBillingUsd": null
+}

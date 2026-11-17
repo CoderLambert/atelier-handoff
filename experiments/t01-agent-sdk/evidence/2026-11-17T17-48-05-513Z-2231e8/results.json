@@ -1,0 +1,804 @@
+{
+  "batch": "2026-11-17T17-48-05-513Z-2231e8",
+  "environment": {
+    "at": "2026-11-17T17:48:05.513Z",
+    "node": "v24.21.0",
+    "npm": "npm/11.19.0 node/v24.21.0 linux x64 workspaces/false",
+    "os": "linux",
+    "arch": "x64",
+    "kernel": "7.2.5-3-omarchy",
+    "sdk": "0.3.326",
+    "bundledCliDeclared": "2.1.326",
+    "shunt": "0.64.0",
+    "gateway": "http://127.0.0.1:3001",
+    "configuredModel": "gpt-6.1-sol",
+    "auth": "Shunt-managed chatgpt-plan; local placeholder only in SDK",
+    "inferencePerformed": false
+  },
+  "cases": [
+    {
+      "name": "readonly",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 6475,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 0,
+        "signal": null,
+        "at": "2026-11-17T17:48:11.989Z"
+      },
+      "cancellationReason": null,
+      "readerError": null,
+      "sdk": {
+        "sessionId": "39d6f7ff-5815-4eb5-a7bb-f2e10d2c5454",
+        "cliVersion": "2.1.326",
+        "initTools": [
+          "Read"
+        ],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "user",
+          "result:success"
+        ],
+        "textDeltas": 23,
+        "messageStops": 2,
+        "calls": [
+          {
+            "id": "call_d636cdd7b40849eeb93f6f1d8966348c",
+            "name": "Read",
+            "succeeded": true
+          }
+        ],
+        "results": [
+          {
+            "subtype": "success",
+            "isError": false,
+            "stopReason": "end_turn",
+            "terminalReason": "completed",
+            "turns": 2,
+            "sdkEstimatedUsd": 0.00981,
+            "usage": {
+              "input_tokens": 1657,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 61,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 1657,
+                "outputTokens": 61,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.00981,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "thinkingTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          }
+        ],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [],
+      "evidence": "readonly.jsonl"
+    },
+    {
+      "name": "resume",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 3005,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 0,
+        "signal": null,
+        "at": "2026-11-17T17:48:14.995Z"
+      },
+      "cancellationReason": null,
+      "readerError": null,
+      "sdk": {
+        "sessionId": "39d6f7ff-5815-4eb5-a7bb-f2e10d2c5454",
+        "cliVersion": "2.1.326",
+        "initTools": [],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "result:success"
+        ],
+        "textDeltas": 23,
+        "messageStops": 1,
+        "calls": [],
+        "results": [
+          {
+            "subtype": "success",
+            "isError": false,
+            "stopReason": "end_turn",
+            "terminalReason": "completed",
+            "turns": 1,
+            "sdkEstimatedUsd": 0.013109999999999998,
+            "usage": {
+              "input_tokens": 525,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 27,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 2182,
+                "outputTokens": 88,
+                "thinkingTokens": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.013109999999999998,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          }
+        ],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [],
+      "evidence": "resume.jsonl"
+    },
+    {
+      "name": "deny-edit",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 12838,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 0,
+        "signal": null,
+        "at": "2026-11-17T17:48:27.835Z"
+      },
+      "cancellationReason": null,
+      "readerError": null,
+      "sdk": {
+        "sessionId": "66174286-7062-4725-9303-6bca9a96ffbd",
+        "cliVersion": "2.1.326",
+        "initTools": [
+          "Edit",
+          "Read"
+        ],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "user",
+          "result:success"
+        ],
+        "textDeltas": 32,
+        "messageStops": 3,
+        "calls": [
+          {
+            "id": "call_bc62885fb4944b14b2554e4240ff7ba4",
+            "name": "Read",
+            "succeeded": true
+          },
+          {
+            "id": "call_36b69118e5eb45b0a8b7a491c73811a0",
+            "name": "Edit",
+            "succeeded": false
+          }
+        ],
+        "results": [
+          {
+            "subtype": "success",
+            "isError": false,
+            "stopReason": "end_turn",
+            "terminalReason": "completed",
+            "turns": 3,
+            "sdkEstimatedUsd": 0.01816,
+            "usage": {
+              "input_tokens": 3052,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 116,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 3052,
+                "outputTokens": 116,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.01816,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "thinkingTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          }
+        ],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [
+        {
+          "id": "call_36b69118e5eb45b0a8b7a491c73811a0",
+          "decision": "denied",
+          "sdkAborted": false,
+          "appAborted": false
+        }
+      ],
+      "evidence": "deny-edit.jsonl"
+    },
+    {
+      "name": "allow-files",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 12927,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "note.txt": "9660b3303631e95817f72c7536939f0eca9e20c0d7b86382a39e4a98a1b26151",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 0,
+        "signal": null,
+        "at": "2026-11-17T17:48:40.762Z"
+      },
+      "cancellationReason": null,
+      "readerError": null,
+      "sdk": {
+        "sessionId": "c37541ab-fd2f-4532-936b-a9db130833a3",
+        "cliVersion": "2.1.326",
+        "initTools": [
+          "Edit",
+          "Read",
+          "Write"
+        ],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "user",
+          "result:success"
+        ],
+        "textDeltas": 41,
+        "messageStops": 4,
+        "calls": [
+          {
+            "id": "call_09cae7c38a6341a6bd98d0a2754fc006",
+            "name": "Read",
+            "succeeded": true
+          },
+          {
+            "id": "call_9535148a9a4d4178b473331a61b79991",
+            "name": "Edit",
+            "succeeded": true
+          },
+          {
+            "id": "call_e2c6fe922e94463199231e1e9275c398",
+            "name": "Write",
+            "succeeded": true
+          }
+        ],
+        "results": [
+          {
+            "subtype": "success",
+            "isError": false,
+            "stopReason": "end_turn",
+            "terminalReason": "completed",
+            "turns": 4,
+            "sdkEstimatedUsd": 0.018088,
+            "usage": {
+              "input_tokens": 2570,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 2176,
+              "output_tokens": 166,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 2570,
+                "outputTokens": 166,
+                "cacheReadInputTokens": 2176,
+                "cacheCreationInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.018088,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "thinkingTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          }
+        ],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [
+        {
+          "id": "call_9535148a9a4d4178b473331a61b79991",
+          "decision": "allowed",
+          "sdkAborted": false,
+          "appAborted": false
+        },
+        {
+          "id": "call_e2c6fe922e94463199231e1e9275c398",
+          "decision": "allowed",
+          "sdkAborted": false,
+          "appAborted": false
+        }
+      ],
+      "evidence": "allow-files.jsonl"
+    },
+    {
+      "name": "cancel-permission",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 8957,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 143,
+        "signal": null,
+        "at": "2026-11-17T17:48:49.721Z"
+      },
+      "cancellationReason": "pending-permission",
+      "readerError": "Error: Claude Code process aborted by user",
+      "sdk": {
+        "sessionId": "f924b251-83f8-4449-ae3d-7f4176bbef6f",
+        "cliVersion": "2.1.326",
+        "initTools": [
+          "Edit",
+          "Read"
+        ],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "user"
+        ],
+        "textDeltas": 0,
+        "messageStops": 2,
+        "calls": [
+          {
+            "id": "call_21e9c083a50c428992e3cc6a5b5e9289",
+            "name": "Read",
+            "succeeded": true
+          },
+          {
+            "id": "call_0b0abd5e1efd4b9f8b1a30b363173936",
+            "name": "Edit",
+            "succeeded": false
+          }
+        ],
+        "results": [],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [
+        {
+          "id": "call_0b0abd5e1efd4b9f8b1a30b363173936",
+          "decision": "canceled",
+          "sdkAborted": false,
+          "appAborted": true
+        }
+      ],
+      "evidence": "cancel-permission.jsonl"
+    },
+    {
+      "name": "interrupt-continue",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 18511,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 0,
+        "signal": null,
+        "at": "2026-11-17T17:49:08.233Z"
+      },
+      "cancellationReason": null,
+      "readerError": null,
+      "sdk": {
+        "sessionId": "a454f439-76ff-45bc-9fd4-fb73645a6de7",
+        "cliVersion": "2.1.326",
+        "initTools": [],
+        "responseModels": [
+          "gpt-6.1-sol"
+        ],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event",
+          "assistant",
+          "user",
+          "result:error_during_execution",
+          "result:success"
+        ],
+        "textDeltas": 10,
+        "messageStops": 2,
+        "calls": [],
+        "results": [
+          {
+            "subtype": "error_during_execution",
+            "isError": true,
+            "stopReason": null,
+            "terminalReason": "aborted_streaming",
+            "turns": 2,
+            "sdkEstimatedUsd": 0.001955,
+            "usage": {
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 0,
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 341,
+                "outputTokens": 10,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.001955,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "thinkingTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          },
+          {
+            "subtype": "success",
+            "isError": false,
+            "stopReason": "end_turn",
+            "terminalReason": "completed",
+            "turns": 1,
+            "sdkEstimatedUsd": 0.00415,
+            "usage": {
+              "input_tokens": 404,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 7,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "server_tool_use": {
+                "web_search_requests": 0,
+                "web_fetch_requests": 0
+              },
+              "service_tier": "standard",
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 0,
+                "ephemeral_5m_input_tokens": 0
+              },
+              "inference_geo": "",
+              "iterations": [],
+              "speed": "standard",
+              "fallback_credit": null
+            },
+            "modelUsage": {
+              "gpt-6.1-sol": {
+                "inputTokens": 745,
+                "outputTokens": 17,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "webSearchRequests": 0,
+                "costUSD": 0.00415,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 32000,
+                "thinkingTokens": 0,
+                "cacheCreationEphemeral5mInputTokens": 0,
+                "cacheCreationEphemeral1hInputTokens": 0,
+                "canonicalModel": "gpt-6.1-sol",
+                "provider": "firstParty",
+                "costBasis": "unknown"
+              }
+            }
+          }
+        ],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [],
+      "evidence": "interrupt-continue.jsonl"
+    },
+    {
+      "name": "abort-generation",
+      "status": "PASS",
+      "failure": null,
+      "durationMs": 8770,
+      "before": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "after": {
+        "cancel.txt": "c7384d68da530c7fece634656f66c1abea0c9c199d7f23df3b9376136e1e7255",
+        "created.txt": "9f58cd23b1c35a118ea1078452101f68043bc578745b929d25fcc0dc2b303a15",
+        "note.txt": "82c8f8af98b335ba9df3b77d297742d4fbf789e4b0632315dd21be7e02a5d9a3",
+        "reading.txt": "a19777d12f912ea87c0a080cd22568863a3f5a31ce73c38e4287c28a68982aed"
+      },
+      "sentinelUnchanged": true,
+      "processExit": {
+        "code": 143,
+        "signal": null,
+        "at": "2026-11-17T17:49:17.003Z"
+      },
+      "cancellationReason": "active-generation",
+      "readerError": "Error: Claude Code process aborted by user",
+      "sdk": {
+        "sessionId": "7de3ba40-2d90-49e5-bd3c-f632a25a2639",
+        "cliVersion": "2.1.326",
+        "initTools": [],
+        "responseModels": [],
+        "eventTypes": [
+          "command_lifecycle",
+          "system:init",
+          "system:status",
+          "stream_event"
+        ],
+        "textDeltas": 122,
+        "messageStops": 0,
+        "calls": [],
+        "results": [],
+        "actualBillingUsd": null,
+        "pricingValidity": "unknown-for-chatgpt-plan",
+        "structuredPlan": "not-observed; plan tools intentionally disabled"
+      },
+      "permissions": [],
+      "evidence": "abort-generation.jsonl"
+    }
+  ],
+  "ledger": {
+    "authorization": "2026-11-18-user-authorized-T01-Shunt",
+    "inputs": 8,
+    "queries": 7,
+    "sdkEstimatedIncrementUsd": 0.053508,
+    "sessionCosts": {
+      "39d6f7ff-5815-4eb5-a7bb-f2e10d2c5454": 0.013109999999999998,
+      "66174286-7062-4725-9303-6bca9a96ffbd": 0.01816,
+      "c37541ab-fd2f-4532-936b-a9db130833a3": 0.018088,
+      "a454f439-76ff-45bc-9fd4-fb73645a6de7": 0.00415
+    },
+    "attempts": [
+      {
+        "name": "readonly",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:48:05.515Z"
+      },
+      {
+        "name": "resume",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:48:11.991Z"
+      },
+      {
+        "name": "deny-edit",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:48:14.997Z"
+      },
+      {
+        "name": "allow-files",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:48:27.836Z"
+      },
+      {
+        "name": "cancel-permission",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:48:40.764Z"
+      },
+      {
+        "name": "interrupt-continue",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 2,
+        "at": "2026-11-17T17:48:49.722Z"
+      },
+      {
+        "name": "abort-generation",
+        "batch": "2026-11-17T17-48-05-513Z-2231e8",
+        "reservedInputs": 1,
+        "at": "2026-11-17T17:49:08.234Z"
+      }
+    ]
+  },
+  "actualBillingUsd": null
+}

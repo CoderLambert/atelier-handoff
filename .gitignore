@@ -1,0 +1,14 @@
+node_modules/
+.data/
+.local/
+dist/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+!experiments/t01-agent-sdk/evidence/**/*.log
+playwright-report/
+test-results/
