@@ -62,7 +62,9 @@ export class AgentRunner implements Runner {
     let failure: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const commands = new Set<Promise<unknown>>();
+    const toolWork = new Set<Promise<unknown>>();
     const queuedMcp: { id: string; name: string; inputHash: string }[] = [];
+    const callHash = (name: string, args: Record<string, unknown>) => fingerprint(JSON.stringify(name === 'mcp__atelier__list_files' ? { ...args, path: args.path ?? '' } : args, (_key, value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value));
     const assistantId = randomUUID();
     this.store.put('messages', { id: assistantId, runId: run.id, sessionId: run.sessionId, role: 'assistant', text: '', createdAt: now() });
     const blocks = new Map<string, string>(); let messageId = ''; let blockIndex = 0; let dirty = false;
@@ -81,18 +83,23 @@ export class AgentRunner implements Runner {
     const finishTool = (id: string, ok: boolean, output: string) => {
       let prior: ToolCall; try { prior = this.store.get('tools', id); } catch { return; }
       const status = ['denied', 'canceled'].includes(prior.status) ? prior.status : ok ? 'succeeded' : 'failed';
-      this.store.update('tools', id, { status, output: output.slice(0, 32000) + (output.length > 32000 ? '\n[输出已截断至 32 KiB]' : ''), endedAt: now() });
+      if (output.length > 32000) this.files.saveOutput(id, output);
+      this.store.update('tools', id, { status, output: output.slice(0, 32000) + (output.length > 32000 ? '\n[预览已截断，可查看或下载完整工具输出]' : ''), outputLength: output.length, outputTruncated: output.length > 32000, endedAt: now() });
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
     };
     const custom = <S extends z.ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>, id: string) => Promise<unknown>) => tool(name, description, schema, async args => {
       const fullName = 'mcp__atelier__' + name;
-      const hash = fingerprint(JSON.stringify(args));
-      let index = queuedMcp.findIndex(item => item.name === fullName && item.inputHash === hash);
-      if (index < 0) index = queuedMcp.findIndex(item => item.name === fullName); // Schema defaults may normalize omitted fields.
-      const id = index >= 0 ? queuedMcp.splice(index, 1)[0]!.id : appToolId(randomUUID());
+      const hash = callHash(fullName, args as Record<string, unknown>);
+      const index = queuedMcp.findIndex(item => item.name === fullName && item.inputHash === hash);
+      if (index < 0) return { isError: true, content: [{ type: 'text' as const, text: '工具调用与已验证参数不匹配，操作未执行。' }] };
+      const id = queuedMcp.splice(index, 1)[0]!.id;
       createTool(id, fullName, args);
-      try { signal.throwIfAborted(); const result = await handler(args as z.infer<z.ZodObject<S>>, id); const output = typeof result === 'string' ? result : JSON.stringify(result); finishTool(id, true, output); return { content: [{ type: 'text' as const, text: output }] }; }
-      catch (error) { const output = this.clean(error); finishTool(id, false, output); return { isError: true, content: [{ type: 'text' as const, text: output }] }; }
+      const work = (async () => {
+        try { signal.throwIfAborted(); const result = await handler(args as z.infer<z.ZodObject<S>>, id); const output = typeof result === 'string' ? result : JSON.stringify(result); finishTool(id, true, output); return { content: [{ type: 'text' as const, text: output }] }; }
+        catch (error) { const output = this.clean(error); finishTool(id, false, output); return { isError: true, content: [{ type: 'text' as const, text: output }] }; }
+      })();
+      toolWork.add(work);
+      try { return await work; } finally { toolWork.delete(work); }
     });
     const path = z.string().min(1).max(1000);
     const reason = z.string().min(1).max(1000);
@@ -148,7 +155,7 @@ export class AgentRunner implements Runner {
           z.array(z.object({ content: z.string().max(1000), status: z.enum(['pending', 'in_progress', 'completed']) }).passthrough()).max(30).parse(args.todos);
         } else if (!permittedMcp.has(event.tool_name)) throw new Error('工具未开放。');
         const id = appToolId(event.tool_use_id); createTool(id, event.tool_name, args);
-        if (permittedMcp.has(event.tool_name)) queuedMcp.push({ id, name: event.tool_name, inputHash: fingerprint(JSON.stringify(args)) });
+        if (permittedMcp.has(event.tool_name)) queuedMcp.push({ id, name: event.tool_name, inputHash: callHash(event.tool_name, args) });
         return decision('allow', '受控工具；写入和命令由应用执行器逐次审批。');
       } catch (error) { return decision('deny', this.clean(error)); }
     };
@@ -231,7 +238,7 @@ export class AgentRunner implements Runner {
         await Promise.race([childExit, new Promise<void>(resolve => { deadline = setTimeout(() => { failure = 'SDK 未及时退出，已强制结束所属进程。'; child?.kill('SIGKILL'); resolve(); }, 8000); })]);
         clearTimeout(deadline); if (!processExited) await childExit;
       }
-      await Promise.allSettled(commands);
+      await Promise.allSettled([...commands, ...toolWork]);
       const status: RunStatus = live.reason === 'user' ? 'stopped' : live.reason === 'shutdown' ? 'interrupted' : live.reason === 'timeout' ? 'failed' : !finalResult ? 'interrupted' : failure ? 'failed' : 'completed';
       const reason = live.reason === 'user' ? '用户停止，进程已退出；已发生的修改保留。' : live.reason === 'shutdown' ? '服务关闭，运行中断。' : live.reason === 'timeout' ? '执行超过设定时限，已停止。' : failure;
       this.store.update('runs', run.id, { status, endedAt: now(), reason, error: ['failed', 'interrupted'].includes(status) ? reason : null });

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { AppError, now, type Run } from '../shared/types.js';
@@ -62,7 +63,18 @@ export class FileRecords {
       throw new AppError('ARTIFACT_UNAVAILABLE', '成果文件丢失或版本不匹配。', 409);
     }
   }
+  saveOutput(id: string, output: string): void {
+    mkdirSync(join(this.store.directory, 'tool-output'), { recursive: true, mode: 0o700 });
+    writeFileSync(join(this.store.directory, 'tool-output', fingerprint(id)), output, { mode: 0o600 });
+  }
+  async toolOutput(id: string): Promise<string> {
+    const tool = this.store.get('tools', id); this.store.get('sessions', tool.sessionId);
+    if (!tool.outputTruncated) return tool.output;
+    try { return await readFile(join(this.store.directory, 'tool-output', fingerprint(id)), 'utf8'); }
+    catch { throw new AppError('OUTPUT_UNAVAILABLE', '完整工具输出已丢失，短预览仍可查看。', 404); }
+  }
   async deleteSessionFiles(sessionId: string): Promise<void> {
+    for (const tool of this.store.list('tools').filter(tool => tool.sessionId === sessionId)) await unlink(join(this.store.directory, 'tool-output', fingerprint(tool.id))).catch(() => {});
     for (const kind of ['attachments', 'artifacts'] as const) for (const item of this.store.list(kind).filter(item => item.sessionId === sessionId)) await unlink(this.path(kind, item.id)).catch(() => {});
   }
 }

@@ -60,11 +60,13 @@ export async function createApp(options: { root: string; data: string; runnerFac
     if (previous) { if (previous.body_hash !== bodyHash) throw new AppError('IDEMPOTENCY_CONFLICT', '同一请求编号不能用于不同内容。', 409); return store.get('runs', previous.run_id as string); }
     if (session.status !== 'active') throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
     const project = store.get('projects', session.projectId); await resolveProjectPath(project.path, '', { directory: true });
+    const selectedConfig = store.config();
+    if (!options.runnerFactory && !(await connection(selectedConfig)).available) throw new AppError('SDK_UNAVAILABLE', '无法连接本机 Shunt，请先启动网关或检查设置；任务尚未开始，输入已保留。', 503, true);
     let context = ''; let contextBytes = 0;
     for (const path of [...new Set(request.contextPaths)]) { const text = await readProjectText(project.path, path, 128 * 1024); contextBytes += Buffer.byteLength(text); context += `\n<project_context path=${JSON.stringify(path)}>\n${text}\n</project_context>\n`; }
     for (const id of [...new Set(request.attachmentIds)]) { const text = await files.attachmentText(id, sessionId); contextBytes += Buffer.byteLength(text); const attachment = store.get('attachments', id); context += `\n<attachment name=${JSON.stringify(attachment.name)}>\n${text}\n</attachment>\n`; }
     if (contextBytes > 128 * 1024) throw new AppError('CONTEXT_TOO_LARGE', '本轮附件与附加上下文总量不能超过 128 KiB。', 413);
-    const run: Run = { id: randomUUID(), sessionId, projectId: project.id, prompt: request.text, mode: request.mode, status: 'queued', createdAt: now(), startedAt: null, endedAt: null, reason: null, error: null, retryOf, contextPaths: [...new Set(request.contextPaths)], attachmentIds: [...new Set(request.attachmentIds)], plan: [], usage: null, config: store.config() };
+    const run: Run = { id: randomUUID(), sessionId, projectId: project.id, prompt: request.text, mode: request.mode, status: 'queued', createdAt: now(), startedAt: null, endedAt: null, reason: null, error: null, retryOf, contextPaths: [...new Set(request.contextPaths)], attachmentIds: [...new Set(request.attachmentIds)], plan: [], usage: null, config: selectedConfig };
     const raced = store.transaction(() => {
       const duplicate = store.db.prepare('SELECT * FROM idempotency WHERE key=?').get(key);
       if (duplicate) { if (duplicate.body_hash !== bodyHash) throw new AppError('IDEMPOTENCY_CONFLICT', '请求编号对应不同内容。', 409); return store.get('runs', duplicate.run_id as string); }
@@ -74,7 +76,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
       if (store.list('runs').filter(r => activeStatuses.includes(r.status)).length >= 3) throw new AppError('SERVER_BUSY', '同时最多执行 3 个不同项目，请稍后发送。', 409, true);
       for (const id of run.attachmentIds) { const a = store.get('attachments', id); if (a.sessionId !== sessionId || a.removed) throw new AppError('CONTEXT_DENIED', '附件状态已变化，请重新选择。', 409); store.update('attachments', id, { status: 'used' }); }
       store.put('runs', run); store.put('messages', { id: randomUUID(), sessionId, runId: run.id, role: 'user', text: request.text, createdAt: run.createdAt });
-      store.update('sessions', sessionId, { title: latest.title === '新会话' ? request.text.slice(0, 40) : latest.title, updatedAt: now(), draft: emptyDraft() });
+      store.update('sessions', sessionId, { title: latest.title === '新会话' ? request.text.slice(0, 40) : latest.title, updatedAt: now(), draft: { ...emptyDraft(), mode: request.mode } });
       store.db.prepare('INSERT INTO idempotency(key,body_hash,run_id) VALUES(?,?,?)').run(key, bodyHash, run.id); return null;
     });
     if (raced) return raced;
@@ -184,6 +186,12 @@ export async function createApp(options: { root: string; data: string; runnerFac
           const request = z.object({ idempotencyKey: z.string().uuid() }).parse(await body(req));
           return json(res, { run: await createRun(run.sessionId, { text: `请以只读方式检查上次任务的当前状态和已发生的操作，给出下一步建议，不要重放写入或命令。原任务：${run.prompt}`, mode: 'readonly', contextPaths: [], attachmentIds: [], idempotencyKey: request.idempotencyKey }, run.id) }, 202);
         }
+      }
+      if (parts[0] === 'api' && parts[1] === 'tools' && parts.length === 4 && parts[3] === 'output' && method === 'GET') {
+        const text = await files.toolOutput(parts[2]!);
+        if (url.searchParams.get('download') === '1') { res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="tool-output.txt"', 'Content-Security-Policy': "sandbox; default-src 'none'", 'Cache-Control': 'no-store' }); res.end(text); return; }
+        const offset = Math.max(0, Math.floor(Number(url.searchParams.get('offset')) || 0)); const limit = Math.max(1, Math.min(32000, Math.floor(Number(url.searchParams.get('limit')) || 16000)));
+        return json(res, { text: text.slice(offset, offset + limit), offset, total: text.length, nextOffset: offset + limit < text.length ? offset + limit : null });
       }
       if (parts[0] === 'api' && parts[1] === 'permissions') {
         const permission = store.get('permissions', parts[2]!);

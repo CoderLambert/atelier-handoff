@@ -53,6 +53,12 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     await request(`/api/sessions/${s1.id}/messages`, 'POST', { ...message, text: 'different' }, 409);
     await request(`/api/sessions/${s2.id}/messages`, 'POST', { text: 'conflicting run', idempotencyKey: randomUUID() }, 409);
     await request(`/api/sessions/${s1.id}`, 'DELETE', {}, 409);
+    const longOutput = 'long-output '.repeat(3000) + 'END'; const toolId = run.id + ':large-output';
+    app.store.put('tools', { id: toolId, runId: run.id, sessionId: s1.id, name: 'test-output', inputSummary: '', status: 'succeeded', output: longOutput.slice(0, 32000), outputLength: longOutput.length, outputTruncated: true, startedAt: now(), endedAt: now() });
+    app.files.saveOutput(toolId, longOutput);
+    const firstPage = await request(`/api/tools/${encodeURIComponent(toolId)}/output`); assert.equal(firstPage.text, longOutput.slice(0, 16000)); assert.equal(firstPage.nextOffset, 16000);
+    const rest = await request(`/api/tools/${encodeURIComponent(toolId)}/output?offset=16000&limit=32000`); assert.equal(firstPage.text + rest.text, longOutput);
+    assert.equal(await (await fetch(url + `/api/tools/${encodeURIComponent(toolId)}/output?download=1`)).text(), longOutput);
     const artifact = await app.files.publish(app.store.get('runs', run.id), 'report.md', 'version one');
     await writeFile(join(project, 'report.md'), 'unrelated version');
     assert.equal((await request(`/api/artifacts/${artifact.id}/content`)).text, 'version one');
@@ -120,8 +126,8 @@ test('project file access rejects traversal, symlinks and private files; create/
   assert.equal(await readFile(outside, 'utf8'), 'outside');
 }));
 
-test('isolated commands execute and abort without writing a late side-effect', async () => fixture(async (_base, project) => {
-  if (!commandsAvailable()) return;
+test('isolated commands execute and abort without writing a late side-effect', async t => fixture(async (_base, project) => {
+  if (!commandsAvailable()) { t.skip('bubblewrap is unavailable on this machine'); return; }
   const result = await runCommand(project, 'node -e "process.stdout.write(process.cwd())"', new AbortController().signal);
   assert.equal(result.code, 0); assert.equal(result.output, '/workspace');
   const controller = new AbortController();

@@ -16,7 +16,7 @@ JSON 请求/响应；错误 HTTP 非 2xx，`{error:{code,message,retryable}}`。
 - Session: `{id,projectId,title,status:'active'|'archived',sdkSessionId:null|string,createdAt,updatedAt,draft:{text,contextPaths:string[],attachmentIds:string[],mode:'readonly'|'edit'}}`
 - Run: `{id,sessionId,projectId,prompt,status:'queued'|'running'|'awaiting_permission'|'stopping'|'completed'|'stopped'|'failed'|'interrupted',mode,createdAt,startedAt,endedAt,reason,error,retryOf,contextPaths,attachmentIds,plan:Step[],usage:null|Usage}`
 - Message: `{id,sessionId,runId,role:'user'|'assistant',text,createdAt}`（文本在执行中持续更新）
-- ToolCall: `{id,runId,sessionId,name,inputSummary,status:'running'|'awaiting_permission'|'succeeded'|'failed'|'denied'|'canceled',output,startedAt,endedAt,permissionId?}`
+- ToolCall: `{id,runId,sessionId,name,inputSummary,status:'running'|'awaiting_permission'|'succeeded'|'failed'|'denied'|'canceled',output,outputLength?,outputTruncated?,startedAt,endedAt,permissionId?}`；output 为短预览，截断时完整内容另有分页/下载入口
 - Permission: `{id,runId,sessionId,toolCallId,kind:'write'|'edit'|'delete'|'command',path:null|string,command:null|string,before:null|string,after:null|string,diff:string,baseFingerprint:null|string,version:string,status:'pending'|'allowed'|'denied'|'expired'|'canceled',createdAt,expiresAt,reason}`
 - Artifact: `{id,runId,sessionId,projectId,name,mime,size,fingerprint,availability:'available'|'unavailable',createdAt}`
 - Attachment: `{id,sessionId,name,mime,size,status:'ready'|'used',createdAt}`
@@ -45,6 +45,7 @@ JSON 请求/响应；错误 HTTP 非 2xx，`{error:{code,message,retryable}}`。
 - GET `/api/runs/:id` → `{run,tools,permissions,artifacts,events}`
 - POST `/api/runs/:id/stop` `{}` → `{run}`；先 stopping，退出确认后 stopped
 - POST `/api/runs/:id/retry` `{idempotencyKey}` → 202 `{run}`；安全重试为只读恢复分析，明确不会自动重复上次写入
+- GET `/api/tools/:id/output?offset=0&limit=16000` → `{text,offset,total,nextOffset}`；`download=1` 下载完整文本
 - GET `/api/permissions/:id` → `{permission}`
 - POST `/api/permissions/:id/decision` `{decision:'allow'|'deny',version}` → `{permission}`；同决定重发幂等，相反/过期/取消409；基线变化返回 OPERATION_CHANGED 并拒绝
 - GET `/api/permissions/:id/diff` → `{diff,before,after,path,kind,version}`
