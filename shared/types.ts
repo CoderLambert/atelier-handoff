@@ -3,7 +3,7 @@ export type Mode = 'readonly' | 'edit';
 export const activeStatuses: RunStatus[] = ['queued', 'running', 'awaiting_permission', 'stopping'];
 export interface Project { id: string; name: string; path: string; branch: string; available: boolean; createdAt: string }
 export interface Draft { text: string; contextPaths: string[]; attachmentIds: string[]; mode: Mode }
-export interface Session { id: string; projectId: string; title: string; status: 'active' | 'archived'; sdkSessionId: string | null; sdkCostTotal?: number; createdAt: string; updatedAt: string; draft: Draft }
+export interface Session { id: string; projectId: string; title: string; status: 'active' | 'archived'; sdkSessionId: string | null; sdkCostTotal?: number; sdkMode?: Mode; sdkConfigKey?: string; createdAt: string; updatedAt: string; draft: Draft }
 export interface Step { content: string; status: 'pending' | 'in_progress' | 'completed' }
 export interface Usage { model: string; inputTokens: number | null; outputTokens: number | null; cacheReadTokens: number | null; cacheCreationTokens: number | null; sdkEstimateUsd: number | null; costEstimateUsd: null; pricingBasis: 'unknown'; complete: boolean }
 export interface Run { id: string; sessionId: string; projectId: string; prompt: string; status: RunStatus; mode: Mode; createdAt: string; startedAt: string | null; endedAt: string | null; reason: string | null; error: string | null; retryOf: string | null; contextPaths: string[]; attachmentIds: string[]; plan: Step[]; usage: Usage | null; config: AppConfig }

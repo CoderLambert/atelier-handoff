@@ -20,7 +20,7 @@ JSON 请求/响应；错误 HTTP 非 2xx，`{error:{code,message,retryable}}`。
 - Permission: `{id,runId,sessionId,toolCallId,kind:'write'|'edit'|'delete'|'command',path:null|string,command:null|string,before:null|string,after:null|string,diff:string,baseFingerprint:null|string,version:string,status:'pending'|'allowed'|'denied'|'expired'|'canceled',createdAt,expiresAt,reason}`
 - Artifact: `{id,runId,sessionId,projectId,name,mime,size,fingerprint,availability:'available'|'unavailable',createdAt}`
 - Attachment: `{id,sessionId,name,mime,size,status:'ready'|'used',createdAt}`
-- Step: `{content,status:'pending'|'in_progress'|'completed'}`；仅模型实际 TodoWrite 时存在
+- Step: `{content,status:'pending'|'in_progress'|'completed'}`；仅模型实际调用工作台 update_plan（或可用的 SDK TodoWrite）时存在
 - Usage: `{model,inputTokens:null|number,outputTokens:null|number,cacheReadTokens:null|number,cacheCreationTokens:null|number,sdkEstimateUsd:null|number,costEstimateUsd:null,pricingBasis:'unknown',complete:boolean}`；actual cost 默认未知，SDK estimate 明确标为非账单
 
 所有时间为 ISO string，可为空的时间/原因/错误用 null。相对路径是项目内路径，禁止前端拼接任意绝对下载地址。

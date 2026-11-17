@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f0f3eb">
-  <meta name="description" content="atelier. AI 工作台交互原型：会话、执行轨迹、文件审批与交付物。面向 Claude Agent SDK 的产品界面设计，所有执行均为本地模拟。">
+  <meta name="description" content="atelier. 个人本机 AI 工作台。">
   <title>atelier. — 把决定留给你</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
@@ -12,7 +12,7 @@
 <body>
   <div class="app">
     <button class="nav-scrim" data-action="close-nav" aria-label="关闭导航"></button>
-    <aside class="sidebar" aria-label="工作空间导航">
+    <aside class="sidebar" id="sidebar" aria-label="工作空间导航">
       <div class="wordmark" aria-label="atelier"><span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i></span><span>atelier<span class="brand-period">.</span></span></div>
       <button class="workspace-switch" data-action="settings" aria-label="打开工作空间设置">
         <span class="workspace-avatar">L</span>
@@ -22,16 +22,16 @@
       <button class="new-session" data-action="new"><span data-icon="plus"></span><span>新建会话</span><kbd class="key-hint">⌘ K</kbd></button>
       <div class="search-control"><span data-icon="search"></span><label class="sr-only" for="session-search">搜索会话</label><input id="session-search" type="search" placeholder="搜索会话" autocomplete="off"></div>
       <nav class="main-nav" aria-label="主导航">
-        <button class="nav-item active" data-action="view" data-view="chat" aria-current="page"><span data-icon="chat"></span><span>全部会话</span><span class="nav-count" id="session-count">3</span></button>
-        <button class="nav-item" data-action="view" data-view="artifacts"><span data-icon="grid"></span><span>交付物</span><span class="nav-count" id="deliverable-count">2</span></button>
+        <button class="nav-item active" data-action="view" data-view="chat" aria-current="page"><span data-icon="chat"></span><span>全部会话</span><span class="nav-count" id="session-count">0</span></button>
+        <button class="nav-item" data-action="view" data-view="artifacts"><span data-icon="grid"></span><span>交付物</span><span class="nav-count" id="deliverable-count">0</span></button>
         <button class="nav-item" data-action="view" data-view="runs"><span data-icon="clock"></span><span>执行记录</span></button>
       </nav>
       <div class="sidebar-section-label"><span>最近会话</span><span class="mono">最近</span></div>
       <div class="history-wrap"><div id="history-list"></div></div>
       <section class="directory-section" aria-label="当前工作目录">
         <div class="sidebar-section-label"><span>工作目录</span><span data-icon="folder"></span></div>
-        <button class="directory-button" data-action="project"><span class="tiny-dot"></span><span id="workspace-name">orbit-web</span><span class="mono">local</span></button>
-        <div class="branch-label"><span data-icon="branch"></span><span id="workspace-branch">feat/form-validation</span></div>
+        <button class="directory-button" data-action="project"><span class="tiny-dot"></span><span id="workspace-name">工作空间</span><span class="mono">local</span></button>
+        <div class="branch-label"><span data-icon="branch"></span><span id="workspace-branch">本地目录</span></div>
       </section>
       <div class="sidebar-bottom">
         <div class="prototype-indicator"><span class="tiny-dot"></span><span>本地工作空间</span><button class="text-action" data-action="settings" aria-label="工作台设置"><span data-icon="settings"></span></button></div>
@@ -40,33 +40,33 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航"><span data-icon="menu"></span></button>
-        <div class="breadcrumbs"><span data-icon="folder"></span><span id="breadcrumb-project">orbit-web</span><span class="breadcrumb-slash">/</span><span class="od-truncate" id="breadcrumb-session">登录页体验优化</span></div>
-        <div class="topbar-actions"><button class="connection-state" data-action="settings"><span class="tiny-dot"></span>演示模式</button><button class="icon-button" data-action="toggle-aside" aria-label="展开或收起任务详情" aria-controls="right-panel" aria-expanded="true"><span data-icon="panel"></span></button></div>
+        <button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航" aria-expanded="false" aria-controls="sidebar"><span data-icon="menu"></span></button>
+        <div class="breadcrumbs"><span data-icon="folder"></span><span id="breadcrumb-project">工作空间</span><span class="breadcrumb-slash">/</span><span class="od-truncate" id="breadcrumb-session">开始工作</span></div>
+        <div class="topbar-actions"><button class="connection-state" data-action="settings"><span class="tiny-dot"></span>连接中</button><button class="icon-button" data-action="toggle-aside" aria-label="展开或收起任务详情" aria-controls="right-panel" aria-expanded="true"><span data-icon="panel"></span></button></div>
       </header>
       <section class="conversation-screen" id="conversation-screen" aria-label="会话工作区">
         <header class="session-header">
-          <div class="session-title-row"><h1 id="session-title">登录页体验优化</h1><div id="session-status" role="status"></div></div>
+          <div class="session-title-row"><h1 id="session-title">开始工作</h1><div id="session-status" role="status"></div></div>
           <div class="session-meta"><span id="session-branch"></span><i class="meta-divider" aria-hidden="true"></i><span id="session-runtime"></span><button class="session-detail" data-action="settings">会话详情 <span data-icon="chevron"></span></button></div>
         </header>
         <div class="tabs-row">
           <div class="session-tabs" role="tablist" aria-label="会话内容">
             <button class="session-tab active" role="tab" aria-selected="true" aria-controls="conversation-content" data-action="tab" data-tab="conversation"><span data-icon="chat"></span>会话</button>
-            <button class="session-tab" role="tab" aria-selected="false" aria-controls="conversation-content" data-action="tab" data-tab="trace"><span data-icon="terminal"></span>执行轨迹 <span class="count-badge" id="trace-count">4</span></button>
+            <button class="session-tab" role="tab" aria-selected="false" aria-controls="conversation-content" data-action="tab" data-tab="trace"><span data-icon="terminal"></span>执行轨迹 <span class="count-badge" id="trace-count">0</span></button>
             <button class="session-tab" role="tab" aria-selected="false" aria-controls="conversation-content" data-action="tab" data-tab="artifacts"><span data-icon="file"></span>交付物 <span class="count-badge" id="artifact-count">0</span></button>
           </div>
           <span class="simulation-note" id="stage-hint">先看结论，再做决定</span>
         </div>
         <div class="conversation-content" id="conversation-content" role="tabpanel" aria-label="当前会话内容"></div>
         <footer class="composer" id="composer">
-          <div class="context-row"><div class="context-chips" id="context-chips"></div><button class="add-context" data-action="add-context"><span data-icon="plus"></span>上下文</button><span class="composer-policy"><span data-icon="shield"></span><span id="composer-policy">写入前审批</span></span></div>
+          <div class="context-row"><div class="context-chips" id="context-chips"></div><button class="add-context" data-action="add-context"><span data-icon="plus"></span>上下文</button><button class="composer-policy mode-toggle" id="mode-toggle" data-action="policy" aria-pressed="false">模式：只读</button><span class="sr-only" id="composer-policy">只读</span></div>
           <div class="composer-box">
             <label class="composer-label" for="prompt-input">继续对话</label>
             <textarea id="prompt-input" placeholder="描述下一步，或补充你的想法…" aria-describedby="input-help" rows="2"></textarea>
             <div class="composer-toolbar">
-              <button class="agent-select" data-action="settings"><span class="agent-mark" aria-hidden="true">✳</span>Claude<span data-icon="down"></span></button>
+              <button class="agent-select" data-action="settings"><span class="agent-mark" aria-hidden="true">✳</span>模型设置<span data-icon="down"></span></button>
               <details class="composer-options"><summary class="icon-button" aria-label="更多对话选项"><span data-icon="settings"></span></summary><div class="composer-menu"><button data-action="policy"><span data-icon="shield"></span>执行权限<span class="muted">逐次审批</span></button><button data-action="settings"><span data-icon="settings"></span>会话设置</button></div></details>
-              <button class="icon-button attach-button" data-action="attach" aria-label="附加文件名作为演示上下文"><span data-icon="attach"></span></button>
+              <button class="icon-button attach-button" data-action="attach" aria-label="上传文本附件"><span data-icon="attach"></span></button>
               <span class="send-hint" id="input-help">Enter 发送</span>
               <button class="send-button" id="send-button" data-action="send" aria-label="发送任务"><span data-icon="arrow"></span></button>
             </div>
@@ -85,11 +85,11 @@
         <button class="aside-tab" role="tab" aria-selected="false" aria-controls="aside-body" data-action="side" data-side="events">事件</button>
       </div>
       <div class="aside-body" id="aside-body" role="tabpanel" aria-label="运行详情内容"></div>
-      <footer class="aside-footer"><span><span data-icon="info"></span>本地模拟，未连接真实 SDK</span></footer>
+      <footer class="aside-footer"><span><span data-icon="info"></span>本机工作空间</span></footer>
     </aside>
   </div>
   <dialog id="detail-dialog" aria-labelledby="dialog-title"><header class="dialog-header"><h2 id="dialog-title">详情</h2><button class="icon-button" id="close-dialog" data-action="close" aria-label="关闭详情"><span data-icon="x"></span></button></header><div class="dialog-body" id="dialog-body"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <noscript><p>此交互原型需要启用 JavaScript。请使用支持 JavaScript 的浏览器打开 index.html。</p></noscript>
+  <noscript><p>此工作台需要启用 JavaScript。请使用支持 JavaScript 的浏览器打开 index.html。</p></noscript>
 </body>
 </html>
