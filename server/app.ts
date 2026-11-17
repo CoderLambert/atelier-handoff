@@ -7,7 +7,7 @@ import { Store } from './store.js';
 import { AgentRunner, type Runner } from './agent.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
-import { authorizeRoot, readProjectText, listProjectFiles, fingerprint, resolveProjectPath } from './files.js';
+import { authorizeRoot, readProjectText, listProjectFiles, fingerprint, resolveProjectPath, inside } from './files.js';
 import { commandsAvailable } from './commands.js';
 import { AppError, activeStatuses, emptyDraft, now, type Run, type Session, type AppConfig, type RunEvent } from '../shared/types.js';
 
@@ -72,7 +72,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
       if (duplicate) { if (duplicate.body_hash !== bodyHash) throw new AppError('IDEMPOTENCY_CONFLICT', '请求编号对应不同内容。', 409); return store.get('runs', duplicate.run_id as string); }
       if (deletingSessions.has(sessionId)) throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
       const latest = store.get('sessions', sessionId); if (latest.status !== 'active') throw new AppError('SESSION_ARCHIVED', '会话已归档。', 409);
-      if (store.list('runs').some(r => activeStatuses.includes(r.status) && (r.sessionId === sessionId || r.projectId === project.id))) throw new AppError('RUN_ACTIVE', '该项目已有活动运行，请先处理审批或停止后再发送。', 409);
+      if (store.list('runs').some(r => { if (!activeStatuses.includes(r.status)) return false; const other = store.get('projects', r.projectId); return r.sessionId === sessionId || inside(project.path, other.path) || inside(other.path, project.path); })) throw new AppError('RUN_ACTIVE', '该项目或重叠目录已有活动运行，请先处理审批或停止后再发送。', 409);
       if (store.list('runs').filter(r => activeStatuses.includes(r.status)).length >= 3) throw new AppError('SERVER_BUSY', '同时最多执行 3 个不同项目，请稍后发送。', 409, true);
       for (const id of run.attachmentIds) { const a = store.get('attachments', id); if (a.sessionId !== sessionId || a.removed) throw new AppError('CONTEXT_DENIED', '附件状态已变化，请重新选择。', 409); store.update('attachments', id, { status: 'used' }); }
       store.put('runs', run); store.put('messages', { id: randomUUID(), sessionId, runId: run.id, role: 'user', text: request.text, createdAt: run.createdAt });

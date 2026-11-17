@@ -52,6 +52,10 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     assert.equal((await request(`/api/sessions/${s1.id}/messages`, 'POST', message, 202)).run.id, run.id); assert.equal(starts, 1);
     await request(`/api/sessions/${s1.id}/messages`, 'POST', { ...message, text: 'different' }, 409);
     await request(`/api/sessions/${s2.id}/messages`, 'POST', { text: 'conflicting run', idempotencyKey: randomUUID() }, 409);
+    await mkdir(join(project, 'nested'));
+    const nestedProject = (await request('/api/projects', 'POST', { path: join(project, 'nested') }, 201)).project;
+    const nestedSession = (await request('/api/sessions', 'POST', { projectId: nestedProject.id }, 201)).session;
+    await request(`/api/sessions/${nestedSession.id}/messages`, 'POST', { text: 'overlapping project run', idempotencyKey: randomUUID() }, 409);
     await request(`/api/sessions/${s1.id}`, 'DELETE', {}, 409);
     const longOutput = 'long-output '.repeat(3000) + 'END'; const toolId = run.id + ':large-output';
     app.store.put('tools', { id: toolId, runId: run.id, sessionId: s1.id, name: 'test-output', inputSummary: '', status: 'succeeded', output: longOutput.slice(0, 32000), outputLength: longOutput.length, outputTruncated: true, startedAt: now(), endedAt: now() });
