@@ -1,0 +1,118 @@
+import { constants } from 'node:fs';
+import { lstat, realpath, readFile, readdir, mkdir, open, rename, unlink } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { resolve, relative, isAbsolute, sep, dirname, basename, join, extname } from 'node:path';
+import { homedir } from 'node:os';
+import { AppError } from '../shared/types.js';
+
+export const fingerprint = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
+export const MAX_TEXT = 256 * 1024;
+export const blockedNames = new Set(['.git', '.claude', '.codex', '.ssh', '.aws', '.config', '.data', '.local', '.npmrc', '.netrc', '.pypirc', 'node_modules']);
+const sensitive = (part: string) => blockedNames.has(part) || /^\.env(?:\.|$)/i.test(part) || /^(id_rsa|id_ed25519)$|\.(pem|key|p12)$/i.test(part);
+export function inside(root: string, target: string): boolean { const part = relative(root, target); return part === '' || (!part.startsWith(`..${sep}`) && part !== '..' && !isAbsolute(part)); }
+export async function authorizeRoot(input: string): Promise<string> {
+  if (!isAbsolute(input) || input.includes('\0')) throw new AppError('INVALID_INPUT', '请选择本机项目的绝对目录。');
+  let root: string;
+  try { root = await realpath(input); if (!(await lstat(root)).isDirectory()) throw new Error(); }
+  catch { throw new AppError('PROJECT_UNAVAILABLE', '目录不存在或无法访问。'); }
+  if (root === '/' || root === homedir()) throw new AppError('INVALID_INPUT', '请选择具体项目目录，不要选择根目录或整个用户目录。');
+  return root;
+}
+export async function resolveProjectPath(root: string, input: string, options: { directory?: boolean; create?: boolean } = {}): Promise<string> {
+  if (input.includes('\0') || input.startsWith('~') || input.split(/[\\/]/).includes('..')) throw new AppError('PATH_DENIED', '路径包含不允许的跳转。', 403);
+  const target = resolve(root, input || '.'); const part = relative(root, target);
+  if (!inside(root, target) || (!part && !options.directory)) throw new AppError('PATH_DENIED', '路径超出授权项目。', 403);
+  const parts = part.split(sep).filter(Boolean);
+  if (parts.some(sensitive)) throw new AppError('PATH_DENIED', '凭据、内部数据或依赖目录不向 Agent 开放。', 403);
+  try { if (await realpath(root) !== root || !(await lstat(root)).isDirectory()) throw new Error(); }
+  catch { throw new AppError('PROJECT_UNAVAILABLE', '授权项目已移动或不可用。', 409); }
+  let current = root;
+  for (const [index, segment] of parts.entries()) {
+    current = resolve(current, segment);
+    let stat;
+    try { stat = await lstat(current); }
+    catch (error) { if (options.create && (error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw new AppError('FILE_UNAVAILABLE', '文件不存在或不可访问。', 404); }
+    if (stat.isSymbolicLink()) throw new AppError('PATH_DENIED', '首版不访问符号链接。', 403);
+    if (index < parts.length - 1 && !stat.isDirectory()) throw new AppError('PATH_DENIED', '父路径不是目录。', 403);
+    if (stat.isFile() && stat.nlink !== 1) throw new AppError('PATH_DENIED', '首版不访问多硬链接文件。', 403);
+    if (!stat.isFile() && !stat.isDirectory()) throw new AppError('PATH_DENIED', '不支持特殊文件。', 403);
+    if (index === parts.length - 1 && (options.directory ? !stat.isDirectory() : !stat.isFile())) throw new AppError('INVALID_INPUT', options.directory ? '请选择目录。' : '请选择普通文件。');
+  }
+  return target;
+}
+export async function readProjectText(root: string, input: string, limit = MAX_TEXT): Promise<string> {
+  const target = await resolveProjectPath(root, input);
+  const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = await handle.stat(); if (stat.size > limit) throw new AppError('FILE_TOO_LARGE', `文本超过 ${Math.round(limit / 1024)} KiB 限制。`, 413);
+    if (!stat.isFile() || stat.nlink !== 1) throw new AppError('PATH_DENIED', '文件状态已改变。', 409);
+    const data = await handle.readFile();
+    if (data.includes(0)) throw new AppError('BINARY_FILE', '此文件为二进制，首版只支持文本。');
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { throw new AppError('UNSUPPORTED_ENCODING', '首版只支持 UTF-8 文本。'); }
+  } finally { await handle.close(); }
+}
+export async function listProjectFiles(root: string, input = '') {
+  const target = await resolveProjectPath(root, input, { directory: true });
+  const entries = await readdir(target, { withFileTypes: true });
+  const items = [];
+  for (const entry of entries.sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))) {
+    if (sensitive(entry.name) || entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) continue;
+    const full = join(target, entry.name); const stat = await lstat(full);
+    if (stat.isFile() && stat.nlink !== 1) continue;
+    items.push({ name: entry.name, path: relative(root, full), isDirectory: entry.isDirectory(), size: stat.size });
+    if (items.length >= 500) break;
+  }
+  return { path: relative(root, target), items };
+}
+export async function searchProject(root: string, query: string, signal: AbortSignal) {
+  const matches: { path: string; line: number; text: string }[] = []; let examined = 0; let truncated = false;
+  const walk = async (directory: string, depth: number) => {
+    if (depth > 12 || examined >= 1500 || matches.length >= 100) { truncated = true; return; }
+    signal.throwIfAborted();
+    const { items } = await listProjectFiles(root, directory);
+    for (const item of items) {
+      signal.throwIfAborted();
+      if (++examined > 1500 || matches.length >= 100) { truncated = true; break; }
+      if (item.isDirectory) await walk(item.path, depth + 1);
+      else if (item.size <= MAX_TEXT) {
+        try {
+          const text = await readProjectText(root, item.path);
+          for (const [index, line] of text.split('\n').entries()) if (line.toLowerCase().includes(query.toLowerCase())) {
+            matches.push({ path: item.path, line: index + 1, text: line.slice(0, 300) }); if (matches.length >= 100) break;
+          }
+        } catch (error) { if (!(error instanceof AppError)) throw error; }
+      }
+    }
+  };
+  await walk('', 0); return { matches, truncated, examined };
+}
+export async function applyText(root: string, path: string, before: string | null, after: string | null, signal: AbortSignal): Promise<string | null> {
+  signal.throwIfAborted();
+  const target = await resolveProjectPath(root, path, { create: before === null });
+  let current: string | null;
+  try { current = await readProjectText(root, path); }
+  catch (error) { if (error instanceof AppError && error.code === 'FILE_UNAVAILABLE') current = null; else throw error; }
+  if (current !== before) throw new AppError('OPERATION_CHANGED', '文件已在等待审批期间变化，请重新生成修改。', 409);
+  signal.throwIfAborted();
+  if (after === null) { await unlink(target); return null; }
+  await mkdir(dirname(target), { recursive: true });
+  await resolveProjectPath(root, path, { create: true }); signal.throwIfAborted();
+  const temporary = join(dirname(target), `.atelier-${randomUUID()}.tmp`);
+  const handle = await open(temporary, 'wx', 0o600);
+  try {
+    if (current !== null) await handle.chmod((await lstat(target)).mode & 0o777);
+    await handle.writeFile(after, 'utf8'); await handle.sync(); await handle.close();
+    const latest = current === null ? await lstat(target).then(() => 'exists', () => null) : await readProjectText(root, path);
+    if (latest !== before) throw new AppError('OPERATION_CHANGED', '文件基线已变化，没有应用修改。', 409);
+    signal.throwIfAborted(); await rename(temporary, target); return fingerprint(after);
+  } finally { await handle.close().catch(() => {}); await unlink(temporary).catch(() => {}); }
+}
+export function textDiff(path: string, before: string | null, after: string | null): string {
+  const lines = [`--- ${before === null ? '/dev/null' : path}`, `+++ ${after === null ? '/dev/null' : path}`];
+  if (before !== null) lines.push(...before.split('\n').map(line => '-' + line));
+  if (after !== null) lines.push(...after.split('\n').map(line => '+' + line));
+  return lines.join('\n');
+}
+export const textExtensions = new Set(['.txt', '.md', '.json', '.csv', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.yaml', '.yml', '.log', '.py']);
+export function safeName(name: string): string { return basename(name.replaceAll('\\', '/')).replace(/[\x00-\x1f]/g, '').slice(0, 160) || 'file.txt'; }
+export function mimeFor(name: string): string { return extname(name) === '.md' ? 'text/markdown' : extname(name) === '.json' ? 'application/json' : 'text/plain'; }
