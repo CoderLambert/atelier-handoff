@@ -19,7 +19,7 @@ export async function runCommand(root: string, command: string, signal: AbortSig
   for (const name of ['.env', '.env.local', '.env.production', '.env.development', '.npmrc', '.netrc']) if (existsSync(join(root, name))) args.push('--ro-bind', '/dev/null', '/workspace/' + name);
   args.push('/bin/sh', '-c', command);
   return new Promise((resolve, reject) => {
-    const child = spawn('bwrap', args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const child = spawn('bwrap', args, { env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let output = ''; let truncated = false; let killed = false;
     const append = (chunk: Buffer) => { if (output.length + chunk.length > 64 * 1024) truncated = true; output = (output + chunk.toString()).slice(0, 64 * 1024); };
     child.stdout.on('data', append); child.stderr.on('data', append);

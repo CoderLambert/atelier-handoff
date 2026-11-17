@@ -134,6 +134,11 @@ test('isolated commands execute and abort without writing a late side-effect', a
   if (!commandsAvailable()) { t.skip('bubblewrap is unavailable on this machine'); return; }
   const result = await runCommand(project, 'node -e "process.stdout.write(process.cwd())"', new AbortController().signal);
   assert.equal(result.code, 0); assert.equal(result.output, '/workspace');
+  const oldSecret = process.env.ATELIER_TEST_SECRET; process.env.ATELIER_TEST_SECRET = 'synthetic-command-boundary-marker';
+  try {
+    const environment = await runCommand(project, `node -e 'let inherited = !!process.env.ATELIER_TEST_SECRET; try { inherited ||= require("node:fs").readFileSync("/proc/1/environ", "utf8").includes("ATELIER_TEST_SECRET="); } catch {} process.stdout.write(inherited ? "leaked" : "clean")'`, new AbortController().signal);
+    assert.equal(environment.code, 0); assert.equal(environment.output, 'clean');
+  } finally { if (oldSecret === undefined) delete process.env.ATELIER_TEST_SECRET; else process.env.ATELIER_TEST_SECRET = oldSecret; }
   const controller = new AbortController();
   const work = runCommand(project, 'printf started > heartbeat.txt; sleep 20; printf late > after.txt', controller.signal);
   const rejected = assert.rejects(work, /停止/);
