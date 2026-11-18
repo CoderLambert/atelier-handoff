@@ -10,6 +10,7 @@ import { FileRecords } from './artifacts.js';
 import { authorizeRoot, readProjectText, listProjectFiles, fingerprint, resolveProjectPath, inside } from './files.js';
 import { commandsAvailable } from './commands.js';
 import { pickProjectDirectory } from './project-picker.js';
+import { buildRunDiagnostics } from './diagnostics.js';
 import { AppError, activeStatuses, emptyDraft, now, type Run, type Session, type AppConfig, type RunEvent } from '../shared/types.js';
 
 const inputSchema = z.object({ text: z.string().trim().min(1).max(32000), mode: z.enum(['readonly', 'edit']).default('readonly'), contextPaths: z.array(z.string().max(1000)).max(30).default([]), attachmentIds: z.array(z.string().uuid()).max(20).default([]), idempotencyKey: z.string().uuid() });
@@ -199,6 +200,16 @@ export async function createApp(options: { root: string; data: string; runnerFac
         const run = store.get('runs', parts[2]!);
         if (parts.length === 3 && method === 'GET') return json(res, { run, tools: store.list('tools').filter(t => t.runId === run.id), permissions: store.list('permissions').filter(p => p.runId === run.id), artifacts: store.list('artifacts').filter(a => a.runId === run.id), events: store.history(run.sessionId).filter(e => e.runId === run.id) });
         if (parts.length === 4 && parts[3] === 'trace' && method === 'GET') return json(res, store.runHistory(run.id));
+        if (parts.length === 4 && parts[3] === 'diagnostics.json' && method === 'GET') {
+          const tools = store.list('tools').filter(tool => tool.runId === run.id);
+          const diagnostics = buildRunDiagnostics(run, store.runHistory(run.id), tools);
+          const filenameId = /^[a-f0-9-]{36}$/.test(run.id) ? `-${run.id}` : '';
+          res.setHeader('Content-Disposition', `attachment; filename="atelier-diagnostics${filenameId}.json"`);
+          res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify(diagnostics, null, 2) + '\n');
+          return;
+        }
         if (parts[3] === 'stop' && method === 'POST') { await body(req); if (activeStatuses.includes(run.status)) runner.stop(run.id); return json(res, { run: store.get('runs', run.id) }); }
         if (parts[3] === 'retry' && method === 'POST') {
           if (activeStatuses.includes(run.status)) throw new AppError('RUN_ACTIVE', '当前运行尚未结束。', 409);

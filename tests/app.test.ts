@@ -84,6 +84,18 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     const diagnostic = await request(`/api/runs/${run.id}/trace`);
     assert.ok(diagnostic.events.some((item: { id: number }) => item.id === event.id));
     assert.ok(diagnostic.events.every((item: { runId: string }) => item.runId === run.id));
+    app.store.event(run.id, s1.id, 'sdk.api_retry', { attempt: 1, httpStatus: 429, retryDelayMs: 1000, headers: { authorization: 'fixture-secret-header' } });
+    app.store.event(run.id, s1.id, 'sdk.error', { code: 'sk-fixture-secret-code', reason: 'fixture-private-error' });
+    const download = await fetch(`${url}/api/runs/${run.id}/diagnostics.json`);
+    assert.equal(download.status, 200);
+    assert.match(download.headers.get('content-disposition') ?? '', /^attachment;.*\.json/);
+    const exported = await download.text();
+    const report = JSON.parse(exported);
+    assert.equal(report.run.id, run.id);
+    assert.equal(report.events.find((item: { type: string }) => item.type === 'sdk.api_retry').details.httpStatus, 429);
+    assert.equal(report.tools[0].id, toolId);
+    assert.doesNotMatch(exported, /fixture-secret|fixture-private|long-output |Read note/);
+    assert.ok(!exported.includes(project));
     const streamingTrace = await request(`/api/runs/${retry.id}/trace`);
     assert.equal(streamingTrace.eventCount - streamingTrace.events.length, 501);
     assert.ok(streamingTrace.events.every((item: { type: string }) => item.type !== 'message.delta'));

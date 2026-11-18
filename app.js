@@ -125,7 +125,7 @@ function renderConversation() {
   const pickerFocused = document.activeElement === $('#trace-run', el);
   const toolLabels = {Read:'读取文件', list_files:'列出文件', search_files:'搜索项目', edit_file:'编辑文件', write_file:'写入文件', delete_file:'删除文件', run_command:'运行命令', update_plan:'更新计划', publish_artifact:'发布交付物'};
   el.innerHTML = `<section class="trace-overview">
-   <div class="trace-run-bar"><label for="trace-run">运行</label><select id="trace-run">${snap.runs.slice().reverse().map(item => `<option value="${esc(item.id)}" ${item.id === run.id ? 'selected' : ''}>${esc(date(item.createdAt))} · ${esc(item.prompt?.slice(0, 42) || '运行')}</option>`).join('')}</select>${badge(run.status)}</div>
+   <div class="trace-run-bar"><label for="trace-run">运行</label><select id="trace-run">${snap.runs.slice().reverse().map(item => `<option value="${esc(item.id)}" ${item.id === run.id ? 'selected' : ''}>${esc(date(item.createdAt))} · ${esc(item.prompt?.slice(0, 42) || '运行')}</option>`).join('')}</select>${badge(run.status)}<a class="btn btn-secondary trace-download" href="/api/runs/${enc(run.id)}/diagnostics.json" download>下载诊断 JSON</a></div>
    ${run.error ? `<p class="trace-error" role="status">${esc(run.error)}</p>` : ''}
    <dl class="trace-facts">${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value === '' || value == null ? '—' : value)}</dd></div>`).join('')}</dl>
    </section><div class="trace-heading"><h2>工具调用 <span class="count-badge">${tools.length}</span></h2></div>${tools.map(tool => {
