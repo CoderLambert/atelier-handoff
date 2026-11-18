@@ -144,8 +144,6 @@ export class AgentProfiles {
 
   create(projectId: string, raw: unknown): AgentCard {
     const config: AgentConfig = agentConfig.parse(raw);
-    if (config.mode !== 'readonly')
-      throw new AppError('AGENT_MODE_DENIED', '新建智能体请先使用只读模式。', 403);
     return this.store.transaction(() => {
       const catalog = this.extensions.list(projectId);
       this.requireUniqueName(projectId, config.name);

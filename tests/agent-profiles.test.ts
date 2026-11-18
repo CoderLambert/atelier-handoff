@@ -219,6 +219,46 @@ test('project agents bind immutable revisions and combine only authorized Skill 
     assert.equal((await api(messages, 'POST', send(), 409)).error.code, 'AGENT_UNAVAILABLE');
     assert.ok((await api(`/api/sessions/${session.id}`)).agent.issues.length);
     assert.throws(() => runs[0]![4]?.(), { code: 'AGENT_UNAVAILABLE' });
+
+    const { agent: editable } = await api(
+      agents,
+      'POST',
+      {
+        ...config,
+        name: '文档编辑助手',
+        mode: 'edit',
+        capabilities: ['read', 'write'],
+        skills: [],
+        mcp: [],
+      },
+      201,
+    );
+    assert.equal(editable.version, 1);
+    assert.equal(editable.config.mode, 'edit');
+    const { session: editSession } = await api(
+      '/api/sessions',
+      'POST',
+      { projectId: project.id, agentRevisionId: editable.revisionId },
+      201,
+    );
+    assert.equal(editSession.draft.mode, 'readonly');
+    const editMessages = `/api/sessions/${editSession.id}/messages`;
+    const { run: readonlyRun } = await api(
+      editMessages,
+      'POST',
+      { text: '查看文档', idempotencyKey: randomUUID() },
+      202,
+    );
+    await jobs.get(readonlyRun.id);
+    assert.deepEqual(readonlyRun.agent.capabilities, ['read']);
+    const { run: editRun } = await api(
+      editMessages,
+      'POST',
+      { text: '修改文档', mode: 'edit', idempotencyKey: randomUUID() },
+      202,
+    );
+    await jobs.get(editRun.id);
+    assert.deepEqual(editRun.agent.capabilities, ['read', 'write']);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

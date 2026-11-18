@@ -274,7 +274,6 @@ export function AgentEditor({
                 <span>运行模式</span>
                 <select
                   value={config.mode}
-                  disabled={!item}
                   onChange={(event) => {
                     const mode = event.target.value === 'edit' ? 'edit' : 'readonly';
                     change({
@@ -288,13 +287,9 @@ export function AgentEditor({
                   }}
                 >
                   <option value="readonly">只读模式</option>
-                  <option value="edit">编辑模式（修改与命令需确认）</option>
+                  <option value="edit">受控修改</option>
                 </select>
-                <small>
-                  {item
-                    ? '切回只读会关闭修改文件与执行命令。MCP 工具仍需逐项检查。'
-                    : '新建智能体从只读模式开始。创建后，可在编辑配置中启用编辑模式。'}
-                </small>
+                <small>选择受控修改后，可勾选所需能力，再在会话中启用。相关操作需逐次审批。</small>
               </label>
               <div className="agent-capability-grid">
                 {capabilityOptions.map((capability) => (
