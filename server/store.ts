@@ -79,7 +79,7 @@ export class Store {
   recover(): void {
     for (const run of this.list('runs')) if (activeStatuses.includes(run.status)) {
       this.update('runs', run.id, { status: 'interrupted', endedAt: now(), reason: '服务已重启，之前的运行中断。已发生的文件修改不会自动撤销，请先检查记录。' });
-      for (const permission of this.list('permissions').filter(item => item.runId === run.id && item.status === 'pending')) this.update('permissions', permission.id, { status: 'canceled', reason: '运行已中断，旧审批无效。' });
+      for (const permission of this.list('permissions').filter(item => item.runId === run.id && item.status === 'pending')) this.update('permissions', permission.id, { status: 'canceled', resolutionReason: '运行已中断，旧审批无效。' });
       for (const tool of this.list('tools').filter(item => item.runId === run.id && ['running', 'awaiting_permission'].includes(item.status))) this.update('tools', tool.id, { status: 'canceled', endedAt: now() });
       this.event(run.id, run.sessionId, 'run.finished', { status: 'interrupted' });
     }

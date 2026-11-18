@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
 import { Store } from '../server/store.js';
 import { AgentRunner } from '../server/agent.js';
+import { readRunUsage } from '../server/usage.js';
 import { FileRecords } from '../server/artifacts.js';
 import { emptyDraft } from '../shared/types.js';
 import { PermissionService } from '../server/permissions.js';
-import { applyText, readProjectText } from '../server/files.js';
+import { applyText, readProjectText, textDiff } from '../server/files.js';
+import { applyPatch } from 'diff';
 import { commandsAvailable, runCommand } from '../server/commands.js';
 import { now, type Run } from '../shared/types.js';
 
@@ -51,12 +54,32 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     const selection = await request(pickerRoute, 'POST', {});
     assert.deepEqual(selection, { path: project });
     assert.equal((await request('/api/projects')).total, 0);
+    execFileSync('git', ['init', '--initial-branch=fixture', '--separate-git-dir', join(base, 'git-metadata'), project], { stdio: 'ignore' });
     const p = (await request('/api/projects', 'POST', selection, 201)).project;
+    assert.equal(p.branch, 'fixture');
     const s1 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
     const s2 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
+    await request(`/api/sessions/${s2.id}`, 'PATCH', { title: 'Planning archive' });
+    assert.equal((await request('/api/sessions?query=ARCHIVE&limit=1')).items[0].id, s2.id);
+    const sessionsPage = await request('/api/sessions?limit=1');
+    assert.equal(sessionsPage.nextOffset, 1);
+    assert.notEqual((await request('/api/sessions?limit=1&offset=1')).items[0].id, sessionsPage.items[0].id);
     await request(`/api/sessions/${s1.id}`, 'PATCH', { draft: { text: 'draft one', contextPaths: ['note.txt'], attachmentIds: [], mode: 'readonly' } });
     assert.equal((await request(`/api/sessions/${s2.id}`)).session.draft.text, '');
-    const attachment = (await request(`/api/sessions/${s1.id}/attachments`, 'POST', { name: 'notes.md', contentBase64: Buffer.from('attached content').toString('base64') }, 201)).attachment;
+    const upload = app.files.upload.bind(app.files);
+    let markEntered!: () => void;
+    let releaseUpload!: () => void;
+    const entered = new Promise<void>(resolve => { markEntered = resolve; });
+    const release = new Promise<void>(resolve => { releaseUpload = resolve; });
+    app.files.upload = async (...args) => { markEntered(); await release; return upload(...args); };
+    const uploading = request(`/api/sessions/${s1.id}/attachments`, 'POST', { name: 'notes.md', contentBase64: Buffer.from('attached content').toString('base64') }, 201);
+    try {
+      await entered;
+      const blocked = await request(`/api/sessions/${s1.id}`, 'DELETE', {}, 409);
+      assert.equal(blocked.error.code, 'ATTACHMENT_UPLOAD_ACTIVE');
+    } finally { releaseUpload(); }
+    const attachment = (await uploading).attachment;
+    app.files.upload = upload;
     await request(`/api/sessions/${s2.id}`, 'PATCH', { draft: { text: '', contextPaths: [], attachmentIds: [attachment.id], mode: 'readonly' } }, 403);
     const message = { text: 'Read note', mode: 'readonly', attachmentIds: [attachment.id], contextPaths: ['note.txt'], idempotencyKey: randomUUID() };
     const run = (await request(`/api/sessions/${s1.id}/messages`, 'POST', message, 202)).run;
@@ -81,6 +104,11 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     const retry = (await request(`/api/runs/${run.id}/retry`, 'POST', { idempotencyKey: randomUUID() }, 202)).run;
     assert.notEqual(retry.id, run.id); assert.equal(retry.mode, 'readonly'); assert.equal(retry.retryOf, run.id);
     await request(`/api/runs/${retry.id}/stop`, 'POST', {});
+    const runPage = await request(`/api/runs?sessionId=${s1.id}&status=stopped&limit=1`);
+    assert.equal(runPage.total, 2);
+    assert.equal(runPage.nextOffset, 1);
+    assert.equal(runPage.items[0].id, retry.id);
+    assert.equal((await request(`/api/runs?sessionId=${s1.id}&status=stopped&limit=1&offset=1`)).items[0].id, run.id);
     await request(`/api/sessions/${s1.id}/attachments/${attachment.id}`, 'DELETE', {});
     const snapshot = await request(`/api/sessions/${s1.id}`); assert.equal(snapshot.runs.length, 2); assert.equal(snapshot.messages.length, 2); assert.equal(snapshot.artifacts.length, 1);
     assert.equal(snapshot.attachments.find((item: { id: string }) => item.id === attachment.id)?.name, 'notes.md');
@@ -136,6 +164,18 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
   } finally { await app.close(); }
 }));
 
+test('usage distinguishes failed placeholder counters and isolates per-run SDK estimates', () => {
+  const placeholder = readRunUsage({ is_error: true, total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } }, 'fixture', 0.15);
+  assert.equal(placeholder.usage.inputTokens, null);
+  assert.equal(placeholder.cumulativeCost, null);
+  assert.equal(placeholder.usage.complete, false);
+  const measured = { is_error: false, total_cost_usd: 0.25, usage: { input_tokens: 500, output_tokens: 100, cache_read_input_tokens: 0 } };
+  assert.equal(readRunUsage(measured, 'fixture', 0.15).usage.sdkEstimateUsd, 0.1);
+  assert.equal(readRunUsage(measured, 'fixture', null).usage.sdkEstimateUsd, null);
+  assert.equal(readRunUsage(measured, 'fixture', 0.5).usage.sdkEstimateUsd, null);
+  assert.equal(readRunUsage(measured, 'fixture', 0).usage.cacheReadTokens, 0);
+});
+
 test('repeated stop and shutdown preserve the first cancellation and finalize once', async () => fixture(async (base, project) => {
   const store = new Store(join(base, 'data'));
   const runner = new AgentRunner(store, new PermissionService(store), new FileRecords(store));
@@ -172,7 +212,10 @@ test('permission expiry during the file baseline check prevents approval', async
     store.update('permissions', permission.id, { expiresAt: new Date(0).toISOString() });
     await assert.rejects(decision, { code: 'PERMISSION_EXPIRED' });
     await rejected;
-    assert.equal(store.get('permissions', permission.id).status, 'expired');
+    const expired = store.get('permissions', permission.id);
+    assert.equal(expired.status, 'expired');
+    assert.equal(expired.reason, 'fixture');
+    assert.match(expired.resolutionReason ?? '', /超时/);
     assert.equal(await readFile(join(project, 'note.txt'), 'utf8'), 'ORIGINAL\n');
   } finally { service.cancelRun(run.id); store.close(); }
 }));
@@ -213,6 +256,25 @@ test('restart persists distinct runs and invalidates ordinary pending approvals'
   store.event(run.id, run.sessionId, 'run.created', {}); const cursor = store.cursor(); store.close(); store = new Store(directory); store.recover();
   try { assert.equal(store.get('runs', run.id).status, 'interrupted'); assert.equal(store.get('permissions', 'permission').status, 'canceled'); assert.equal(store.get('messages', 'message').text, 'preserved'); assert.ok(store.cursor() > cursor); }
   finally { store.close(); }
+}));
+
+test('approval preview describes exactly the bytes applied, including BOM and final newline', async () => fixture(async (_base, project) => {
+  const before = '﻿first\r\nline\r\nlast\r\n';
+  const after = '﻿first\r\nchanged\r\nlast';
+  const file = join(project, 'note.txt');
+  await writeFile(file, before);
+  assert.equal(await readProjectText(project, 'note.txt'), before);
+  const patch = textDiff('note.txt', before, after);
+  assert.match(patch, /@@/);
+  assert.equal(applyPatch(before, patch), after);
+  assert.equal(applyPatch('', textDiff('new.md', null, 'new')), 'new');
+  assert.equal(applyPatch('old\n', textDiff('old.md', 'old\n', null)), '');
+  const signal = new AbortController().signal;
+  await applyText(project, 'note.txt', before, after, signal);
+  assert.deepEqual(await readFile(file), Buffer.from(after));
+  const results = await Promise.allSettled(['alpha', 'beta'].map(text => applyText(project, 'shared.txt', null, text, signal)));
+  assert.equal(results.filter(x => x.status === 'fulfilled').length, 1);
+  assert.equal(await readFile(join(project, 'shared.txt'), 'utf8'), results[0]?.status === 'fulfilled' ? 'alpha' : 'beta');
 }));
 
 test('project file access rejects traversal, symlinks and private files; create/delete stay inside project', async () => fixture(async (base, project) => {

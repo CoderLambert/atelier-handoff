@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFile, lstat, rm } from 'node:fs/promises';
 import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
@@ -27,8 +29,23 @@ function page<T>(items: T[], url: URL) {
   const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0), limit = Math.max(1, Math.min(500, Number(url.searchParams.get('limit')) || 50));
   return { items: items.slice(offset, offset + limit), total: items.length, nextOffset: offset + limit < items.length ? offset + limit : null };
 }
+const exec = promisify(execFile);
 async function branchFor(root: string): Promise<string> {
-  try { if ((await lstat(join(root, '.git'))).isSymbolicLink() || (await lstat(join(root, '.git', 'HEAD'))).isSymbolicLink()) return ''; const text = (await readFile(join(root, '.git', 'HEAD'), 'utf8')).trim(); return text.startsWith('ref: refs/heads/') ? text.slice(16) : 'detached'; } catch { return ''; }
+  try {
+    const git = join(root, '.git');
+    const metadata = await lstat(git);
+    if (metadata.isFile() && metadata.size <= 4096 && (await readFile(git, 'utf8')).startsWith('gitdir: ')) {
+      const options = { env: { PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' }, timeout: 1500, maxBuffer: 4096 };
+      try { return (await exec('git', ['-C', root, 'symbolic-ref', '--short', 'HEAD'], options)).stdout.trim(); }
+      catch {
+        await exec('git', ['-C', root, 'rev-parse', '--verify', 'HEAD'], options);
+        return 'detached';
+      }
+    }
+    if (!metadata.isDirectory() || (await lstat(join(git, 'HEAD'))).isSymbolicLink()) return '';
+    const head = (await readFile(join(git, 'HEAD'), 'utf8')).trim();
+    return head.startsWith('ref: refs/heads/') ? head.slice(16) : 'detached';
+  } catch { return ''; }
 }
 export async function createApp(options: { root: string; data: string; runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner; permissionTtlMs?: number; pickDirectory?: typeof pickProjectDirectory }) {
   const store = new Store(options.data); store.recover();
@@ -38,6 +55,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const deletingSessions = new Set<string>();
+  const uploadingSessions = new Set<string>();
   let directoryPicker: AbortController | undefined;
   const streams = new Set<ServerResponse>();
   const connection = async (config: AppConfig) => {
@@ -181,6 +199,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
           store.get('sessions', id);
           if (store.list('runs').some(r => r.sessionId === id && activeStatuses.includes(r.status))) throw new AppError('RUN_ACTIVE', '请先停止运行再删除会话。', 409);
           if (deletingSessions.has(id)) throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
+          if (uploadingSessions.has(id)) throw new AppError('ATTACHMENT_UPLOAD_ACTIVE', '请等附件上传结束再删除会话。', 409);
           deletingSessions.add(id);
           try {
             await files.deleteSessionFiles(id);
@@ -196,7 +215,14 @@ export async function createApp(options: { root: string; data: string; runnerFac
           if (method === 'POST') return json(res, { run: await createRun(id, await body(req)) }, 202);
         }
         if (parts[3] === 'attachments') {
-          if (parts.length === 4 && method === 'POST') { const upload = z.object({ name: z.string().min(1).max(255), mime: z.string().optional(), contentBase64: z.string() }).parse(await body(req)); return json(res, { attachment: await files.upload(id, upload.name, upload.contentBase64) }, 201); }
+          if (parts.length === 4 && method === 'POST') {
+            const upload = z.object({ name: z.string().min(1).max(255), mime: z.string().optional(), contentBase64: z.string() }).parse(await body(req));
+            if (deletingSessions.has(id)) throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
+            if (uploadingSessions.has(id)) throw new AppError('ATTACHMENT_UPLOAD_ACTIVE', '此会话正在上传附件，请稍后重试。', 409);
+            uploadingSessions.add(id);
+            try { return json(res, { attachment: await files.upload(id, upload.name, upload.contentBase64) }, 201); }
+            finally { uploadingSessions.delete(id); }
+          }
           if (parts.length === 5 && method === 'DELETE') { await files.removeAttachment(parts[4]!, id); return json(res, { ok: true }); }
         }
       }

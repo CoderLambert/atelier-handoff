@@ -10,6 +10,7 @@ import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
 import { applyText, fingerprint, listProjectFiles, readProjectText, resolveProjectPath, searchProject, MAX_TEXT } from './files.js';
 import { commandsAvailable, runCommand } from './commands.js';
+import { readRunUsage } from './usage.js';
 
 class InputQueue {
   private values: SDKUserMessage[] = []; private ended = false; private wake?: () => void;
@@ -69,6 +70,8 @@ export class AgentRunner implements Runner {
     let processExited = false;
     let stderrBytes = 0;
     let firstText = true;
+    let initialized = false;
+    let observedModel = run.config.model;
     let finalResult: SDKResultMessage | undefined;
     let failure: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -226,6 +229,8 @@ export class AgentRunner implements Runner {
       input.push(`${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${run.mode === 'readonly' ? '只读；不允许项目写入或命令' : '受控修改；可通过本轮提供的 atelier 写入/编辑/删除/命令工具请求单次审批'}。计划工具为 update_plan。\n\n用户本轮任务：\n${inputText}`);
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {
+          initialized = true;
+          observedModel = message.model || observedModel;
           this.store.update('sessions', session.id, { sdkSessionId: message.session_id, sdkMode: run.mode, sdkConfigKey: configKey, ...(!resumeExisting ? { sdkCostTotal: 0 } : {}) });
           this.store.event(run.id, session.id, 'sdk.initialized', { model: message.model, version: message.claude_code_version, tools: message.tools, resumed: !!resumeExisting });
         } else if (message.type === 'stream_event') {
@@ -256,11 +261,10 @@ export class AgentRunner implements Runner {
         } else if (message.type === 'result') {
           finalResult = message;
           if (!blocks.size && message.subtype === 'success') { blocks.set('result', message.result); dirty = true; }
-          const usage = message.usage;
-          const cumulativeCost = Number.isFinite(message.total_cost_usd) ? message.total_cost_usd : null;
-          const incrementalCost = cumulativeCost === null ? null : Math.max(0, cumulativeCost - (resumeExisting ? session.sdkCostTotal ?? 0 : 0));
-          if (cumulativeCost !== null) this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost });
-          this.store.update('runs', run.id, { usage: { model: run.config.model, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, cacheReadTokens: usage?.cache_read_input_tokens ?? null, cacheCreationTokens: usage?.cache_creation_input_tokens ?? null, sdkEstimateUsd: incrementalCost, costEstimateUsd: null, pricingBasis: 'unknown', complete: !message.is_error } });
+          const previousCost = resumeExisting ? session.sdkCostTotal ?? null : 0;
+          const { usage, cumulativeCost } = readRunUsage(message, observedModel, previousCost);
+          this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost ?? undefined });
+          this.store.update('runs', run.id, { usage });
           this.store.event(run.id, session.id, 'sdk.result', {
             subtype: message.subtype, isError: message.is_error,
             terminalReason: message.terminal_reason ?? null, stopReason: message.stop_reason,
@@ -288,6 +292,7 @@ export class AgentRunner implements Runner {
         clearTimeout(deadline); if (!processExited) await childExit;
       }
       await Promise.allSettled([...commands, ...toolWork]);
+      if (initialized && !finalResult) this.store.update('sessions', session.id, { sdkCostTotal: undefined });
       const status: RunStatus = live.reason === 'user' ? 'stopped' : live.reason === 'shutdown' ? 'interrupted' : live.reason === 'timeout' ? 'failed' : !finalResult ? 'interrupted' : failure ? 'failed' : 'completed';
       const reason = live.reason === 'user' ? '用户停止，进程已退出；已发生的修改保留。' : live.reason === 'shutdown' ? '服务关闭，运行中断。' : live.reason === 'timeout' ? '执行超过设定时限，已停止。' : failure;
       this.store.update('runs', run.id, { status, endedAt: now(), reason, error: ['failed', 'interrupted'].includes(status) ? reason : null });

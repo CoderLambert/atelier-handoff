@@ -1,5 +1,6 @@
 import { constants } from 'node:fs';
-import { lstat, realpath, readFile, readdir, mkdir, open, rename, unlink } from 'node:fs/promises';
+import { lstat, realpath, readFile, readdir, mkdir, open, rename, unlink, link } from 'node:fs/promises';
+import { createTwoFilesPatch } from 'diff';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute, sep, dirname, basename, join, extname } from 'node:path';
 import { homedir } from 'node:os';
@@ -44,11 +45,14 @@ export async function readProjectText(root: string, input: string, limit = MAX_T
   const target = await resolveProjectPath(root, input);
   const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    const stat = await handle.stat(); if (stat.size > limit) throw new AppError('FILE_TOO_LARGE', `文本超过 ${Math.round(limit / 1024)} KiB 限制。`, 413);
+    const stat = await handle.stat();
+    if (stat.size > limit) throw new AppError('FILE_TOO_LARGE', `文件大小为 ${stat.size} 字节，超过 ${Math.round(limit / 1024)} KiB 文本限制。`, 413);
     if (!stat.isFile() || stat.nlink !== 1) throw new AppError('PATH_DENIED', '文件状态已改变。', 409);
     const data = await handle.readFile();
-    if (data.includes(0)) throw new AppError('BINARY_FILE', '此文件为二进制，首版只支持文本。');
-    try { return new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { throw new AppError('UNSUPPORTED_ENCODING', '首版只支持 UTF-8 文本。'); }
+    if (data.length > limit) throw new AppError('FILE_TOO_LARGE', `文件大小为 ${data.length} 字节，超过 ${Math.round(limit / 1024)} KiB 文本限制。`, 413);
+    if (data.includes(0)) throw new AppError('BINARY_FILE', `二进制文件，大小 ${data.length} 字节。当前工具仅处理 UTF-8 文本。`);
+    try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data); }
+    catch { throw new AppError('UNSUPPORTED_ENCODING', `文件大小 ${data.length} 字节，编码并非有效 UTF-8。`); }
   } finally { await handle.close(); }
 }
 export async function listProjectFiles(root: string, input = '') {
@@ -104,14 +108,22 @@ export async function applyText(root: string, path: string, before: string | nul
     await handle.writeFile(after, 'utf8'); await handle.sync(); await handle.close();
     const latest = current === null ? await lstat(target).then(() => 'exists', () => null) : await readProjectText(root, path);
     if (latest !== before) throw new AppError('OPERATION_CHANGED', '文件基线已变化，没有应用修改。', 409);
-    signal.throwIfAborted(); await rename(temporary, target); return fingerprint(after);
+    signal.throwIfAborted();
+    if (before === null) {
+      try { await link(temporary, target); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new AppError('OPERATION_CHANGED', '目标已存在，请重新审批。', 409);
+        throw error;
+      }
+    } else await rename(temporary, target);
+    return fingerprint(after);
   } finally { await handle.close().catch(() => {}); await unlink(temporary).catch(() => {}); }
 }
 export function textDiff(path: string, before: string | null, after: string | null): string {
-  const lines = [`--- ${before === null ? '/dev/null' : path}`, `+++ ${after === null ? '/dev/null' : path}`];
-  if (before !== null) lines.push(...before.split('\n').map(line => '-' + line));
-  if (after !== null) lines.push(...after.split('\n').map(line => '+' + line));
-  return lines.join('\n');
+  const oldPath = before === null ? '/dev/null' : path;
+  const newPath = after === null ? '/dev/null' : path;
+  const patch = createTwoFilesPatch(oldPath, newPath, before ?? '', after ?? '', undefined, undefined, { context: 3, maxEditLength: 4000, timeout: 100 });
+  return patch ?? `--- ${oldPath}\n+++ ${newPath}\n差异规模超过预览限制。原文件 ${Buffer.byteLength(before ?? '')} 字节，操作后 ${Buffer.byteLength(after ?? '')} 字节。`;
 }
 export const textExtensions = new Set(['.txt', '.md', '.json', '.csv', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.yaml', '.yml', '.log', '.py']);
 export function safeName(name: string): string { return basename(name.replaceAll('\\', '/')).replace(/[\x00-\x1f]/g, '').slice(0, 160) || 'file.txt'; }

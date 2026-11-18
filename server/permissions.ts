@@ -37,7 +37,7 @@ export class PermissionService {
   private finish(id: string, status: Permission['status'], reason?: string): Permission {
     const permission = this.store.get('permissions', id);
     if (permission.status !== 'pending') return permission;
-    const updated = this.store.update('permissions', id, { status, ...(reason ? { reason } : {}) });
+    const updated = this.store.update('permissions', id, { status, ...(reason ? { resolutionReason: reason } : {}) });
     const pending = this.pending.get(id); this.pending.delete(id);
     this.store.update('tools', permission.toolCallId, { status: status === 'allowed' ? 'running' : status === 'canceled' ? 'canceled' : 'denied', ...(status === 'allowed' ? {} : { endedAt: now() }) });
     const run = this.store.get('runs', permission.runId);
