@@ -124,6 +124,36 @@
   }
 }
 
+.react-dialog.artifact-dialog {
+  padding: 0;
+}
+
+.artifact-preview-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.artifact-preview-toolbar .btn {
+  min-height: 32px;
+  padding: 4px 7px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.artifact-preview-toolbar .btn:where([aria-label]) {
+  padding: 0;
+}
+
+.artifact-dialog-fullscreen > pre {
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
 .react-dialog.artifact-dialog-fullscreen {
   inset: 0;
   transform: none;
