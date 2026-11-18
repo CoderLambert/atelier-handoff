@@ -1,0 +1,90 @@
+.chat-conversation {
+  flex: 1;
+  min-width: 0;
+  overflow-anchor: none;
+}
+.chat-conversation .message-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-composer {
+  flex: none;
+  min-width: 0;
+}
+.chat-composer .mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.chat-composer .mode-toggle[aria-pressed='true'] {
+  color: var(--success);
+}
+.chat-composer :is(button, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.chat-composer .send-button {
+  font-size: 22px;
+}
+.chat-composer .chat-extension-fieldset {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.chat-composer-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.chat-composer-error:empty {
+  display: none;
+}
+.chat-composer .chat-upload-error {
+  color: var(--danger);
+}
+.chat-context-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.chat-context-path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-context-options {
+  max-height: 55dvh;
+  overflow-y: auto;
+}
+.chat-file-kind {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.chat-file-preview {
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-warm);
+}
+@media (max-width: 640px) {
+  .chat-composer .composer-footer {
+    flex-wrap: wrap;
+  }
+  .chat-composer .send-hint {
+    display: none;
+  }
+  .chat-composer .context-chip {
+    max-width: 100%;
+  }
+}

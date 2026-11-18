@@ -1,0 +1,145 @@
+@import 'tailwindcss/theme.css' layer(theme);
+@import './styles/atelier.css';
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@source './';
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-muted: var(--surface-warm);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-on);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: white;
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+}
+
+@layer base {
+  .react-dialog-overlay {
+    background: rgb(29 36 25 / 0.45);
+  }
+  .react-dialog {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(500px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+    padding: 22px;
+    background: var(--surface);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 18px 56px #2223;
+  }
+  .react-dialog:has(.ext-market, .ext-market-preview) {
+    width: min(860px, calc(100% - 32px));
+  }
+  .react-dialog-header {
+    display: grid;
+    gap: 8px;
+    padding-inline-end: 34px;
+    margin-block-end: 16px;
+  }
+  .react-dialog-dismiss {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+  .react-workspace .main {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+  .react-workspace .react-center {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .react-workspace .react-center .conversation-screen {
+    flex: 1;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .react-workspace .react-conversation-body {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .react-workspace .react-scroll-view {
+    overflow: auto;
+    min-height: 0;
+  }
+  .react-workspace .react-side {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    border-inline-start: 1px solid var(--border-soft);
+    background: var(--surface);
+  }
+  .react-workspace .react-collections {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+  .react-drawer {
+    inset: 0 auto 0 0;
+    transform: none;
+    width: min(360px, 92vw);
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+  .react-drawer-details {
+    inset: 0 0 0 auto;
+  }
+  .react-drawer .sidebar {
+    height: 100dvh;
+  }
+  @media (max-width: 1120px) {
+    .react-workspace.app {
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    }
+    .react-workspace .react-side {
+      display: none;
+    }
+  }
+  @media (max-width: 760px) {
+    .react-workspace.app {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .react-workspace > .sidebar {
+      display: none;
+    }
+    .react-workspace .topbar {
+      padding-inline: 10px;
+      gap: 6px;
+    }
+    .react-workspace .topbar-actions {
+      gap: 4px;
+    }
+  }
+}
+
+.react-chrome-action {
+  display: none;
+}
+.react-drawer .sidebar {
+  display: flex;
+  position: static;
+  width: 100%;
+  box-shadow: none;
+}
+@media (max-width: 1120px) {
+  .react-chrome-action.details {
+    display: inline-flex;
+  }
+}
+@media (max-width: 767px) {
+  .react-chrome-action.navigation {
+    display: inline-flex;
+  }
+}

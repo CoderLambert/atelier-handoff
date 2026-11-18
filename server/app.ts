@@ -6,6 +6,7 @@ import { readFile, lstat, rm } from 'node:fs/promises';
 import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
+import { serveClient } from './client-assets.js';
 import { AgentRunner, type Runner } from './agent.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
@@ -940,36 +941,7 @@ export async function createApp(options: {
         }
       }
       if (parts[0] === 'api') throw new AppError('NOT_FOUND', '接口不存在。', 404);
-      if (method !== 'GET' && method !== 'HEAD')
-        throw new AppError('NOT_FOUND', '页面不存在。', 404);
-      const staticFiles: Record<string, string> = {
-        '/': 'index.html',
-        '/index.html': 'index.html',
-        '/app.js': 'app.js',
-        '/extensions-ui.js': 'extensions-ui.js',
-        '/extensions.css': 'extensions.css',
-        '/assets/markdown-it.js': 'node_modules/markdown-it/dist/browser/markdown-it.umd.min.js',
-        '/styles.css': 'styles.css',
-        '/prototype/': 'prototype/index.html',
-        '/prototype/index.html': 'prototype/index.html',
-        '/prototype/app.js': 'prototype/app.js',
-        '/prototype/styles.css': 'prototype/styles.css',
-      };
-      const file = staticFiles[url.pathname];
-      if (!file) throw new AppError('NOT_FOUND', '页面不存在。', 404);
-      const content = await readFile(join(options.root, file));
-      const type = file.endsWith('.js')
-        ? 'text/javascript'
-        : file.endsWith('.css')
-          ? 'text/css'
-          : 'text/html';
-      res.writeHead(200, {
-        'Content-Type': type + '; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Content-Security-Policy':
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-      });
-      res.end(method === 'HEAD' ? undefined : content);
+      await serveClient(options.root, url.pathname, method, res);
     } catch (error) {
       if (res.headersSent) {
         res.end();

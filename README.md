@@ -15,7 +15,9 @@ npm ci
 npm start
 ```
 
-打开 **http://127.0.0.1:4317**。开发时可用 `npm run dev` 自动重启服务；服务重启会中断尚未完成的运行并保留历史。
+`npm start` 会先用 Vite 构建前端，再启动本地工作台。打开 **http://127.0.0.1:4317**。
+
+开发时在两个终端分别运行 `npm run dev:server` 和 `npm run dev`，打开 **http://127.0.0.1:5173** 使用前端热更新。Vite 将 `/api` 代理到 `ATELIER_PORT`，默认为 `4317`。服务重启会中断未完成的运行，并保留历史。
 
 应用默认连接 `http://127.0.0.1:3001` 的 Shunt。该网关已在本机配置；如果没有运行，可在现有 `/home/lambert/Projects/claude-code-demo` 项目中执行 `npm run gateway`。已经运行时无需重复启动。登录由 Shunt 的本机浏览器流程完成，工作台不会读取或复制其 OAuth 凭据。
 
@@ -79,12 +81,13 @@ npm run format        # 一键整理项目源码
 npm run format:check  # 检查格式
 ```
 
-格式化范围包括工作台的 JS、HTML、CSS，服务端、共享类型、脚本、测试和项目 JSON 配置。
+格式化范围包括 React 前端、服务端、共享类型、脚本、测试和项目 JSON 配置。
 
 ## 检查与证据
 
 ```sh
 npm run check
+npm run build
 npm test
 ```
 
@@ -105,7 +108,11 @@ npm run test:live -- --authorized --final-tools
 ## 目录
 
 ```text
-index.html / styles.css / app.js  真实工作台前端
+frontend/src/app/                React 工作台、Redux 界面与草稿状态
+frontend/src/api/                共用 API 客户端和响应类型
+frontend/src/features/           对话、审批、轨迹、交付物、设置和扩展
+frontend/src/components/ui/      shadcn/ui 组件与 Tailwind 样式接入
+dist/client/                     Vite 前端构建产物
 server/                          HTTP、SQLite、SDK、权限与文件服务
 shared/types.ts                  共享实体与状态
 scripts/verify-live.ts            真实 SDK 应用验收
