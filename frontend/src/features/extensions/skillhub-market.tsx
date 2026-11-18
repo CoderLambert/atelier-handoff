@@ -112,8 +112,8 @@ export function SkillHubMarket({
   }
   const items = results.data?.items ?? [];
   return (
-    <div className="ext-market skillhub-market" data-show-detail={Boolean(selected)}>
-      <form className="skillhub-search" onSubmit={search}>
+    <div className="ext-market skillhub-market">
+      <form className="skillhub-search" onSubmit={search} hidden={Boolean(selected)}>
         <label className="ext-search">
           <span aria-hidden="true">⌕</span>
           <input
@@ -134,9 +134,14 @@ export function SkillHubMarket({
       <p className="sr-only" role="status">
         {message}
       </p>
-      <div className="skillhub-browser" data-has-results={items.length > 0}>
-        <section className="skillhub-results" aria-label="搜索结果" aria-busy={results.isFetching}>
-          <p className="skillhub-result-count" role="status">
+      <div className="skillhub-browser">
+        <section
+          className="skillhub-results"
+          aria-label="搜索结果"
+          aria-busy={results.isFetching}
+          hidden={Boolean(selected)}
+        >
+          <p className="market-result-count" role="status">
             {results.isFetching
               ? '正在搜索…'
               : query && !results.isError
@@ -150,12 +155,12 @@ export function SkillHubMarket({
                 {query ? '没有匹配的技能。试试更短的关键词。' : '输入关键词查找 SkillHub 技能。'}
               </p>
             ) : null}
-            <ul className="skillhub-list">
+            <ul className="market-catalog-list">
               {items.map((item) => (
                 <li key={item.coordinate}>
                   <button
                     type="button"
-                    className="skillhub-result"
+                    className="market-result"
                     aria-controls={detailId}
                     aria-current={selected?.coordinate === item.coordinate ? 'true' : undefined}
                     disabled={install.isPending}
@@ -167,17 +172,17 @@ export function SkillHubMarket({
                       setMessage('');
                     }}
                   >
-                    <span className="skillhub-result-copy">
+                    <span className="market-result-copy">
                       <strong>{item.title}</strong>
-                      <span className="skillhub-result-summary">
+                      <span className="market-result-summary">
                         {item.description || '暂无简介'}
                       </span>
-                      <span className="skillhub-result-meta">
-                        <span>{item.publisher || item.coordinate.split('/')[0]}</span>
-                        <span>v{item.version}</span>
-                      </span>
                     </span>
-                    <span aria-hidden="true" className="skillhub-chevron">
+                    <span className="market-result-meta">
+                      <span>{item.publisher || item.coordinate.split('/')[0]}</span>
+                      <span>v{item.version}</span>
+                    </span>
+                    <span aria-hidden="true" className="market-result-arrow">
                       ›
                     </span>
                   </button>
@@ -186,7 +191,12 @@ export function SkillHubMarket({
             </ul>
           </div>
         </section>
-        <section id={detailId} className="skillhub-detail" aria-label="SkillHub 技能预览">
+        <section
+          id={detailId}
+          className="skillhub-detail"
+          aria-label="SkillHub 技能预览"
+          hidden={!selected}
+        >
           {selected ? (
             <>
               <div className="skillhub-detail-header">
@@ -211,8 +221,7 @@ export function SkillHubMarket({
                     body={entry.body
                       .replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
                       .trimStart()}
-                    label="SKILL.md"
-                    initiallyOpen
+                    standalone
                   />
                 ) : null}
               </div>
@@ -237,9 +246,7 @@ export function SkillHubMarket({
                 </ActionButton>
               </div>
             </>
-          ) : (
-            <p className="skillhub-empty">选择一项技能，查看正文和导入选项。</p>
-          )}
+          ) : null}
         </section>
       </div>
     </div>
