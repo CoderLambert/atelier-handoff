@@ -1,5 +1,5 @@
 import { fromBuffer, type Entry, type ZipFile } from 'yauzl';
-import { parseDocument } from 'yaml';
+import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
 import { AppError } from '../shared/types.js';
 import { fingerprint } from './files.js';
@@ -180,6 +180,43 @@ async function readSkillDocument(data: Buffer) {
   return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
 }
 
+export function normalizeSkillHubMarkdown(body: string): string {
+  const header = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(body);
+  if (!header) return body;
+  const yaml = header[1]!;
+  let document = parseDocument(yaml, { uniqueKeys: true });
+  const repairable =
+    document.errors.length > 0 &&
+    document.errors.every((error) => error.code === 'BLOCK_AS_IMPLICIT_KEY');
+  if (repairable) {
+    // A plain localized description can contain punctuation YAML reads as a nested mapping.
+    const repaired = yaml.replace(
+      /^(description(?:_[a-zA-Z-]+)?):[ \t]+([^\r\n]+)$/gm,
+      (line, key: string, value: string) =>
+        /^[\p{L}\p{N}]/u.test(value) && /:[ \t]/.test(value)
+          ? `${key}: ${JSON.stringify(value)}`
+          : line,
+    );
+    if (repaired !== yaml) document = parseDocument(repaired, { uniqueKeys: true });
+  }
+  if (document.errors.length || !isMap(document.contents)) return body;
+  const toolsNode = document.get('allowed-tools');
+  const declaredTools = isSeq(toolsNode)
+    ? toolsNode.items.map((item) => (isScalar(item) ? item.value : undefined))
+    : null;
+  const advisoryTools =
+    Array.isArray(declaredTools) &&
+    declaredTools.every(
+      (tool) => typeof tool === 'string' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(tool),
+    );
+  if (advisoryTools) {
+    // Atelier provides its own per-run tool scope and approvals.
+    document.delete('allowed-tools');
+  }
+  if (!repairable && !advisoryTools) return body;
+  return `---\n${document.toString()}---\n${body.slice(header[0].length)}`;
+}
+
 export async function previewSkillHub(source: string, request = fetch): Promise<PublicEntry> {
   const match = coordinate.exec(source.slice('skillhub:'.length));
   if (!match) throw new AppError('PUBLIC_SOURCE_INVALID', '请输入有效的 SkillHub 技能坐标。');
@@ -199,9 +236,8 @@ export async function previewSkillHub(source: string, request = fetch): Promise<
   const selectedVersion = version ?? resolved.data.latestVersion.version;
   try {
     const archive = await downloadPackage(namespace!, slug!, selectedVersion, request, signal);
-    const body = await readSkillDocument(archive);
-    const header = body.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    const metadata = header ? parseDocument(header[1]!).toJS({ maxAliasCount: 0 }) : {};
+    const body = normalizeSkillHubMarkdown(await readSkillDocument(archive));
+    const metadata = inspectMarkdown(body);
     return {
       kind: 'skill',
       location: `skillhub:${name}`,
@@ -211,12 +247,11 @@ export async function previewSkillHub(source: string, request = fetch): Promise<
           .toLowerCase()
           .replace(/^[^a-z0-9]+/, '')
           .slice(0, 64) || 'extension',
-      description:
-        typeof metadata?.description === 'string' ? metadata.description.slice(0, 500) : '',
+      description: metadata.description,
       revision: fingerprint(body),
       body,
       upstreamVersion: selectedVersion,
-      issue: inspectMarkdown(body).compatibility,
+      issue: metadata.compatibility,
     };
   } catch (error) {
     if (error instanceof AppError) throw error;

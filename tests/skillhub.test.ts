@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { previewSkillHub, searchSkillHub } from '../server/skillhub.js';
+import { inspectMarkdown } from '../server/extensions.js';
+import { normalizeSkillHubMarkdown, previewSkillHub, searchSkillHub } from '../server/skillhub.js';
 
 const coordinates = '@example/react';
 
@@ -41,4 +42,18 @@ test('SkillHub download rejects redirects outside the approved package CDN', asy
     { code: 'SKILLHUB_INVALID_RESPONSE' },
   );
   assert.deepEqual(paths, ['/api/v1/skills/resolve', '/api/v1/download']);
+});
+
+test('SkillHub repairs plain description punctuation and keeps project tool policy', () => {
+  const body =
+    '---\nname: resume\ndescription_en: Use for writing: resumes and cover letters\nallowed-tools: [Read, Write]\ndisable-model-invocation: true\n---\n# Resume feedback\n';
+  const normalized = normalizeSkillHubMarkdown(body);
+  assert.equal(inspectMarkdown(normalized).supported, true);
+  assert.equal(inspectMarkdown(normalized).modelInvocable, false);
+  assert.equal(inspectMarkdown(normalized).text, '# Resume feedback');
+  assert.doesNotMatch(normalized, /allowed-tools/);
+  const withHook = body.replace('allowed-tools:', 'hooks: {}\nallowed-tools:');
+  assert.equal(inspectMarkdown(normalizeSkillHubMarkdown(withHook)).supported, false);
+  const duplicate = body.replace('name: resume', 'name: resume\nname: other');
+  assert.equal(normalizeSkillHubMarkdown(duplicate), duplicate);
 });

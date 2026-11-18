@@ -208,7 +208,9 @@ export function SkillHubMarket({
                 {entry?.body ? (
                   <MarkdownPreview
                     key={selected.source}
-                    body={entry.body}
+                    body={entry.body
+                      .replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
+                      .trimStart()}
                     label="SKILL.md"
                     initiallyOpen
                   />
