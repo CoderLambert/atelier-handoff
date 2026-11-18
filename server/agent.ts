@@ -14,6 +14,7 @@ import { z } from 'zod';
 import {
   AppError,
   now,
+  type AgentCapability,
   type Run,
   type RunStatus,
   type Step,
@@ -74,7 +75,13 @@ interface LiveRun {
   done: Promise<void>;
 }
 export interface Runner {
-  start(run: Run, input: string, mcp?: EnabledMcp[], skills?: RunSkill[]): void;
+  start(
+    run: Run,
+    input: string,
+    mcp?: EnabledMcp[],
+    skills?: RunSkill[],
+    validateAgent?: () => void,
+  ): void;
   stop(id: string): void;
   shutdown(): Promise<void>;
 }
@@ -85,10 +92,16 @@ export class AgentRunner implements Runner {
     private readonly permissions: PermissionService,
     private readonly files: FileRecords,
   ) {}
-  start(run: Run, input: string, mcp: EnabledMcp[] = [], skills: RunSkill[] = []): void {
+  start(
+    run: Run,
+    input: string,
+    mcp: EnabledMcp[] = [],
+    skills: RunSkill[] = [],
+    validateAgent?: () => void,
+  ): void {
     const live: LiveRun = { cancellation: new AbortController(), done: Promise.resolve() };
     this.active.set(run.id, live);
-    live.done = this.execute(run, input, live, mcp, skills).finally(() =>
+    live.done = this.execute(run, input, live, mcp, skills, validateAgent).finally(() =>
       this.active.delete(run.id),
     );
   }
@@ -127,10 +140,17 @@ export class AgentRunner implements Runner {
     live: LiveRun,
     mcp: EnabledMcp[],
     skills: RunSkill[],
+    validateAgent?: () => void,
   ): Promise<void> {
     const signal = live.cancellation.signal;
     const project = this.store.get('projects', run.projectId);
     const session = this.store.get('sessions', run.sessionId);
+    const allowed = (capability: AgentCapability) =>
+      !run.agent || run.agent.capabilities.includes(capability);
+    const verifyCurrent = () => {
+      signal.throwIfAborted();
+      validateAgent?.();
+    };
     const candidates = new Map(skills.map((skill) => [sdkSkillName(skill), skill]));
     const skillRefs = skills.map(({ id, name, version }) => ({ id, name, version }));
     const skillCalls = new Map<string, RunSkill>();
@@ -139,6 +159,7 @@ export class AgentRunner implements Runner {
       JSON.stringify({
         model: run.config.model,
         gateway: run.config.gateway,
+        ...(run.agent ? { agent: run.agent, capabilityPolicy: 1 } : {}),
         ...(run.extensions ? { extensions: run.extensions } : {}),
         ...(skillRefs.length ? { skills: skillRefs } : {}),
       }),
@@ -275,7 +296,7 @@ export class AgentRunner implements Runner {
         createTool(id, fullName, args);
         const work = (async () => {
           try {
-            signal.throwIfAborted();
+            verifyCurrent();
             const result = await handler(args as z.infer<z.ZodObject<S>>, id);
             const output = typeof result === 'string' ? result : JSON.stringify(result);
             finishTool(id, true, output);
@@ -342,14 +363,29 @@ export class AgentRunner implements Runner {
         async (args) => {
           if ((args.content === undefined) === (args.path === undefined))
             throw new AppError('INVALID_INPUT', '必须指定成果内容或一个已有项目路径。');
+          if (args.path && !allowed('read'))
+            throw new AppError('AGENT_CAPABILITY_DENIED', '此智能体未启用项目文件读取。', 403);
           const text =
             args.content ?? (await readProjectText(project.path, args.path!, 1024 * 1024));
-          signal.throwIfAborted();
+          verifyCurrent();
           return this.files.publish(run, args.name, text);
         },
       ),
-    ];
-    if (run.mode === 'edit')
+    ].filter((entry) => {
+      switch (entry.name) {
+        case 'update_plan':
+          return allowed('plan');
+        case 'list_files':
+          return allowed('read');
+        case 'search_files':
+          return allowed('search');
+        case 'publish_artifact':
+          return allowed('artifact');
+        default:
+          return false;
+      }
+    });
+    if (run.mode === 'edit' && allowed('write'))
       mcpTools.push(
         custom(
           'write_file',
@@ -376,7 +412,15 @@ export class AgentRunner implements Runner {
               },
               signal,
             );
-            const hash = await applyText(project.path, args.path, before, args.content, signal);
+            verifyCurrent();
+            const hash = await applyText(
+              project.path,
+              args.path,
+              before,
+              args.content,
+              signal,
+              verifyCurrent,
+            );
             return { path: args.path, fingerprint: hash, applied: true };
           },
         ),
@@ -400,9 +444,17 @@ export class AgentRunner implements Runner {
               { toolCallId: id, kind: 'edit', path: args.path, before, after, reason: args.reason },
               signal,
             );
+            verifyCurrent();
             return {
               path: args.path,
-              fingerprint: await applyText(project.path, args.path, before, after, signal),
+              fingerprint: await applyText(
+                project.path,
+                args.path,
+                before,
+                after,
+                signal,
+                verifyCurrent,
+              ),
               applied: true,
             };
           },
@@ -426,12 +478,13 @@ export class AgentRunner implements Runner {
               },
               signal,
             );
-            await applyText(project.path, args.path, before, null, signal);
+            verifyCurrent();
+            await applyText(project.path, args.path, before, null, signal, verifyCurrent);
             return { path: args.path, deleted: true };
           },
         ),
       );
-    if (run.mode === 'edit' && commandsAvailable())
+    if (run.mode === 'edit' && allowed('command') && commandsAvailable())
       mcpTools.push(
         custom(
           'run_command',
@@ -449,6 +502,7 @@ export class AgentRunner implements Runner {
               },
               signal,
             );
+            verifyCurrent();
             const work = runCommand(project.path, args.command, signal);
             commands.add(work);
             try {
@@ -493,6 +547,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   signal,
                 );
               }
+              verifyCurrent();
               const identity = { server: server.name, tool: selected.name, toolCallId: id };
               this.store.event(run.id, session.id, 'mcp.call_started', identity);
               try {
@@ -502,6 +557,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   selected.name,
                   args,
                   AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+                  verifyCurrent,
                 );
                 signal.throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {
@@ -543,13 +599,16 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       try {
         signal.throwIfAborted();
         if (event.hook_event_name !== 'PreToolUse') return {};
+        verifyCurrent();
         const args = event.tool_input as Record<string, unknown>;
         const id = appToolId(event.tool_use_id);
         if (event.tool_name === 'Read') {
+          if (!allowed('read')) throw new Error('工具未开放。');
           if (typeof args.file_path !== 'string') throw new Error('缺少文件路径。');
           await readProjectText(project.path, args.file_path);
           signal.throwIfAborted();
         } else if (event.tool_name === 'TodoWrite') {
+          if (!allowed('plan')) throw new Error('工具未开放。');
           z.array(
             z
               .object({
@@ -628,7 +687,11 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         options: {
           cwd: project.path,
           model: run.config.model,
-          tools: ['Read', 'TodoWrite', ...(skills.length ? ['Skill'] : [])],
+          tools: [
+            ...(allowed('read') ? ['Read'] : []),
+            ...(allowed('plan') ? ['TodoWrite'] : []),
+            ...(skills.length ? ['Skill'] : []),
+          ],
           skills: [...candidates.keys()],
           allowedTools: [],
           disallowedTools: [
@@ -755,7 +818,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           ? '本轮按所选技能交付用户要求的结果。设计、分析与文档任务先在对话中给出可独立使用的完整版本，再按需发布交付物。只做完成该结果所需的文件检查。对于可逆的设计选择，可说明假设并直接交付初稿。\n\n'
           : '';
       input.push(
-        `${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}计划工具为 update_plan。\n\n${skillDelivery}用户本轮任务：\n${inputText}`,
+        `${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}用户本轮任务：\n${inputText}`,
       );
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {

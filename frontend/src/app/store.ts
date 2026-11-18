@@ -2,7 +2,7 @@ import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolki
 import { useDispatch, useSelector } from 'react-redux';
 import type { Draft } from '@shared/types';
 
-export type View = 'chat' | 'artifacts' | 'runs' | 'extensions';
+export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
 interface WorkspaceState {
   view: View;

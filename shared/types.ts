@@ -79,6 +79,78 @@ export interface UsedExtension {
   version: number;
   tools?: string[];
 }
+export const agentCapabilities = [
+  'read',
+  'search',
+  'context',
+  'attachments',
+  'plan',
+  'artifact',
+  'write',
+  'command',
+] as const;
+export type AgentCapability = (typeof agentCapabilities)[number];
+export interface AgentSkillRef {
+  id: string;
+  version: number;
+  activation: 'auto' | 'manual';
+}
+export interface AgentMcpRef {
+  id: string;
+  version: number;
+  tools: string[];
+}
+export interface AgentConfig {
+  name: string;
+  description: string;
+  instructions: string;
+  starters: string[];
+  mode: Mode;
+  capabilities: AgentCapability[];
+  skills: AgentSkillRef[];
+  mcp: AgentMcpRef[];
+}
+export interface AgentProfile {
+  id: string;
+  projectId: string;
+  revisionId: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AgentRevision {
+  id: string;
+  agentId: string;
+  projectId: string;
+  version: number;
+  config: AgentConfig;
+  createdAt: string;
+  dependencies: unknown;
+}
+export interface AgentCard {
+  id: string;
+  projectId: string;
+  revisionId: string;
+  archived: boolean;
+  version: number;
+  config: AgentConfig;
+  issues: string[];
+}
+export interface AgentRunInfo {
+  id: string;
+  revisionId: string;
+  name: string;
+  version: number;
+  capabilities: AgentCapability[];
+}
+export interface AgentSessionInfo extends AgentRunInfo {
+  mode: Mode;
+  starters: string[];
+  skills: AgentSkillRef[];
+  mcp: AgentMcpRef[];
+  issues: string[];
+}
+
 export interface Draft {
   text: string;
   contextPaths: string[];
@@ -89,6 +161,7 @@ export interface Draft {
 export interface Session {
   id: string;
   projectId: string;
+  agentRevisionId?: string;
   title: string;
   status: 'active' | 'archived';
   sdkSessionId: string | null;
@@ -133,6 +206,7 @@ export interface Run {
   usage: Usage | null;
   config: AppConfig;
   extensions?: UsedExtension[];
+  agent?: AgentRunInfo;
 }
 export interface Message {
   id: string;
@@ -222,6 +296,8 @@ export interface Tables {
   artifacts: Artifact;
   attachments: Attachment;
   extensions: Extension;
+  agents: AgentProfile;
+  agentRevisions: AgentRevision;
 }
 export type Table = keyof Tables;
 export class AppError extends Error {

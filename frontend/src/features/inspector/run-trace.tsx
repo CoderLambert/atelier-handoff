@@ -82,6 +82,8 @@ function TraceDetail({
   const facts: [string, unknown][] = [
     ['模型', init?.model ?? run.config.model],
     ['网关', gateway],
+    ['智能体', run.agent ? `${run.agent.name} · v${run.agent.version}` : null],
+    ['可用内置能力', run.agent?.capabilities.join('、')],
     ['权限模式', run.mode === 'edit' ? '受控修改 · 逐次审批' : '只读'],
     ['SDK CLI', init?.version],
     ['开始时间', formatDate(run.startedAt)],

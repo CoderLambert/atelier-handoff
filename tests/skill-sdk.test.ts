@@ -233,6 +233,13 @@ test(
         plan: [],
         usage: null,
         config: { gateway: gatewayUrl, model, maxTurns: 4, timeoutMs: 30_000 },
+        agent: {
+          id: randomUUID(),
+          revisionId: randomUUID(),
+          name: 'Restricted fixture',
+          version: 1,
+          capabilities: ['plan'],
+        },
       });
       // AgentRunner gives the real bundled CLI an isolated config directory and
       // points every model request at this loopback HTTP server.
@@ -255,6 +262,11 @@ test(
       assert.equal(requests.length, 2, diagnostics);
 
       const first = requests[0]!;
+      const visible = first.tools?.flatMap((item) => ('name' in item ? [item.name] : [])) ?? [];
+      assert.ok(!visible.includes('Read'));
+      assert.ok(!visible.includes('mcp__atelier__list_files'));
+      assert.ok(!visible.includes('mcp__atelier__publish_artifact'));
+      assert.ok(visible.includes('mcp__atelier__update_plan'));
       const tool = first.tools?.find((item) => 'name' in item && item.name === 'Skill');
       assert.ok(
         tool && 'input_schema' in tool,

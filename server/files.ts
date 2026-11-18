@@ -204,6 +204,7 @@ export async function applyText(
   before: string | null,
   after: string | null,
   signal: AbortSignal,
+  beforeApply?: () => void,
 ): Promise<string | null> {
   signal.throwIfAborted();
   const target = await resolveProjectPath(root, path, { create: before === null });
@@ -218,6 +219,7 @@ export async function applyText(
     throw new AppError('OPERATION_CHANGED', '文件已在等待审批期间变化，请重新生成修改。', 409);
   signal.throwIfAborted();
   if (after === null) {
+    beforeApply?.();
     await unlink(target);
     return null;
   }
@@ -241,6 +243,7 @@ export async function applyText(
     if (latest !== before)
       throw new AppError('OPERATION_CHANGED', '文件基线已变化，没有应用修改。', 409);
     signal.throwIfAborted();
+    beforeApply?.();
     if (before === null) {
       try {
         await link(temporary, target);

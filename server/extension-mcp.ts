@@ -143,6 +143,7 @@ export async function callMcp(
   name: string,
   args: Record<string, unknown>,
   signal: AbortSignal,
+  beforeCall?: () => void,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
@@ -157,6 +158,7 @@ export async function callMcp(
     ) {
       throw new AppError('MCP_TOOL_CHANGED', '工具定义已变化。请重新测试连接并检查工具权限。', 409);
     }
+    beforeCall?.();
     const response = await client.callTool({ name, arguments: args }, CallToolResultSchema, {
       timeout: MCP_CALL_TIMEOUT,
       signal,

@@ -79,6 +79,16 @@ export function buildRunDiagnostics(
     run: {
       id: run.id,
       retryOf: run.retryOf,
+      ...(run.agent
+        ? {
+            agent: {
+              id: run.agent.id,
+              revisionId: run.agent.revisionId,
+              version: run.agent.version,
+              capabilities: run.agent.capabilities,
+            },
+          }
+        : {}),
       status: run.status,
       mode: run.mode,
       createdAt: run.createdAt,

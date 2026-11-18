@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { Boxes, Clock3, FolderOpen, MessagesSquare, Package, Plus, Settings2 } from 'lucide-react';
+import {
+  Bot,
+  Boxes,
+  Clock3,
+  FolderOpen,
+  MessagesSquare,
+  Package,
+  Plus,
+  Settings2,
+} from 'lucide-react';
 import { activeStatuses, type Project, type Run, type Session } from '@shared/types';
 import { api } from '@/api/client';
 import type { Page } from '@/api/types';
@@ -13,6 +22,7 @@ const links = [
   { id: 'artifacts', label: '交付物', Icon: Package },
   { id: 'runs', label: '执行记录', Icon: Clock3 },
   { id: 'extensions', label: '扩展', Icon: Boxes },
+  { id: 'agents', label: '智能体', Icon: Bot },
 ] as const;
 const runStatus = {
   queued: '排队中',

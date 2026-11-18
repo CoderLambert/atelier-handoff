@@ -76,6 +76,9 @@ export function Composer({
   const [error, setError] = useState('');
   const queryClient = useQueryClient();
   const sessionId = snapshot.session.id;
+  const agent = snapshot.agent;
+  const contextAllowed = !agent || agent.capabilities.includes('context');
+  const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
   const run = snapshot.runs.find(isActive);
   const attachmentMutations = useIsMutating({ mutationKey: ['chat-attachments', sessionId] });
@@ -87,6 +90,7 @@ export function Composer({
     !run &&
     !submitting &&
     !busy &&
+    !agent?.issues.length &&
     Boolean(draft.text.trim());
   const attachments = new Map(
     snapshot.attachments.map((attachment) => [attachment.id, attachment]),
@@ -150,7 +154,15 @@ export function Composer({
     }
   }
   function uploadFiles(files: FileList | null) {
-    if (!files || archived || submitting || busy || pendingOperations.current) return;
+    if (
+      !files ||
+      !attachmentsAllowed ||
+      archived ||
+      submitting ||
+      busy ||
+      pendingOperations.current
+    )
+      return;
     const available = Math.max(0, 20 - draft.attachmentIds.length);
     if (files.length > available) setError('每条任务最多附加 20 个附件，请移除部分附件后再上传。');
     for (const file of Array.from(files).slice(0, available)) {
@@ -229,7 +241,7 @@ export function Composer({
         <button
           type="button"
           className="add-context"
-          disabled={archived || submitting || !snapshot.project.available}
+          disabled={!contextAllowed || archived || submitting || !snapshot.project.available}
           onClick={() => setContextOpen(true)}
         >
           <Plus size={14} aria-hidden="true" /> 上下文
@@ -237,7 +249,7 @@ export function Composer({
         <button
           type="button"
           className="composer-policy mode-toggle"
-          disabled={archived || submitting}
+          disabled={archived || submitting || agent?.mode === 'readonly'}
           aria-pressed={draft.mode === 'edit'}
           title="受控修改模式中的每次写入操作仍需审批"
           onClick={() =>
@@ -250,6 +262,28 @@ export function Composer({
           {draft.mode === 'edit' ? '模式：受控修改（逐次审批）' : '模式：只读'}
         </button>
       </div>
+      {agent?.issues.length ? (
+        <p className="text-sm text-destructive" role="status">
+          {agent.issues.join('；')}。从会话顶部进入智能体管理修复后，可使用新版本开始会话。
+        </p>
+      ) : null}
+      {agent?.starters.length && !snapshot.messages.length && !archived ? (
+        <div className="mb-2 flex flex-wrap gap-2" aria-label="开场任务">
+          {agent.starters.map((starter) => (
+            <Button
+              key={starter}
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onDraftChange((previous) => ({ ...previous, text: starter }));
+                inputRef.current?.focus();
+              }}
+            >
+              {starter}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       <div className="composer-box">
         <label className="composer-label" htmlFor="prompt-input">
           {archived ? '已归档的会话' : '继续对话'}
@@ -272,6 +306,7 @@ export function Composer({
           <legend className="sr-only">任务扩展</legend>
           <ExtensionPicker
             projectId={archived ? undefined : snapshot.project.id}
+            agent={agent}
             draft={draft}
             onChange={(next: Draft) => {
               if (!archived && !submitting) onDraftChange(next);
@@ -311,7 +346,13 @@ export function Composer({
           <button
             type="button"
             className="icon-button attach-button"
-            disabled={archived || submitting || busy || draft.attachmentIds.length >= 20}
+            disabled={
+              !attachmentsAllowed ||
+              archived ||
+              submitting ||
+              busy ||
+              draft.attachmentIds.length >= 20
+            }
             aria-label="上传文本附件"
             title="上传 1 MiB 以内的 UTF-8 文本附件"
             onClick={() => fileInput.current?.click()}

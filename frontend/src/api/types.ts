@@ -1,5 +1,6 @@
 import type {
   AppConfig,
+  AgentSessionInfo,
   Artifact,
   Attachment,
   Message,
@@ -33,6 +34,7 @@ export interface Bootstrap extends ConfigInfo {
 }
 
 export interface Snapshot {
+  agent?: AgentSessionInfo;
   session: Session;
   project: Project;
   messages: Message[];

@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { Draft, Extension } from '@shared/types';
+import type { AgentSessionInfo, Draft, Extension } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { extensionKeys, marks, messageOf, useExtensions } from './api';
 import { allowedTools, choices, chooseExtension, selectionReason, triggerAt } from './picker-model';
@@ -16,6 +16,7 @@ import './extensions.css';
 
 export interface ExtensionPickerProps {
   projectId?: string;
+  agent?: AgentSessionInfo;
   draft: Draft;
   onChange: (draft: Draft) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
@@ -29,8 +30,30 @@ interface Cursor {
   disabled: boolean;
 }
 const emptyCursor: Cursor = { text: '', start: 0, end: 0, focused: false, disabled: false };
+function scopeExtensions(items: Extension[], agent?: AgentSessionInfo): Extension[] {
+  if (!agent) return items;
+  return items.flatMap((item): Extension[] => {
+    if (
+      item.kind === 'skill' &&
+      agent.skills.some((ref) => ref.id === item.id && ref.version === item.version)
+    )
+      return [item];
+    if (item.kind !== 'mcp') return [];
+    const ref = agent.mcp.find((ref) => ref.id === item.id && ref.version === item.version);
+    return ref
+      ? [
+          {
+            ...item,
+            allowedTools: item.allowedTools.filter((tool) => ref.tools.includes(tool.name)),
+          },
+        ]
+      : [];
+  });
+}
+
 export function ExtensionPicker({
   projectId,
+  agent,
   draft,
   onChange,
   inputRef,
@@ -51,7 +74,7 @@ export function ExtensionPicker({
   const menuRef = useRef<HTMLDivElement>(null);
   const selectionFrame = useRef<number | undefined>(undefined);
   const lastScope = useRef(projectId);
-  const items = query.data ?? [];
+  const items = scopeExtensions(query.data ?? [], agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
   const completionKey = JSON.stringify([projectId, cursor.text, cursor.start, cursor.end]);
   const rows = trigger ? choices(items, trigger, cursor.text, draft.mode) : [];
@@ -67,6 +90,7 @@ export function ExtensionPicker({
   );
   const current = useRef({
     projectId,
+    agent,
     draft,
     onChange,
     onSubmit,
@@ -78,6 +102,7 @@ export function ExtensionPicker({
   });
   current.current = {
     projectId,
+    agent,
     draft,
     onChange,
     onSubmit,
@@ -129,9 +154,10 @@ export function ExtensionPicker({
       sync();
       return;
     }
-    const latest = client
-      .getQueryData<Extension[]>(extensionKeys.list(state.projectId))
-      ?.find((item) => item.id === row.item.id);
+    const latest = scopeExtensions(
+      client.getQueryData<Extension[]>(extensionKeys.list(state.projectId)) ?? [],
+      state.agent,
+    ).find((item) => item.id === row.item.id);
     if (
       !latest ||
       !latest.enabled ||

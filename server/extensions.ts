@@ -465,8 +465,9 @@ export class ProjectExtensions {
     mode: Mode,
     text: string,
     selections: ExtensionSelection[],
+    scope?: ReadonlySet<string>,
   ): ExtensionBundle {
-    const catalog = this.list(projectId);
+    const catalog = this.list(projectId).filter((item) => !scope || scope.has(item.id));
     const supplied = new Map(selections.map((selection) => [selection.id, selection]));
     const slash = /^\/([a-z0-9][a-z0-9_-]{0,63})(?:\s+|$)/.exec(text);
     let args = text;

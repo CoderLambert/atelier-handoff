@@ -20,6 +20,7 @@ import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './st
 
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
+const AgentsPage = lazy(() => import('@/features/agents'));
 const Inspector = lazy(() =>
   import('@/features/inspector').then(({ Inspector }) => ({ default: Inspector })),
 );
@@ -240,7 +241,9 @@ export default function Workspace() {
                   ? '执行记录'
                   : view === 'artifacts'
                     ? '交付物'
-                    : '扩展'}
+                    : view === 'agents'
+                      ? '智能体'
+                      : '扩展'}
             </span>
           </div>
           <div className="topbar-actions">
@@ -279,6 +282,15 @@ export default function Workspace() {
             </div>
           ) : null}
           <Suspense fallback={loading}>
+            {view === 'agents' ? (
+              <div className="react-collections">
+                <AgentsPage
+                  projects={ready.data?.projects ?? []}
+                  projectId={project?.id}
+                  onOpenSession={(id) => openSession(id)}
+                />
+              </div>
+            ) : null}
             {view === 'extensions' ? (
               <div className="react-collections">
                 <ExtensionsPage projects={ready.data?.projects ?? []} projectId={project?.id} />
@@ -298,6 +310,16 @@ export default function Workspace() {
                 <header className="session-header">
                   <div className="session-title-row">
                     <h1>{snapshot?.session.title ?? '开始工作'}</h1>
+                    {snapshot?.agent ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openView('agents')}
+                        title="打开智能体管理"
+                      >
+                        {snapshot.agent.name} · v{snapshot.agent.version}
+                      </Button>
+                    ) : null}
                   </div>
                   {project ? (
                     <p className="session-meta">
