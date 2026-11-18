@@ -124,12 +124,14 @@ export function MarkdownPreview({
   body,
   label = '预览内容',
   initiallyOpen = false,
+  standalone = false,
 }: {
   body: string;
   label?: string;
   initiallyOpen?: boolean;
+  standalone?: boolean;
 }) {
-  const [open, setOpen] = useState(initiallyOpen);
+  const [open, setOpen] = useState(initiallyOpen || standalone);
   const [html, setHtml] = useState<{ body: string; html: string }>();
   useEffect(() => {
     if (!open) return;
@@ -145,6 +147,13 @@ export function MarkdownPreview({
       active = false;
     };
   }, [body, open]);
+  const content =
+    html?.body === body ? (
+      <div className="ext-prose" dangerouslySetInnerHTML={{ __html: html.html }} />
+    ) : (
+      <pre className="ext-body-preview">{body || '暂无内容'}</pre>
+    );
+  if (standalone) return content;
   return (
     <details
       className="ext-preview"
@@ -152,13 +161,7 @@ export function MarkdownPreview({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>{label}</summary>
-      {open ? (
-        html?.body === body ? (
-          <div className="ext-prose" dangerouslySetInnerHTML={{ __html: html.html }} />
-        ) : (
-          <pre className="ext-body-preview">{body || '暂无内容'}</pre>
-        )
-      ) : null}
+      {open ? content : null}
     </details>
   );
 }
@@ -216,7 +219,7 @@ export function BackupActions({
 export function MarketStatus({ skill }: { skill: MarketSkill }) {
   const labels = new Set([marketLabels[skill.status] ?? '状态未知']);
   if (skill.legacy) labels.add(marketLabels.legacy);
-  if (skill.updateAvailable) labels.add(marketLabels['update-available']);
+  if (skill.updateAvailable && !skill.legacy) labels.add(marketLabels['update-available']);
   if (skill.localModified) labels.add(marketLabels['local-modified']);
   if (typeof skill.enabled === 'boolean') labels.add(skill.enabled ? '已启用' : '已停用');
   return (

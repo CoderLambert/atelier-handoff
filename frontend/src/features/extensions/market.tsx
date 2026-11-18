@@ -259,6 +259,7 @@ export function SkillMarketPreview({
   const client = useQueryClient();
   const mutation = useExtensionMutation(projectId);
   const [error, setError] = useState('');
+  const [showSource, setShowSource] = useState(false);
   const [stale, setStale] = useState(false);
   const [confirmedAt, setConfirmedAt] = useState<number>();
   const query = useQuery({
@@ -381,7 +382,9 @@ export function SkillMarketPreview({
             ) : null}
             <p className="ext-help">
               {preview.update
-                ? '应用后保留项目中的调用名、启停选择和记录 ID。请比较当前正文与审核后的新正文。'
+                ? preview.skill.legacy
+                  ? '当前安装来自 atelier 的旧版内置正文。应用迁移会换成市场审核的公开版本，并保留调用名和启停状态。'
+                  : '请比较当前正文与审核后的新正文。应用更新会保留调用名和启停状态。'
                 : '确认正文与来源后，安装到当前项目。'}
             </p>
             <div className="ext-preview-columns">
@@ -400,14 +403,44 @@ export function SkillMarketPreview({
                 </section>
               ) : null}
               <section className="ext-preview-pane">
-                <h4>
-                  审核后的正文 ·{' '}
-                  {preview.skill.commit?.slice(0, 12) || preview.skill.revision.slice(0, 12)}
-                </h4>
-                <pre className="ext-body-preview" tabIndex={0}>
-                  {preview.entry.body}
-                </pre>
-                <MarkdownPreview body={preview.entry.body} label="阅读渲染后的内容" />
+                <div className="ext-market-preview-toolbar">
+                  <h4>
+                    审核后的正文 ·{' '}
+                    {preview.skill.commit?.slice(0, 12) || preview.skill.revision.slice(0, 12)}
+                  </h4>
+                  <div
+                    role="group"
+                    aria-label="审核正文显示方式"
+                    className="ext-market-preview-switch"
+                  >
+                    <ActionButton
+                      primary={!showSource}
+                      aria-pressed={!showSource}
+                      onClick={() => setShowSource(false)}
+                    >
+                      阅读
+                    </ActionButton>
+                    <ActionButton
+                      primary={showSource}
+                      aria-pressed={showSource}
+                      onClick={() => setShowSource(true)}
+                    >
+                      源文件
+                    </ActionButton>
+                  </div>
+                </div>
+                {showSource ? (
+                  <pre className="ext-body-preview" tabIndex={0}>
+                    {preview.entry.body}
+                  </pre>
+                ) : (
+                  <MarkdownPreview
+                    standalone
+                    body={preview.entry.body
+                      .replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
+                      .trimStart()}
+                  />
+                )}
               </section>
             </div>
             {requiresReplacement ? (
@@ -444,7 +477,9 @@ export function SkillMarketPreview({
             {preview?.update
               ? requiresReplacement
                 ? '替换本地正文并应用更新'
-                : '应用审核更新'
+                : preview.skill.legacy
+                  ? '应用迁移'
+                  : '应用审核更新'
               : '安装并启用'}
           </ActionButton>
         </div>

@@ -1556,3 +1556,28 @@
     margin-block-end: 8px;
   }
 }
+
+.ext-market-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  gap: 6px 10px;
+}
+
+.ext-market-preview-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.ext-market-preview-switch .ext-button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+}
+
+.ext-market-preview .ext-preview-pane > .ext-prose {
+  max-height: 360px;
+  overscroll-behavior: contain;
+}
