@@ -15,7 +15,7 @@ export class PermissionService {
     const permission: Permission = {
       id: randomUUID(), runId: run.id, sessionId: run.sessionId, toolCallId: operation.toolCallId,
       kind: operation.kind, path: operation.path ?? null, command: operation.command ?? null,
-      before, after, diff: operation.kind === 'command' ? operation.command! : textDiff(operation.path!, before, after),
+      before, after, diff: operation.kind === 'command' || operation.kind === 'mcp' ? operation.command! : textDiff(operation.path!, before, after),
       baseFingerprint: before === null ? null : fingerprint(before), version: randomUUID(), status: 'pending',
       createdAt: now(), expiresAt: new Date(Date.now() + this.ttlMs).toISOString(), reason: operation.reason,
     };
