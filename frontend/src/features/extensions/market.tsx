@@ -83,11 +83,12 @@ export function SkillMarket({
   return (
     <FeatureDialog
       title="Skill 市场"
+      className={marketSource === 'skillhub' ? 'skillhub-dialog' : undefined}
       description={`当前项目 · ${projectName}。按需预览和安装项目 Skill。`}
       busy={pending}
       onClose={onClose}
     >
-      <div role="group" aria-label="市场来源" className="mb-3 flex gap-2">
+      <div role="group" aria-label="市场来源" className="market-source-tabs mb-3 flex gap-2">
         <ActionButton
           primary={marketSource === 'curated'}
           aria-pressed={marketSource === 'curated'}

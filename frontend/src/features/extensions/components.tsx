@@ -13,12 +13,14 @@ export function FeatureDialog({
   title,
   description,
   busy = false,
+  className = '',
   onClose,
   children,
 }: {
   title: string;
   description?: string;
   busy?: boolean;
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -30,7 +32,7 @@ export function FeatureDialog({
       }}
     >
       <DialogContent
-        className="ext-dialog max-h-[90dvh] w-[calc(100%-32px)] overflow-y-auto sm:max-w-[960px]"
+        className={`ext-dialog max-h-[90dvh] w-[calc(100%-32px)] overflow-y-auto sm:max-w-[960px] ${className}`}
         aria-busy={busy}
       >
         <DialogHeader>
@@ -118,8 +120,16 @@ function renderMarkdown(body: string) {
   });
   return markdownRenderer.then((render) => render(body));
 }
-export function MarkdownPreview({ body, label = '预览内容' }: { body: string; label?: string }) {
-  const [open, setOpen] = useState(false);
+export function MarkdownPreview({
+  body,
+  label = '预览内容',
+  initiallyOpen = false,
+}: {
+  body: string;
+  label?: string;
+  initiallyOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
   const [html, setHtml] = useState<{ body: string; html: string }>();
   useEffect(() => {
     if (!open) return;
@@ -136,7 +146,11 @@ export function MarkdownPreview({ body, label = '预览内容' }: { body: string
     };
   }, [body, open]);
   return (
-    <details className="ext-preview" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details
+      className="ext-preview"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary>{label}</summary>
       {open ? (
         html?.body === body ? (

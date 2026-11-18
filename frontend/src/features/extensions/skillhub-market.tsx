@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import {
@@ -26,6 +26,13 @@ export function SkillHubMarket({
   projectId: string;
   onSaved: (message: string) => void;
 }) {
+  const detailId = useId();
+  const resultScroll = useRef<HTMLDivElement>(null);
+  const detailScroll = useRef<HTMLDivElement>(null);
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<HTMLButtonElement>(null);
+  const restoring = useRef(false);
+  const resultPosition = useRef(0);
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<SkillHubItem>();
@@ -60,6 +67,22 @@ export function SkillHubMarket({
     extensions.data?.some(
       (item) => item.origin?.location === entry.location && item.origin.key === entry.key,
     );
+  const selectedSource = selected?.source;
+  useLayoutEffect(() => {
+    if (selectedSource) {
+      detailHeading.current?.focus({ preventScroll: true });
+      if (detailScroll.current) detailScroll.current.scrollTop = 0;
+    } else if (restoring.current) {
+      restoring.current = false;
+      if (resultScroll.current) resultScroll.current.scrollTop = resultPosition.current;
+      opener.current?.focus({ preventScroll: true });
+    }
+  }, [selectedSource]);
+  function back() {
+    restoring.current = true;
+    setSelected(undefined);
+    setError('');
+  }
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = input.trim();
@@ -67,6 +90,7 @@ export function SkillHubMarket({
     setSelected(undefined);
     setError('');
     setMessage('');
+    if (resultScroll.current) resultScroll.current.scrollTop = 0;
     if (next === query) void results.refetch();
     else setQuery(next);
   }
@@ -82,19 +106,21 @@ export function SkillHubMarket({
       const status = `已导入 /${entry.name}，可在对话中手动调用。`;
       setMessage(status);
       onSaved(status);
-      setSelected(undefined);
     } catch (failure) {
       setError(messageOf(failure));
     }
   }
+  const items = results.data?.items ?? [];
   return (
-    <div className="ext-market">
-      <form className="ext-market-filters" onSubmit={search}>
+    <div className="ext-market skillhub-market" data-show-detail={Boolean(selected)}>
+      <form className="skillhub-search" onSubmit={search}>
         <label className="ext-search">
           <span aria-hidden="true">⌕</span>
           <input
             type="search"
-            placeholder="例如 React、写作、项目规划"
+            name="q"
+            autoComplete="off"
+            placeholder="搜索技能，例如 React、写作或项目规划"
             aria-label="搜索 SkillHub"
             value={input}
             maxLength={120}
@@ -105,75 +131,115 @@ export function SkillHubMarket({
           搜索
         </ActionButton>
       </form>
-      {message ? <p role="status">{message}</p> : null}
-      <ErrorMessage error={error || results.error || preview.error} />
-      {selected ? (
-        <section aria-label="SkillHub 技能预览" className="space-y-3">
-          <div className="ext-market-actions">
-            <ActionButton
-              disabled={install.isPending}
-              onClick={() => {
-                setSelected(undefined);
-                setError('');
-              }}
-            >
-              返回搜索结果
-            </ActionButton>
+      <p className="sr-only" role="status">
+        {message}
+      </p>
+      <div className="skillhub-browser" data-has-results={items.length > 0}>
+        <section className="skillhub-results" aria-label="搜索结果" aria-busy={results.isFetching}>
+          <p className="skillhub-result-count" role="status">
+            {results.isFetching
+              ? '正在搜索…'
+              : query && !results.isError
+                ? `「${query}」· ${items.length} 项结果`
+                : 'SkillHub 搜索结果'}
+          </p>
+          <div ref={resultScroll} className="skillhub-result-scroll">
+            <ErrorMessage error={results.error} />
+            {!query || (results.isSuccess && !items.length) ? (
+              <p className="skillhub-empty">
+                {query ? '没有匹配的技能。试试更短的关键词。' : '输入关键词查找 SkillHub 技能。'}
+              </p>
+            ) : null}
+            <ul className="skillhub-list">
+              {items.map((item) => (
+                <li key={item.coordinate}>
+                  <button
+                    type="button"
+                    className="skillhub-result"
+                    aria-controls={detailId}
+                    aria-current={selected?.coordinate === item.coordinate ? 'true' : undefined}
+                    disabled={install.isPending}
+                    onClick={(event) => {
+                      opener.current = event.currentTarget;
+                      resultPosition.current = resultScroll.current?.scrollTop ?? 0;
+                      setSelected(item);
+                      setError('');
+                      setMessage('');
+                    }}
+                  >
+                    <span className="skillhub-result-copy">
+                      <strong>{item.title}</strong>
+                      <span className="skillhub-result-summary">
+                        {item.description || '暂无简介'}
+                      </span>
+                      <span className="skillhub-result-meta">
+                        <span>{item.publisher || item.coordinate.split('/')[0]}</span>
+                        <span>v{item.version}</span>
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="skillhub-chevron">
+                      ›
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
-          <h3>{selected.title}</h3>
-          <p className="ext-card-source">
-            {selected.coordinate} · v{selected.version}
-          </p>
-          <p className="ext-help">
-            导入此版本的 SKILL.md。安装后可手动调用，自动调用可在项目扩展中开启。
-          </p>
-          {preview.isFetching ? <p role="status">正在读取 SKILL.md…</p> : null}
-          {entry?.issue ? <p className="ext-compatibility">{entry.issue}</p> : null}
-          {entry?.body ? <MarkdownPreview body={entry.body} label="SkillHub SKILL.md" /> : null}
-          <ActionButton
-            primary
-            disabled={
-              !entry?.revision ||
-              !!entry.issue ||
-              preview.isFetching ||
-              extensions.isPending ||
-              !!installed ||
-              install.isPending
-            }
-            onClick={() => void save()}
-          >
-            {installed ? '已导入' : install.isPending ? '正在导入…' : '导入当前项目'}
-          </ActionButton>
         </section>
-      ) : (
-        <>
-          {results.isFetching ? <p role="status">正在搜索 SkillHub…</p> : null}
-          {results.isSuccess && !results.data.items.length ? (
-            <p className="ext-help">没有匹配的 Skill。</p>
-          ) : null}
-          <div className="ext-card-grid ext-market-grid">
-            {results.data?.items.map((item) => (
-              <article key={item.coordinate} className="ext-card ext-market-card">
-                <p className="ext-card-kind">
-                  {item.publisher ?? 'SkillHub'} · v{item.version}
-                </p>
-                <h3>{item.title}</h3>
-                <code>{item.coordinate}</code>
-                <p className="ext-market-description">{item.description}</p>
-                <ActionButton
-                  onClick={() => {
-                    setSelected(item);
-                    setError('');
-                    setMessage('');
-                  }}
-                >
-                  查看正文
+        <section id={detailId} className="skillhub-detail" aria-label="SkillHub 技能预览">
+          {selected ? (
+            <>
+              <div className="skillhub-detail-header">
+                <ActionButton className="skillhub-back" disabled={install.isPending} onClick={back}>
+                  ← 返回结果
                 </ActionButton>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
+                <h3 ref={detailHeading} tabIndex={-1}>
+                  {selected.title}
+                </h3>
+                <p>
+                  {selected.coordinate} · v{selected.version}
+                </p>
+              </div>
+              <div ref={detailScroll} className="skillhub-detail-scroll">
+                <p className="skillhub-detail-description">{selected.description}</p>
+                {preview.isFetching ? <p role="status">正在读取 SKILL.md…</p> : null}
+                <ErrorMessage error={preview.error} />
+                {entry?.issue ? <p className="ext-compatibility">{entry.issue}</p> : null}
+                {entry?.body ? (
+                  <MarkdownPreview
+                    key={selected.source}
+                    body={entry.body}
+                    label="SKILL.md"
+                    initiallyOpen
+                  />
+                ) : null}
+              </div>
+              <div className="skillhub-detail-footer">
+                <ErrorMessage error={error} />
+                <p className="ext-help">
+                  {installed ? '已加入当前项目' : '导入 SKILL.md，默认手动调用'}
+                </p>
+                <ActionButton
+                  primary
+                  disabled={
+                    !entry?.revision ||
+                    !!entry.issue ||
+                    preview.isFetching ||
+                    extensions.isPending ||
+                    !!installed ||
+                    install.isPending
+                  }
+                  onClick={() => void save()}
+                >
+                  {installed ? '已导入' : install.isPending ? '正在导入…' : '导入当前项目'}
+                </ActionButton>
+              </div>
+            </>
+          ) : (
+            <p className="skillhub-empty">选择一项技能，查看正文和导入选项。</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
