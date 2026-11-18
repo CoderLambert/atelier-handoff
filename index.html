@@ -8,6 +8,7 @@
   <title>atelier. — 把决定留给你</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23466339'/%3E%3Ctext x='7' y='24' fill='white' font-family='Georgia' font-size='27'%3Ea%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <script src="/assets/markdown-it.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -48,7 +49,7 @@
       <section class="conversation-screen" id="conversation-screen" aria-label="会话工作区">
         <header class="session-header">
           <div class="session-title-row"><h1 id="session-title">开始工作</h1><div id="session-status" role="status"></div></div>
-          <div class="session-meta"><span id="session-branch"></span><i class="meta-divider" aria-hidden="true"></i><span id="session-runtime"></span><button class="session-detail" data-action="settings">会话详情 <span data-icon="chevron"></span></button></div>
+          <div class="session-meta"><span id="session-branch"></span><i class="meta-divider" aria-hidden="true"></i><span id="session-runtime"></span><button class="session-detail" data-action="session-details">会话详情 <span data-icon="chevron"></span></button></div>
         </header>
         <div class="tabs-row">
           <div class="session-tabs" role="tablist" aria-label="会话内容">
@@ -65,8 +66,9 @@
             <label class="composer-label" for="prompt-input">继续对话</label>
             <textarea id="prompt-input" placeholder="描述下一步，或补充你的想法…" aria-describedby="input-help" rows="2"></textarea>
             <div class="composer-toolbar">
-              <button class="agent-select" data-action="settings"><span class="agent-mark" aria-hidden="true">✳</span>模型设置<span data-icon="down"></span></button>
-              <details class="composer-options"><summary class="icon-button" aria-label="更多对话选项"><span data-icon="settings"></span></summary><div class="composer-menu"><button data-action="policy"><span data-icon="shield"></span>执行权限<span class="muted">逐次审批</span></button><button data-action="settings"><span data-icon="settings"></span>会话设置</button></div></details>
+              <button class="agent-select" data-action="settings"><span class="agent-mark" aria-hidden="true">✳</span><span id="composer-model">模型设置</span><span data-icon="down"></span></button>
+              <span id="composer-run-status" class="composer-run-status" role="status" hidden></span>
+              <button class="btn btn-secondary composer-stop" id="composer-stop" data-action="stop" hidden>停止</button>
               <button class="icon-button attach-button" data-action="attach" aria-label="上传文本附件"><span data-icon="attach"></span></button>
               <span class="send-hint" id="input-help">Enter 发送</span>
               <button class="send-button" id="send-button" data-action="send" aria-label="发送任务"><span data-icon="arrow"></span></button>

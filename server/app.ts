@@ -227,7 +227,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
       }
       if (parts[0] === 'api') throw new AppError('NOT_FOUND', '接口不存在。', 404);
       if (method !== 'GET' && method !== 'HEAD') throw new AppError('NOT_FOUND', '页面不存在。', 404);
-      const staticFiles: Record<string, string> = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css', '/prototype/': 'prototype/index.html', '/prototype/index.html': 'prototype/index.html', '/prototype/app.js': 'prototype/app.js', '/prototype/styles.css': 'prototype/styles.css' };
+      const staticFiles: Record<string, string> = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/assets/markdown-it.js': 'node_modules/markdown-it/dist/browser/markdown-it.umd.min.js', '/styles.css': 'styles.css', '/prototype/': 'prototype/index.html', '/prototype/index.html': 'prototype/index.html', '/prototype/app.js': 'prototype/app.js', '/prototype/styles.css': 'prototype/styles.css' };
       const file = staticFiles[url.pathname]; if (!file) throw new AppError('NOT_FOUND', '页面不存在。', 404);
       const content = await readFile(join(options.root, file));
       const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html';

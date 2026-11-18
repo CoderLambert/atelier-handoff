@@ -469,3 +469,62 @@ html,body { max-width:100%; overflow-x:hidden; }
 .collection-filters label { display:flex; align-items:center; gap:6px; min-width:0; }
 .collection-filters input,.collection-filters select,#filter-status { min-width:0; max-width:220px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--fg); }
 .selected-run { outline:2px solid var(--success); outline-offset:6px; border-radius:var(--radius-sm); }
+
+/* Conversation reading surface */
+.conversation-content { padding-inline: 4px 12px; scrollbar-gutter: stable; }
+.message-thread { padding: 4px 4px 0; }
+.message-thread .message { align-items: flex-start; margin-bottom: 24px; }
+.message-thread .user-message { background: var(--surface-warm); border: 1px solid var(--border-soft); border-radius: 14px; padding: 14px 16px; }
+.message-thread .assistant-message { padding: 10px 16px 16px; }
+.message-meta time { font-variant-numeric: tabular-nums; }
+.message-text, .markdown-body { font-size: var(--text-base); line-height: 1.72; overflow-wrap: anywhere; }
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body :is(p, ul, ol, blockquote, pre, .table-scroll, .code-panel) { margin: 0 0 1em; }
+.markdown-body :is(h1,h2,h3,h4,h5,h6) { margin: 1.4em 0 .55em; line-height: 1.3; font-weight: 650; }
+.markdown-body h1 { font-size: 1.5em; }
+.markdown-body h2 { font-size: 1.28em; }
+.markdown-body h3 { font-size: 1.12em; }
+.markdown-body :is(h4,h5,h6) { font-size: 1em; }
+.markdown-body :is(ul,ol) { padding-inline-start: 1.55em; }
+.markdown-body li + li { margin-top: .25em; }
+.markdown-body li > :is(ul,ol) { margin: .35em 0 0; }
+.markdown-body blockquote { border-inline-start: 3px solid var(--border); padding-inline-start: 1em; color: var(--muted); }
+.markdown-body blockquote > :last-child { margin-bottom: 0; }
+.markdown-body a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.markdown-body :not(pre) > code { background: var(--surface-warm); border: 1px solid var(--border-soft); padding: .08em .3em; border-radius: 4px; font: .88em var(--font-mono); overflow-wrap: anywhere; }
+.markdown-body .table-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: 9px; }
+.markdown-body table { width: 100%; border-collapse: collapse; font-size: .93em; }
+.markdown-body :is(th,td) { padding: .52em .8em; text-align: start; vertical-align: top; min-width: 6rem; }
+.markdown-body th { background: var(--surface-warm); font-weight: 650; }
+.markdown-body tr + tr td, .markdown-body thead + tbody td { border-top: 1px solid var(--border-soft); }
+.markdown-body .code-panel { background: var(--surface-warm); border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.markdown-body .code-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px 5px 14px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: var(--text-xs); }
+.markdown-body .code-toolbar button { font: inherit; border-radius: 5px; padding: 6px 8px; }
+.markdown-body .code-toolbar button:hover { background: var(--soft-accent); color: var(--success); }
+.markdown-body pre { overflow: auto; padding: 12px 14px; font: .87em/1.55 var(--font-mono); white-space: pre; }
+.markdown-body .code-panel pre { margin: 0; }
+.markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.4em 0; }
+.message-placeholder { color: var(--muted); font-size: var(--text-sm); }
+
+/* Primary controls stay visible while working. */
+.composer-toolbar { flex-wrap: wrap; }
+.composer-run-status { color: var(--muted); font-size: var(--text-xs); }
+.composer-stop { min-height: 34px; padding: 4px 9px; }
+.composer-box { box-shadow: none; }
+.composer-box textarea { min-height: 3.25rem; max-height: 10rem; field-sizing: content; }
+.agent-select { max-width: 12rem; overflow-wrap: anywhere; }
+.trace-heading h2 { display: flex; align-items: center; gap: 8px; }
+.trace-item { border: 1px solid var(--border); background: var(--surface); padding: 0 12px; border-radius: 10px; margin: 0 0 8px; }
+.trace-item summary { padding: 9px 0; }
+.trace-item summary .status-badge { margin-inline-start: 8px; }
+.trace-item .trace-label { color: var(--muted); font-size: var(--text-xs); margin-top: 6px; }
+.trace-item[open] { padding-bottom: 12px; }
+.session-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 20px; margin: 0; }
+.session-facts dt { color: var(--muted); }
+.session-facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .conversation-content { padding-inline-end: 4px; }
+  .message-thread .assistant-message, .message-thread .user-message { padding-inline: 9px; }
+  .markdown-body :is(th,td) { padding-inline: .55em; }
+}
