@@ -80,6 +80,13 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     await request(`/api/runs/${retry.id}/stop`, 'POST', {});
     const snapshot = await request(`/api/sessions/${s1.id}`); assert.equal(snapshot.runs.length, 2); assert.equal(snapshot.messages.length, 2); assert.equal(snapshot.artifacts.length, 1);
     const cursor = app.store.cursor(); const event = app.store.event(run.id, s1.id, 'test.changed', {}); assert.equal(app.store.since(cursor)[0]?.id, event.id);
+    for (let index = 0; index < 501; index++) app.store.event(retry.id, s1.id, 'message.delta');
+    const diagnostic = await request(`/api/runs/${run.id}/trace`);
+    assert.ok(diagnostic.events.some((item: { id: number }) => item.id === event.id));
+    assert.ok(diagnostic.events.every((item: { runId: string }) => item.runId === run.id));
+    const streamingTrace = await request(`/api/runs/${retry.id}/trace`);
+    assert.equal(streamingTrace.eventCount - streamingTrace.events.length, 501);
+    assert.ok(streamingTrace.events.every((item: { type: string }) => item.type !== 'message.delta'));
     const controller = new AbortController(); const stream = await fetch(url + `/api/events?after=${cursor}`, { signal: controller.signal }); const reader = stream.body!.getReader();
     let received = ''; while (!received.includes('test.changed')) received += new TextDecoder().decode((await reader.read()).value); controller.abort();
     await request(`/api/sessions/${s1.id}`, 'PATCH', { title: 'Renamed', status: 'archived' });

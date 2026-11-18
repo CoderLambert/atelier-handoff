@@ -63,6 +63,14 @@ export class Store {
   history(sessionId: string): RunEvent[] {
     return this.db.prepare('SELECT * FROM events WHERE session_id=? ORDER BY id DESC LIMIT 500').all(sessionId).reverse().map(row => ({ id: Number(row.id), runId: row.run_id as string, sessionId: row.session_id as string, seq: Number(row.seq), type: row.type as string, at: row.at as string, payload: JSON.parse(row.payload as string) }));
   }
+  runHistory(runId: string): { events: RunEvent[]; eventCount: number } {
+    const eventCount = Number(this.db.prepare('SELECT count(*) AS count FROM events WHERE run_id=?').get(runId)!.count);
+    const events = this.db.prepare("SELECT * FROM events WHERE run_id=? AND type!='message.delta' ORDER BY seq DESC LIMIT 600").all(runId).reverse().map(row => ({
+      id: Number(row.id), runId: row.run_id as string, sessionId: row.session_id as string,
+      seq: Number(row.seq), type: row.type as string, at: row.at as string, payload: JSON.parse(row.payload as string),
+    }));
+    return { events, eventCount };
+  }
   config(): AppConfig {
     const row = this.db.prepare("SELECT value FROM settings WHERE key='config'").get();
     return row ? JSON.parse(row.value as string) : { gateway: process.env.ATELIER_GATEWAY || 'http://127.0.0.1:3001', model: process.env.ATELIER_MODEL || 'gpt-6.1-sol', maxTurns: 16, timeoutMs: 300000 };

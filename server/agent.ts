@@ -42,7 +42,11 @@ export class AgentRunner implements Runner {
   private clean(error: unknown): string {
     let text = error instanceof Error ? error.message : typeof error === 'string' ? error : '执行失败。';
     for (const key of ['ATELIER_GATEWAY_TOKEN', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) if (process.env[key]) text = text.split(process.env[key]!).join('[已隐藏]');
-    return text.slice(0, 2000);
+    return text.replace(/\bBearer\s+[^\s"',;]+/gi, 'Bearer [已隐藏]')
+      .replace(/\b(?:sk-[\w-]{12,}|eyJ[\w-]+\.[\w-]+\.[\w-]+)\b/g, '[已隐藏]')
+      .replace(/(https?:\/\/)[^\s/@]+@/gi, '$1[已隐藏]@')
+      .replace(/([?&](?:token|key|api_key|access_token)=)[^&\s]+/gi, '$1[已隐藏]')
+      .slice(0, 2000);
   }
   private async execute(run: Run, inputText: string, live: LiveRun): Promise<void> {
     const signal = live.cancellation.signal;
@@ -58,6 +62,8 @@ export class AgentRunner implements Runner {
     let child: ChildProcessWithoutNullStreams | undefined;
     let childExit: Promise<void> | undefined;
     let processExited = false;
+    let stderrBytes = 0;
+    let firstText = true;
     let finalResult: SDKResultMessage | undefined;
     let failure: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -157,7 +163,15 @@ export class AgentRunner implements Runner {
         const id = appToolId(event.tool_use_id); createTool(id, event.tool_name, args);
         if (permittedMcp.has(event.tool_name)) queuedMcp.push({ id, name: event.tool_name, inputHash: callHash(event.tool_name, args) });
         return decision('allow', '受控工具；写入和命令由应用执行器逐次审批。');
-      } catch (error) { return decision('deny', this.clean(error)); }
+      } catch (error) {
+        if (event.hook_event_name === 'PreToolUse' && !signal.aborted) {
+          this.store.event(run.id, session.id, 'tool.blocked', {
+            tool: event.tool_name, toolCallId: appToolId(event.tool_use_id),
+            code: error instanceof AppError ? error.code : null, reason: this.clean(error),
+          });
+        }
+        return decision('deny', this.clean(error));
+      }
     };
     try {
       signal.throwIfAborted();
@@ -186,8 +200,19 @@ export class AgentRunner implements Runner {
         }] }], PostToolUseFailure: [{ hooks: [async event => { if (event.hook_event_name === 'PostToolUseFailure') finishTool(appToolId(event.tool_use_id), false, this.clean(event.error)); return {}; }] }] },
         spawnClaudeCodeProcess: options => {
           const process = spawn(options.command, options.args, { cwd: options.cwd, env: options.env, signal: options.signal, stdio: ['pipe', 'pipe', 'pipe'] }); child = process;
-          process.stderr.on('data', () => {});
-          childExit = new Promise(resolve => { process.once('exit', (code, signal) => { processExited = true; this.store.event(run.id, run.sessionId, 'process.exited', { code, signal }); resolve(); }); process.once('error', () => { if (!process.pid) { processExited = true; resolve(); } }); });
+          this.store.event(run.id, run.sessionId, 'process.spawned', { pid: process.pid ?? null });
+          process.stderr.on('data', (chunk: Buffer) => { stderrBytes += chunk.length; });
+          childExit = new Promise(resolve => {
+            process.once('exit', (code, signal) => {
+              processExited = true;
+              this.store.event(run.id, run.sessionId, 'process.exited', { code, signal, stderrBytes });
+              resolve();
+            });
+            process.once('error', (error: NodeJS.ErrnoException) => {
+              if (!options.signal.aborted) this.store.event(run.id, run.sessionId, 'sdk.error', { stage: 'process', code: error.code ?? null });
+              if (!process.pid) { processExited = true; resolve(); }
+            });
+          });
           return process;
         },
       } });
@@ -202,9 +227,16 @@ export class AgentRunner implements Runner {
           if (event.type === 'message_start') messageId = event.message.id;
           if (event.type === 'content_block_start') blockIndex = event.index;
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            if (firstText && event.delta.text) {
+              firstText = false;
+              this.store.event(run.id, session.id, 'sdk.first_text', { elapsedMs: Date.now() - Date.parse(this.store.get('runs', run.id).startedAt ?? run.createdAt) });
+            }
             const key = `${messageId}:${event.index}`; blocks.set(key, (blocks.get(key) ?? '') + event.delta.text); dirty = true;
           }
+        } else if (message.type === 'system' && message.subtype === 'api_retry') {
+          this.store.event(run.id, session.id, 'sdk.api_retry', { attempt: message.attempt, maxRetries: message.max_retries, retryDelayMs: message.retry_delay_ms, httpStatus: message.error_status, error: message.error, noResponse: message.no_response });
         } else if (message.type === 'assistant') {
+          if (message.error) this.store.event(run.id, session.id, 'sdk.error', { stage: 'assistant', code: message.error });
           for (const [index, block] of message.message.content.entries()) if (block.type === 'text') {
             const key = `${message.message.id}:${message.message.content.length === 1 ? blockIndex : index}`;
             blocks.set(key, block.text); dirty = true;
@@ -223,6 +255,14 @@ export class AgentRunner implements Runner {
           const incrementalCost = cumulativeCost === null ? null : Math.max(0, cumulativeCost - (resumeExisting ? session.sdkCostTotal ?? 0 : 0));
           if (cumulativeCost !== null) this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost });
           this.store.update('runs', run.id, { usage: { model: run.config.model, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, cacheReadTokens: usage?.cache_read_input_tokens ?? null, cacheCreationTokens: usage?.cache_creation_input_tokens ?? null, sdkEstimateUsd: incrementalCost, costEstimateUsd: null, pricingBasis: 'unknown', complete: !message.is_error } });
+          this.store.event(run.id, session.id, 'sdk.result', {
+            subtype: message.subtype, isError: message.is_error,
+            terminalReason: message.terminal_reason ?? null, stopReason: message.stop_reason,
+            httpStatus: 'api_error_status' in message ? message.api_error_status ?? null : null,
+            turns: message.num_turns, durationMs: message.duration_ms, apiDurationMs: message.duration_api_ms,
+            ttftMs: 'ttft_ms' in message ? message.ttft_ms ?? null : null,
+            deniedTools: message.permission_denials?.length ?? null,
+          });
           this.store.event(run.id, session.id, 'usage.updated', {}); break;
         } else if (message.type !== 'tool_progress' && !(message.type === 'system' && message.subtype === 'status')) {
           this.store.event(run.id, session.id, 'sdk.notice', { type: message.type, subtype: 'subtype' in message ? message.subtype : null });
@@ -230,7 +270,10 @@ export class AgentRunner implements Runner {
       }
       if (!finalResult && !signal.aborted) failure = 'SDK 连接已结束，但未返回终态。';
       else if (finalResult?.is_error) failure = finalResult.subtype === 'success' ? this.clean(finalResult.result) : this.clean(finalResult.errors.join('\n'));
-    } catch (error) { failure = this.clean(error); }
+    } catch (error) {
+      failure = this.clean(error);
+      if (!signal.aborted) this.store.event(run.id, session.id, 'sdk.error', { stage: connection ? 'stream' : 'startup', code: (error as NodeJS.ErrnoException)?.code ?? null });
+    }
     finally {
       clearTimeout(timer); this.permissions.cancelRun(run.id); clearInterval(flushTimer); flush(); input.end(); connection?.close();
       if (childExit && !processExited) {

@@ -198,6 +198,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
         if (parts.length === 2 && method === 'GET') return json(res, page(store.list('runs').filter(r => ['sessionId', 'projectId', 'status'].every(key => !url.searchParams.get(key) || r[key as 'sessionId' | 'projectId' | 'status'] === url.searchParams.get(key))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), url));
         const run = store.get('runs', parts[2]!);
         if (parts.length === 3 && method === 'GET') return json(res, { run, tools: store.list('tools').filter(t => t.runId === run.id), permissions: store.list('permissions').filter(p => p.runId === run.id), artifacts: store.list('artifacts').filter(a => a.runId === run.id), events: store.history(run.sessionId).filter(e => e.runId === run.id) });
+        if (parts.length === 4 && parts[3] === 'trace' && method === 'GET') return json(res, store.runHistory(run.id));
         if (parts[3] === 'stop' && method === 'POST') { await body(req); if (activeStatuses.includes(run.status)) runner.stop(run.id); return json(res, { run: store.get('runs', run.id) }); }
         if (parts[3] === 'retry' && method === 'POST') {
           if (activeStatuses.includes(run.status)) throw new AppError('RUN_ACTIVE', '当前运行尚未结束。', 409);

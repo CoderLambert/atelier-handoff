@@ -66,24 +66,87 @@ function render() {
  }
  renderAside();
 }
+const traceCache = new Map();
+const eventNames = {
+ 'run.created':'创建运行', 'run.status_changed':'运行状态更新', 'run.finished':'运行结束',
+ 'process.spawned':'启动 SDK 进程', 'process.exited':'SDK 进程退出', 'sdk.initialized':'SDK 初始化',
+ 'sdk.first_text':'收到首段文本', 'sdk.api_retry':'模型请求重试', 'sdk.error':'SDK 错误',
+ 'sdk.result':'SDK 返回结果', 'sdk.notice':'SDK 通知', 'sdk.context_restarted':'重新建立 SDK 上下文',
+ 'tool.started':'工具开始', 'tool.finished':'工具结束', 'tool.blocked':'工具被拦截', 'permission.requested':'等待审批',
+ 'permission.resolved':'审批结束', 'usage.updated':'用量已更新', 'plan.updated':'计划已更新', 'artifact.created':'交付物已生成',
+};
+function elapsed(ms) {
+ if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
+ return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} 秒`;
+}
+function traceEvents(snap, run) {
+ const recent = snap.events.filter(event => event.runId === run.id);
+ const revision = recent.at(-1)?.id ?? 0;
+ let cached = traceCache.get(run.id);
+ if (cached?.revision !== revision) {
+  cached = { revision, data: cached?.data };
+  traceCache.set(run.id, cached);
+  const request = cached;
+  api(`/api/runs/${enc(run.id)}/trace`).then(data => { request.data = data; }).catch(error => {
+   request.error = error.message;
+  }).finally(() => {
+   if (traceCache.get(run.id) === request && state.tab === 'trace' && currentRun()?.id === run.id) renderConversation();
+  });
+ }
+ return { events: cached.data?.events ?? recent.filter(event => event.type !== 'message.delta'), total: cached.data?.eventCount, error: cached.error };
+}
 function renderConversation() {
  const el=$('#conversation-content'), snap=state.snapshot, oldScroll=el.scrollTop, near=el.scrollHeight-el.scrollTop-el.clientHeight<100;
  if(!snap) {el.innerHTML='<div class="welcome"><h2>开始你的工作</h2><p>绑定本机项目目录，然后新建会话。</p><button class="btn btn-primary" data-action="project">绑定项目</button></div>';return;}
  if (state.tab === 'trace') {
-  const tools = snap.tools || [];
+  const run = currentRun();
+  if (!run) { el.innerHTML = '<p class="empty-text">发送任务后，这里会显示本轮调用详情。</p>'; return; }
+  const tools = snap.tools.filter(tool => tool.runId === run.id);
+  const { events, total, error } = traceEvents(snap, run);
+  const result = events.findLast(event => event.type === 'sdk.result')?.payload;
+  const init = events.findLast(event => event.type === 'sdk.initialized')?.payload;
+  const exit = events.findLast(event => event.type === 'process.exited')?.payload;
+  const firstText = events.find(event => event.type === 'sdk.first_text')?.payload;
+  const retries = events.filter(event => event.type === 'sdk.api_retry').length;
+  const duration = run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : null;
+  let gateway = '—';
+  try { gateway = new URL(run.config.gateway).origin; } catch { /* Older or invalid configuration. */ }
+  const facts = [
+   ['模型', init?.model ?? run.config?.model], ['网关', gateway],
+   ['权限模式', run.mode === 'edit' ? '受控修改' : '只读'], ['SDK CLI', init?.version],
+   ['开始时间', date(run.startedAt)], ['结束时间', date(run.endedAt)],
+   ['总耗时', elapsed(duration)], ['首段文本', elapsed(firstText?.elapsedMs)],
+   ['API 耗时', elapsed(result?.apiDurationMs)], ['SDK 轮次', result?.turns],
+   ['HTTP 状态', result?.httpStatus], ['停止原因', result?.terminalReason || result?.stopReason || run.reason],
+   ['进程退出', exit ? (exit.signal || (exit.code ?? '—')) : null],
+   ['输入 / 输出 tokens', run.usage ? `${run.usage.inputTokens ?? '—'} / ${run.usage.outputTokens ?? '—'}` : null],
+   ['已记录重试', retries || (result ? 0 : null)], ['运行 ID', run.id],
+  ];
+  const pickerFocused = document.activeElement === $('#trace-run', el);
   const toolLabels = {Read:'读取文件', list_files:'列出文件', search_files:'搜索项目', edit_file:'编辑文件', write_file:'写入文件', delete_file:'删除文件', run_command:'运行命令', update_plan:'更新计划', publish_artifact:'发布交付物'};
-  el.innerHTML = `<div class="trace-heading"><h2>工具调用 <span class="count-badge">${tools.length}</span></h2></div>${tools.map(tool => {
+  el.innerHTML = `<section class="trace-overview">
+   <div class="trace-run-bar"><label for="trace-run">运行</label><select id="trace-run">${snap.runs.slice().reverse().map(item => `<option value="${esc(item.id)}" ${item.id === run.id ? 'selected' : ''}>${esc(date(item.createdAt))} · ${esc(item.prompt?.slice(0, 42) || '运行')}</option>`).join('')}</select>${badge(run.status)}</div>
+   ${run.error ? `<p class="trace-error" role="status">${esc(run.error)}</p>` : ''}
+   <dl class="trace-facts">${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value === '' || value == null ? '—' : value)}</dd></div>`).join('')}</dl>
+   </section><div class="trace-heading"><h2>工具调用 <span class="count-badge">${tools.length}</span></h2></div>${tools.map(tool => {
    const name = tool.name.replace(/^mcp__atelier__/, '');
    return `<details class="trace-item" data-tool="${esc(tool.id)}" ${openTools.has(tool.id) ? 'open' : ''}>
     <summary><strong>${esc(toolLabels[name] || name)}</strong>${badge(tool.status)}</summary>
+    <p class="trace-label">${esc(tool.id)} · ${esc(date(tool.startedAt))} · ${elapsed(tool.endedAt ? Date.parse(tool.endedAt) - Date.parse(tool.startedAt) : null)}</p>
     <p class="trace-label">参数</p><pre>${esc(tool.inputSummary)}</pre>
     ${tool.output ? `<p class="trace-label">输出</p><pre>${esc(tool.output)}</pre>` : ''}
     ${tool.outputTruncated ? `<button class="btn btn-secondary" data-action="tool-output" data-id="${esc(tool.id)}">查看完整输出</button>` : ''}</details>`;
   }).join('') || '<p class="empty-text">本会话还没有调用工具。</p>'}
-   <details class="trace-item trace-events" ${openTools.has('events:' + snap.session.id) ? 'open' : ''} data-tool="${esc('events:' + snap.session.id)}">
-    <summary><strong>运行事件</strong> <span class="count-badge">${snap.events?.length || 0}</span></summary>
-    ${(snap.events || []).map(event => `<div class="timeline-row"><time datetime="${esc(event.at)}">${esc(date(event.at))}</time><span>${esc(event.type)}</span></div>`).join('') || '<p class="muted">暂无运行事件</p>'}
+   <details class="trace-item trace-events" ${openTools.has('events:' + run.id) ? 'open' : ''} data-tool="${esc('events:' + run.id)}">
+    <summary><strong>运行事件</strong> <span class="count-badge">${events.length}</span></summary>
+    ${error ? `<p class="trace-error">${esc(error)}</p>` : ''}
+    ${total > events.length ? `<p class="trace-label">共 ${total} 条。已折叠文本增量，最多显示最近 600 条诊断事件。</p>` : ''}
+    ${events.map(event => `<details class="trace-event" data-tool="event:${event.id}" ${openTools.has('event:' + event.id) ? 'open' : ''}>
+     <summary><span>${esc(eventNames[event.type] || event.type)}</span><time datetime="${esc(event.at)}">${esc(date(event.at))}</time></summary>
+     <pre>${esc(JSON.stringify({ event: event.type, sequence: event.seq, timestamp: event.at, ...event.payload }, null, 2))}</pre>
+    </details>`).join('') || '<p class="muted">暂无运行事件</p>'}
    </details>`;
+  if (pickerFocused) $('#trace-run', el)?.focus({preventScroll:true});
   el.scrollTop = oldScroll;
   return;
  }
@@ -300,7 +363,10 @@ $('#prompt-input').addEventListener('input',e=>{if(!state.current)return;getDraf
 $('#prompt-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!$('#send-button').disabled)send();}});
 $('#file-input').addEventListener('change',e=>{const files=[...e.target.files];e.target.value='';upload(files);});
 $('#session-search').addEventListener('input',e=>{state.search=e.target.value;pages.sessions=0;++listSequence;clearTimeout(searchTimer);searchTimer=setTimeout(()=>refreshLists().then(renderHistory).catch(err=>toast(err.message)),250);});
-document.addEventListener('toggle',e=>{if(e.target.matches('details[data-tool]')) {if(e.target.open)openTools.add(e.target.dataset.tool);else openTools.delete(e.target.dataset.tool);}},true);
+document.addEventListener('change', event => {
+ if (event.target.id === 'trace-run') { state.selectedRun = event.target.value; render(); }
+});
+document.addEventListener('toggle',e=>{if(e.target.isConnected && e.target.matches('details[data-tool]')) {if(e.target.open)openTools.add(e.target.dataset.tool);else openTools.delete(e.target.dataset.tool);}},true);
 document.addEventListener('change',e=>{if(e.target.id==='filter-status'){filters.runStatus=e.target.value;pages.runs=0;refreshLists().then(render).catch(err=>toast(err.message));}});
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'&&!e.isComposing){e.preventDefault();if(!$('#detail-dialog').open) $('[data-action=new]').click();return;} const tab=e.target.closest?.('[role=tab]');if(tab && ['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){const tabs=$$('[role=tab]',tab.closest('[role=tablist]'));let i=tabs.indexOf(tab);i=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;e.preventDefault();tabs[i].focus();tabs[i].click();} if(e.key==='Escape' && !$('#detail-dialog').open)closeDrawers(); if(e.key==='Tab' && !$('#detail-dialog').open && (document.body.classList.contains('nav-open')||document.body.classList.contains('drawer-aside'))){const container=document.body.classList.contains('nav-open')?$('.sidebar'):$('.right-panel');const focus=$$('button:not([disabled]),input:not([disabled]),a[href],select,textarea',container).filter(el=>el.getClientRects().length);if(focus.length && (e.shiftKey&&document.activeElement===focus[0] || !e.shiftKey&&document.activeElement===focus.at(-1))){e.preventDefault();(e.shiftKey?focus.at(-1):focus[0]).focus();}}});
 let wasNarrow=innerWidth<1024;

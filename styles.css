@@ -523,6 +523,16 @@ html,body { max-width:100%; overflow-x:hidden; }
 .session-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 20px; margin: 0; }
 .session-facts dt { color: var(--muted); }
 .session-facts dd { margin: 0; overflow-wrap: anywhere; }
+.trace-overview { padding: 14px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; }
+.trace-run-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.trace-run-bar select { flex: 1; min-width: 0; max-width: 100%; color: inherit; background: var(--surface); padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.trace-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 158px), 1fr)); gap: 10px 14px; margin: 14px 0 0; }
+.trace-facts dt { font-size: var(--text-xs); color: var(--muted); }
+.trace-facts dd { margin: 1px 0 0; overflow-wrap: anywhere; }
+.trace-error { padding: 8px 10px; margin-top: 10px; color: var(--danger); background: var(--code-delete); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trace-event { border-top: 1px solid var(--border-soft); }
+.trace-event time { color: var(--muted); font-size: var(--text-xs); margin-inline-start: 8px; }
+.trace-events .trace-label { margin: 0 0 8px; }
 @media (max-width: 767px) {
   .conversation-content { padding-inline-end: 4px; }
   .message-thread .assistant-message, .message-thread .user-message { padding-inline: 9px; }
