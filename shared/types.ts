@@ -39,6 +39,7 @@ export interface ExtensionOrigin {
   key: string;
   revision: string;
   sha256?: string;
+  upstreamVersion?: string;
 }
 export interface ExtensionBase {
   id: string;

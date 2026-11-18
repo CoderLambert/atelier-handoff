@@ -291,7 +291,11 @@ export class ProjectExtensions {
           '此 Skill 已关联精选市场，请从市场预览并应用审核版本。',
           409,
         );
-      if (previous && previous.origin?.revision === entry.revision)
+      if (
+        previous &&
+        previous.origin?.revision === entry.revision &&
+        previous.origin?.upstreamVersion === entry.upstreamVersion
+      )
         return { item: previous, changed: false };
       if (
         previous?.kind !== 'mcp' &&
@@ -328,7 +332,13 @@ export class ProjectExtensions {
                 previous.enabled &&
                 JSON.stringify(previous.transport) === JSON.stringify(entry.transport),
             }
-          : { ...fields, kind: entry.kind, body: entry.body, enabled: previous?.enabled ?? true };
+          : {
+              ...fields,
+              kind: entry.kind,
+              body: entry.body,
+              enabled: previous?.enabled ?? true,
+              ...(!previous && entry.location.startsWith('skillhub:') ? { autoInvoke: false } : {}),
+            };
       const item = this.saveRecord(projectId, payload, previous?.id);
       return {
         item: this.store.put('extensions', {
@@ -339,6 +349,7 @@ export class ProjectExtensions {
             key: entry.key,
             revision: entry.revision!,
             sha256: entry.sha256,
+            upstreamVersion: entry.upstreamVersion,
           },
         }),
         changed: true,

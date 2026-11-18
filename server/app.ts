@@ -27,6 +27,7 @@ import { ProjectExtensions, extensionSelections, inspectMarkdown } from './exten
 import { selectRunSkills, type RunSkill } from './run-skills.js';
 import { testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
+import { searchSkillHub } from './skillhub.js';
 import {
   installMarketSkill,
   listSkillMarket,
@@ -555,6 +556,11 @@ export async function createApp(options: {
               ),
             });
           }
+        }
+        if (parts.length === 5 && id === 'skillhub-search' && method === 'GET') {
+          store.get('projects', projectId);
+          const query = z.string().trim().min(1).max(120).parse(url.searchParams.get('q'));
+          return json(res, { items: await searchSkillHub(query) });
         }
         if (parts.length === 5 && id === 'market-preview' && method === 'POST') {
           const input = marketTarget.parse(await body(req));

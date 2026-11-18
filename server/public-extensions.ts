@@ -5,6 +5,7 @@ import { delimiter, isAbsolute, join, posix } from 'node:path';
 import { parseDocument } from 'yaml';
 import { AppError, type McpTransport } from '../shared/types.js';
 import { fingerprint } from './files.js';
+import { previewSkillHub } from './skillhub.js';
 
 const registry = 'https://registry.modelcontextprotocol.io/v0.1/servers';
 export type PublicKind = 'skill' | 'command' | 'mcp';
@@ -17,6 +18,7 @@ export interface PublicEntry {
   revision?: string;
   sha256?: string;
   upstreamName?: string;
+  upstreamVersion?: string;
   body?: string;
   transport?: McpTransport;
   issue?: string;
@@ -250,6 +252,8 @@ export async function previewPublic(
 ): Promise<PublicEntry[]> {
   const invalidConfig = '此声明需要当前尚未支持的启动参数、传输方式或凭据格式。';
   try {
+    if (source.startsWith('skillhub:') && kind === 'skill')
+      return [await previewSkillHub(source, request)];
     if (source.startsWith('registry:') && kind === 'mcp') {
       const query = source.slice(9).trim();
       if (!query) throw new AppError('PUBLIC_SOURCE_INVALID', '请输入 MCP Registry 搜索词。');

@@ -14,6 +14,7 @@ export interface PublicEntry {
   revision?: string;
   sha256?: string;
   upstreamName?: string;
+  upstreamVersion?: string;
   body?: string;
   transport?: McpTransport;
   issue?: string;

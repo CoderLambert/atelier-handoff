@@ -2,6 +2,7 @@ import { useDeferredValue, useState } from 'react';
 import { useIsMutating, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Extension } from '@shared/types';
 import { api } from '@/api/client';
+import { SkillHubMarket } from './skillhub-market';
 import {
   ActionButton,
   BackupActions,
@@ -41,6 +42,7 @@ export function SkillMarket({
   const query = useQuery(marketQuery(projectId));
   const install = useExtensionMutation(projectId);
   const pending = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
+  const [marketSource, setMarketSource] = useState<'curated' | 'skillhub'>('curated');
   const [search, setSearch] = useState('');
   const searchText = useDeferredValue(search.trim().toLocaleLowerCase());
   const [category, setCategory] = useState('');
@@ -81,135 +83,157 @@ export function SkillMarket({
   return (
     <FeatureDialog
       title="Skill 市场"
-      description={`当前项目 · ${projectName}。精选 Skill 来自公开仓库的固定版本，仅导入 Markdown 指令；所需工具请另行配置。`}
+      description={`当前项目 · ${projectName}。按需预览和安装项目 Skill。`}
       busy={pending}
       onClose={onClose}
     >
-      <div className="ext-market">
-        <div className="ext-market-filters">
-          <label className="ext-search">
-            <span aria-hidden="true">⌕</span>
-            <input
-              autoFocus
-              type="search"
-              placeholder="搜索名称、发布者或仓库"
-              aria-label="搜索精选 Skill"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-          <label className="ext-filter">
-            分类
-            <select
-              aria-label="按分类筛选"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              <option value="">全部</option>
-              {categories.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <ActionButton
-            disabled={query.isFetching || pending}
-            onClick={() => {
-              setError('');
-              void query.refetch();
-            }}
-          >
-            刷新目录
-          </ActionButton>
-        </div>
-        <p className="ext-save-state" role="status" aria-live="polite">
-          {pending
-            ? '正在处理…'
-            : query.isFetching
-              ? skills.length
-                ? '正在刷新目录，保留上次显示的内容…'
-                : '正在读取精选目录…'
-              : status}
-        </p>
-        <ErrorMessage error={error || query.error} />
-        {query.isError && skills.length ? (
-          <p className="ext-help">当前显示上次成功读取的目录，安装前请刷新。</p>
-        ) : null}
-        <div className="ext-card-grid ext-market-grid" aria-busy={query.isFetching || pending}>
-          {results.map((skill) => {
-            const review = needsMarketReview(skill);
-            return (
-              <article className="ext-card ext-market-card" key={skill.id}>
-                <p className="ext-card-kind">
-                  {skill.category} · {skill.publisher}
-                </p>
-                <h3>{skill.title}</h3>
-                <code>/{skill.name}</code>
-                <p className="ext-market-description">{skill.description}</p>
-                <MarketStatus skill={skill} />
-                {skill.installedVersion != null ? (
-                  <p className="ext-help">
-                    项目 v{skill.installedVersion}
-                    {skill.installedRevision ? ` · ${skill.installedRevision.slice(0, 12)}` : ''}
-                  </p>
-                ) : null}
-                <p className="ext-card-source">
-                  {skill.repository || '公开仓库'}
-                  {skill.commit ? (
-                    <span title={skill.commit}>{skill.commit.slice(0, 12)}</span>
-                  ) : null}
-                </p>
-                <Capabilities skill={skill} />
-                <MarketSource skill={skill} />
-                {skill.status === 'conflict' ? (
-                  <p className="ext-compatibility">
-                    项目中已有同名扩展。请先在项目扩展中重命名或删除冲突项，再刷新目录。
-                  </p>
-                ) : null}
-                <div className="ext-market-actions">
-                  <ActionButton
-                    primary={review}
-                    disabled={!ready || pending}
-                    onClick={() => onPreview(skill.id, skill.installedId)}
-                  >
-                    {skill.legacy || skill.status === 'legacy'
-                      ? '预览迁移'
-                      : review
-                        ? '预览更新'
-                        : '查看正文'}
-                  </ActionButton>
-                  {!review ? (
-                    <ActionButton
-                      primary={skill.status === 'available'}
-                      disabled={
-                        !ready || pending || !['available', 'disabled'].includes(skill.status)
-                      }
-                      onClick={() => void apply(skill)}
-                    >
-                      {skill.status === 'disabled'
-                        ? '启用'
-                        : skill.status === 'enabled'
-                          ? '已启用'
-                          : skill.status === 'conflict'
-                            ? '同名冲突'
-                            : '安装并启用'}
-                    </ActionButton>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-        {!results.length && !query.isPending ? (
-          <p className="ext-help">没有匹配的 Skill。</p>
-        ) : null}
-        <div className="ext-dialog-actions">
-          <ActionButton disabled={pending} onClick={onClose}>
-            关闭
-          </ActionButton>
-        </div>
+      <div role="group" aria-label="市场来源" className="mb-3 flex gap-2">
+        <ActionButton
+          primary={marketSource === 'curated'}
+          aria-pressed={marketSource === 'curated'}
+          disabled={pending}
+          onClick={() => setMarketSource('curated')}
+        >
+          精选
+        </ActionButton>
+        <ActionButton
+          primary={marketSource === 'skillhub'}
+          aria-pressed={marketSource === 'skillhub'}
+          disabled={pending}
+          onClick={() => setMarketSource('skillhub')}
+        >
+          SkillHub
+        </ActionButton>
       </div>
+      {marketSource === 'skillhub' ? (
+        <SkillHubMarket projectId={projectId} onSaved={onSaved} />
+      ) : (
+        <div className="ext-market">
+          <div className="ext-market-filters">
+            <label className="ext-search">
+              <span aria-hidden="true">⌕</span>
+              <input
+                autoFocus
+                type="search"
+                placeholder="搜索名称、发布者或仓库"
+                aria-label="搜索精选 Skill"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <label className="ext-filter">
+              分类
+              <select
+                aria-label="按分类筛选"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+              >
+                <option value="">全部</option>
+                {categories.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ActionButton
+              disabled={query.isFetching || pending}
+              onClick={() => {
+                setError('');
+                void query.refetch();
+              }}
+            >
+              刷新目录
+            </ActionButton>
+          </div>
+          <p className="ext-save-state" role="status" aria-live="polite">
+            {pending
+              ? '正在处理…'
+              : query.isFetching
+                ? skills.length
+                  ? '正在刷新目录，保留上次显示的内容…'
+                  : '正在读取精选目录…'
+                : status}
+          </p>
+          <ErrorMessage error={error || query.error} />
+          {query.isError && skills.length ? (
+            <p className="ext-help">当前显示上次成功读取的目录，安装前请刷新。</p>
+          ) : null}
+          <div className="ext-card-grid ext-market-grid" aria-busy={query.isFetching || pending}>
+            {results.map((skill) => {
+              const review = needsMarketReview(skill);
+              return (
+                <article className="ext-card ext-market-card" key={skill.id}>
+                  <p className="ext-card-kind">
+                    {skill.category} · {skill.publisher}
+                  </p>
+                  <h3>{skill.title}</h3>
+                  <code>/{skill.name}</code>
+                  <p className="ext-market-description">{skill.description}</p>
+                  <MarketStatus skill={skill} />
+                  {skill.installedVersion != null ? (
+                    <p className="ext-help">
+                      项目 v{skill.installedVersion}
+                      {skill.installedRevision ? ` · ${skill.installedRevision.slice(0, 12)}` : ''}
+                    </p>
+                  ) : null}
+                  <p className="ext-card-source">
+                    {skill.repository || '公开仓库'}
+                    {skill.commit ? (
+                      <span title={skill.commit}>{skill.commit.slice(0, 12)}</span>
+                    ) : null}
+                  </p>
+                  <Capabilities skill={skill} />
+                  <MarketSource skill={skill} />
+                  {skill.status === 'conflict' ? (
+                    <p className="ext-compatibility">
+                      项目中已有同名扩展。请先在项目扩展中重命名或删除冲突项，再刷新目录。
+                    </p>
+                  ) : null}
+                  <div className="ext-market-actions">
+                    <ActionButton
+                      primary={review}
+                      disabled={!ready || pending}
+                      onClick={() => onPreview(skill.id, skill.installedId)}
+                    >
+                      {skill.legacy || skill.status === 'legacy'
+                        ? '预览迁移'
+                        : review
+                          ? '预览更新'
+                          : '查看正文'}
+                    </ActionButton>
+                    {!review ? (
+                      <ActionButton
+                        primary={skill.status === 'available'}
+                        disabled={
+                          !ready || pending || !['available', 'disabled'].includes(skill.status)
+                        }
+                        onClick={() => void apply(skill)}
+                      >
+                        {skill.status === 'disabled'
+                          ? '启用'
+                          : skill.status === 'enabled'
+                            ? '已启用'
+                            : skill.status === 'conflict'
+                              ? '同名冲突'
+                              : '安装并启用'}
+                      </ActionButton>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          {!results.length && !query.isPending ? (
+            <p className="ext-help">没有匹配的 Skill。</p>
+          ) : null}
+          <div className="ext-dialog-actions">
+            <ActionButton disabled={pending} onClick={onClose}>
+              关闭
+            </ActionButton>
+          </div>
+        </div>
+      )}
     </FeatureDialog>
   );
 }
