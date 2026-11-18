@@ -26,6 +26,22 @@
   };
   const itemKey = (pid, id) => JSON.stringify([pid, id]);
   const messageOf = (error) => error?.message || '操作失败，请重试。';
+  const marketLabels = {
+    available: '可安装',
+    enabled: '已启用',
+    disabled: '已停用',
+    legacy: '旧版待迁移',
+    'update-available': '有审核更新',
+    'local-modified': '本地已修改',
+    conflict: '同名冲突',
+  };
+  const allowsAuto = (item) => item?.modelInvocable !== false;
+  const autoEnabled = (item) => allowsAuto(item) && item?.autoInvoke !== false;
+  const needsMarketReview = (skill) =>
+    skill.legacy ||
+    skill.localModified ||
+    skill.updateAvailable ||
+    ['legacy', 'update-available', 'local-modified'].includes(skill.status);
 
   window.createExtensionUI = function createExtensionUI({
     api,
@@ -41,6 +57,7 @@
     const prefix = `atelier-ext-${++instanceSequence}`;
     const esc = (value) => escapeHTML(String(value ?? ''));
     const caches = new Map();
+    const markets = new Map();
     const tests = new Map();
     const pending = new Set();
     const operationErrors = new Map();
@@ -302,7 +319,9 @@
       root.querySelector('.ext-scope-note').textContent =
         page.kind === 'mcp'
           ? '只在当前项目生效。连接测试通过后，可在会话中输入 # 选择已允许的工具。'
-          : '只在当前项目生效。在会话中输入 /，选择命令或可手动调用的 Skill。';
+          : page.kind === 'skill'
+            ? '只在当前项目生效。允许自动调用的 Skill 可由模型按需使用；输入 / 可手动选择支持的 Skill。'
+            : '只在当前项目生效。在会话中输入 /，选择命令。';
       drawResults();
     }
 
@@ -354,12 +373,15 @@
           <button type="button" class="ext-switch" role="switch" aria-checked="${Boolean(item.enabled)}" aria-label="${item.enabled ? '停用' : '启用'} ${esc(item.name)}" data-ext-action="toggle" ${attrs} data-ext-focus="toggle-${esc(item.id)}" ${busy ? 'disabled' : ''}><span></span></button></div>
         <button type="button" class="ext-card-title" data-ext-action="edit" ${attrs} data-ext-focus="edit-${esc(item.id)}">${item.kind === 'command' ? '<span class="ext-name-prefix">/</span>' : ''}${esc(item.name)}</button>
         <p class="ext-card-description">${esc(item.description || '暂无描述')}</p>
-        <div class="ext-card-meta"><span class="ext-state-dot ${item.enabled ? 'ext-is-enabled' : ''}">${item.enabled ? '已启用' : '已停用'}</span>${item.kind === 'mcp' ? statusHTML(pid, item) : `<span>${invocable ? '仅自动调用' : '可手动调用'}</span>`}<span class="ext-version">v${esc(item.version)}</span></div>
+        <div class="ext-card-meta"><span class="ext-state-dot ${item.enabled ? 'ext-is-enabled' : ''}">${item.enabled ? '已启用' : '已停用'}</span>${item.kind === 'mcp' ? statusHTML(pid, item) : `<span>${invocable ? '不支持手动调用' : '可手动调用'}</span>`}<span class="ext-version">v${esc(item.version)}</span></div>
         ${item.supported === false || item.compatibility ? `<p class="ext-compatibility">${esc(item.compatibility || '当前运行环境暂不支持此扩展')}</p>` : ''}
         ${item.kind === 'mcp' ? `<p class="ext-card-source">${esc(item.transport?.type === 'stdio' ? item.transport.command : item.transport?.url || '未配置连接')}<span>${(item.allowedTools || []).length} 个允许的工具</span></p>` : `<p class="ext-card-source">${esc(item.source || '项目内创建')}</p>`}
+        ${item.kind === 'skill' ? `<div class="ext-auto-setting"><span id="${prefix}-auto-${esc(item.id)}">允许自动调用</span><button type="button" class="ext-switch" role="switch" aria-checked="${autoEnabled(item)}" aria-labelledby="${prefix}-auto-${esc(item.id)}" aria-label="${esc(item.name)} 允许自动调用" data-ext-action="toggle-auto" ${attrs} data-ext-focus="auto-${esc(item.id)}" ${busy || !allowsAuto(item) || item.supported === false ? 'disabled' : ''}><span></span></button><small>${!allowsAuto(item) ? '上游禁止模型调用，仅可按手动调用声明使用。' : item.supported === false ? '当前不兼容，暂不能自动调用。' : !item.enabled ? '启用此扩展后生效。' : autoEnabled(item) ? '模型可按需加载，下一轮对话生效。' : '已关闭自动调用。'}</small></div>` : ''}
+        ${item.marketId ? `<p class="ext-card-source">市场 · ${esc(item.marketId)}${item.marketRevision ? `<span title="${esc(item.marketRevision)}">目录 ${esc(item.marketRevision.slice(0, 12))}</span>` : ''}</p>` : ''}
+        ${item.origin?.location ? `<p class="ext-card-source">${sourceLink(item.origin.location, '公开来源')}<span title="${esc(item.origin.revision)}">${esc(item.origin.revision?.slice(0, 12) || '')}</span></p>` : ''}
         ${result?.message ? `<p class="ext-test-message" data-ext-status="${esc(result.status)}">${esc(result.message)}</p>` : ''}
         ${operationErrors.has(key) ? `<p class="ext-error" role="alert">${esc(operationErrors.get(key))}</p>` : ''}
-        <footer class="ext-card-actions">${button('edit', '查看与编辑', `${attrs} data-ext-focus="detail-${esc(item.id)}"`)}${item.origin ? button('public-sync', '检查更新', attrs) : ''}${item.kind === 'mcp' ? button('test', '测试连接', `${attrs} data-ext-focus="test-${esc(item.id)}" ${busy ? 'disabled' : ''}`) : ''}${button('delete', '删除', `${attrs} data-ext-focus="delete-${esc(item.id)}" ${busy ? 'disabled' : ''}`, 'ext-button-danger')}</footer>
+        <footer class="ext-card-actions">${button('edit', '查看与编辑', `${attrs} data-ext-focus="detail-${esc(item.id)}"`)}${item.origin || item.marketId || item.kind === 'skill' ? button('public-sync', '检查更新', `${attrs} ${busy ? 'disabled' : ''}`) : ''}${item.kind === 'mcp' ? button('test', '测试连接', `${attrs} data-ext-focus="test-${esc(item.id)}" ${busy ? 'disabled' : ''}`) : ''}${button('delete', '删除', `${attrs} data-ext-focus="delete-${esc(item.id)}" ${busy ? 'disabled' : ''}`, 'ext-button-danger')}</footer>
       </article>`;
     }
 
@@ -388,27 +410,41 @@
       } else if (item && action === 'test') {
         const context = openEditor(pid, item);
         testConnection(context);
-      } else if (item && action === 'toggle') {
-        toggleItem(pid, item);
+      } else if (item && (action === 'toggle' || action === 'toggle-auto')) {
+        toggleItem(pid, item, action === 'toggle-auto' ? 'autoInvoke' : 'enabled');
       } else if (item && action === 'delete') {
         confirmDelete(pid, item);
       }
     }
 
-    async function toggleItem(pid, item) {
+    async function toggleItem(pid, item, field = 'enabled') {
       const key = itemKey(pid, item.id);
       if (pending.has(key)) return;
+      if (
+        field === 'autoInvoke' &&
+        (item.kind !== 'skill' || !allowsAuto(item) || item.supported === false)
+      )
+        return;
+      const enabled = field === 'autoInvoke' ? autoEnabled(item) : item.enabled;
       pending.add(key);
       operationErrors.delete(key);
       refreshSurfaces();
       try {
         const result = await api(endpoint(pid, item.id), {
           method: 'PATCH',
-          body: { version: item.version, enabled: !item.enabled },
+          body: { version: item.version, [field]: !enabled },
         });
         rememberItem(pid, returnedItem(result));
         await load(pid, true);
-        notify(item.enabled ? '扩展已停用' : '扩展已启用');
+        notify(
+          field === 'autoInvoke'
+            ? enabled
+              ? '已关闭自动调用'
+              : '已允许自动调用，下一轮对话生效'
+            : enabled
+              ? '扩展已停用'
+              : '扩展已启用',
+        );
       } catch (error) {
         operationErrors.set(key, messageOf(error));
         if (error.status === 409) await load(pid, true);
@@ -443,115 +479,457 @@
       closeDialog();
     }
 
+    function sourceLink(url, label) {
+      try {
+        const parsed = new URL(url);
+        if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password)
+          return esc(label);
+        return `<a href="${esc(parsed.href)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+      } catch {
+        return esc(label);
+      }
+    }
+
+    function marketSourceHTML(skill) {
+      const repository = skill.repository || '';
+      const repositoryURL = /^[\w.-]+\/[\w.-]+$/.test(repository)
+        ? `https://github.com/${repository}`
+        : repository;
+      return `<details class="ext-preview ext-source-details"><summary>来源与版本</summary><dl class="ext-source-list">
+        <div><dt>发布者</dt><dd>${esc(skill.publisher)}</dd></div>
+        <div><dt>仓库</dt><dd>${sourceLink(repositoryURL, repository || '未提供')}</dd></div>
+        <div><dt>文件</dt><dd>${sourceLink(skill.url, skill.path || '查看固定来源')}</dd></div>
+        <div><dt>上游名称</dt><dd>${esc(skill.upstreamName || skill.name)}</dd></div>
+        <div><dt>Commit</dt><dd>${esc(skill.commit || '未提供')}</dd></div>
+        <div><dt>SHA-256</dt><dd>${esc(skill.sha256 || '未提供')}</dd></div>
+        <div><dt>目录修订</dt><dd>${esc(skill.revision || '未提供')}</dd></div>
+        ${skill.installedVersion != null ? `<div><dt>项目版本</dt><dd>v${esc(skill.installedVersion)}</dd></div>` : ''}
+        ${skill.installedRevision ? `<div><dt>已装修订</dt><dd>${esc(skill.installedRevision)}</dd></div>` : ''}
+        <div><dt>许可证</dt><dd>${sourceLink(skill.license?.url, skill.license?.name || '未提供')}</dd></div>
+      </dl></details>`;
+    }
+
+    function marketStatusHTML(skill) {
+      const labels = new Set([marketLabels[skill.status] || '状态未知']);
+      if (skill.legacy) labels.add(marketLabels.legacy);
+      if (skill.updateAvailable) labels.add(marketLabels['update-available']);
+      if (skill.localModified) labels.add(marketLabels['local-modified']);
+      if (typeof skill.enabled === 'boolean') labels.add(skill.enabled ? '已启用' : '已停用');
+      return `<div class="ext-market-status" data-ext-market-status="${esc(skill.status)}">${[...labels].map((label) => `<span>${esc(label)}</span>`).join('')}</div>`;
+    }
+
+    function capabilitiesHTML(skill) {
+      return skill.capabilities?.length
+        ? `<ul class="ext-capabilities">${skill.capabilities.map((text) => `<li>${esc(text)}</li>`).join('')}</ul>`
+        : '';
+    }
+
+    async function fetchMarket(pid) {
+      if (!markets.has(pid)) markets.set(pid, { items: null, sequence: 0 });
+      const state = markets.get(pid);
+      const sequence = ++state.sequence;
+      const response = await api(`${endpoint(pid)}/market`);
+      if (!Array.isArray(response?.items)) throw new Error('精选目录响应缺少 items，请重试。');
+      if (sequence === state.sequence) state.items = response.items;
+      return response.items;
+    }
+
     function openMarket(pid) {
       const projectName = allProjects().find((item) => item.id === pid)?.name || pid;
       const context = showDialog(
         'Skill 市场',
         `<div class="ext-market">
-        <p class="ext-help">当前项目 · ${esc(projectName)}</p>
+        <p class="ext-help">当前项目 · ${esc(projectName)}。精选 Skill 来自公开仓库的固定版本，仅导入 Markdown 指令；所需工具请另行配置。</p>
         <div class="ext-market-filters">
-          <label class="ext-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="搜索 Skill" aria-label="搜索精选 Skill"></label>
-          <label class="ext-filter">分类 <select aria-label="按分类筛选"><option value="">全部</option><option>设计</option><option>开发</option><option>写作</option></select></label>
+          <label class="ext-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="搜索名称、发布者或仓库" aria-label="搜索精选 Skill"></label>
+          <label class="ext-filter">分类 <select aria-label="按分类筛选"><option value="">全部</option></select></label>
+          ${button('market-refresh', '刷新目录')}
         </div>
-        <p class="ext-save-state" role="status"></p><p class="ext-form-error" role="alert" hidden></p>
+        <p class="ext-save-state" role="status" aria-live="polite"></p><p class="ext-form-error" role="alert" hidden></p>
         <div class="ext-card-grid ext-market-grid" data-ext-market-cards></div>
       </div>`,
       );
-      const url = `${endpoint(pid)}/market`;
       const search = context.root.querySelector('input[type=search]');
       const category = context.root.querySelector('select');
       const cards = context.root.querySelector('[data-ext-market-cards]');
       const status = context.root.querySelector('.ext-save-state');
-      let skills = [];
-      let loading = true;
+      const refresh = context.root.querySelector('[data-ext-action="market-refresh"]');
+      let skills = markets.get(pid)?.items || [];
+      let loading = false;
       let installing = '';
+      let ready = false;
 
       function draw() {
         if (!live(context)) return;
-        if (loading) {
+        refresh.disabled = loading || Boolean(installing);
+        cards.setAttribute('aria-busy', String(loading || Boolean(installing)));
+        const selectedCategory = category.value;
+        category.innerHTML =
+          '<option value="">全部</option>' +
+          [...new Set(skills.map((skill) => skill.category))]
+            .map((value) => `<option value="${esc(value)}">${esc(value)}</option>`)
+            .join('');
+        category.value = selectedCategory;
+        if (loading && !skills.length) {
           cards.innerHTML = '<p class="ext-loading">正在读取精选目录…</p>';
           return;
         }
-        const query = search.value.trim().toLowerCase();
+        const saved = focusSnapshot(cards);
+        const query = search.value.trim().toLocaleLowerCase();
         const results = skills.filter(
           (skill) =>
             (!category.value || skill.category === category.value) &&
-            `${skill.title} ${skill.name} ${skill.description} ${skill.publisher}`
-              .toLowerCase()
+            `${skill.title} ${skill.name} ${skill.description} ${skill.publisher} ${skill.repository} ${skill.upstreamName}`
+              .toLocaleLowerCase()
               .includes(query),
         );
         cards.innerHTML =
           results
             .map((skill) => {
-              const label =
-                installing === skill.id
-                  ? '正在安装…'
-                  : {
-                      enabled: '已启用',
-                      disabled: '启用',
-                      conflict: '项目中已有同名扩展',
-                      available: '安装并启用',
-                    }[skill.status];
-              const disabled = installing || ['enabled', 'conflict'].includes(skill.status);
+              const review = needsMarketReview(skill);
+              const disabled =
+                !ready || loading || installing || ['enabled', 'conflict'].includes(skill.status);
+              const previewLabel =
+                skill.legacy || skill.status === 'legacy'
+                  ? '预览迁移'
+                  : review
+                    ? '预览更新'
+                    : '查看正文';
+              const attrs = `data-ext-id="${esc(skill.id)}"`;
               return `<article class="ext-card ext-market-card">
             <p class="ext-card-kind">${esc(skill.category)} · ${esc(skill.publisher)}</p>
-            <h3>${esc(skill.title)}</h3>
-            <code>/${esc(skill.name)}</code>
+            <h3>${esc(skill.title)}</h3><code>/${esc(skill.name)}</code>
             <p class="ext-market-description">${esc(skill.description)}</p>
+            ${marketStatusHTML(skill)}
+            ${skill.installedVersion != null ? `<p class="ext-help">项目 v${esc(skill.installedVersion)}${skill.installedRevision ? ` · ${esc(skill.installedRevision.slice(0, 12))}` : ''}</p>` : ''}
+            <p class="ext-card-source">${esc(skill.repository || '公开仓库')}${skill.commit ? `<span title="${esc(skill.commit)}">${esc(skill.commit.slice(0, 12))}</span>` : ''}</p>
+            ${capabilitiesHTML(skill)}${marketSourceHTML(skill)}
+            ${skill.status === 'conflict' ? '<p class="ext-compatibility">项目中已有同名扩展。请先在项目扩展中重命名或删除冲突项，再刷新目录。</p>' : ''}
             <div class="ext-market-actions">
-              ${skill.url ? `<a href="${esc(skill.url)}" target="_blank" rel="noopener noreferrer">查看来源</a>` : ''}
-              ${button('market-install', label, `data-ext-id="${esc(skill.id)}" ${disabled ? 'disabled' : ''}`, skill.status === 'available' ? 'ext-button-primary' : '')}
-            </div>
-          </article>`;
+              ${button('market-preview', previewLabel, `${attrs} data-ext-focus="preview-${esc(skill.id)}" ${loading || installing ? 'disabled' : ''}`, review ? 'ext-button-primary' : '')}
+              ${!review ? button('market-install', installing === skill.id ? '正在处理…' : skill.status === 'disabled' ? '启用' : skill.status === 'enabled' ? '已启用' : skill.status === 'conflict' ? '同名冲突' : '安装并启用', `${attrs} data-ext-focus="install-${esc(skill.id)}" ${disabled ? 'disabled' : ''}`, skill.status === 'available' ? 'ext-button-primary' : '') : ''}
+            </div></article>`;
             })
             .join('') || '<p class="ext-help">没有匹配的 Skill。</p>';
+        restoreFocus(cards, saved);
       }
 
       async function refreshMarket() {
-        const response = await api(url);
-        skills = response.items;
+        if (!live(context) || loading) return;
+        loading = true;
+        ready = false;
+        formError(context, '');
+        status.textContent = skills.length
+          ? '正在刷新目录，保留上次显示的内容…'
+          : '正在读取精选目录…';
+        draw();
+        try {
+          const items = await fetchMarket(pid);
+          if (!live(context)) return;
+          skills = items;
+          ready = true;
+          status.textContent = '';
+        } catch (error) {
+          formError(context, `${messageOf(error)} 可点击“刷新目录”重试。`);
+          if (live(context))
+            status.textContent = skills.length ? '当前显示上次成功读取的目录，安装前请刷新。' : '';
+        } finally {
+          loading = false;
+          draw();
+        }
       }
 
       search.addEventListener('input', draw);
       category.addEventListener('change', draw);
       context.root.addEventListener('click', async (event) => {
-        const selected = event.target.closest('[data-ext-action="market-install"]');
-        if (!selected || installing) return;
-        const id = selected.dataset.extId;
-        installing = id;
+        const selected = event.target.closest('[data-ext-action]');
+        if (!selected || !live(context) || loading || installing) return;
+        const action = selected.dataset.extAction;
+        if (action === 'market-refresh') return refreshMarket();
+        const skill = skills.find((value) => value.id === selected.dataset.extId);
+        if (!skill) return;
+        if (action === 'market-preview') return openMarketPreview(pid, skill.id, skill.installedId);
+        if (
+          action !== 'market-install' ||
+          !ready ||
+          !['available', 'disabled'].includes(skill.status)
+        )
+          return;
+        if (needsMarketReview(skill)) return openMarketPreview(pid, skill.id, skill.installedId);
+        if (!skill.revision) return formError(context, '目录缺少修订号，请刷新目录后重试。');
+        installing = skill.id;
         formError(context, '');
         status.textContent = '';
         draw();
         try {
-          const result = await api(url, { method: 'POST', body: { id } });
+          const result = await api(`${endpoint(pid)}/market`, {
+            method: 'POST',
+            body: { id: skill.id, revision: skill.revision },
+          });
           const item = returnedItem(result);
           rememberItem(pid, item);
-          skills = skills.map((skill) =>
-            skill.id === id ? { ...skill, name: item.name, status: 'enabled' } : skill,
-          );
-          if (live(context))
-            status.textContent = `已启用 /${item.name}，可以回到该项目的对话使用。`;
-          refreshSurfaces();
+          // Discard cached status after a mutation, even if this dialog was closed.
+          markets.delete(pid);
+          if (live(context)) {
+            await refreshMarket();
+            if (live(context))
+              status.textContent = `已启用 /${item?.name || skill.name}，可以回到该项目的对话使用。`;
+          }
+          await load(pid, true);
         } catch (error) {
+          if (error.status === 409 && live(context)) await refreshMarket();
           formError(context, messageOf(error));
-          if (error.status === 409) await refreshMarket().catch(() => {});
         } finally {
           installing = '';
           draw();
-          if (live(context) && document.activeElement === document.body)
-            search.focus({ preventScroll: true });
+          refreshSurfaces();
         }
       });
       draw();
-      refreshMarket()
-        .catch((error) => formError(context, messageOf(error)))
-        .finally(() => {
-          loading = false;
-          draw();
-        });
+      void refreshMarket();
     }
 
-    function openPublicImport(pid, kind, updating) {
+    function openInstalledMarketPreview(pid, item) {
+      if (item.marketId) return openMarketPreview(pid, item.marketId, item.id);
+      const context = showDialog(
+        '检查 Skill 更新',
+        `<p class="ext-save-state" role="status" aria-live="polite"></p><p class="ext-form-error" role="alert" hidden></p><div class="ext-dialog-actions">${button('cancel', '取消')}${button('market-resolve', '重新检查')}</div>`,
+      );
+      async function resolve() {
+        if (!live(context) || context.busy) return;
+        formError(context, '');
+        setBusy(context, true, '正在核对市场来源…');
+        const retry = context.root.querySelector('[data-ext-action="market-resolve"]');
+        retry.disabled = true;
+        try {
+          const skills = await fetchMarket(pid);
+          if (!live(context)) return;
+          const skill = skills.find((value) => value.installedId === item.id);
+          if (skill) return openMarketPreview(pid, skill.id, item.id);
+          if (item.origin) return openPublicImport(pid, item.kind, item, true);
+          formError(
+            context,
+            '此 Skill 尚未关联公开来源。可在“查看与编辑”中检查正文，或从 Skill 市场导入。',
+          );
+        } catch (error) {
+          formError(context, `${messageOf(error)} 无法核对来源，请重试。`);
+        } finally {
+          setBusy(context, false);
+          if (live(context)) retry.disabled = false;
+        }
+      }
+      context.root.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-ext-action]')?.dataset.extAction;
+        if (action === 'cancel') closeOwnDialog(context);
+        if (action === 'market-resolve') void resolve();
+      });
+      void resolve();
+    }
+
+    function openMarketPreview(pid, id, installedId) {
+      const projectName = allProjects().find((item) => item.id === pid)?.name || pid;
+      const context = showDialog(
+        'Skill 市场 · 预览',
+        `<div class="ext-market-preview">
+        <p class="ext-editor-scope">当前项目 · ${esc(projectName)}</p>
+        <p class="ext-save-state" role="status" aria-live="polite"></p><p class="ext-form-error" role="alert" hidden></p>
+        <div data-ext-market-preview></div>
+        <div class="ext-dialog-actions">${button('market-back', '返回市场')}${button('market-preview-reload', '重新读取预览')}${button('market-apply', '应用更新', 'disabled', 'ext-button-primary')}</div></div>`,
+      );
+      const content = context.root.querySelector('[data-ext-market-preview]');
+      const apply = context.root.querySelector('[data-ext-action="market-apply"]');
+      const reload = context.root.querySelector('[data-ext-action="market-preview-reload"]');
+      let preview = null;
+      let localBody = '';
+      let stale = true;
+      let sequence = 0;
+
+      function replacementRequired() {
+        return Boolean(preview?.requiresReplacement || preview?.skill.localModified);
+      }
+      function updateActions() {
+        if (!live(context)) return;
+        reload.disabled = context.busy;
+        const confirmed = context.root.querySelector('[data-ext-replace-local]')?.checked;
+        apply.disabled =
+          context.busy ||
+          stale ||
+          !preview ||
+          Boolean(preview.entry.issue) ||
+          preview.skill.status === 'conflict' ||
+          (replacementRequired() && !confirmed);
+        apply.textContent = preview?.update
+          ? replacementRequired()
+            ? '替换本地正文并应用更新'
+            : '应用审核更新'
+          : '安装并启用';
+      }
+      async function readPreview() {
+        if (!live(context) || context.busy) return;
+        const request = ++sequence;
+        stale = true;
+        formError(context, '');
+        setBusy(context, true, '正在读取固定版本并校验来源…');
+        updateActions();
+        try {
+          const response = await api(`${endpoint(pid)}/market-preview`, {
+            method: 'POST',
+            body: { id },
+          });
+          if (!live(context) || request !== sequence) return;
+          if (
+            response?.skill?.id !== id ||
+            !response.skill.revision ||
+            typeof response.entry?.body !== 'string'
+          )
+            throw new Error('市场预览响应不完整，请重新读取。');
+          if (installedId && response.update?.id !== installedId)
+            throw new Error('安装关联已变化，请返回市场刷新后重新预览。');
+          if (
+            response.update &&
+            (!response.update.id ||
+              !Number.isInteger(response.update.version) ||
+              !response.update.revision)
+          )
+            throw new Error('市场预览缺少更新版本，请重新读取。');
+          let oldBody = response.localBody;
+          if (response.update && typeof oldBody !== 'string') {
+            let item = cache(pid).items?.find(
+              (value) =>
+                value.id === response.update.id && value.version === response.update.version,
+            );
+            if (!item) {
+              await load(pid, true);
+              if (!live(context) || request !== sequence) return;
+              item = cache(pid).items?.find(
+                (value) =>
+                  value.id === response.update.id && value.version === response.update.version,
+              );
+            }
+            oldBody = item?.body;
+            if (typeof oldBody !== 'string')
+              throw new Error('无法读取与预览版本一致的本地正文，请重新读取预览。');
+          }
+          preview = response;
+          localBody = typeof oldBody === 'string' ? oldBody : '';
+          stale = false;
+          const skill = response.skill;
+          content.innerHTML = `<h3>${esc(skill.title || skill.name)}</h3><p class="ext-help">安装别名 /${esc(skill.name)} · ${esc(skill.publisher)}</p>
+            ${marketStatusHTML(skill)}${capabilitiesHTML(skill)}${marketSourceHTML(skill)}
+            ${response.entry.issue ? `<p class="ext-compatibility">${esc(response.entry.issue)}</p>` : ''}
+            ${response.update ? '<p class="ext-help">应用后保留项目中的调用名、启停选择和记录 ID。请比较当前正文与审核后的新正文。</p>' : '<p class="ext-help">确认正文与来源后，安装到当前项目。</p>'}
+            <div class="ext-preview-columns">
+              ${response.update ? `<section class="ext-preview-pane"><h4>当前项目正文 · v${esc(response.update.version)}</h4><pre class="ext-body-preview" tabindex="0">${esc(localBody)}</pre><div class="ext-backup-actions">${button('market-copy-local', '复制本地正文')}${button('market-backup-local', '下载 Markdown 备份')}</div><p class="ext-help" data-ext-backup-state role="status" aria-live="polite"></p></section>` : ''}
+              <section class="ext-preview-pane"><h4>审核后的正文 · ${esc(skill.commit?.slice(0, 12) || skill.revision.slice(0, 12))}</h4><pre class="ext-body-preview" tabindex="0">${esc(response.entry.body)}</pre><details class="ext-preview"><summary>阅读渲染后的内容</summary><div class="ext-prose">${previewHTML(response.entry.body)}</div></details></section>
+            </div>
+            ${replacementRequired() ? '<fieldset class="ext-replacement" data-ext-fields><p>当前正文包含本地修改，应用将覆盖这些修改。可先复制或下载备份。</p><label><input type="checkbox" data-ext-replace-local> 我已检查新旧正文，确认替换本地修改</label></fieldset>' : ''}`;
+        } catch (error) {
+          formError(context, messageOf(error));
+        } finally {
+          if (live(context) && request === sequence) {
+            setBusy(context, false);
+            updateActions();
+          }
+        }
+      }
+
+      context.root.addEventListener('change', (event) => {
+        if (event.target.matches('[data-ext-replace-local]')) updateActions();
+      });
+      context.root.addEventListener('click', async (event) => {
+        const action = event.target.closest('[data-ext-action]')?.dataset.extAction;
+        if (!live(context)) return;
+        if (action === 'market-back') return openMarket(pid);
+        if (context.busy) return;
+        if (action === 'market-preview-reload') return readPreview();
+        if (!preview) return;
+        if (action === 'market-copy-local' || action === 'market-backup-local') {
+          const request = sequence;
+          try {
+            if (action === 'market-copy-local') {
+              if (!navigator.clipboard?.writeText)
+                throw new Error('当前浏览器无法复制，请下载 Markdown 备份。');
+              await navigator.clipboard.writeText(localBody);
+            } else {
+              const url = URL.createObjectURL(
+                new Blob([localBody], { type: 'text/markdown;charset=utf-8' }),
+              );
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${preview.skill.name.replace(/[^\p{L}\p{N}_-]/gu, '-')}-local-v${preview.update.version}.md`;
+              context.root.append(link);
+              link.click();
+              link.remove();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            if (live(context) && request === sequence)
+              context.root.querySelector('[data-ext-backup-state]').textContent =
+                action === 'market-copy-local' ? '已复制本地正文。' : '已发起 Markdown 备份下载。';
+          } catch (error) {
+            if (live(context) && request === sequence) formError(context, messageOf(error));
+          }
+          return;
+        }
+        if (action !== 'market-apply' || apply.disabled || stale) return;
+        const snapshot = preview;
+        const replaceLocal = replacementRequired();
+        if (replaceLocal && !context.root.querySelector('[data-ext-replace-local]')?.checked)
+          return;
+        const key = snapshot.update && itemKey(pid, snapshot.update.id);
+        if (key && pending.has(key))
+          return formError(context, '此扩展正在保存，请完成后重新读取预览。');
+        if (key) pending.add(key);
+        formError(context, '');
+        setBusy(context, true, snapshot.update ? '正在应用审核更新…' : '正在安装…');
+        updateActions();
+        refreshSurfaces();
+        try {
+          const response = await api(
+            `${endpoint(pid)}/${snapshot.update ? 'market-update' : 'market'}`,
+            {
+              method: 'POST',
+              body: snapshot.update
+                ? {
+                    id,
+                    update: {
+                      id: snapshot.update.id,
+                      version: snapshot.update.version,
+                      revision: snapshot.update.revision,
+                      ...(replaceLocal ? { replaceLocal: true } : {}),
+                    },
+                  }
+                : { id, revision: snapshot.skill.revision },
+            },
+          );
+          rememberItem(pid, returnedItem(response));
+          markets.delete(pid);
+          stale = true;
+          await load(pid, true);
+          closeOwnDialog(context);
+          notify(snapshot.update ? '审核更新已应用' : 'Skill 已安装并启用');
+        } catch (error) {
+          if (error.status === 409) {
+            stale = true;
+            markets.delete(pid);
+            await load(pid, true);
+          }
+          formError(
+            context,
+            `${messageOf(error)}${stale ? ' 请重新读取预览、核对新旧正文后再应用。' : ' 可重试，或重新读取预览。'}`,
+          );
+        } finally {
+          if (key) pending.delete(key);
+          setBusy(context, false);
+          updateActions();
+          refreshSurfaces();
+        }
+      });
+      void readPreview();
+    }
+
+    function openPublicImport(pid, kind, updating, marketChecked = false) {
+      if (updating && kind === 'skill' && (!marketChecked || updating.marketId))
+        return openInstalledMarketPreview(pid, updating);
       const officialSkill =
         'https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md';
       const formLabel =
@@ -723,7 +1101,7 @@
               <div class="ext-markdown-toolbar"><span>Markdown 指令</span><label class="ext-file-button">导入文件<input type="file" name="markdownFile" accept=".md,.markdown,text/markdown,text/plain" aria-label="导入 Markdown 文件"></label></div>
               <textarea class="ext-code-input ext-body-input" name="body" rows="12" required spellcheck="false" aria-label="Markdown 指令正文" data-ext-focus="editor-body">${esc(item?.body || '')}</textarea>
               <details class="ext-preview"><summary>预览内容</summary><div class="ext-prose">${previewHTML(item?.body || '')}</div></details>
-              ${kind === 'skill' ? `<p class="ext-help">Skill 的手动调用与兼容性由服务端解析 Markdown 元数据。${item?.userInvocable === false ? '当前仅支持自动调用。' : ''}</p>` : ''}`
+              ${kind === 'skill' ? `<label class="ext-auto-field"><input type="checkbox" name="autoInvoke" ${autoEnabled(item) ? 'checked' : ''} ${!allowsAuto(item) ? 'disabled' : ''}><span>允许自动调用<small>${!allowsAuto(item) ? '上游声明禁止模型调用，当前自动调用已关闭。' : '启用后，模型可在当前项目中按需加载。保存后从下一轮对话生效。'}</small></span></label><p class="ext-help">手动调用与兼容性由服务端解析 Markdown 元数据。${item?.userInvocable === false ? '当前不支持 / 手动调用。' : '关闭自动调用后，仍可使用 / 手动选择兼容的 Skill。'}</p>` : ''}`
           }
           ${item?.compatibility ? `<p class="ext-compatibility">${esc(item.compatibility)}</p>` : ''}
         </fieldset>
@@ -858,6 +1236,9 @@
           ...fields,
           source: String(values.get('source') || '').trim(),
           body: String(values.get('body') || ''),
+          ...(context.kind === 'skill'
+            ? { autoInvoke: allowsAuto(context.item) && values.has('autoInvoke') }
+            : {}),
         };
       }
       let transport;

@@ -38,6 +38,7 @@ export interface ExtensionOrigin {
   location: string;
   key: string;
   revision: string;
+  sha256?: string;
 }
 export interface ExtensionBase {
   id: string;
@@ -49,6 +50,7 @@ export interface ExtensionBase {
   version: number;
   origin?: ExtensionOrigin;
   marketId?: string;
+  marketRevision?: string;
 }
 export type Extension = ExtensionBase &
   (
@@ -58,6 +60,8 @@ export type Extension = ExtensionBase &
         supported: boolean;
         compatibility?: string;
         userInvocable: boolean;
+        modelInvocable?: boolean;
+        autoInvoke?: boolean;
       }
     | {
         kind: 'mcp';

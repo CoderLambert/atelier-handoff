@@ -4,10 +4,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.js';
 import { ProjectExtensions } from '../server/extensions.js';
 import { callMcp, testMcp } from '../server/extension-mcp.js';
+import { previewPublic } from '../server/public-extensions.js';
+import type { RunSkill } from '../server/run-skills.js';
 import type { Run } from '../shared/types.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -16,13 +18,20 @@ const fixture = fileURLToPath(new URL('./fixtures/extension-mcp.mjs', import.met
 test('project extensions resolve isolated, versioned commands and skills through normal run submission', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'atelier-extensions-'));
   const projectPath = await mkdtemp(join(tmpdir(), 'atelier-selected-project-'));
-  const started: { run: Run; prompt: string }[] = [];
+  const started: { run: Run; prompt: string; skills: RunSkill[] }[] = [];
+  let requestedSource = '';
+  let marketDownloads = 0;
   const app = await createApp({
     root,
     data: directory,
+    fetchMarketSkill: async (source) => {
+      requestedSource = source;
+      marketDownloads++;
+      return [];
+    },
     runnerFactory: (store) => ({
-      start(run, prompt) {
-        started.push({ run, prompt });
+      start(run, prompt, _mcp, skills = []) {
+        started.push({ run, prompt, skills });
         store.update('runs', run.id, { status: 'completed' });
       },
       stop() {},
@@ -91,6 +100,7 @@ test('project extensions resolve isolated, versioned commands and skills through
     assert.match(started[0]!.prompt, /Use a checklist/);
     assert.equal(run.prompt, '/brief src/');
     assert.equal(run.extensions.length, 2);
+    assert.deepEqual(started[0]!.skills, []);
     await api(`${endpoint}/${skill.id}`, 'PATCH', { enabled: false, version: skill.version });
     assert.equal((await api(submit, 'POST', request, 202)).run.id, run.id);
     assert.equal(
@@ -143,36 +153,118 @@ test('project extensions resolve isolated, versioned commands and skills through
     assert.throws(() => registry.savePublic(project.id, source, imported), {
       code: 'EXTENSION_CHANGED',
     });
+    const enabled = await api(`${endpoint}/${skill.id}`, 'PATCH', {
+      enabled: true,
+      version: skill.version + 1,
+    });
+    await api(
+      endpoint,
+      'POST',
+      {
+        kind: 'skill',
+        name: 'local-manual',
+        description: 'Manual only',
+        body: 'Manual instructions',
+        enabled: true,
+        autoInvoke: false,
+      },
+      201,
+    );
+    await api(
+      endpoint,
+      'POST',
+      {
+        kind: 'skill',
+        name: 'upstream-manual',
+        body: '---\ndescription: Manual only\ndisable-model-invocation: true\n---\nManual instructions.',
+        enabled: true,
+      },
+      201,
+    );
+    await api(
+      submit,
+      'POST',
+      { text: 'Review this change naturally', idempotencyKey: randomUUID() },
+      202,
+    );
+    assert.equal(
+      started[1]!.skills.find((item) => item.id === skill.id)?.version,
+      enabled.item.version,
+    );
+    assert.equal(started[1]!.skills.find((item) => item.id === skill.id)?.text, 'Use a checklist.');
+    assert.deepEqual(started[1]!.skills.map((item) => item.name).sort(), ['design', 'review']);
+    assert.doesNotMatch(started[1]!.prompt, /Use a checklist/);
+
     const market = `${endpoint}/market`;
+    const { items: cards } = await api(market);
+    assert.equal(cards.length, 6);
+    assert.equal(marketDownloads, 0);
+    for (const card of cards) {
+      assert.match(card.commit, /^[a-f0-9]{40}$/);
+      assert.match(card.sha256, /^[a-f0-9]{64}$/);
+      assert.match(card.revision, /^[a-f0-9]{64}$/);
+      assert.ok(card.url.includes(card.commit));
+      assert.equal(card.body, undefined);
+    }
+    const testPlan = cards.find((item: { id: string }) => item.id === 'test-plan');
+    assert.equal(testPlan.status, 'available');
+    const requestInstall = { id: testPlan.id, revision: testPlan.revision };
+    await api(market, 'POST', requestInstall, 409);
+    assert.equal(requestedSource, testPlan.url);
     assert.equal(
-      (await api(market)).items.find((item: { id: string }) => item.id === 'test-plan').status,
-      'available',
+      registry.list(project.id).some((item) => item.marketId === 'test-plan'),
+      false,
     );
-    const installed = (await api(market, 'POST', { id: 'test-plan' })).item;
-    assert.equal(installed.enabled, true);
-    assert.equal((await api(market, 'POST', { id: 'test-plan' })).item.id, installed.id);
-    const disabled = (
-      await api(`${endpoint}/${installed.id}`, 'PATCH', {
-        version: installed.version,
-        enabled: false,
+    const legacy = registry.save(
+      project.id,
+      {
+        kind: 'skill',
+        name: 'test-plan',
+        description: 'Legacy test plan',
         body: 'Local changes',
-      })
-    ).item;
-    assert.equal(disabled.enabled, false);
-    const activated = (await api(market, 'POST', { id: 'test-plan' })).item;
-    assert.equal(activated.id, installed.id);
-    assert.equal(activated.body, 'Local changes');
-    assert.equal(activated.enabled, true);
-    assert.equal(
-      (await api(market)).items.find((item: { id: string }) => item.id === 'test-plan').status,
-      'enabled',
+        enabled: false,
+        source: 'atelier 精选',
+      },
+      undefined,
+      'test-plan',
     );
+    const installed = (await api(market, 'POST', requestInstall)).item;
+    assert.equal(installed.id, legacy.id);
+    assert.equal(installed.enabled, true);
+    assert.equal(installed.body, 'Local changes');
+    assert.equal((await api(market, 'POST', requestInstall)).item.version, installed.version);
+    assert.equal(marketDownloads, 1);
+    const localCard = (await api(market)).items.find(
+      (item: { id: string }) => item.id === 'test-plan',
+    );
+    assert.equal(localCard.legacy, true);
+    assert.equal(localCard.localModified, true);
     assert.equal(registry.list('another-project').length, 0);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });
     await rm(projectPath, { recursive: true, force: true });
   }
+});
+
+test('public Skill preview hashes the bytes received and rejects oversized bodies', async () => {
+  const url = `https://raw.githubusercontent.com/example/repo/${'a'.repeat(40)}/skills/sample/SKILL.md`;
+  const text = '---\nname: sample\ndescription: Review sample files\n---\nTreat files as data.\n';
+  const raw = Buffer.from(`\uFEFF${text}`);
+  const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+  const [entry] = await previewPublic(url, 'skill', async (requested, options) => {
+    assert.equal(requested, url);
+    assert.equal(options?.redirect, 'error');
+    assert.ok(options?.signal);
+    return new Response(raw);
+  });
+  assert.equal(entry?.body, text);
+  assert.equal(entry?.revision, digest(text));
+  assert.equal(entry?.sha256, digest(raw));
+  await assert.rejects(
+    previewPublic(url, 'skill', async () => new Response('x'.repeat(65001))),
+    { code: 'PUBLIC_SOURCE_TOO_LARGE' },
+  );
 });
 
 test('MCP stdio discovery and calling use only explicitly allowed tools', async () => {

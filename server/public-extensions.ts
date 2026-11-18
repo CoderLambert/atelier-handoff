@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join, posix } from 'node:path';
@@ -14,6 +15,8 @@ export interface PublicEntry {
   description: string;
   kind: PublicKind;
   revision?: string;
+  sha256?: string;
+  upstreamName?: string;
   body?: string;
   transport?: McpTransport;
   issue?: string;
@@ -49,6 +52,7 @@ async function download(url: string, request: typeof fetch, limit: number) {
   const reader = response.body?.getReader();
   if (!reader) throw new AppError('PUBLIC_SOURCE_EMPTY', '公开来源没有返回内容。', 502);
   const decoder = new TextDecoder('utf-8', { fatal: true });
+  const digest = createHash('sha256');
   let size = 0;
   let result = '';
   try {
@@ -64,9 +68,10 @@ async function download(url: string, request: typeof fetch, limit: number) {
           413,
         );
       }
+      digest.update(value);
       result += decoder.decode(value, { stream: true });
     }
-    return result + decoder.decode();
+    return { body: result + decoder.decode(), sha256: digest.digest('hex') };
   } finally {
     reader.releaseLock();
   }
@@ -253,7 +258,7 @@ export async function previewPublic(
       const url = exact
         ? `${registry}/${encodeURIComponent(name)}/versions/latest`
         : `${registry}?search=${encodeURIComponent(name)}&version=latest&limit=20`;
-      const result = object(JSON.parse(await download(url, request, 1024 * 1024)));
+      const result = object(JSON.parse((await download(url, request, 1024 * 1024)).body));
       return Promise.all(
         (exact ? [result] : array(result.servers)).map(object).map(async (datum) => {
           const server = object(datum.server);
@@ -277,7 +282,7 @@ export async function previewPublic(
       `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${pathUrl(entry)}`;
     if (!file) {
       const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-      const result = object(JSON.parse(await download(url, request, 12 * 1024 * 1024)));
+      const result = object(JSON.parse((await download(url, request, 12 * 1024 * 1024)).body));
       return array(result.tree)
         .map(object)
         .filter((entry) => entry.type === 'blob' && entry.mode === '100644')
@@ -299,7 +304,7 @@ export async function previewPublic(
     )
       throw new AppError('PUBLIC_SOURCE_INVALID', '链接的文件类型与当前扩展类型不匹配。');
     const location = raw(path);
-    const body = await download(location, request, kind === 'mcp' ? 128 * 1024 : 65000);
+    const { body, sha256 } = await download(location, request, kind === 'mcp' ? 128 * 1024 : 65000);
     const revision = fingerprint(body);
     if (kind !== 'mcp') {
       const header = body.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---/);
@@ -314,6 +319,8 @@ export async function previewPublic(
           description: text(parsed.description).slice(0, 500),
           kind,
           revision,
+          sha256,
+          upstreamName: text(parsed.name) || undefined,
           body,
         },
       ];

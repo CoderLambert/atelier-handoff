@@ -401,7 +401,9 @@ const eventNames = {
   'tool.blocked': '工具被拦截',
   'permission.requested': '等待审批',
   'permission.resolved': '审批结束',
-  'extensions.selected': '加载扩展',
+  'extensions.selected': '加载手动选择的扩展',
+  'skills.discovered': 'SDK 发现自动调用 Skill',
+  'skill.invoked': 'Skill 自动调用成功',
   'mcp.call_started': '开始调用 MCP',
   'mcp.call_finished': 'MCP 调用结束',
   'usage.updated': '用量已更新',
@@ -444,6 +446,7 @@ function traceEvents(snap, run) {
 }
 const toolLabels = {
   Read: '读取文件',
+  Skill: '加载 Skill',
   list_files: '列出文件',
   search_files: '搜索项目',
   edit_file: '编辑文件',
@@ -602,6 +605,14 @@ function renderConversation() {
     const { events, total, error } = traceEvents(snap, run);
     const result = events.findLast((event) => event.type === 'sdk.result')?.payload;
     const init = events.findLast((event) => event.type === 'sdk.initialized')?.payload;
+    const discoveredSkills = events.findLast(
+      (event) => event.type === 'skills.discovered',
+    )?.payload;
+    const invokedSkills = new Set(
+      events
+        .filter((event) => event.type === 'skill.invoked')
+        .map(({ payload }) => `${payload.name} · v${payload.version}`),
+    );
     const exit = events.findLast((event) => event.type === 'process.exited')?.payload;
     const firstText = events.find((event) => event.type === 'sdk.first_text')?.payload;
     const retries = events.filter((event) => event.type === 'sdk.api_retry').length;
@@ -633,6 +644,13 @@ function renderConversation() {
       ],
       ['已记录重试', retries || (result ? 0 : null)],
       ['运行 ID', run.id],
+      [
+        '自动调用候选',
+        discoveredSkills
+          ? `${discoveredSkills.count} 个可用${discoveredSkills.missingCount ? ` · ${discoveredSkills.missingCount} 个未加载` : ''}`
+          : null,
+      ],
+      ['自动调用的 Skill', [...invokedSkills].join(' / ')],
       [
         '扩展',
         run.extensions

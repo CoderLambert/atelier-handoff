@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   query,
@@ -35,6 +35,7 @@ import { commandsAvailable, runCommand } from './commands.js';
 import { readRunUsage } from './usage.js';
 import { callMcp } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
+import { mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
 
 class InputQueue {
   private values: SDKUserMessage[] = [];
@@ -73,7 +74,7 @@ interface LiveRun {
   done: Promise<void>;
 }
 export interface Runner {
-  start(run: Run, input: string, mcp?: EnabledMcp[]): void;
+  start(run: Run, input: string, mcp?: EnabledMcp[], skills?: RunSkill[]): void;
   stop(id: string): void;
   shutdown(): Promise<void>;
 }
@@ -84,10 +85,12 @@ export class AgentRunner implements Runner {
     private readonly permissions: PermissionService,
     private readonly files: FileRecords,
   ) {}
-  start(run: Run, input: string, mcp: EnabledMcp[] = []): void {
+  start(run: Run, input: string, mcp: EnabledMcp[] = [], skills: RunSkill[] = []): void {
     const live: LiveRun = { cancellation: new AbortController(), done: Promise.resolve() };
     this.active.set(run.id, live);
-    live.done = this.execute(run, input, live, mcp).finally(() => this.active.delete(run.id));
+    live.done = this.execute(run, input, live, mcp, skills).finally(() =>
+      this.active.delete(run.id),
+    );
   }
   private cancel(id: string, reason: NonNullable<LiveRun['reason']>): void {
     const live = this.active.get(id);
@@ -123,15 +126,21 @@ export class AgentRunner implements Runner {
     inputText: string,
     live: LiveRun,
     mcp: EnabledMcp[],
+    skills: RunSkill[],
   ): Promise<void> {
     const signal = live.cancellation.signal;
     const project = this.store.get('projects', run.projectId);
     const session = this.store.get('sessions', run.sessionId);
+    const candidates = new Map(skills.map((skill) => [sdkSkillName(skill), skill]));
+    const skillRefs = skills.map(({ id, name, version }) => ({ id, name, version }));
+    const skillCalls = new Map<string, RunSkill>();
+    let pluginDirectory: string | undefined;
     const configKey = fingerprint(
       JSON.stringify({
         model: run.config.model,
         gateway: run.config.gateway,
         ...(run.extensions ? { extensions: run.extensions } : {}),
+        ...(skillRefs.length ? { skills: skillRefs } : {}),
       }),
     );
     const resumeExisting =
@@ -225,6 +234,10 @@ export class AgentRunner implements Runner {
         : ok
           ? 'succeeded'
           : 'failed';
+      if (prior.status !== 'running' && prior.status !== 'awaiting_permission' && prior.endedAt)
+        return;
+      const skill = skillCalls.get(id);
+      if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
       if (output.length > 32000) this.files.saveOutput(id, output);
       this.store.update('tools', id, {
         status,
@@ -236,6 +249,10 @@ export class AgentRunner implements Runner {
         endedAt: now(),
       });
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
+      if (skill && status === 'succeeded') {
+        const { id: extensionId, name, version } = skill;
+        this.store.event(run.id, run.sessionId, 'skill.invoked', { extensionId, name, version });
+      }
     };
     const custom = <S extends z.ZodRawShape>(
       name: string,
@@ -527,6 +544,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         signal.throwIfAborted();
         if (event.hook_event_name !== 'PreToolUse') return {};
         const args = event.tool_input as Record<string, unknown>;
+        const id = appToolId(event.tool_use_id);
         if (event.tool_name === 'Read') {
           if (typeof args.file_path !== 'string') throw new Error('缺少文件路径。');
           await readProjectText(project.path, args.file_path);
@@ -542,9 +560,12 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           )
             .max(30)
             .parse(args.todos);
+        } else if (event.tool_name === 'Skill') {
+          const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
+          if (!skill) throw new Error('该 Skill 不在本轮自动调用名单中。');
+          skillCalls.set(id, skill);
         } else if (!permittedMcp.has(event.tool_name)) throw new Error('工具未开放。');
-        const id = appToolId(event.tool_use_id);
-        createTool(id, event.tool_name, args);
+        createTool(id, event.tool_name, event.tool_name === 'Skill' ? { skill: args.skill } : args);
         if (permittedMcp.has(event.tool_name))
           queuedMcp.push({ id, name: event.tool_name, inputHash: callHash(event.tool_name, args) });
         return decision('allow', '受控工具；写入和命令由应用执行器逐次审批。');
@@ -570,6 +591,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       await resolveProjectPath(project.path, '', { directory: true });
       const sdkDirectory = join(this.store.directory, 'sdk', session.id);
       await mkdir(sdkDirectory, { recursive: true, mode: 0o700 });
+      if (skills.length) pluginDirectory = await mountRunSkills(sdkDirectory, skills);
       signal.throwIfAborted();
       const env: NodeJS.ProcessEnv = {};
       for (const key of [
@@ -606,7 +628,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         options: {
           cwd: project.path,
           model: run.config.model,
-          tools: ['Read', 'TodoWrite'],
+          tools: ['Read', 'TodoWrite', ...(skills.length ? ['Skill'] : [])],
+          skills: [...candidates.keys()],
           allowedTools: [],
           disallowedTools: [
             'Bash',
@@ -619,7 +642,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             'WebFetch',
           ],
           settingSources: [],
-          plugins: [],
+          plugins: pluginDirectory ? [{ type: 'local', path: pluginDirectory }] : [],
           strictMcpConfig: true,
           mcpServers: {
             atelier: createSdkMcpServer({
@@ -744,6 +767,20 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             sdkConfigKey: configKey,
             ...(!resumeExisting ? { sdkCostTotal: 0 } : {}),
           });
+          if (skillRefs.length) {
+            const discovered = new Set(message.skills ?? []);
+            const items: typeof skillRefs = [];
+            const missing: typeof skillRefs = [];
+            for (const [index, key] of [...candidates.keys()].entries()) {
+              (discovered.has(key) ? items : missing).push(skillRefs[index]!);
+            }
+            this.store.event(run.id, session.id, 'skills.discovered', {
+              items,
+              missing,
+              count: items.length,
+              missingCount: missing.length,
+            });
+          }
           this.store.event(run.id, session.id, 'sdk.initialized', {
             model: message.model,
             version: message.claude_code_version,
@@ -875,6 +912,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         if (!processExited) await childExit;
       }
       await Promise.allSettled([...commands, ...toolWork]);
+      if (pluginDirectory) {
+        try {
+          await rm(pluginDirectory, { recursive: true, force: true });
+        } catch {
+          this.store.event(run.id, session.id, 'sdk.notice', { type: 'skill_cleanup_failed' });
+        }
+      }
       if (initialized && !finalResult)
         this.store.update('sessions', session.id, { sdkCostTotal: undefined });
       const status: RunStatus =

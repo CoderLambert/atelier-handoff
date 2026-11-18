@@ -23,6 +23,8 @@ const eventFields: Record<string, readonly string[]> = {
     'deniedTools',
   ],
   'sdk.notice': ['type', 'subtype'],
+  'skills.discovered': ['count', 'missingCount'],
+  'skill.invoked': ['extensionId', 'name', 'version'],
   'tool.started': ['toolCallId'],
   'tool.finished': ['toolCallId', 'status'],
   'tool.blocked': ['toolCallId', 'tool', 'code'],
