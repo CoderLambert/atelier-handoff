@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env --import tsx server/main.ts",
     "dev": "node --env-file-if-exists=.env --import tsx --watch server/main.ts",
+    "format": "prettier --write \"*.{js,css,html}\" \"{server,shared,scripts,tests}/**/*.{ts,js,mjs}\" package.json tsconfig.json .prettierrc.json",
+    "format:check": "prettier --check \"*.{js,css,html}\" \"{server,shared,scripts,tests}/**/*.{ts,js,mjs}\" package.json tsconfig.json .prettierrc.json",
     "check": "tsc --noEmit && node --check app.js",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:live": "node --import tsx scripts/verify-live.ts"
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "prettier": "3.10.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }

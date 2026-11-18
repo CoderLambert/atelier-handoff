@@ -68,6 +68,15 @@ MCP 页支持 Streamable HTTP 和 stdio。导入 MCP 配置后可核对地址、
 - 当前会话使用完整消息快照刷新；超长会话的虚拟列表、性能调优和更细致的工程质量建设留到后续。
 - Anthropic 不提供经网关运行非 Claude 模型的官方支持。本项目的兼容结论限定于记录的实际组合；ChatGPT 套餐的真实费用无法从 SDK 估算可靠推出。
 
+## 代码格式化
+
+```sh
+npm run format        # 一键整理项目源码
+npm run format:check  # 检查格式
+```
+
+格式化范围包括工作台的 JS、HTML、CSS，服务端、共享类型、脚本、测试和项目 JSON 配置。
+
 ## 检查与证据
 
 ```sh
