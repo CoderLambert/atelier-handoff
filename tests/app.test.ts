@@ -7,6 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
 import { Store } from '../server/store.js';
+import { AgentRunner } from '../server/agent.js';
+import { FileRecords } from '../server/artifacts.js';
+import { emptyDraft } from '../shared/types.js';
 import { PermissionService } from '../server/permissions.js';
 import { applyText, readProjectText } from '../server/files.js';
 import { commandsAvailable, runCommand } from '../server/commands.js';
@@ -78,7 +81,13 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     const retry = (await request(`/api/runs/${run.id}/retry`, 'POST', { idempotencyKey: randomUUID() }, 202)).run;
     assert.notEqual(retry.id, run.id); assert.equal(retry.mode, 'readonly'); assert.equal(retry.retryOf, run.id);
     await request(`/api/runs/${retry.id}/stop`, 'POST', {});
+    await request(`/api/sessions/${s1.id}/attachments/${attachment.id}`, 'DELETE', {});
     const snapshot = await request(`/api/sessions/${s1.id}`); assert.equal(snapshot.runs.length, 2); assert.equal(snapshot.messages.length, 2); assert.equal(snapshot.artifacts.length, 1);
+    assert.equal(snapshot.attachments.find((item: { id: string }) => item.id === attachment.id)?.name, 'notes.md');
+    assert.equal(snapshot.attachments.find((item: { id: string }) => item.id === attachment.id)?.removed, true);
+    assert.deepEqual(snapshot.session.draft.attachmentIds, []);
+    assert.deepEqual(snapshot.runs.find((item: { id: string }) => item.id === run.id)?.attachmentIds, [attachment.id]);
+    await request(`/api/sessions/${s1.id}/messages`, 'POST', { ...message, idempotencyKey: randomUUID() }, 403);
     const cursor = app.store.cursor(); const event = app.store.event(run.id, s1.id, 'test.changed', {}); assert.equal(app.store.since(cursor)[0]?.id, event.id);
     for (let index = 0; index < 501; index++) app.store.event(retry.id, s1.id, 'message.delta');
     const diagnostic = await request(`/api/runs/${run.id}/trace`);
@@ -101,6 +110,23 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     assert.ok(streamingTrace.events.every((item: { type: string }) => item.type !== 'message.delta'));
     const controller = new AbortController(); const stream = await fetch(url + `/api/events?after=${cursor}`, { signal: controller.signal }); const reader = stream.body!.getReader();
     let received = ''; while (!received.includes('test.changed')) received += new TextDecoder().decode((await reader.read()).value); controller.abort();
+    const resetController = new AbortController();
+    try {
+      const cursorBeforeReset = app.store.cursor();
+      const resetStream = await fetch(`${url}/api/events?after=0`, {
+        headers: { 'Last-Event-ID': String(cursorBeforeReset + 1000) }, signal: resetController.signal,
+      });
+      const resetReader = resetStream.body!.getReader();
+      const next = app.store.event(run.id, s1.id, 'test.resumed', {});
+      let frames = '';
+      while (!frames.includes('test.resumed')) {
+        const frame = await resetReader.read();
+        assert.equal(frame.done, false);
+        frames += new TextDecoder().decode(frame.value);
+      }
+      assert.ok(frames.includes(`id: ${cursorBeforeReset}\nevent: cursor-reset`));
+      assert.ok(frames.includes(`id: ${next.id}\ndata:`));
+    } finally { resetController.abort(); }
     await request(`/api/sessions/${s1.id}`, 'PATCH', { title: 'Renamed', status: 'archived' });
     assert.equal((await request('/api/sessions?includeArchived=true')).items.find((s: { id: string }) => s.id === s1.id).title, 'Renamed');
     await request(`/api/sessions/${s1.id}`, 'PATCH', { status: 'active' });
@@ -108,6 +134,47 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     assert.equal(await readFile(join(project, 'note.txt'), 'utf8'), 'ORIGINAL\n');
     await request(`/api/artifacts/${artifact.id}/content`, 'GET', undefined, 404);
   } finally { await app.close(); }
+}));
+
+test('repeated stop and shutdown preserve the first cancellation and finalize once', async () => fixture(async (base, project) => {
+  const store = new Store(join(base, 'data'));
+  const runner = new AgentRunner(store, new PermissionService(store), new FileRecords(store));
+  const run = runData();
+  const at = now();
+  store.put('projects', { id: run.projectId, name: 'fixture', path: project, branch: '', available: true, createdAt: at });
+  store.put('sessions', { id: run.sessionId, projectId: run.projectId, title: 'fixture', status: 'active', sdkSessionId: null, createdAt: at, updatedAt: at, draft: emptyDraft() });
+  store.put('runs', { ...run, status: 'queued', startedAt: null });
+  try {
+    runner.start(run, 'stop during startup');
+    runner.stop(run.id);
+    runner.stop(run.id);
+    assert.equal(store.get('runs', run.id).status, 'stopping');
+    await runner.shutdown();
+    assert.equal(store.get('runs', run.id).status, 'stopped');
+    const { events } = store.runHistory(run.id);
+    assert.deepEqual(events.filter(e => e.payload.status === 'stopping').map(e => e.payload.reason), ['user']);
+    assert.equal(events.filter(e => e.type === 'run.finished').length, 1);
+    assert.ok(events.every(e => e.type !== 'process.spawned'));
+  } finally { await runner.shutdown(); store.close(); }
+}));
+
+test('permission expiry during the file baseline check prevents approval', async () => fixture(async (base, project) => {
+  const store = new Store(join(base, 'data'));
+  const service = new PermissionService(store);
+  const run = runData();
+  store.put('runs', run);
+  store.put('tools', { id: run.id, runId: run.id, sessionId: run.sessionId, name: 'edit_file', inputSummary: '', status: 'running', output: '', startedAt: now(), endedAt: null });
+  try {
+    const request = service.request(run, project, { toolCallId: run.id, kind: 'edit', path: 'note.txt', before: 'ORIGINAL\n', after: 'APPROVED\n', reason: 'fixture' }, new AbortController().signal);
+    const rejected = assert.rejects(request, { code: 'PERMISSION_DENIED' });
+    const permission = store.list('permissions')[0]!;
+    const decision = service.decide(permission.id, 'allow', permission.version);
+    store.update('permissions', permission.id, { expiresAt: new Date(0).toISOString() });
+    await assert.rejects(decision, { code: 'PERMISSION_EXPIRED' });
+    await rejected;
+    assert.equal(store.get('permissions', permission.id).status, 'expired');
+    assert.equal(await readFile(join(project, 'note.txt'), 'utf8'), 'ORIGINAL\n');
+  } finally { service.cancelRun(run.id); store.close(); }
 }));
 
 test('approval baseline change, duplicate decisions and cancel race cannot apply stale writes', async () => fixture(async (base, project) => {

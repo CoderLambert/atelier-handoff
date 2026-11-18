@@ -29,15 +29,20 @@ export class AgentRunner implements Runner {
     this.active.set(run.id, live);
     live.done = this.execute(run, input, live).finally(() => this.active.delete(run.id));
   }
-  stop(id: string): void {
-    const live = this.active.get(id); if (!live) return;
-    live.reason = 'user'; this.store.update('runs', id, { status: 'stopping' });
-    const run = this.store.get('runs', id); this.store.event(id, run.sessionId, 'run.status_changed', { status: 'stopping' });
-    this.permissions.cancelRun(id); live.cancellation.abort();
+  private cancel(id: string, reason: NonNullable<LiveRun['reason']>): void {
+    const live = this.active.get(id);
+    if (!live || live.reason) return;
+    live.reason = reason;
+    const run = this.store.update('runs', id, { status: 'stopping' });
+    this.store.event(id, run.sessionId, 'run.status_changed', { status: 'stopping', reason });
+    this.permissions.cancelRun(id);
+    live.cancellation.abort();
   }
+  stop(id: string): void { this.cancel(id, 'user'); }
   async shutdown(): Promise<void> {
-    for (const [id, live] of this.active) { live.reason = 'shutdown'; this.store.update('runs', id, { status: 'stopping' }); this.permissions.cancelRun(id); live.cancellation.abort(); }
-    await Promise.all([...this.active.values()].map(item => item.done));
+    const tasks = [...this.active.entries()];
+    for (const [id] of tasks) this.cancel(id, 'shutdown');
+    await Promise.all(tasks.map(([, live]) => live.done));
   }
   private clean(error: unknown): string {
     let text = error instanceof Error ? error.message : typeof error === 'string' ? error : '执行失败。';
@@ -178,6 +183,7 @@ export class AgentRunner implements Runner {
       if (Buffer.byteLength(historyContext) > 128 * 1024) throw new AppError('HISTORY_TOO_LARGE', '会话历史过长，切换权限或模型时请新建会话；完整历史仍保留在工作台。');
       await resolveProjectPath(project.path, '', { directory: true });
       const sdkDirectory = join(this.store.directory, 'sdk', session.id); await mkdir(sdkDirectory, { recursive: true, mode: 0o700 });
+      signal.throwIfAborted();
       const env: NodeJS.ProcessEnv = {};
       for (const key of ['PATH', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS']) if (process.env[key]) env[key] = process.env[key];
       Object.assign(env, { ANTHROPIC_BASE_URL: run.config.gateway, ANTHROPIC_AUTH_TOKEN: process.env.ATELIER_GATEWAY_TOKEN || 'local-placeholder', ANTHROPIC_API_KEY: '', ANTHROPIC_MODEL: run.config.model, ANTHROPIC_DEFAULT_OPUS_MODEL: run.config.model, ANTHROPIC_DEFAULT_SONNET_MODEL: run.config.model, ANTHROPIC_DEFAULT_HAIKU_MODEL: run.config.model, ANTHROPIC_SMALL_FAST_MODEL: run.config.model, CLAUDE_CONFIG_DIR: sdkDirectory, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1', CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: 'false', MCP_TOOL_TIMEOUT: '180000' });
@@ -216,7 +222,7 @@ export class AgentRunner implements Runner {
           return process;
         },
       } });
-      timer = setTimeout(() => { live.reason = 'timeout'; this.store.update('runs', run.id, { status: 'stopping' }); this.permissions.cancelRun(run.id); live.cancellation.abort(); }, run.config.timeoutMs);
+      timer = setTimeout(() => this.cancel(run.id, 'timeout'), run.config.timeoutMs);
       input.push(`${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${run.mode === 'readonly' ? '只读；不允许项目写入或命令' : '受控修改；可通过本轮提供的 atelier 写入/编辑/删除/命令工具请求单次审批'}。计划工具为 update_plan。\n\n用户本轮任务：\n${inputText}`);
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {

@@ -51,7 +51,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
   }));
   const sessionSnapshot = (id: string) => {
     const session = store.get('sessions', id);
-    return { session, project: store.get('projects', session.projectId), messages: store.list('messages').filter(m => m.sessionId === id), runs: store.list('runs').filter(r => r.sessionId === id), tools: store.list('tools').filter(t => t.sessionId === id), permissions: store.list('permissions').filter(p => p.sessionId === id), artifacts: store.list('artifacts').filter(a => a.sessionId === id), attachments: store.list('attachments').filter(a => a.sessionId === id && !a.removed), events: store.history(id), cursor: store.cursor() };
+    return { session, project: store.get('projects', session.projectId), messages: store.list('messages').filter(m => m.sessionId === id), runs: store.list('runs').filter(r => r.sessionId === id), tools: store.list('tools').filter(t => t.sessionId === id), permissions: store.list('permissions').filter(p => p.sessionId === id), artifacts: store.list('artifacts').filter(a => a.sessionId === id), attachments: store.list('attachments').filter(a => a.sessionId === id && (!a.removed || a.status === 'used')), events: store.history(id), cursor: store.cursor() };
   };
   const createRun = async (sessionId: string, raw: unknown, retryOf: string | null = null) => {
     if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
@@ -103,8 +103,13 @@ export async function createApp(options: { root: string; data: string; runnerFac
         return json(res, { csrfToken, cursor: store.cursor(), projects: projectList, sessions: store.list('sessions').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), runs: store.list('runs').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100), artifacts: store.list('artifacts').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100), ...info });
       }
       if (url.pathname === '/api/events' && method === 'GET') {
-        let cursor = Math.max(0, Number(req.headers['last-event-id'] || url.searchParams.get('after')) || 0);
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' }); res.write(': connected\n\n');
+        const requested = Number(req.headers['last-event-id'] || url.searchParams.get('after') || 0);
+        const latest = store.cursor();
+        const reset = !Number.isSafeInteger(requested) || requested < 0 || requested > latest;
+        let cursor = reset ? latest : requested;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.write(': connected\n\n');
+        if (reset) res.write(`id: ${cursor}\nevent: cursor-reset\ndata: ${JSON.stringify({cursor})}\n\n`);
         streams.add(res);
         const send = (event: RunEvent) => { if (event.id <= cursor) return; cursor = event.id; res.write(`id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`); };
         const onEvent = (event: RunEvent) => send(event);

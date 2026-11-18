@@ -506,6 +506,8 @@ html,body { max-width:100%; overflow-x:hidden; }
 .markdown-body .code-panel pre { margin: 0; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.4em 0; }
 .message-placeholder { color: var(--muted); font-size: var(--text-sm); }
+.message-context { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.message-context li { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; min-width: 0; }
 
 /* Primary controls stay visible while working. */
 .composer-toolbar { flex-wrap: wrap; }

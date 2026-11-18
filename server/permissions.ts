@@ -55,20 +55,31 @@ export class PermissionService {
     const run = this.store.get('runs', permission.runId);
     if (!pending || pending.signal.aborted || !['running', 'awaiting_permission'].includes(run.status)) { this.finish(id, 'canceled'); throw new AppError('RUN_STOPPED', '运行不再等待此审批。', 409); }
     if (Date.now() >= Date.parse(permission.expiresAt)) { this.finish(id, 'expired'); throw new AppError('PERMISSION_EXPIRED', '审批已过期。', 409); }
+    let staleReason: string | undefined;
     if (decision === 'allow' && permission.path) {
-      let content: string | null;
-      try { content = await readProjectText(pending.root, permission.path); }
-      catch (error) {
-        if (error instanceof AppError && error.code === 'FILE_UNAVAILABLE' && permission.before === null) content = null;
-        else { this.finish(id, 'denied', '文件访问状态已变化。'); throw new AppError('OPERATION_CHANGED', '文件访问状态已变化，请重新生成修改。', 409); }
+      try {
+        if (await readProjectText(pending.root, permission.path) !== permission.before) {
+          staleReason = '文件内容已变化，旧差异没有应用。请重新生成修改。';
+        }
+      } catch (error) {
+        if (!(error instanceof AppError && error.code === 'FILE_UNAVAILABLE' && permission.before === null)) {
+          staleReason = '文件访问状态已变化，请重新生成修改。';
+        }
       }
-      if (content !== permission.before) { this.finish(id, 'denied', '等待审批期间文件内容已变化。'); throw new AppError('OPERATION_CHANGED', '文件内容已变化，旧差异没有应用。请重新生成修改。', 409); }
     }
     // File checks yield to stop and competing decisions: re-check after every await.
     const latest = this.store.get('permissions', id);
     if (pending.signal.aborted || latest.status !== 'pending' || this.store.get('runs', run.id).status === 'stopping') {
       if (latest.status === desired) return latest;
       throw new AppError('PERMISSION_EXPIRED', '审批状态已变化，决定未重复应用。', 409);
+    }
+    if (Date.now() >= Date.parse(latest.expiresAt)) {
+      this.finish(id, 'expired', '审批已超时，请重新发起操作。');
+      throw new AppError('PERMISSION_EXPIRED', '审批已过期。', 409);
+    }
+    if (staleReason) {
+      this.finish(id, 'denied', staleReason);
+      throw new AppError('OPERATION_CHANGED', staleReason, 409);
     }
     return this.finish(id, desired);
   }
