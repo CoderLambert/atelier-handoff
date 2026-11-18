@@ -100,6 +100,17 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     const artifact = await app.files.publish(app.store.get('runs', run.id), 'report.md', 'version one');
     await writeFile(join(project, 'report.md'), 'unrelated version');
     assert.equal((await request(`/api/artifacts/${artifact.id}/content`)).text, 'version one');
+    const prototype = await app.files.publish(app.store.get('runs', run.id), 'prototype.html', '<h1>Example</h1>');
+    const preview = await fetch(url + `/api/artifacts/${prototype.id}/preview`);
+    assert.equal(preview.status, 200);
+    assert.match(preview.headers.get('content-type') ?? '', /^text\/html/);
+    assert.match(preview.headers.get('content-security-policy') ?? '', /^sandbox allow-scripts;/);
+    assert.equal(preview.headers.get('x-frame-options'), null);
+    assert.equal(await preview.text(), '<h1>Example</h1>');
+    assert.equal((await request(`/api/artifacts/${prototype.id}/content`)).previewKind, 'html');
+    const nonHtmlPreview = await fetch(url + `/api/artifacts/${artifact.id}/preview`);
+    assert.equal(nonHtmlPreview.status, 404);
+    await nonHtmlPreview.body?.cancel();
     await request(`/api/runs/${run.id}/stop`, 'POST', {});
     const retry = (await request(`/api/runs/${run.id}/retry`, 'POST', { idempotencyKey: randomUUID() }, 202)).run;
     assert.notEqual(retry.id, run.id); assert.equal(retry.mode, 'readonly'); assert.equal(retry.retryOf, run.id);
@@ -110,7 +121,7 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     assert.equal(runPage.items[0].id, retry.id);
     assert.equal((await request(`/api/runs?sessionId=${s1.id}&status=stopped&limit=1&offset=1`)).items[0].id, run.id);
     await request(`/api/sessions/${s1.id}/attachments/${attachment.id}`, 'DELETE', {});
-    const snapshot = await request(`/api/sessions/${s1.id}`); assert.equal(snapshot.runs.length, 2); assert.equal(snapshot.messages.length, 2); assert.equal(snapshot.artifacts.length, 1);
+    const snapshot = await request(`/api/sessions/${s1.id}`); assert.equal(snapshot.runs.length, 2); assert.equal(snapshot.messages.length, 2); assert.equal(snapshot.artifacts.length, 2);
     assert.equal(snapshot.attachments.find((item: { id: string }) => item.id === attachment.id)?.name, 'notes.md');
     assert.equal(snapshot.attachments.find((item: { id: string }) => item.id === attachment.id)?.removed, true);
     assert.deepEqual(snapshot.session.draft.attachmentIds, []);

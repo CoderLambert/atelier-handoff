@@ -301,7 +301,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
         if (parts[3] === 'retry' && method === 'POST') {
           if (activeStatuses.includes(run.status)) throw new AppError('RUN_ACTIVE', '当前运行尚未结束。', 409);
           const request = z.object({ idempotencyKey: z.string().uuid() }).parse(await body(req));
-          return json(res, { run: await createRun(run.sessionId, { text: `请以只读方式检查上次任务的当前状态和已发生的操作，给出下一步建议，不要重放写入或命令。原任务：${run.prompt}`, mode: 'readonly', contextPaths: [], attachmentIds: [], idempotencyKey: request.idempotencyKey }, run.id) }, 202);
+          return json(res, { run: await createRun(run.sessionId, { text: `请以只读方式续接上次任务。根据已有信息直接交付原任务要求的结果，保留已经完成的部分。只使用必要的读取工具，禁止重放写入或命令。\n\n原任务：${run.prompt}`, mode: 'readonly', contextPaths: [], attachmentIds: [], idempotencyKey: request.idempotencyKey }, run.id) }, 202);
         }
       }
       if (parts[0] === 'api' && parts[1] === 'tools' && parts.length === 4 && parts[3] === 'output' && method === 'GET') {
@@ -320,7 +320,18 @@ export async function createApp(options: { root: string; data: string; runnerFac
         if (parts.length === 2 && method === 'GET') return json(res, page(store.list('artifacts').filter(a => (!url.searchParams.get('sessionId') || a.sessionId === url.searchParams.get('sessionId')) && (!url.searchParams.get('projectId') || a.projectId === url.searchParams.get('projectId'))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), url));
         if (parts.length === 4 && method === 'GET') {
           const { artifact, bytes } = await files.content(parts[2]!);
-          if (parts[3] === 'content') return json(res, { artifact, text: bytes.toString('utf8'), previewable: true });
+          const html = /\.html?$/i.test(artifact.name);
+          if (parts[3] === 'content') return json(res, { artifact, text: bytes.toString('utf8'), previewable: true, previewKind: html ? 'html' : 'text' });
+          if (parts[3] === 'preview' && html) {
+            res.removeHeader('X-Frame-Options');
+            res.writeHead(200, {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Content-Security-Policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'",
+              'Cache-Control': 'no-store',
+            });
+            res.end(bytes);
+            return;
+          }
           if (parts[3] === 'download') { res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="download.txt"; filename*=UTF-8''${encodeURIComponent(artifact.name)}`, 'Content-Security-Policy': "sandbox; default-src 'none'", 'Cache-Control': 'no-store' }); res.end(bytes); return; }
         }
       }

@@ -127,6 +127,31 @@ function traceEvents(snap, run) {
  }
  return { events: cached.data?.events ?? recent.filter(event => event.type !== 'message.delta'), total: cached.data?.eventCount, error: cached.error };
 }
+const recoverableRun = run => run && ['failed', 'stopped', 'interrupted'].includes(run.status);
+
+function renderRunSummary(run, snapshot, hasText) {
+ if (!run || active(run)) return '';
+ const tools = snapshot.tools.filter(tool => tool.runId === run.id);
+ const artifacts = snapshot.artifacts.filter(artifact => artifact.runId === run.id);
+ if (!recoverableRun(run) && !artifacts.length && (hasText || !tools.length)) return '';
+ const title = recoverableRun(run)
+  ? (hasText ? '已保留部分回复' : '回复未完成')
+  : artifacts.length ? '本轮交付物' : '本轮执行结果';
+ const reason = run.error?.message || run.error || run.reason;
+ const completed = tools.filter(tool => tool.status === 'succeeded').length;
+ const retryDisabled = snapshot.session.status === 'archived' || snapshot.runs.some(active);
+ return `<section class="run-recovery" aria-label="本轮运行结果">
+  <strong>${title}</strong>
+  ${reason ? `<p>${esc(reason)}</p>` : ''}
+  ${tools.length ? `<p>已完成 ${completed} / ${tools.length} 次工具调用。</p>` : ''}
+  <div class="run-recovery-actions">
+   ${artifacts.map(artifact => `<button type="button" class="btn btn-secondary" data-action="artifact" data-id="${esc(artifact.id)}">${/\.html?$/i.test(artifact.name) ? '查看原型 · ' : ''}${esc(artifact.name)}</button>`).join('')}
+   <button type="button" class="btn btn-secondary" data-action="run-trace" data-id="${esc(run.id)}">查看执行轨迹</button>
+   ${recoverableRun(run) ? `<button type="button" class="btn btn-primary" data-action="retry" data-id="${esc(run.id)}" ${retryDisabled ? 'disabled' : ''}>只读续接</button>` : ''}
+  </div>
+ </section>`;
+}
+
 function renderConversation() {
  const el=$('#conversation-content'), snap=state.snapshot, oldScroll=el.scrollTop, near=el.scrollHeight-el.scrollTop-el.clientHeight<100;
  if(!snap) {el.innerHTML='<div class="welcome"><h2>开始你的工作</h2><p>绑定本机项目目录，然后新建会话。</p><button class="btn btn-primary" data-action="project">绑定项目</button></div>';return;}
@@ -184,7 +209,12 @@ function renderConversation() {
   return;
  }
  if(state.tab==='artifacts') {el.innerHTML=artifactList(snap.artifacts || []);return;}
- const messages = snap.messages || [];
+ const original = snap.messages || [];
+ const assistantRuns = new Set(original.filter(message => message.role === 'assistant').map(message => message.runId));
+ const failedWithoutReply = new Set(snap.runs.filter(run => recoverableRun(run) && !assistantRuns.has(run.id)).map(run => run.id));
+ const messages = original.flatMap(message => message.role === 'user' && failedWithoutReply.delete(message.runId)
+  ? [message, { id: `summary-${message.runId}`, role: 'assistant', runId: message.runId, createdAt: message.createdAt, text: '' }]
+  : [message]);
  if (!messages.length) {
   el.innerHTML = '<div class="welcome"><h2>这次想做什么？</h2><p>描述任务，或先添加要讨论的项目文件。</p></div>';
   return;
@@ -241,7 +271,14 @@ function renderConversation() {
     row.dataset.references = references;
    }
   }
-  const placeholder = assistant && !text ? (active(run) ? (run.status === 'awaiting_permission' ? '等待你确认操作…' : '正在处理…') : '本轮没有文字回复') : '';
+  const summary = assistant ? renderRunSummary(run, snap, Boolean(text.trim())) : '';
+  if (assistant && row.renderedSummary !== summary) {
+   $('.run-recovery', row)?.remove();
+   if (summary) content.insertAdjacentHTML('afterend', summary);
+   row.renderedSummary = summary;
+   changed ||= Boolean(summary);
+  }
+  const placeholder = assistant && !text && !summary ? (active(run) ? (run.status === 'awaiting_permission' ? '等待你确认操作…' : '正在处理…') : '本轮没有文字回复') : '';
   const value = text || placeholder;
   if (content.renderedText === value && content.renderedPlaceholder === Boolean(placeholder)) continue;
   changed ||= Boolean(text);
@@ -406,6 +443,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-acti
  else if(a==='page') {pages[b.dataset.kind]=Number(b.dataset.offset);await refreshLists();render();}
  else if(a==='artifact-filter') {filters.projectId=$('#filter-project').value;filters.sessionId=$('#filter-session').value.trim();pages.artifacts=0;await refreshLists();render();}
  else if(a==='view') {state.view=b.dataset.view;closeDrawers();await refreshLists();render();}
+ else if(a==='run-trace') {state.selectedRun=id;state.tab='trace';render();$('#trace-run')?.focus();}
  else if(a==='tab') {state.tab=b.dataset.tab;render();}
  else if(a==='side') {state.side=b.dataset.side;renderAside();}
  else if(a==='menu') {drawerTrigger=b;document.body.classList.remove('drawer-aside');document.body.classList.add('aside-closed');document.body.classList.toggle('nav-open');setInert();if(document.body.classList.contains('nav-open'))$('.sidebar button').focus();}
@@ -442,7 +480,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-acti
  else if(a==='settings') await settings();
  else if(a==='save-settings') {const result=await api('/api/config',{method:'PATCH',body:{gateway:$('#config-gateway').value,model:$('#config-model').value,maxTurns:Number($('#config-turns').value),timeoutMs:Number($('#config-timeout').value)}});state.config=result.config;state.connection=result.connection || {};closeDialog();toast('设置已保存');}
  else if(a==='stop') {await api(`/api/runs/${enc(id)}/stop`,{method:'POST'});await refresh();}
- else if(a==='retry') {if(!confirm('以只读模式恢复分析，不会自动重复上次写入。继续吗？'))return;const key='retry:'+id;let attempt=state.pending.get(key);if(!attempt){attempt=crypto.randomUUID();state.pending.set(key,attempt);}await api(`/api/runs/${enc(id)}/retry`,{method:'POST',body:{idempotencyKey:attempt}});state.pending.delete(key);await refresh();}
+ else if(a==='retry') {if(!confirm('以只读模式续接，继续生成原任务的结果？'))return;const key='retry:'+id;let attempt=state.pending.get(key);if(!attempt){attempt=crypto.randomUUID();state.pending.set(key,attempt);}await api(`/api/runs/${enc(id)}/retry`,{method:'POST',body:{idempotencyKey:attempt}});state.pending.delete(key);await refresh();}
  else if(a==='permission') {const [detail,diff]=await Promise.all([api(`/api/permissions/${enc(id)}`),api(`/api/permissions/${enc(id)}/diff`)]);const p=detail.permission;openDialog('审批操作',`<p>${esc(p.kind)} · ${esc(p.path || p.command || '')}</p><p>目的 / 原因：${esc(p.reason || '未提供')}</p>${p.resolutionReason ? `<p>${esc(p.resolutionReason)}</p>` : ''}<p>状态：${esc(labels[p.status] || p.status)} ${p.expiresAt?'· 到期 '+esc(date(p.expiresAt)):''}</p><pre class="safe-pre">${esc(diff.diff || p.command || '无文本差异')}</pre>${p.status==='pending'?`<div class="dialog-actions"><button class="btn btn-secondary" data-action="decide" data-id="${esc(id)}" data-decision="deny" data-version="${esc(diff.version)}">拒绝</button><button class="btn btn-primary" data-action="decide" data-id="${esc(id)}" data-decision="allow" data-version="${esc(diff.version)}">允许</button></div>`:''}`,true); if(p.status==='pending') $('#detail-dialog').dataset.permissionId=id; const latest=state.snapshot?.permissions?.find(x=>x.id===id); if(p.status==='pending' && latest && latest.status!=='pending') {closeDialog();toast('审批状态已变化，请重新查看');}}
  else if (a === 'decide') {
   const sessionId = state.current;
@@ -462,7 +500,15 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-acti
    (tab?.getClientRects().length ? tab : $('#prompt-input')).focus();
   }
  }
- else if(a==='artifact') {const result=await api(`/api/artifacts/${enc(id)}/content`), art=result.artifact;openDialog(art.name,`<p>${esc(art.mime)} · ${esc(art.availability)}</p>${result.previewable?`<div class="document-preview"><pre>${esc(result.text)}</pre></div>`:'<p>该成果不可预览</p>'}<div class="dialog-actions"><button class="btn btn-secondary" data-action="run-source" data-id="${esc(art.sessionId)}" data-run="${esc(art.runId)}">查看来源运行</button><a class="btn btn-primary" href="/api/artifacts/${enc(id)}/download" download>下载</a></div>`,true);}
+ else if (a === 'artifact') {
+  const path = `/api/artifacts/${enc(id)}`;
+  const result = await api(`${path}/content`);
+  const artifact = result.artifact;
+  const preview = result.previewKind === 'html'
+   ? `<iframe class="artifact-preview-frame" src="${path}/preview" title="${esc(artifact.name)}" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>`
+   : result.previewable ? `<div class="document-preview"><pre>${esc(result.text)}</pre></div>` : '<p>该成果不可预览</p>';
+  openDialog(artifact.name, `${preview}<div class="dialog-actions"><button class="btn btn-secondary" data-action="run-source" data-id="${esc(artifact.sessionId)}" data-run="${esc(artifact.runId)}">查看来源运行</button><a class="btn btn-primary" href="${path}/download" download>下载</a></div>`, true);
+ }
  else if(a==='rename') {const title=prompt('会话名称',state.snapshot.session.title);if(title?.trim()) {await api(`/api/sessions/${enc(state.current)}`,{method:'PATCH',body:{title:title.trim()}});await refresh();}}
  else if(a==='archive') {await api(`/api/sessions/${enc(state.current)}`,{method:'PATCH',body:{status:state.snapshot.session.status==='archived'?'active':'archived'}});await refresh();}
  else if(a==='delete-session') {if(!confirm('删除该会话及其历史记录？项目源文件不会被删除。'))return;const old=state.current;deleted.add(old);clearTimeout(state.saving.get(old));state.saving.delete(old);try {await api(`/api/sessions/${enc(old)}`,{method:'DELETE'});} catch(err) {deleted.delete(old);persistDraft(old);throw err;}state.drafts.delete(old);storage.remove('atelier-draft:'+old);storage.remove('atelier-last-session');state.current=null;state.snapshot=null;await refreshLists();if(state.sessions.length)await switchSession(state.sessions[0].id);else render();}

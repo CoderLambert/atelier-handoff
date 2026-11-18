@@ -506,6 +506,12 @@ html,body { max-width:100%; overflow-x:hidden; }
 .markdown-body .code-panel pre { margin: 0; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.4em 0; }
 .message-placeholder { color: var(--muted); font-size: var(--text-sm); }
+.run-recovery { display: grid; gap: 6px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-warm); color: var(--fg-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.run-recovery strong { color: var(--fg); }
+.run-recovery p { margin: 0; }
+.run-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.run-recovery-actions .btn { min-height: 32px; padding: 4px 9px; }
+.artifact-preview-frame { width: 100%; height: min(62dvh, 650px); margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
 .message-context { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
 .message-context li { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; min-width: 0; }
 

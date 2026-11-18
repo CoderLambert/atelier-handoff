@@ -260,7 +260,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         },
       } });
       timer = setTimeout(() => this.cancel(run.id, 'timeout'), run.config.timeoutMs);
-      input.push(`${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${run.mode === 'readonly' ? '只读；不允许项目写入或命令' : '受控修改；可通过本轮提供的 atelier 写入/编辑/删除/命令工具请求单次审批'}。计划工具为 update_plan。\n\n用户本轮任务：\n${inputText}`);
+      const modeInstruction = run.mode === 'readonly'
+        ? '只读；不允许项目写入或执行命令。'
+        : '受控修改；可通过本轮提供的 atelier 写入/编辑/删除/命令工具请求单次审批。';
+      const skillDelivery = run.mode === 'readonly' && run.extensions?.some(extension => extension.kind === 'skill')
+        ? '本轮按所选技能交付用户要求的结果。设计、分析与文档任务先在对话中给出可独立使用的完整版本，再按需发布交付物。只做完成该结果所需的文件检查。对于可逆的设计选择，可说明假设并直接交付初稿。\n\n'
+        : '';
+      input.push(`${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}计划工具为 update_plan。\n\n${skillDelivery}用户本轮任务：\n${inputText}`);
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {
           initialized = true;
