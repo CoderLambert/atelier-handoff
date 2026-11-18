@@ -8,7 +8,9 @@
   <title>atelier. — 把决定留给你</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23466339'/%3E%3Ctext x='7' y='24' fill='white' font-family='Georgia' font-size='27'%3Ea%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="extensions.css">
   <script src="/assets/markdown-it.js" defer></script>
+  <script src="extensions-ui.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -27,6 +29,7 @@
         <button class="nav-item active" data-action="view" data-view="chat" aria-current="page"><span data-icon="chat"></span><span>全部会话</span><span class="nav-count" id="session-count">0</span></button>
         <button class="nav-item" data-action="view" data-view="artifacts"><span data-icon="grid"></span><span>交付物</span><span class="nav-count" id="deliverable-count">0</span></button>
         <button class="nav-item" data-action="view" data-view="runs"><span data-icon="clock"></span><span>执行记录</span></button>
+        <button class="nav-item" data-action="view" data-view="extensions"><span aria-hidden="true">⊞</span><span>扩展</span></button>
       </nav>
       <div class="sidebar-section-label"><span>最近会话</span><span class="mono">最近</span></div>
       <div class="history-wrap"><div id="history-list"></div></div>
@@ -61,10 +64,10 @@
         </div>
         <div class="conversation-content" id="conversation-content" role="tabpanel" aria-label="当前会话内容"></div>
         <footer class="composer" id="composer">
-          <div class="context-row"><div class="context-chips" id="context-chips"></div><button class="add-context" data-action="add-context"><span data-icon="plus"></span>上下文</button><button class="composer-policy mode-toggle" id="mode-toggle" data-action="policy" aria-pressed="false">模式：只读</button><span class="sr-only" id="composer-policy">只读</span></div>
+          <div class="context-row"><div class="context-chips" id="context-chips"></div><div id="extension-chips" class="context-chips"></div><button class="add-context" data-action="add-context"><span data-icon="plus"></span>上下文</button><button class="composer-policy mode-toggle" id="mode-toggle" data-action="policy" aria-pressed="false">模式：只读</button><span class="sr-only" id="composer-policy">只读</span></div>
           <div class="composer-box">
             <label class="composer-label" for="prompt-input">继续对话</label>
-            <textarea id="prompt-input" placeholder="描述下一步，或补充你的想法…" aria-describedby="input-help" rows="2"></textarea>
+            <textarea id="prompt-input" placeholder="输入消息…（/ 调用 Command 或 Skill，# 选择 MCP）" aria-describedby="input-help" rows="2"></textarea>
             <div class="composer-toolbar">
               <button class="agent-select" data-action="settings"><span class="agent-mark" aria-hidden="true">✳</span><span id="composer-model">模型设置</span><span data-icon="down"></span></button>
               <span id="composer-run-status" class="composer-run-status" role="status" hidden></span>

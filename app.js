@@ -35,7 +35,12 @@ async function api(path, options={}) {
  if(!response.ok) { const error=new Error(data.error?.message || `请求失败 (${response.status})`); error.code=data.error?.code; error.status=response.status; throw error; } return data;
 }
 const items = data => Array.isArray(data) ? data : data?.items || [];
-const draftDefault = () => ({text:'',contextPaths:[],attachmentIds:[],mode:'readonly'});
+const draftDefault = () => ({text:'',contextPaths:[],attachmentIds:[],mode:'readonly',extensionSelections:[]});
+const extensionUI = window.createExtensionUI?.({
+ api, project: () => currentProject(), projects: () => state.projects,
+ draft: () => state.snapshot?.session ? getDraft(state.snapshot.session.id) : null,
+ saveDraft: () => persistDraft(), notify: toast, escape: esc, openDialog, closeDialog,
+});
 function getDraft(id=state.current) { if(!state.drafts.has(id)) { let saved; try { saved=JSON.parse(storage.get('atelier-draft:'+id)); } catch {} state.drafts.set(id,{...draftDefault(),...((state.snapshot?.session?.id===id ? state.snapshot.session : state.sessions.find(s=>s.id===id))?.draft || {}),...saved}); } return state.drafts.get(id); }
 function persistDraft(id=state.current) { if(!id || deleted.has(id)) return; const d=getDraft(id); storage.set('atelier-draft:'+id,JSON.stringify(d)); clearTimeout(state.saving.get(id)); state.saving.set(id,setTimeout(async()=>{ state.saving.delete(id); if(deleted.has(id)) return; const copy=JSON.stringify(d); try { await api('/api/sessions/'+enc(id),{method:'PATCH',body:{draft:JSON.parse(copy)}}); if(!deleted.has(id) && JSON.stringify(getDraft(id))===copy) storage.remove('atelier-draft:'+id); } catch(e) { if(!deleted.has(id)) toast('草稿已尝试保存在本机：'+e.message); } },500)); }
 async function refreshLists() { const seq=++listSequence; const [s,r,a,...running]=await Promise.all([api('/api/sessions?includeArchived=true&query='+enc(state.search)+'&limit=50&offset='+pages.sessions),api('/api/runs?limit=50&offset='+pages.runs+'&status='+enc(filters.runStatus)),api('/api/artifacts?limit=50&offset='+pages.artifacts+'&projectId='+enc(filters.projectId)+'&sessionId='+enc(filters.sessionId)),...['queued','running','awaiting_permission','stopping'].map(status=>api('/api/runs?limit=500&status='+status))]); if(seq!==listSequence)return; state.sessions=items(s); state.runs=items(r); state.artifacts=items(a); state.activeRuns=running.flatMap(items); Object.assign(pageInfo,{sessions:s,runs:r,artifacts:a}); }
@@ -82,9 +87,10 @@ function renderHistory() {
 }
 function render() {
  renderHistory(); renderConnection(); $('#composer-model').textContent=state.config.model || '模型设置'; const snap=state.snapshot, s=snap?.session, p=currentProject(), run=currentRun();
- $('#workspace-name').textContent=p?.name || '绑定项目'; $('#workspace-branch').textContent=p?.branch || '本地目录'; $('#breadcrumb-project').textContent=p?.name || '工作空间'; $('#breadcrumb-session').textContent=state.view==='chat'?(s?.title || '新会话'):state.view==='runs'?'执行记录':'交付物';
+ $('#workspace-name').textContent=p?.name || '绑定项目'; $('#workspace-branch').textContent=p?.branch || '本地目录'; $('#breadcrumb-project').textContent=p?.name || '工作空间'; $('#breadcrumb-session').textContent=state.view==='chat'?(s?.title || '新会话'):state.view==='runs'?'执行记录':state.view==='extensions'?'扩展':'交付物';
  $('#conversation-screen').hidden=state.view!=='chat'; $('#collection-screen').hidden=state.view==='chat';
- if(state.view!=='chat') renderCollection(); else {
+ if (state.view === 'extensions') extensionUI?.renderPage($('#collection-screen'));
+ else if(state.view!=='chat') renderCollection(); else {
   $('#session-title').textContent=s?.title || '开始工作'; $('#session-status').innerHTML=run?badge(run.status):''; $('#session-branch').textContent=p?.branch || ''; $('#session-runtime').textContent=s?.status==='archived'?'已归档':'本地工作空间'; $('#stage-hint').textContent=run?labels[run.status] || run.status:'';
   $('#trace-count').textContent=snap?.tools?.length || 0; $('#artifact-count').textContent=snap?.artifacts?.length || 0;
   $$('.session-tab').forEach(b=>{let on=b.dataset.tab===state.tab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on)); b.tabIndex=on?0:-1;});
@@ -99,7 +105,7 @@ const eventNames = {
  'sdk.first_text':'收到首段文本', 'sdk.api_retry':'模型请求重试', 'sdk.error':'SDK 错误',
  'sdk.result':'SDK 返回结果', 'sdk.notice':'SDK 通知', 'sdk.context_restarted':'重新建立 SDK 上下文',
  'tool.started':'工具开始', 'tool.finished':'工具结束', 'tool.blocked':'工具被拦截', 'permission.requested':'等待审批',
- 'permission.resolved':'审批结束', 'usage.updated':'用量已更新', 'plan.updated':'计划已更新', 'artifact.created':'交付物已生成',
+ 'permission.resolved':'审批结束', 'extensions.selected':'加载扩展', 'mcp.call_started':'开始调用 MCP', 'mcp.call_finished':'MCP 调用结束', 'usage.updated':'用量已更新', 'plan.updated':'计划已更新', 'artifact.created':'交付物已生成',
 };
 function elapsed(ms) {
  if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
@@ -147,6 +153,7 @@ function renderConversation() {
    ['进程退出', exit ? (exit.signal || (exit.code ?? '—')) : null],
    ['输入 / 输出 tokens', run.usage ? `${run.usage.inputTokens ?? '—'} / ${run.usage.outputTokens ?? '—'}` : null],
    ['已记录重试', retries || (result ? 0 : null)], ['运行 ID', run.id],
+   ['扩展', run.extensions?.map(item => `${item.name} · v${item.version}${item.tools?.length ? ` (${item.tools.join('、')})` : ''}`).join(' / ')],
   ];
   const pickerFocused = document.activeElement === $('#trace-run', el);
   const toolLabels = {Read:'读取文件', list_files:'列出文件', search_files:'搜索项目', edit_file:'编辑文件', write_file:'写入文件', delete_file:'删除文件', run_command:'运行命令', update_plan:'更新计划', publish_artifact:'发布交付物'};
@@ -216,6 +223,7 @@ function renderConversation() {
     const attachment = snap.attachments.find(item => item.id === id);
     files.push(['附件', attachment?.name || id]);
    }
+   for (const extension of run.extensions || []) files.push([extension.kind === 'mcp' ? 'MCP' : extension.kind === 'skill' ? 'Skill' : 'Command', extension.name]);
    const references = JSON.stringify(files);
    if (row.dataset.references !== references) {
     $('.message-context', row)?.remove();
@@ -225,7 +233,7 @@ function renderConversation() {
      list.setAttribute('aria-label', '本轮已读取的上下文');
      for (const [kind, name] of files) {
       const item = document.createElement('li');
-      item.textContent = `已读取 · ${kind} · ${name}`;
+      item.textContent = ['MCP','Skill','Command'].includes(kind) ? `${kind} · ${name}` : `已读取 · ${kind} · ${name}`;
       list.append(item);
      }
      content.after(list);
@@ -267,6 +275,7 @@ function renderComposer() {
  $('#composer-policy').textContent=d.mode==='edit'?'受控修改 · 逐次审批':'只读'; $('#mode-toggle').textContent=d.mode==='edit'?'模式：受控修改（逐次审批）':'模式：只读'; $('#mode-toggle').setAttribute('aria-pressed',String(d.mode==='edit')); $('#mode-toggle').disabled=!s;
  const attachments=state.snapshot?.attachments || []; const upload=state.uploading.get(s?.id) || [];
  $('#context-chips').innerHTML=d.contextPaths.map(p=>`<button class="context-chip" data-action="remove-context" data-path="${esc(p)}" title="移除">上下文 · ${esc(p)} ×</button>`).join('')+d.attachmentIds.map(id=>{const a=attachments.find(x=>x.id===id);return `<button class="context-chip" data-action="remove-attachment" data-id="${esc(id)}" title="移除">附件 · ${esc(a?.name || id)} · 已附加 ×</button>`;}).join('')+upload.map((x,i)=>`<button class="context-chip" data-action="dismiss-upload" data-id="${i}">${esc(x.name)} · ${esc(x.status)}${x.status.startsWith('失败')?' ×':''}</button>`).join('');
+ extensionUI?.renderComposer(input, $('#extension-chips'));
 }
 function artifactList(list) {return list.length?list.map(a=>`<button class="artifact-card" data-action="artifact" data-id="${esc(a.id)}"><span class="file-tile">▤</span><span class="od-field od-fill"><strong>${esc(a.name)}</strong><span>${esc(a.availability)} · ${esc(date(a.createdAt))}</span></span><span>预览 ›</span></button>`).join(''):'<p class="empty-text">暂无交付物</p>';}
 function pagination(kind) { const info=pageInfo[kind]; if(!info || (info.total<=50 && !pages[kind])) return ''; return `<div class="pagination"><button class="btn btn-secondary" data-action="page" data-kind="${kind}" data-offset="${Math.max(0,pages[kind]-50)}" ${pages[kind]===0?'disabled':''}>上一页</button><span>${pages[kind]+1}–${Math.min(pages[kind]+50,info.total)} / ${info.total}</span><button class="btn btn-secondary" data-action="page" data-kind="${kind}" data-offset="${info.nextOffset ?? pages[kind]}" ${info.nextOffset==null?'disabled':''}>下一页</button></div>`; }
