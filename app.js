@@ -45,8 +45,31 @@ function getDraft(id=state.current) { if(!state.drafts.has(id)) { let saved; try
 function persistDraft(id=state.current) { if(!id || deleted.has(id)) return; const d=getDraft(id); storage.set('atelier-draft:'+id,JSON.stringify(d)); clearTimeout(state.saving.get(id)); state.saving.set(id,setTimeout(async()=>{ state.saving.delete(id); if(deleted.has(id)) return; const copy=JSON.stringify(d); try { await api('/api/sessions/'+enc(id),{method:'PATCH',body:{draft:JSON.parse(copy)}}); if(!deleted.has(id) && JSON.stringify(getDraft(id))===copy) storage.remove('atelier-draft:'+id); } catch(e) { if(!deleted.has(id)) toast('草稿已尝试保存在本机：'+e.message); } },500)); }
 async function refreshLists() { const seq=++listSequence; const [s,r,a,...running]=await Promise.all([api('/api/sessions?includeArchived=true&query='+enc(state.search)+'&limit=50&offset='+pages.sessions),api('/api/runs?limit=50&offset='+pages.runs+'&status='+enc(filters.runStatus)),api('/api/artifacts?limit=50&offset='+pages.artifacts+'&projectId='+enc(filters.projectId)+'&sessionId='+enc(filters.sessionId)),...['queued','running','awaiting_permission','stopping'].map(status=>api('/api/runs?limit=500&status='+status))]); if(seq!==listSequence)return; state.sessions=items(s); state.runs=items(r); state.artifacts=items(a); state.activeRuns=running.flatMap(items); Object.assign(pageInfo,{sessions:s,runs:r,artifacts:a}); }
 async function loadSnapshot(id=state.current) { const seq=++snapshotSequence; if(!id) { state.snapshot=null; return; } const data=await api('/api/sessions/'+enc(id)); if(seq!==snapshotSequence || state.current!==id) return; state.snapshot=data; if(!state.drafts.has(id)) getDraft(id); const dialog=$('#detail-dialog'), permissionId=dialog.dataset.permissionId; if(dialog.open && permissionId) { const permission=(data.permissions || []).find(p=>p.id===permissionId); if(!permission || permission.status!=='pending') { closeDialog(); toast('审批状态已变化，请重新查看'); } } }
-async function refresh() { await Promise.all([refreshLists(),loadSnapshot()]); render(); }
-function scheduleRefresh() { if(refreshTimer) return; refreshTimer=setTimeout(()=>{refreshTimer=null;refresh().catch(e=>toast(e.message));},250); }
+async function refresh() {
+ const results = await Promise.allSettled([refreshLists(), loadSnapshot()]);
+ render();
+ const failure = results.find(result => result.status === 'rejected');
+ if (failure) throw failure.reason;
+}
+let liveRefreshRunning = false;
+let liveRefreshPending = false;
+function scheduleRefresh() {
+ liveRefreshPending = true;
+ if (refreshTimer || liveRefreshRunning) return;
+ refreshTimer = setTimeout(async () => {
+  refreshTimer = null;
+  liveRefreshPending = false;
+  liveRefreshRunning = true;
+  try {
+   await refresh();
+  } catch (error) {
+   toast(error.message);
+  } finally {
+   liveRefreshRunning = false;
+   if (liveRefreshPending) scheduleRefresh();
+  }
+ }, 200);
+}
 function connect() {
  source?.close();
  source = new EventSource('/api/events?after=' + enc(state.cursor));
@@ -127,6 +150,84 @@ function traceEvents(snap, run) {
  }
  return { events: cached.data?.events ?? recent.filter(event => event.type !== 'message.delta'), total: cached.data?.eventCount, error: cached.error };
 }
+const toolLabels = { Read: '读取文件', list_files: '列出文件', search_files: '搜索项目', edit_file: '编辑文件', write_file: '写入文件', delete_file: '删除文件', run_command: '运行命令', update_plan: '更新计划', publish_artifact: '发布交付物' };
+function toolLabel(name) {
+ const short = name.replace(/^mcp__atelier__/, '');
+ return toolLabels[short] || short;
+}
+
+function updateRunProgress(content, run, snapshot, hasText) {
+ let panel = content.previousElementSibling;
+ if (!panel?.matches('.run-progress')) panel = null;
+ if (!active(run)) {
+  panel?.remove();
+  return Boolean(panel);
+ }
+ const inserted = !panel;
+ if (inserted) {
+  content.insertAdjacentHTML('beforebegin', `<section class="run-progress" aria-label="本轮执行进度">
+   <div class="run-progress-head"><strong role="status"></strong><span data-progress-clock></span></div>
+   <p class="run-progress-tools" hidden></p>
+   <details class="run-progress-plan" hidden><summary></summary><ol></ol></details>
+  </section>`);
+  panel = content.previousElementSibling;
+ }
+ const tools = snapshot.tools.filter(tool => tool.runId === run.id);
+ const ongoing = tools.find(tool => tool.status === 'running');
+ const finished = tools.filter(tool => tool.endedAt);
+ const last = finished.reduce((latest, tool) => !latest || tool.endedAt >= latest.endedAt ? tool : latest, null);
+ const events = snapshot.events.filter(event => event.runId === run.id);
+ const recent = events.at(-1);
+ const modelActivity = events.findLast(event => ['sdk.initialized', 'sdk.api_retry', 'tool.started', 'tool.finished', 'message.delta'].includes(event.type));
+ let stage = '正在等待模型回复';
+ if (run.status === 'queued') stage = '等待执行';
+ else if (run.status === 'awaiting_permission') stage = '等待操作审批';
+ else if (run.status === 'stopping') stage = '正在停止';
+ else if (ongoing) stage = `正在调用工具 · ${toolLabel(ongoing.name)}`;
+ else if (modelActivity?.type === 'sdk.api_retry') stage = '等待模型重试结果';
+ else if (modelActivity?.type === 'message.delta' && hasText) stage = '正在接收回复';
+ else if (!modelActivity && !tools.length && !hasText) stage = '正在启动模型会话';
+ const heading = $('[role="status"]', panel);
+ if (heading.textContent !== stage) heading.textContent = stage;
+ $('[data-progress-clock]', panel).dataset.progressClock = recent?.at || last?.endedAt || run.startedAt || run.createdAt;
+
+ const toolLine = $('.run-progress-tools', panel);
+ const toolsAppeared = toolLine.hidden && tools.length > 0;
+ toolLine.hidden = !tools.length;
+ const toolStatus = last ? ` · 最近工具 ${toolLabel(last.name)}（${last.status === 'succeeded' ? '成功' : labels[last.status] || last.status}）` : '';
+ const toolText = `工具调用 ${finished.length} / ${tools.length} 已结束${toolStatus}`;
+ if (toolLine.textContent !== toolText) toolLine.textContent = toolText;
+
+ const plan = $('.run-progress-plan', panel);
+ const steps = run.plan || [];
+ const planAppeared = plan.hidden && steps.length > 0;
+ plan.hidden = !steps.length;
+ const planKey = JSON.stringify(steps);
+ if (plan.dataset.steps !== planKey) {
+  plan.dataset.steps = planKey;
+  $('summary', plan).textContent = `任务计划 · ${steps.filter(step => step.status === 'completed').length} / ${steps.length} 已完成`;
+  const statuses = { pending: '待执行', in_progress: '进行中', completed: '已完成' };
+  $('ol', plan).innerHTML = steps.map(step => `<li>${esc(step.content)} <small>${esc(statuses[step.status] || step.status)}</small></li>`).join('');
+ }
+ return inserted || toolsAppeared || planAppeared;
+}
+
+let runClockTimer;
+function updateRunClocks() {
+ const visible = state.view === 'chat' && state.tab === 'conversation';
+ const clocks = visible ? $$('[data-progress-clock]', $('#conversation-content')) : [];
+ for (const node of clocks) {
+  const milliseconds = Date.now() - Date.parse(node.dataset.progressClock);
+  if (!Number.isFinite(milliseconds)) continue;
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const duration = seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+  const value = `上次更新于 ${duration}前`;
+  if (node.textContent !== value) node.textContent = value;
+ }
+ if (clocks.length && !runClockTimer) runClockTimer = setInterval(updateRunClocks, 1000);
+ if (!clocks.length && runClockTimer) { clearInterval(runClockTimer); runClockTimer = undefined; }
+}
+
 const recoverableRun = run => run && ['failed', 'stopped', 'interrupted'].includes(run.status);
 
 function renderRunSummary(run, snapshot, hasText) {
@@ -181,15 +282,13 @@ function renderConversation() {
    ['扩展', run.extensions?.map(item => `${item.name} · v${item.version}${item.tools?.length ? ` (${item.tools.join('、')})` : ''}`).join(' / ')],
   ];
   const pickerFocused = document.activeElement === $('#trace-run', el);
-  const toolLabels = {Read:'读取文件', list_files:'列出文件', search_files:'搜索项目', edit_file:'编辑文件', write_file:'写入文件', delete_file:'删除文件', run_command:'运行命令', update_plan:'更新计划', publish_artifact:'发布交付物'};
   el.innerHTML = `<section class="trace-overview">
    <div class="trace-run-bar"><label for="trace-run">运行</label><select id="trace-run">${snap.runs.slice().reverse().map(item => `<option value="${esc(item.id)}" ${item.id === run.id ? 'selected' : ''}>${esc(date(item.createdAt))} · ${esc(item.prompt?.slice(0, 42) || '运行')}</option>`).join('')}</select>${badge(run.status)}<a class="btn btn-secondary trace-download" href="/api/runs/${enc(run.id)}/diagnostics.json" download>下载诊断 JSON</a></div>
    ${run.error ? `<p class="trace-error" role="status">${esc(run.error)}</p>` : ''}
    <dl class="trace-facts">${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value === '' || value == null ? '—' : value)}</dd></div>`).join('')}</dl>
    </section><div class="trace-heading"><h2>工具调用 <span class="count-badge">${tools.length}</span></h2></div>${tools.map(tool => {
-   const name = tool.name.replace(/^mcp__atelier__/, '');
    return `<details class="trace-item" data-tool="${esc(tool.id)}" ${openTools.has(tool.id) ? 'open' : ''}>
-    <summary><strong>${esc(toolLabels[name] || name)}</strong>${badge(tool.status)}</summary>
+    <summary><strong>${esc(toolLabel(tool.name))}</strong>${badge(tool.status)}</summary>
     <p class="trace-label">${esc(tool.id)} · ${esc(date(tool.startedAt))} · ${elapsed(tool.endedAt ? Date.parse(tool.endedAt) - Date.parse(tool.startedAt) : null)}</p>
     <p class="trace-label">参数</p><pre>${esc(tool.inputSummary)}</pre>
     ${tool.output ? `<p class="trace-label">输出</p><pre>${esc(tool.output)}</pre>` : ''}
@@ -211,8 +310,8 @@ function renderConversation() {
  if(state.tab==='artifacts') {el.innerHTML=artifactList(snap.artifacts || []);return;}
  const original = snap.messages || [];
  const assistantRuns = new Set(original.filter(message => message.role === 'assistant').map(message => message.runId));
- const failedWithoutReply = new Set(snap.runs.filter(run => recoverableRun(run) && !assistantRuns.has(run.id)).map(run => run.id));
- const messages = original.flatMap(message => message.role === 'user' && failedWithoutReply.delete(message.runId)
+ const runsWithoutReply = new Set(snap.runs.filter(run => (active(run) || recoverableRun(run)) && !assistantRuns.has(run.id)).map(run => run.id));
+ const messages = original.flatMap(message => message.role === 'user' && runsWithoutReply.delete(message.runId)
   ? [message, { id: `summary-${message.runId}`, role: 'assistant', runId: message.runId, createdAt: message.createdAt, text: '' }]
   : [message]);
  if (!messages.length) {
@@ -271,14 +370,16 @@ function renderConversation() {
     row.dataset.references = references;
    }
   }
-  const summary = assistant ? renderRunSummary(run, snap, Boolean(text.trim())) : '';
+  const hasText = Boolean(text.trim());
+  const summary = assistant ? renderRunSummary(run, snap, hasText) : '';
   if (assistant && row.renderedSummary !== summary) {
    $('.run-recovery', row)?.remove();
    if (summary) content.insertAdjacentHTML('afterend', summary);
    row.renderedSummary = summary;
    changed ||= Boolean(summary);
   }
-  const placeholder = assistant && !text && !summary ? (active(run) ? (run.status === 'awaiting_permission' ? '等待你确认操作…' : '正在处理…') : '本轮没有文字回复') : '';
+  if (assistant && updateRunProgress(content, run, snap, hasText)) changed = true;
+  const placeholder = assistant && !text && !summary && !active(run) ? '本轮没有文字回复' : '';
   const value = text || placeholder;
   if (content.renderedText === value && content.renderedPlaceholder === Boolean(placeholder)) continue;
   changed ||= Boolean(text);
@@ -289,6 +390,7 @@ function renderConversation() {
   else content.textContent = value;
  }
  for (const row of existing.values()) row.remove();
+ updateRunClocks();
  if (near || fresh) { if (changed || fresh) el.scrollTop = el.scrollHeight; unseen = false; }
  else { el.scrollTop = oldScroll; if (changed) unseen = true; }
  const jump = $('.new-messages', el);
