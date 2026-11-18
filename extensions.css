@@ -111,6 +111,16 @@
 .ext-prose td,.ext-prose th { padding:6px 10px; border:1px solid var(--border); }
 .ext-dialog-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:10px; padding-top:16px; border-top:1px solid var(--border-soft); }
 .ext-dialog>.ext-dialog-actions { margin-top:20px; }
+.ext-market { display:grid; gap:12px; }
+.ext-market-filters { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.ext-market-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:12px; }
+.ext-market-card { padding:14px; gap:6px; }
+.ext-market-card h3 { overflow-wrap:anywhere; font-size:var(--text-base); }
+.ext-market-card code { font-size:var(--text-xs); color:var(--muted); overflow-wrap:anywhere; }
+.ext-market-description { font-size:var(--text-sm); line-height:1.6; color:var(--fg-2); }
+.ext-market-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding-top:6px; margin-top:auto; }
+.ext-market-actions a { font-size:var(--text-xs); }
+.ext-market-actions button { margin-inline-start:auto; }
 .ext-save-state { margin-right:auto; color:var(--muted); font-size:var(--text-xs); }
 .ext-save-state:empty { display:none; }
 .ext-tool-section { min-width:0; padding-top:4px; }

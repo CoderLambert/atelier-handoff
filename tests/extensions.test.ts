@@ -70,6 +70,19 @@ test('project extensions resolve isolated, versioned commands and skills through
     assert.equal(synced.version, imported.version + 1);
     assert.equal(synced.origin?.revision, 'second');
     assert.throws(() => registry.savePublic(project.id, source, imported), { code: 'EXTENSION_CHANGED' });
+    const market = `${endpoint}/market`;
+    assert.equal((await api(market)).items.find((item: {id: string}) => item.id === 'test-plan').status, 'available');
+    const installed = (await api(market, 'POST', { id: 'test-plan' })).item;
+    assert.equal(installed.enabled, true);
+    assert.equal((await api(market, 'POST', { id: 'test-plan' })).item.id, installed.id);
+    const disabled = (await api(`${endpoint}/${installed.id}`, 'PATCH', { version: installed.version, enabled: false, body: 'Local changes' })).item;
+    assert.equal(disabled.enabled, false);
+    const activated = (await api(market, 'POST', { id: 'test-plan' })).item;
+    assert.equal(activated.id, installed.id);
+    assert.equal(activated.body, 'Local changes');
+    assert.equal(activated.enabled, true);
+    assert.equal((await api(market)).items.find((item: {id: string}) => item.id === 'test-plan').status, 'enabled');
+    assert.equal(registry.list('another-project').length, 0);
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

@@ -16,6 +16,7 @@ import { buildRunDiagnostics } from './diagnostics.js';
 import { ProjectExtensions, extensionSelections } from './extensions.js';
 import { testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
+import { installMarketSkill, listSkillMarket } from './skill-market.js';
 import { AppError, activeStatuses, emptyDraft, now, type Run, type Session, type AppConfig, type RunEvent } from '../shared/types.js';
 
 const inputSchema = z.object({ text: z.string().trim().min(1).max(32000), mode: z.enum(['readonly', 'edit']).default('readonly'), contextPaths: z.array(z.string().max(1000)).max(30).default([]), attachmentIds: z.array(z.string().uuid()).max(20).default([]), extensionSelections: extensionSelections.default([]), idempotencyKey: z.string().uuid() });
@@ -160,6 +161,13 @@ export async function createApp(options: { root: string; data: string; runnerFac
         if (parts.length === 4 && method === 'GET') return json(res, { items: extensions.list(projectId) });
         if (parts.length === 4 && method === 'POST') return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
         const id = parts[4]!;
+        if (parts.length === 5 && id === 'market') {
+          if (method === 'GET') return json(res, { items: listSkillMarket(extensions, projectId) });
+          if (method === 'POST') {
+            const input = z.object({ id: z.string().min(1).max(64) }).parse(await body(req));
+            return json(res, { item: await installMarketSkill(extensions, projectId, input.id) });
+          }
+        }
         if (parts.length === 5 && method === 'POST' && (id === 'public-preview' || id === 'public-import')) {
           store.get('projects', projectId);
           const input = z.object({

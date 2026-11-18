@@ -7,7 +7,7 @@ export interface DiscoveredTool { name: string; description: string; inputSchema
 export interface AllowedMcpTool { name: string; access: 'read' | 'approval' }
 export type McpTransport = { type: 'http'; url: string; tokenEnv?: string } | { type: 'stdio'; command: string; args: string[]; envNames: string[] };
 export interface ExtensionOrigin { location: string; key: string; revision: string }
-export interface ExtensionBase { id: string; projectId: string; name: string; description: string; source: string; enabled: boolean; version: number; origin?: ExtensionOrigin }
+export interface ExtensionBase { id: string; projectId: string; name: string; description: string; source: string; enabled: boolean; version: number; origin?: ExtensionOrigin; marketId?: string }
 export type Extension = ExtensionBase & (
   | { kind: 'command' | 'skill'; body: string; supported: boolean; compatibility?: string; userInvocable: boolean }
   | { kind: 'mcp'; transport: McpTransport; allowedTools: AllowedMcpTool[]; tools: DiscoveredTool[]; status?: 'connected' | 'needs-auth' | 'failed'; statusMessage?: string }

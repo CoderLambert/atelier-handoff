@@ -26,7 +26,7 @@ const extensionInput = z.union([
   z.object({ ...shared, kind: z.literal('mcp'), transport: z.union([http, stdio]), allowedTools: z.array(z.object({ name: toolName, access: z.enum(['read', 'approval']) })).max(40).default([]) }),
 ]);
 
-function inspectMarkdown(body: string) {
+export function inspectMarkdown(body: string) {
   const normalized = body.replace(/^﻿/, '').replaceAll('\r\n', '\n');
   const frontmatter = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   let metadata: Record<string, unknown> = {};
@@ -62,7 +62,7 @@ export class ProjectExtensions {
     return record;
   }
 
-  save(projectId: string, raw: unknown, id?: string): Extension {
+  save(projectId: string, raw: unknown, id?: string, marketId?: string): Extension {
     const catalog = this.list(projectId);
     const previous = id ? this.get(projectId, id) : undefined;
     if (previous) {
@@ -75,7 +75,7 @@ export class ProjectExtensions {
     if (catalog.some(item => item.id !== id && item.name === input.name && (item.kind === 'mcp') === (input.kind === 'mcp'))) {
       throw new AppError('EXTENSION_NAME_TAKEN', '当前项目已有同名扩展。', 409);
     }
-    const base = { id: id ?? randomUUID(), projectId, version: (previous?.version ?? 0) + 1, name: input.name, description: input.description, enabled: input.enabled, origin: previous?.origin };
+    const base = { id: id ?? randomUUID(), projectId, version: (previous?.version ?? 0) + 1, name: input.name, description: input.description, enabled: input.enabled, origin: previous?.origin, marketId: previous?.marketId ?? marketId };
     let record: Extension;
     if (input.kind === 'mcp') {
       const sameTransport = previous?.kind === 'mcp' && JSON.stringify(previous.transport) === JSON.stringify(input.transport);

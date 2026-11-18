@@ -169,7 +169,7 @@
           <div class="ext-tabs" role="tablist" aria-label="扩展类型"></div>
           <div class="ext-toolbar"><label class="ext-search"><span aria-hidden="true">⌕</span><input type="search" data-ext-field="search" data-ext-focus="search" placeholder="搜索名称或描述" aria-label="搜索扩展"></label>
             <label class="ext-filter">状态<select data-ext-field="filter" data-ext-focus="filter"><option value="all">全部</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></label>
-            <div class="ext-toolbar-actions">${button('public-import', '从公开来源导入', 'data-ext-focus="public-import"', 'ext-button-primary')}${button('import', '导入 Markdown', 'data-ext-focus="import"')}${button('create', '+ 新建', 'data-ext-focus="create"')}</div></div>
+            <div class="ext-toolbar-actions">${button('market', 'Skill 市场', 'data-ext-focus="market"', 'ext-button-primary')}${button('public-import', '从公开来源导入', 'data-ext-focus="public-import"')}${button('import', '导入 Markdown', 'data-ext-focus="import"')}${button('create', '+ 新建', 'data-ext-focus="create"')}</div></div>
           <p class="ext-scope-note"></p><div class="ext-page-message" role="status" aria-live="polite"></div>
           <section class="ext-results" role="tabpanel" id="${prefix}-results" tabindex="0"></section>
         </section>`;
@@ -231,6 +231,9 @@
       const search = root.querySelector('[data-ext-field="search"]');
       if (document.activeElement !== search) search.value = page.query;
       root.querySelector('[data-ext-field="filter"]').value = page.filter;
+      const market = root.querySelector('[data-ext-action="market"]');
+      market.hidden = page.kind !== 'skill';
+      market.disabled = !page.pid;
       const importButton = root.querySelector('[data-ext-action="import"]');
       importButton.hidden = page.kind === 'mcp';
       importButton.disabled = !page.pid;
@@ -306,6 +309,8 @@
       } else if (action === 'reload') {
         load(pid, true);
         drawPage();
+      } else if (action === 'market') {
+        openMarket(pid);
       } else if (action === 'public-import' || (action === 'public-sync' && item)) {
         openPublicImport(pid, page.kind, action === 'public-sync' ? item : null);
       } else if (action === 'create' || action === 'import') {
@@ -366,6 +371,89 @@
       if (!live(context)) return;
       dialogContext = null;
       closeDialog();
+    }
+
+    function openMarket(pid) {
+      const projectName = allProjects().find(item => item.id === pid)?.name || pid;
+      const context = showDialog('Skill 市场', `<div class="ext-market">
+        <p class="ext-help">当前项目 · ${esc(projectName)}</p>
+        <div class="ext-market-filters">
+          <label class="ext-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="搜索 Skill" aria-label="搜索精选 Skill"></label>
+          <label class="ext-filter">分类 <select aria-label="按分类筛选"><option value="">全部</option><option>设计</option><option>开发</option><option>写作</option></select></label>
+        </div>
+        <p class="ext-save-state" role="status"></p><p class="ext-form-error" role="alert" hidden></p>
+        <div class="ext-card-grid ext-market-grid" data-ext-market-cards></div>
+      </div>`);
+      const url = `${endpoint(pid)}/market`;
+      const search = context.root.querySelector('input[type=search]');
+      const category = context.root.querySelector('select');
+      const cards = context.root.querySelector('[data-ext-market-cards]');
+      const status = context.root.querySelector('.ext-save-state');
+      let skills = [];
+      let loading = true;
+      let installing = '';
+
+      function draw() {
+        if (!live(context)) return;
+        if (loading) {
+          cards.innerHTML = '<p class="ext-loading">正在读取精选目录…</p>';
+          return;
+        }
+        const query = search.value.trim().toLowerCase();
+        const results = skills.filter(skill => (!category.value || skill.category === category.value) &&
+          `${skill.title} ${skill.name} ${skill.description} ${skill.publisher}`.toLowerCase().includes(query));
+        cards.innerHTML = results.map(skill => {
+          const label = installing === skill.id ? '正在安装…' : { enabled: '已启用', disabled: '启用', conflict: '项目中已有同名扩展', available: '安装并启用' }[skill.status];
+          const disabled = installing || ['enabled', 'conflict'].includes(skill.status);
+          return `<article class="ext-card ext-market-card">
+            <p class="ext-card-kind">${esc(skill.category)} · ${esc(skill.publisher)}</p>
+            <h3>${esc(skill.title)}</h3>
+            <code>/${esc(skill.name)}</code>
+            <p class="ext-market-description">${esc(skill.description)}</p>
+            <div class="ext-market-actions">
+              ${skill.url ? `<a href="${esc(skill.url)}" target="_blank" rel="noopener noreferrer">查看来源</a>` : ''}
+              ${button('market-install', label, `data-ext-id="${esc(skill.id)}" ${disabled ? 'disabled' : ''}`, skill.status === 'available' ? 'ext-button-primary' : '')}
+            </div>
+          </article>`;
+        }).join('') || '<p class="ext-help">没有匹配的 Skill。</p>';
+      }
+
+      async function refreshMarket() {
+        const response = await api(url);
+        skills = response.items;
+      }
+
+      search.addEventListener('input', draw);
+      category.addEventListener('change', draw);
+      context.root.addEventListener('click', async event => {
+        const selected = event.target.closest('[data-ext-action="market-install"]');
+        if (!selected || installing) return;
+        const id = selected.dataset.extId;
+        installing = id;
+        formError(context, '');
+        status.textContent = '';
+        draw();
+        try {
+          const result = await api(url, { method: 'POST', body: { id } });
+          const item = returnedItem(result);
+          rememberItem(pid, item);
+          skills = skills.map(skill => skill.id === id ? { ...skill, name: item.name, status: 'enabled' } : skill);
+          if (live(context)) status.textContent = `已启用 /${item.name}，可以回到该项目的对话使用。`;
+          refreshSurfaces();
+        } catch (error) {
+          formError(context, messageOf(error));
+          if (error.status === 409) await refreshMarket().catch(() => {});
+        } finally {
+          installing = '';
+          draw();
+          if (live(context) && document.activeElement === document.body) search.focus({ preventScroll: true });
+        }
+      });
+      draw();
+      refreshMarket().catch(error => formError(context, messageOf(error))).finally(() => {
+        loading = false;
+        draw();
+      });
     }
 
     function openPublicImport(pid, kind, updating) {
