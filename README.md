@@ -37,7 +37,9 @@ npm start
 
 在侧栏打开「扩展」并选择项目。Skills 和 Commands 分别管理 `SKILL.md` 与 Markdown 指令模板。导入时可预览内容。保存并启用后，在对话输入框输入 `/` 选择，或直接发送 `/summarize src/` 这类已经登记的指令。模板中的 `$ARGUMENTS` 会替换为用户输入的参数。
 
-MCP 页支持 Streamable HTTP 和 stdio。HTTP 填写服务地址，凭据可通过本机环境变量引用。stdio 填写已安装程序的绝对路径及参数。测试连接后选择可用工具并启用服务，再到输入框用 `#` 选择本轮要用的工具。需审批的工具可在「受控修改」模式中使用。
+「从公开来源导入」支持 GitHub 仓库或文件链接。Skills 与 Commands 标签可以浏览相应 Markdown 文件。MCP 标签还可以搜索官方 MCP Registry，或从 GitHub 导入 `.mcp.json`、`mcp.json` 和 `server.json`。预览并导入后，卡片上的「检查更新」会按原来源检查新版本，预览后可以应用更新。
+
+MCP 页支持 Streamable HTTP 和 stdio。导入 MCP 配置后可核对地址、启动参数及凭据环境变量，再测试连接、选择允许的工具并启用。输入 `#` 选取本轮要用的工具。需审批的工具可在「受控修改」模式中使用。
 
 当前支持独立 Markdown 指令与技能。依赖脚本、hooks 或附属文件的技能会在导入后显示兼容性说明。MCP 的交互式 OAuth 登录属于后续范围。
 

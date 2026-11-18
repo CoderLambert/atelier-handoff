@@ -4,6 +4,7 @@ import { parseDocument } from 'yaml';
 import { z } from 'zod';
 import { AppError, type Extension, type ExtensionSelection, type Mode, type UsedExtension } from '../shared/types.js';
 import { Store } from './store.js';
+import type { PublicEntry } from './public-extensions.js';
 
 type McpExtension = Extract<Extension, { kind: 'mcp' }>;
 const name = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
@@ -74,7 +75,7 @@ export class ProjectExtensions {
     if (catalog.some(item => item.id !== id && item.name === input.name && (item.kind === 'mcp') === (input.kind === 'mcp'))) {
       throw new AppError('EXTENSION_NAME_TAKEN', '当前项目已有同名扩展。', 409);
     }
-    const base = { id: id ?? randomUUID(), projectId, version: (previous?.version ?? 0) + 1, name: input.name, description: input.description, enabled: input.enabled };
+    const base = { id: id ?? randomUUID(), projectId, version: (previous?.version ?? 0) + 1, name: input.name, description: input.description, enabled: input.enabled, origin: previous?.origin };
     let record: Extension;
     if (input.kind === 'mcp') {
       const sameTransport = previous?.kind === 'mcp' && JSON.stringify(previous.transport) === JSON.stringify(input.transport);
@@ -86,6 +87,29 @@ export class ProjectExtensions {
       record = { ...base, kind: input.kind, body: input.body, source: input.source, supported: meta.supported, compatibility: meta.compatibility, userInvocable: meta.userInvocable, enabled: meta.supported && base.enabled, description: base.description || meta.description };
     }
     return this.store.put('extensions', record);
+  }
+
+  savePublic(projectId: string, entry: PublicEntry, update?: { id: string; version: number }) {
+    if (!entry.revision || entry.issue) throw new AppError('PUBLIC_SOURCE_UNSUPPORTED', entry.issue || '请先选择并预览要导入的条目。');
+    return this.store.transaction(() => {
+      const previous = update ? this.get(projectId, update.id) : undefined;
+      if (update && (!previous?.origin || previous.origin.location !== entry.location || previous.origin.key !== entry.key || previous.version !== update.version || previous.kind !== entry.kind)) {
+        throw new AppError('EXTENSION_CHANGED', '扩展来源或版本已变化，请刷新后重新同步。', 409);
+      }
+      if (previous && previous.origin?.revision === entry.revision) return { item: previous, changed: false };
+      if (!previous && this.list(projectId).some(item => item.origin?.location === entry.location && item.origin.key === entry.key)) {
+        throw new AppError('PUBLIC_SOURCE_EXISTS', '当前项目已导入此条目，请从对应卡片同步。', 409);
+      }
+      const fields = { name: previous?.name ?? entry.name, description: entry.description, ...(previous ? { version: previous.version } : {}) };
+      const payload = entry.kind === 'mcp' ? {
+        ...fields, kind: entry.kind, transport: entry.transport,
+        enabled: previous?.kind === 'mcp' && previous.enabled && JSON.stringify(previous.transport) === JSON.stringify(entry.transport),
+      } : { ...fields, kind: entry.kind, body: entry.body, enabled: previous?.enabled ?? true };
+      const item = this.save(projectId, payload, previous?.id);
+      return { item: this.store.put('extensions', {
+        ...item, source: entry.location, origin: { location: entry.location, key: entry.key, revision: entry.revision! },
+      }), changed: true };
+    });
   }
 
   remove(projectId: string, id: string) {

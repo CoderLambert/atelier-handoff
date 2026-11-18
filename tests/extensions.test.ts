@@ -60,6 +60,16 @@ test('project extensions resolve isolated, versioned commands and skills through
     app.store.put('projects', { ...project, id: 'another-project', path: join(projectPath, 'other') });
     assert.throws(() => registry.resolve('another-project', 'readonly', 'review', [{ id: skill.id, version: skill.version }]), { code: 'EXTENSION_CHANGED' });
     assert.equal(registry.get(project.id, command.id).name, 'brief');
+    const source = { kind: 'skill' as const, location: 'https://raw.githubusercontent.com/example/repo/main/design/SKILL.md', key: 'design/SKILL.md', name: 'design', description: 'Fixture', revision: 'first', body: 'Initial instructions' };
+    const imported = registry.savePublic(project.id, source).item;
+    assert.ok(imported.enabled);
+    assert.equal(imported.origin?.location, source.location);
+    assert.throws(() => registry.savePublic(project.id, source), { code: 'PUBLIC_SOURCE_EXISTS' });
+    assert.equal(registry.savePublic(project.id, source, imported).changed, false);
+    const synced = registry.savePublic(project.id, { ...source, revision: 'second', body: 'Revised instructions' }, imported).item;
+    assert.equal(synced.version, imported.version + 1);
+    assert.equal(synced.origin?.revision, 'second');
+    assert.throws(() => registry.savePublic(project.id, source, imported), { code: 'EXTENSION_CHANGED' });
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

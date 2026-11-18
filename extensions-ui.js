@@ -169,7 +169,7 @@
           <div class="ext-tabs" role="tablist" aria-label="扩展类型"></div>
           <div class="ext-toolbar"><label class="ext-search"><span aria-hidden="true">⌕</span><input type="search" data-ext-field="search" data-ext-focus="search" placeholder="搜索名称或描述" aria-label="搜索扩展"></label>
             <label class="ext-filter">状态<select data-ext-field="filter" data-ext-focus="filter"><option value="all">全部</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></label>
-            <div class="ext-toolbar-actions">${button('import', '导入 Markdown', 'data-ext-focus="import"')}${button('create', '+ 新建', 'data-ext-focus="create"', 'ext-button-primary')}</div></div>
+            <div class="ext-toolbar-actions">${button('public-import', '从公开来源导入', 'data-ext-focus="public-import"', 'ext-button-primary')}${button('import', '导入 Markdown', 'data-ext-focus="import"')}${button('create', '+ 新建', 'data-ext-focus="create"')}</div></div>
           <p class="ext-scope-note"></p><div class="ext-page-message" role="status" aria-live="polite"></div>
           <section class="ext-results" role="tabpanel" id="${prefix}-results" tabindex="0"></section>
         </section>`;
@@ -234,6 +234,7 @@
       const importButton = root.querySelector('[data-ext-action="import"]');
       importButton.hidden = page.kind === 'mcp';
       importButton.disabled = !page.pid;
+      root.querySelector('[data-ext-action="public-import"]').disabled = !page.pid;
       const create = root.querySelector('[data-ext-action="create"]');
       create.disabled = !page.pid || entry.loading;
       create.textContent = `+ ${page.kind === 'mcp' ? '添加 MCP' : `新建 ${kinds[page.kind]}`}`;
@@ -288,7 +289,7 @@
         ${item.kind === 'mcp' ? `<p class="ext-card-source">${esc(item.transport?.type === 'stdio' ? item.transport.command : item.transport?.url || '未配置连接')}<span>${(item.allowedTools || []).length} 个允许的工具</span></p>` : `<p class="ext-card-source">${esc(item.source || '项目内创建')}</p>`}
         ${result?.message ? `<p class="ext-test-message" data-ext-status="${esc(result.status)}">${esc(result.message)}</p>` : ''}
         ${operationErrors.has(key) ? `<p class="ext-error" role="alert">${esc(operationErrors.get(key))}</p>` : ''}
-        <footer class="ext-card-actions">${button('edit', '查看与编辑', `${attrs} data-ext-focus="detail-${esc(item.id)}"`)}${item.kind === 'mcp' ? button('test', '测试连接', `${attrs} data-ext-focus="test-${esc(item.id)}" ${busy ? 'disabled' : ''}`) : ''}${button('delete', '删除', `${attrs} data-ext-focus="delete-${esc(item.id)}" ${busy ? 'disabled' : ''}`, 'ext-button-danger')}</footer>
+        <footer class="ext-card-actions">${button('edit', '查看与编辑', `${attrs} data-ext-focus="detail-${esc(item.id)}"`)}${item.origin ? button('public-sync', '检查更新', attrs) : ''}${item.kind === 'mcp' ? button('test', '测试连接', `${attrs} data-ext-focus="test-${esc(item.id)}" ${busy ? 'disabled' : ''}`) : ''}${button('delete', '删除', `${attrs} data-ext-focus="delete-${esc(item.id)}" ${busy ? 'disabled' : ''}`, 'ext-button-danger')}</footer>
       </article>`;
     }
 
@@ -305,6 +306,8 @@
       } else if (action === 'reload') {
         load(pid, true);
         drawPage();
+      } else if (action === 'public-import' || (action === 'public-sync' && item)) {
+        openPublicImport(pid, page.kind, action === 'public-sync' ? item : null);
       } else if (action === 'create' || action === 'import') {
         const context = openEditor(pid, null, page.kind);
         if (action === 'import') context.root.querySelector('[name="markdownFile"]').click();
@@ -363,6 +366,70 @@
       if (!live(context)) return;
       dialogContext = null;
       closeDialog();
+    }
+
+    function openPublicImport(pid, kind, updating) {
+      const officialSkill = 'https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md';
+      const formLabel = kind === 'mcp' ? 'MCP Registry 搜索词或 GitHub 配置链接' : 'GitHub 仓库或文件链接';
+      const context = showDialog(updating ? '同步公开来源' : '从公开来源导入', `<form data-ext-public>
+        ${field(formLabel, 'source', updating?.origin?.location || '', `${updating ? 'readonly' : 'required'} autocomplete="off" maxlength="4096"`)}
+        <div class="ext-dialog-actions">${!updating && kind === 'skill' ? button('public-preset', 'Anthropic Frontend Design') : ''}${!updating && kind === 'mcp' ? button('public-preset', '搜索 Context7') : ''}<button type="submit" class="ext-button">${updating ? '检查更新' : '查询'}</button></div>
+        <p class="ext-save-state" role="status"></p><p class="ext-form-error" role="alert" hidden></p>
+        <div data-ext-public-results></div>
+        </form>`, true);
+      const form = context.root.querySelector('form');
+      const results = form.querySelector('[data-ext-public-results]');
+      let entries = [];
+      async function loadPublic(source) {
+        if (context.busy) return;
+        formError(context, '');
+        setBusy(context, true, '正在读取公开来源…');
+        try {
+          const response = await api(`${endpoint(pid)}/public-preview`, { method: 'POST', body: { source, kind } });
+          entries = updating ? response.items.filter(item => item.key === updating.origin.key) : response.items;
+          if (!live(context)) return;
+          results.innerHTML = entries.map((item, index) => {
+            const unchanged = updating?.origin.revision && updating.origin.revision === item.revision;
+            const detail = item.body ? `<details class="ext-preview"><summary>预览 Markdown</summary><div class="markdown-body">${previewHTML(item.body)}</div></details>`
+              : item.transport ? `<pre class="safe-pre">${esc(JSON.stringify(item.transport, null, 2))}</pre>` : '';
+            const label = item.revision ? updating ? '应用更新' : '导入到当前项目' : '查看文件';
+            return `<article class="ext-card"><strong>${esc(item.name)}</strong><p>${esc(item.description)}</p>${detail}
+              ${item.issue ? `<p class="ext-compatibility">${esc(item.issue)}</p>` : unchanged ? '<p class="ext-help">当前已是此来源的最新版本。</p>' : button('public-select', label, `data-ext-index="${index}"`, 'ext-button-primary')}</article>`;
+          }).join('') || '<p class="ext-help">未找到匹配的扩展。</p>';
+        } catch (error) { formError(context, messageOf(error)); }
+        finally { setBusy(context, false); }
+      }
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        const value = form.elements.source.value.trim();
+        if (value) void loadPublic(kind === 'mcp' && !value.includes('://') && !value.startsWith('registry:') ? `registry:${value}` : value);
+      });
+      context.root.addEventListener('click', async event => {
+        if (context.busy) return;
+        const button = event.target.closest('[data-ext-action]');
+        if (button?.dataset.extAction === 'public-preset') {
+          form.elements.source.value = kind === 'mcp' ? 'context7' : officialSkill;
+          form.requestSubmit();
+        }
+        if (button?.dataset.extAction !== 'public-select') return;
+        const item = entries[Number(button.dataset.extIndex)];
+        if (!item) return;
+        if (!item.revision) return loadPublic(item.location);
+        setBusy(context, true);
+        formError(context, '');
+        try {
+          const response = await api(`${endpoint(pid)}/public-import`, { method: 'POST', body: {
+            source: item.location, key: item.key, revision: item.revision, kind,
+            ...(updating ? { update: { id: updating.id, version: updating.version } } : {}),
+          } });
+          rememberItem(pid, returnedItem(response));
+          await load(pid, true);
+          closeOwnDialog(context);
+          notify(updating ? '同步已完成' : '已导入当前项目');
+        } catch (error) { formError(context, messageOf(error)); }
+        finally { setBusy(context, false); refreshSurfaces(); }
+      });
+      if (updating) void loadPublic(updating.origin.location);
     }
 
     function confirmDelete(pid, item) {

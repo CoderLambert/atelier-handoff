@@ -15,6 +15,7 @@ import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { ProjectExtensions, extensionSelections } from './extensions.js';
 import { testMcp } from './extension-mcp.js';
+import { previewPublic } from './public-extensions.js';
 import { AppError, activeStatuses, emptyDraft, now, type Run, type Session, type AppConfig, type RunEvent } from '../shared/types.js';
 
 const inputSchema = z.object({ text: z.string().trim().min(1).max(32000), mode: z.enum(['readonly', 'edit']).default('readonly'), contextPaths: z.array(z.string().max(1000)).max(30).default([]), attachmentIds: z.array(z.string().uuid()).max(20).default([]), extensionSelections: extensionSelections.default([]), idempotencyKey: z.string().uuid() });
@@ -159,6 +160,19 @@ export async function createApp(options: { root: string; data: string; runnerFac
         if (parts.length === 4 && method === 'GET') return json(res, { items: extensions.list(projectId) });
         if (parts.length === 4 && method === 'POST') return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
         const id = parts[4]!;
+        if (parts.length === 5 && method === 'POST' && (id === 'public-preview' || id === 'public-import')) {
+          store.get('projects', projectId);
+          const input = z.object({
+            source: z.string().trim().min(1).max(4096), kind: z.enum(['skill', 'command', 'mcp']),
+            key: z.string().max(4096).optional(), revision: z.string().optional(),
+            update: z.object({ id: z.string().uuid(), version: z.number().int().positive() }).optional(),
+          }).parse(await body(req));
+          const items = await previewPublic(input.source, input.kind);
+          if (id === 'public-preview') return json(res, { items });
+          const item = items.find(entry => entry.key === input.key && entry.revision === input.revision);
+          if (!item || !item.revision) throw new AppError('PUBLIC_SOURCE_CHANGED', '公开来源已更新，请重新预览。', 409);
+          return json(res, extensions.savePublic(projectId, item, input.update), input.update ? 200 : 201);
+        }
         if (parts.length === 5 && method === 'PATCH') return json(res, { item: extensions.save(projectId, await body(req), id) });
         if (parts.length === 5 && method === 'DELETE') { extensions.remove(projectId, id); return json(res, { ok: true }); }
         if (parts.length === 6 && parts[5] === 'test' && method === 'POST') {
