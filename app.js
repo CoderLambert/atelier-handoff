@@ -916,6 +916,12 @@ function renderUsage(run) {
   return `<dl class="trace-facts">${values.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value ?? '暂无')}</dd></div>`).join('')}</dl>
   <p class="aside-description">${usage.complete ? '本轮报告' : '本轮用量报告不完整'} · SDK 估算 ${estimate} · 网关实际费用未知</p>`;
 }
+function permissionOperation(p) {
+  if (p.kind === 'command') return { title: '运行命令', tone: 'neutral' };
+  if (p.kind === 'delete') return { title: '删除文件', tone: 'removed' };
+  if (p.kind === 'write' && p.before === null) return { title: '新建文件', tone: 'added' };
+  return { title: p.kind === 'write' ? '覆盖文件' : '修改文件', tone: 'modified' };
+}
 function renderAside() {
   const snap = state.snapshot,
     run = currentRun(),
@@ -935,7 +941,7 @@ function renderAside() {
   const cards = permissions
     .map(
       (x) =>
-        `<div class="approval-card"><div class="approval-eyebrow">需要你的决定</div><div class="approval-title">${esc(x.kind)} ${esc(x.path || x.command || '')}</div><button class="diff-link" data-action="permission" data-id="${esc(x.id)}">查看详情与审批 ›</button></div>`,
+        `<div class="approval-card"><div class="approval-eyebrow">${permissionOperation(x).title} · 待审批</div><div class="approval-title">${esc(x.path || x.command || '')}</div><button class="diff-link" data-action="permission" data-id="${esc(x.id)}">查看详情与审批 ›</button></div>`,
     )
     .join('');
   if (state.side === 'changes')
@@ -943,7 +949,7 @@ function renderAside() {
       (snap.permissions || [])
         .map(
           (x) =>
-            `<div class="approval-card"><div class="approval-eyebrow">${esc(labels[x.status] || x.status)}</div><div class="approval-title">${esc(x.kind)} ${esc(x.path || x.command || '')}</div><button class="diff-link" data-action="permission" data-id="${esc(x.id)}">查看真实差异 ›</button></div>`,
+            `<div class="approval-card"><div class="approval-eyebrow">${permissionOperation(x).title} · ${esc(labels[x.status] || x.status)}</div><div class="approval-title">${esc(x.path || x.command || '')}</div><button class="diff-link" data-action="permission" data-id="${esc(x.id)}">${x.kind === 'command' ? '查看命令' : '查看文件差异'} ›</button></div>`,
         )
         .join('') || '<p class="empty-text">暂无操作记录</p>';
   else if (state.side === 'events')
@@ -962,14 +968,235 @@ function renderAside() {
       `<section class="aside-section"><div class="section-label">项目</div><strong>${esc(p?.name || '')}</strong><div class="project-path">${esc(p?.path || '')}</div></section><section class="aside-section"><div class="section-label">当前运行</div>${run ? badge(run.status) : '暂无运行'}<p class="aside-description">${esc(run?.error?.message || run?.error || run?.reason || '')}</p><div class="action-row">${active(run) ? `<button class="btn btn-secondary" data-action="stop" data-id="${esc(run.id)}">停止</button>` : ''}${run && ['failed', 'stopped', 'interrupted'].includes(run.status) ? `<button class="btn btn-secondary" data-action="retry" data-id="${esc(run.id)}">只读重试</button>` : ''}</div></section>${run?.plan?.length ? `<section class="aside-section"><div class="section-label">计划</div>${run.plan.map((x) => `<p>${esc({ pending: '待执行', in_progress: '进行中', completed: '已完成' }[x.status] || x.status)} · ${esc(x.content)}</p>`).join('')}</section>` : ''}<section class="aside-section"><div class="section-label">用量</div>${renderUsage(run)}</section><section class="aside-section"><div class="section-label">会话管理</div><div class="action-row"><button class="btn btn-secondary" data-action="rename">重命名</button><button class="btn btn-secondary" data-action="archive">${snap.session.status === 'archived' ? '恢复' : '归档'}</button><button class="btn btn-secondary" data-action="delete-session">删除</button></div></section>`;
   }
 }
-function openDialog(title, html, wide = false) {
-  if (!$('#detail-dialog').open) state.dialogTrigger = document.activeElement;
-  delete $('#detail-dialog').dataset.permissionId;
+function openDialog(title, html, wide = false, permissionLayout = false) {
+  const dialog = $('#detail-dialog');
+  if (!dialog.open) state.dialogTrigger = document.activeElement;
+  delete dialog.dataset.permissionId;
   $('#dialog-title').textContent = title;
   $('#dialog-body').innerHTML = html;
-  const d = $('#detail-dialog');
-  d.classList.toggle('wide-dialog', wide);
-  if (!d.open) d.showModal();
+  dialog.classList.toggle('wide-dialog', wide);
+  dialog.classList.toggle('permission-dialog', permissionLayout);
+  if (!dialog.open) dialog.showModal();
+}
+function parsePermissionPatch(patch) {
+  const hunks = [];
+  const lines = patch.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  let hunk,
+    added = 0,
+    removed = 0;
+  const complete = () =>
+    !hunk || (hunk.oldSeen === hunk.oldCount && hunk.newSeen === hunk.newCount);
+  for (const text of lines) {
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$/.exec(text);
+    if (header) {
+      if (!complete()) return null;
+      hunk = {
+        oldStart: Number(header[1]),
+        oldCount: Number(header[2] ?? 1),
+        newStart: Number(header[3]),
+        newCount: Number(header[4] ?? 1),
+        oldSeen: 0,
+        newSeen: 0,
+        lines: [],
+      };
+      hunks.push(hunk);
+      continue;
+    }
+    if (!hunk) continue;
+    if (text === '\\ No newline at end of file') {
+      const previous = hunk.lines.at(-1);
+      if (!previous) return null;
+      previous.noFinalNewline = true;
+      continue;
+    }
+    const marker = text[0];
+    if (marker !== ' ' && marker !== '+' && marker !== '-') return null;
+    const kind = marker === '+' ? 'added' : marker === '-' ? 'removed' : 'context';
+    const oldLine = kind === 'added' ? null : hunk.oldStart + hunk.oldSeen++;
+    const newLine = kind === 'removed' ? null : hunk.newStart + hunk.newSeen++;
+    if (hunk.oldSeen > hunk.oldCount || hunk.newSeen > hunk.newCount) return null;
+    hunk.lines.push({ kind, oldLine, newLine, text: text.slice(1) });
+    if (kind === 'added') added++;
+    if (kind === 'removed') removed++;
+  }
+  return complete() ? { hunks, added, removed } : null;
+}
+function diffLineNumber(number, attributes = '') {
+  return `<td class="diff-line-number"${attributes}>${number ?? ''}</td>`;
+}
+function diffLineContent(line, attributes = '') {
+  const marker = line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : '';
+  const aria =
+    line.kind === 'added'
+      ? ' aria-label="新增"'
+      : line.kind === 'removed'
+        ? ' aria-label="删除"'
+        : '';
+  const bom = line.text.startsWith('\uFEFF');
+  const crlf = line.text.endsWith('\r');
+  const code = line.text.slice(bom ? 1 : 0, crlf ? -1 : undefined);
+  return `<td class="diff-marker"${attributes}${aria}>${marker}</td><td class="diff-line-text"${attributes}><code>${bom ? '<span class="diff-annotation" title="UTF-8 字节顺序标记">BOM</span>' : ''}${esc(code)}${crlf ? '<span class="diff-annotation" title="CRLF 换行">␍</span>' : ''}${line.noFinalNewline ? '<span class="diff-annotation">文件末尾无换行</span>' : ''}</code></td>`;
+}
+function splitDiffRows(lines) {
+  const rows = [];
+  let removed = [],
+    added = [];
+  const flush = () => {
+    for (let index = 0; index < Math.max(removed.length, added.length); index++)
+      rows.push([removed[index], added[index]]);
+    removed = [];
+    added = [];
+  };
+  for (const line of lines) {
+    if (line.kind === 'context') {
+      flush();
+      rows.push([line, line]);
+    } else {
+      (line.kind === 'removed' ? removed : added).push(line);
+    }
+  }
+  flush();
+  return rows;
+}
+function diffSide(line, side) {
+  if (!line) return '<td class="diff-blank" colspan="3"></td>';
+  const attributes = ` data-line-kind="${line.kind}"`;
+  return (
+    diffLineNumber(side === 'old' ? line.oldLine : line.newLine, attributes) +
+    diffLineContent(line, attributes)
+  );
+}
+function diffLineRange(start, count) {
+  if (!count) return '—';
+  return count === 1 ? start : `${start}–${start + count - 1}`;
+}
+function renderPermissionTable(patch, split = false) {
+  const columns = split ? 6 : 4;
+  const number = '<col class="diff-number-column">';
+  const marker = '<col class="diff-marker-column">';
+  const side = `<colgroup>${number}${marker}<col></colgroup>`;
+  const columnGroups = split
+    ? side + side
+    : `<colgroup>${number}${number}${marker}<col></colgroup>`;
+  const head = split
+    ? '<tr><th colspan="3" scope="colgroup">修改前</th><th colspan="3" scope="colgroup">修改后</th></tr>'
+    : '<tr><th scope="col">原行</th><th scope="col">新行</th><th scope="col"><span class="sr-only">变更类型</span></th><th scope="col">文件内容</th></tr>';
+  const bodies = patch.hunks.map((hunk) => {
+    const rows = split
+      ? splitDiffRows(hunk.lines).map(
+          ([oldLine, newLine]) => `<tr>${diffSide(oldLine, 'old')}${diffSide(newLine, 'new')}</tr>`,
+        )
+      : hunk.lines.map(
+          (line) =>
+            `<tr data-line-kind="${line.kind}">${diffLineNumber(line.oldLine)}${diffLineNumber(line.newLine)}${diffLineContent(line)}</tr>`,
+        );
+    return `<tbody><tr class="diff-hunk"><th colspan="${columns}" scope="rowgroup">原 ${diffLineRange(hunk.oldStart, hunk.oldCount)} · 新 ${diffLineRange(hunk.newStart, hunk.newCount)}</th></tr>${rows.join('')}</tbody>`;
+  });
+  return `<table class="diff-table${split ? ' diff-split' : ''}">${columnGroups}<thead>${head}</thead>${bodies.join('')}</table>`;
+}
+function unavailableDiff(preview, patch) {
+  const limit = preview.diff.split('\n').find((line) => line.startsWith('差异规模超过预览限制'));
+  const message =
+    limit ||
+    (patch?.hunks.length
+      ? '这次变更行数较多，可展开查看完整补丁或前后内容。'
+      : '无法逐行展示这份差异，请核对原始补丁或前后内容。');
+  const snapshot = (label, text) =>
+    typeof text === 'string'
+      ? `<details class="diff-snapshot"><summary>${label}</summary><pre class="safe-pre">${esc(text || '（空文件）')}</pre></details>`
+      : '';
+  return `<section class="diff-alternative"><p>${esc(message)}</p>${snapshot(
+    '查看修改前内容',
+    preview.before,
+  )}${snapshot('查看修改后内容', preview.after)}${
+    !limit && preview.diff ? snapshot('查看原始补丁', preview.diff) : ''
+  }</section>`;
+}
+function permissionPreview(preview, patch) {
+  if (!patch?.hunks.length && (preview.before ?? '') === (preview.after ?? '')) {
+    const empty =
+      preview.before === null
+        ? '将新建一个空文件。'
+        : preview.after === null
+          ? '将删除一个空文件。'
+          : '文件内容没有变化。';
+    return `<p class="diff-empty">${empty}</p>`;
+  }
+  if (
+    !patch?.hunks.length ||
+    patch.hunks.reduce((total, hunk) => total + hunk.lines.length, 0) > 2400
+  )
+    return unavailableDiff(preview, patch);
+  const canCompare = preview.before !== null && preview.after !== null;
+  return `<section class="permission-preview" aria-label="文件差异">
+  <div class="diff-toolbar">
+   <div class="diff-summary">
+    ${patch.added ? `<span class="diff-stat-added" aria-label="新增 ${patch.added} 行">+${patch.added}</span>` : ''}
+    ${patch.removed ? `<span class="diff-stat-removed" aria-label="删除 ${patch.removed} 行">−${patch.removed}</span>` : ''}
+    ${patch.hunks.length > 1 ? `<span class="muted">${patch.hunks.length} 处变更</span>` : ''}
+   </div>
+   ${
+     canCompare
+       ? `<div class="diff-layout" role="group" aria-label="差异布局">
+    <button type="button" data-diff-layout="unified" aria-pressed="true">统一视图</button>
+    <button type="button" data-diff-layout="split" aria-pressed="false">并排对照</button>
+   </div>`
+       : ''
+   }
+  </div>
+  <div class="diff-code" tabindex="0" role="region" aria-label="带行号的文件差异">${renderPermissionTable(patch)}</div>
+ </section>`;
+}
+async function openPermission(id) {
+  const [detail, preview] = await Promise.all([
+    api(`/api/permissions/${enc(id)}`),
+    api(`/api/permissions/${enc(id)}/diff`),
+  ]);
+  const permission = detail.permission;
+  const operation = permissionOperation(permission);
+  const command = permission.kind === 'command';
+  const pending = permission.status === 'pending';
+  const patch = command ? null : parsePermissionPatch(preview.diff);
+  const status = pending ? 'pending' : permission.status === 'allowed' ? 'success' : 'neutral';
+  openDialog(
+    command ? '命令审批' : '文件差异',
+    `<div class="permission-meta">
+  <div class="permission-heading">
+   ${command ? '' : `<code class="permission-path">${esc(preview.path || permission.path)}</code>`}
+   <span class="permission-operation" data-tone="${operation.tone}">${operation.title}</span>
+   <span class="status-badge ${status}"><span class="status-dot"></span>${esc(labels[permission.status] || permission.status)}</span>
+  </div>
+  <dl class="permission-facts">
+   <div><dt>操作原因</dt><dd>${esc(permission.reason || '未提供')}</dd></div>
+   ${permission.resolutionReason ? `<div><dt>处理说明</dt><dd>${esc(permission.resolutionReason)}</dd></div>` : ''}
+   ${pending && permission.expiresAt ? `<div><dt>审批截止</dt><dd>${esc(date(permission.expiresAt))}</dd></div>` : ''}
+  </dl>
+ </div>
+ ${command ? `<pre class="safe-pre permission-command" aria-label="命令内容">${esc(permission.command || preview.diff)}</pre>` : permissionPreview(preview, patch)}
+ ${pending ? `<div class="dialog-actions"><button class="btn btn-secondary" data-action="decide" data-id="${esc(id)}" data-decision="deny" data-version="${esc(preview.version)}">拒绝</button><button class="btn btn-primary" data-action="decide" data-id="${esc(id)}" data-decision="allow" data-version="${esc(preview.version)}">允许</button></div>` : ''}`,
+    true,
+    true,
+  );
+  const dialog = $('#detail-dialog');
+  const layout = $('.diff-layout', dialog);
+  layout?.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-diff-layout]');
+    if (!button || button.getAttribute('aria-pressed') === 'true') return;
+    for (const option of $$('button', layout))
+      option.setAttribute('aria-pressed', String(option === button));
+    const code = $('.diff-code', dialog);
+    code.innerHTML = renderPermissionTable(patch, button.dataset.diffLayout === 'split');
+    code.scrollLeft = 0;
+  });
+  if (pending) {
+    dialog.dataset.permissionId = id;
+    const latest = state.snapshot?.permissions?.find((p) => p.id === id);
+    if (latest && latest.status !== 'pending') {
+      closeDialog();
+      toast('审批状态已变化，请重新查看');
+    }
+  }
 }
 function closeDialog() {
   $('#detail-dialog').close();
@@ -1382,24 +1609,8 @@ document.addEventListener('click', async (e) => {
       });
       state.pending.delete(key);
       await refresh();
-    } else if (a === 'permission') {
-      const [detail, diff] = await Promise.all([
-        api(`/api/permissions/${enc(id)}`),
-        api(`/api/permissions/${enc(id)}/diff`),
-      ]);
-      const p = detail.permission;
-      openDialog(
-        '审批操作',
-        `<p>${esc(p.kind)} · ${esc(p.path || p.command || '')}</p><p>目的 / 原因：${esc(p.reason || '未提供')}</p>${p.resolutionReason ? `<p>${esc(p.resolutionReason)}</p>` : ''}<p>状态：${esc(labels[p.status] || p.status)} ${p.expiresAt ? '· 到期 ' + esc(date(p.expiresAt)) : ''}</p><pre class="safe-pre">${esc(diff.diff || p.command || '无文本差异')}</pre>${p.status === 'pending' ? `<div class="dialog-actions"><button class="btn btn-secondary" data-action="decide" data-id="${esc(id)}" data-decision="deny" data-version="${esc(diff.version)}">拒绝</button><button class="btn btn-primary" data-action="decide" data-id="${esc(id)}" data-decision="allow" data-version="${esc(diff.version)}">允许</button></div>` : ''}`,
-        true,
-      );
-      if (p.status === 'pending') $('#detail-dialog').dataset.permissionId = id;
-      const latest = state.snapshot?.permissions?.find((x) => x.id === id);
-      if (p.status === 'pending' && latest && latest.status !== 'pending') {
-        closeDialog();
-        toast('审批状态已变化，请重新查看');
-      }
-    } else if (a === 'decide') {
+    } else if (a === 'permission') await openPermission(id);
+    else if (a === 'decide') {
       const sessionId = state.current;
       const dialog = $('#detail-dialog');
       const decisions = $$('[data-action=decide]', dialog);

@@ -40,8 +40,14 @@ export class FileRecords {
       status: 'ready' as const,
       createdAt: now(),
     };
-    await mkdir(join(this.store.directory, 'attachments'), { recursive: true, mode: 0o700 });
-    await writeFile(this.path('attachments', attachment.id), bytes, { flag: 'wx', mode: 0o600 });
+    await mkdir(join(this.store.directory, 'attachments'), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(this.path('attachments', attachment.id), bytes, {
+      flag: 'wx',
+      mode: 0o600,
+    });
     this.store.put('attachments', attachment);
     this.store.event('session-' + sessionId, sessionId, 'attachment.created', {
       attachmentId: attachment.id,
@@ -68,7 +74,9 @@ export class FileRecords {
     });
     // Used content remains immutable for previous run snapshots.
     if (item.status === 'ready') await unlink(this.path('attachments', id)).catch(() => {});
-    this.store.event('session-' + sessionId, sessionId, 'attachment.removed', { attachmentId: id });
+    this.store.event('session-' + sessionId, sessionId, 'attachment.removed', {
+      attachmentId: id,
+    });
   }
   async publish(run: Run, name: string, content: string) {
     if (Buffer.byteLength(content) > 1024 * 1024)
@@ -86,10 +94,18 @@ export class FileRecords {
       availability: 'available' as const,
       createdAt: now(),
     };
-    await mkdir(join(this.store.directory, 'artifacts'), { recursive: true, mode: 0o700 });
-    await writeFile(this.path('artifacts', artifact.id), content, { mode: 0o600, flag: 'wx' });
+    await mkdir(join(this.store.directory, 'artifacts'), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(this.path('artifacts', artifact.id), content, {
+      mode: 0o600,
+      flag: 'wx',
+    });
     this.store.put('artifacts', artifact);
-    this.store.event(run.id, run.sessionId, 'artifact.created', { artifactId: artifact.id });
+    this.store.event(run.id, run.sessionId, 'artifact.created', {
+      artifactId: artifact.id,
+    });
     return artifact;
   }
   async content(id: string) {
@@ -105,7 +121,10 @@ export class FileRecords {
     }
   }
   saveOutput(id: string, output: string): void {
-    mkdirSync(join(this.store.directory, 'tool-output'), { recursive: true, mode: 0o700 });
+    mkdirSync(join(this.store.directory, 'tool-output'), {
+      recursive: true,
+      mode: 0o700,
+    });
     writeFileSync(join(this.store.directory, 'tool-output', fingerprint(id)), output, {
       mode: 0o600,
     });
