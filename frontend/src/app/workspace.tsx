@@ -180,6 +180,15 @@ export default function Workspace() {
     onSuccess: (_, variables) => revalidate(variables.sessionId),
     onError: (error) => setNotice(error.message),
   });
+  const upgradeAgent = useMutation({
+    mutationFn: (input: { sessionId: string; revisionId: string }) =>
+      api(`/api/sessions/${encodeURIComponent(input.sessionId)}/upgrade-agent`, {
+        method: 'POST',
+        body: { revisionId: input.revisionId },
+      }),
+    onSuccess: (_, input) => revalidate(input.sessionId),
+    onError: (error) => setNotice(error.message),
+  });
   function openSessionAction(type: SessionAction) {
     if (!snapshot) return;
     setSessionChange({ type, session: snapshot.session });
@@ -310,6 +319,20 @@ export default function Workspace() {
                 <header className="session-header">
                   <div className="session-title-row">
                     <h1>{snapshot?.session.title ?? '开始工作'}</h1>
+                    {snapshot?.agent?.canUpgrade ? (
+                      <Button
+                        size="sm"
+                        disabled={upgradeAgent.isPending}
+                        onClick={() =>
+                          upgradeAgent.mutate({
+                            sessionId: snapshot.session.id,
+                            revisionId: snapshot.agent!.revisionId,
+                          })
+                        }
+                      >
+                        在此会话使用新版
+                      </Button>
+                    ) : null}
                     {snapshot?.agent ? (
                       <Button
                         size="sm"

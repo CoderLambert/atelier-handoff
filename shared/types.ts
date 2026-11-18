@@ -145,6 +145,7 @@ export interface AgentRunInfo {
   capabilities: AgentCapability[];
 }
 export interface AgentSessionInfo extends AgentRunInfo {
+  canUpgrade?: boolean;
   mode: Mode;
   starters: string[];
   skills: AgentSkillRef[];

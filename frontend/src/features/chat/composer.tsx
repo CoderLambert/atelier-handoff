@@ -264,7 +264,8 @@ export function Composer({
       </div>
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
-          {agent.issues.join('；')}。从会话顶部进入智能体管理修复后，可使用新版本开始会话。
+          {agent.issues.join('；')}。
+          {agent.canUpgrade ? '可从会话顶部使用新版智能体。' : '在智能体管理中检查依赖并发布新版。'}
         </p>
       ) : null}
       {agent?.starters.length && !snapshot.messages.length && !archived ? (

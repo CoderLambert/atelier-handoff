@@ -108,7 +108,11 @@ export function SkillMarket({
           </ActionButton>
         </div>
         <div className="market-source-panel" hidden={marketSource !== 'skillhub'}>
-          <SkillHubMarket projectId={projectId} onSaved={onSaved} />
+          <SkillHubMarket
+            projectId={projectId}
+            active={marketSource === 'skillhub'}
+            onSaved={onSaved}
+          />
         </div>
         <div className="market-source-panel" hidden={marketSource !== 'curated'}>
           <div className="ext-market market-curated">

@@ -17,13 +17,29 @@ interface SkillHubItem {
   version: string;
   description: string;
   publisher?: string;
+  category?: string;
 }
+
+const categoryLabels: Record<string, string> = {
+  'dev-programming': '编程开发',
+  professional: '专业服务',
+  'ai-agent': '智能体',
+  'design-media': '设计与媒体',
+  'knowledge-management': '知识管理',
+  'office-efficiency': '办公效率',
+  'data-analysis': '数据分析',
+  'content-creation': '内容创作',
+  'life-service': '生活服务',
+  'business-ops': '商业运营',
+};
 
 export function SkillHubMarket({
   projectId,
+  active,
   onSaved,
 }: {
   projectId: string;
+  active: boolean;
   onSaved: (message: string) => void;
 }) {
   const detailId = useId();
@@ -35,6 +51,7 @@ export function SkillHubMarket({
   const resultPosition = useRef(0);
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
   const [selected, setSelected] = useState<SkillHubItem>();
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -42,7 +59,7 @@ export function SkillHubMarket({
   const extensions = useQuery(extensionsQuery(projectId));
   const results = useQuery({
     queryKey: ['extensions', projectId, 'skillhub-search', query],
-    enabled: Boolean(query),
+    enabled: active,
     queryFn: ({ signal }) =>
       api<{ items: SkillHubItem[] }>(
         `${endpoint(projectId, 'skillhub-search')}?q=${encodeURIComponent(query)}`,
@@ -86,7 +103,7 @@ export function SkillHubMarket({
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = input.trim();
-    if (!next) return;
+    setCategory('');
     setSelected(undefined);
     setError('');
     setMessage('');
@@ -111,8 +128,32 @@ export function SkillHubMarket({
     }
   }
   const items = results.data?.items ?? [];
+  const categories = [...new Set(items.flatMap((item) => (item.category ? [item.category] : [])))];
+  const filtered = category ? items.filter((item) => item.category === category) : items;
   return (
     <div className="ext-market skillhub-market">
+      {categories.length > 0 ? (
+        <div
+          className="market-categories"
+          role="group"
+          aria-label="SkillHub 分类"
+          hidden={Boolean(selected)}
+        >
+          {['', ...categories].map((value) => (
+            <ActionButton
+              key={value}
+              primary={value === category}
+              aria-pressed={value === category}
+              onClick={() => {
+                setCategory(value);
+                if (resultScroll.current) resultScroll.current.scrollTop = 0;
+              }}
+            >
+              {value ? (categoryLabels[value] ?? value) : '全部分类'}
+            </ActionButton>
+          ))}
+        </div>
+      ) : null}
       <form className="skillhub-search" onSubmit={search} hidden={Boolean(selected)}>
         <label className="ext-search">
           <span aria-hidden="true">⌕</span>
@@ -127,7 +168,7 @@ export function SkillHubMarket({
             onChange={(event) => setInput(event.target.value)}
           />
         </label>
-        <ActionButton type="submit" primary disabled={!input.trim() || install.isPending}>
+        <ActionButton type="submit" primary disabled={install.isPending}>
           搜索
         </ActionButton>
       </form>
@@ -144,19 +185,17 @@ export function SkillHubMarket({
           <p className="market-result-count" role="status">
             {results.isFetching
               ? '正在搜索…'
-              : query && !results.isError
-                ? `「${query}」· ${items.length} 项结果`
-                : 'SkillHub 搜索结果'}
+              : results.isSuccess
+                ? `${query ? `「${query}」` : '推荐技能'} · ${filtered.length} 项`
+                : 'SkillHub 技能'}
           </p>
           <div ref={resultScroll} className="skillhub-result-scroll">
             <ErrorMessage error={results.error} />
-            {!query || (results.isSuccess && !items.length) ? (
-              <p className="skillhub-empty">
-                {query ? '没有匹配的技能。试试更短的关键词。' : '输入关键词查找 SkillHub 技能。'}
-              </p>
+            {results.isSuccess && !filtered.length ? (
+              <p className="skillhub-empty">没有匹配的技能。可以换一个关键词或分类。</p>
             ) : null}
             <ul className="market-catalog-list">
-              {items.map((item) => (
+              {filtered.map((item) => (
                 <li key={item.coordinate}>
                   <button
                     type="button"
@@ -180,7 +219,12 @@ export function SkillHubMarket({
                     </span>
                     <span className="market-result-meta">
                       <span>{item.publisher || item.coordinate.split('/')[0]}</span>
-                      <span>v{item.version}</span>
+                      <span>
+                        {item.category
+                          ? `${categoryLabels[item.category] ?? item.category} · `
+                          : ''}
+                        v{item.version}
+                      </span>
                     </span>
                     <span aria-hidden="true" className="market-result-arrow">
                       ›

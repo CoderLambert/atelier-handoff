@@ -6,17 +6,23 @@ import { normalizeSkillHubMarkdown, previewSkillHub, searchSkillHub } from '../s
 const coordinates = '@example/react';
 
 test('SkillHub search preserves namespace and pins the listed version', async () => {
-  const results = await searchSkillHub('react', async (input) => {
+  const results = await searchSkillHub('', async (input) => {
     const url = new URL(String(input));
     assert.equal(url.origin, 'https://api.skillhub.cn');
-    assert.equal(url.searchParams.get('q'), 'react');
+    assert.equal(url.searchParams.get('q'), '');
     return Response.json({
       results: [
-        { namespace: { canonicalName: coordinates }, displayName: 'React', version: '1.2.3' },
+        {
+          namespace: { canonicalName: coordinates },
+          displayName: 'React',
+          version: '1.2.3',
+          category: 'dev-programming',
+        },
       ],
     });
   });
   assert.equal(results[0]?.source, `skillhub:${coordinates}@1.2.3`);
+  assert.equal(results[0]?.category, 'dev-programming');
 });
 
 test('SkillHub download rejects redirects outside the approved package CDN', async () => {

@@ -18,6 +18,11 @@ const markdownLimit = 65_000;
 const searchResult = z.object({
   namespace: z.object({ canonicalName: z.string().regex(coordinate) }),
   displayName: z.string(),
+  category: z
+    .string()
+    .regex(/^[a-z0-9-]{1,60}$/)
+    .nullish()
+    .catch(undefined),
   description: z.string().optional(),
   description_zh: z.string().optional(),
   owner_name: z.string().nullish(),
@@ -85,7 +90,7 @@ export async function searchSkillHub(query: string, request = fetch) {
     .safeParse(
       await apiJson(
         '/api/v1/search',
-        { q: query, limit: '24' },
+        { q: query, limit: '48' },
         request,
         AbortSignal.timeout(10_000),
       ),
@@ -93,7 +98,7 @@ export async function searchSkillHub(query: string, request = fetch) {
   if (!result.success)
     throw new AppError('SKILLHUB_INVALID_RESPONSE', 'SkillHub 搜索结果格式发生变化。', 502);
   const seen = new Set<string>();
-  return result.data.results.slice(0, 24).flatMap((raw) => {
+  return result.data.results.slice(0, 48).flatMap((raw) => {
     const parsed = searchResult.safeParse(raw);
     if (!parsed.success) return [];
     const item = parsed.data;
@@ -108,6 +113,7 @@ export async function searchSkillHub(query: string, request = fetch) {
         title: item.displayName.slice(0, 160),
         description: (item.description_zh || item.description || '').slice(0, 600),
         publisher: item.owner_name?.slice(0, 100),
+        category: item.category ?? undefined,
       },
     ];
   });

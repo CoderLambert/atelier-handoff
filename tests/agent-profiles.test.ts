@@ -200,6 +200,26 @@ test('project agents bind immutable revisions and combine only authorized Skill 
       config: { ...config, instructions: '更新的角色指令。' },
     });
     assert.equal(second.version, 2);
+    const { session: empty } = await api(
+      '/api/sessions',
+      'POST',
+      { projectId: project.id, agentRevisionId: first.revisionId },
+      201,
+    );
+    await api(`/api/sessions/${empty.id}`, 'PATCH', {
+      draft: { ...empty.draft, text: '待发送草稿' },
+    });
+    await api(
+      `/api/sessions/${session.id}/upgrade-agent`,
+      'POST',
+      { revisionId: first.revisionId },
+      409,
+    );
+    const { session: upgraded } = await api(`/api/sessions/${empty.id}/upgrade-agent`, 'POST', {
+      revisionId: first.revisionId,
+    });
+    assert.equal(upgraded.agentRevisionId, second.revisionId);
+    assert.equal(upgraded.draft.text, '待发送草稿');
     assert.equal((await api(`/api/sessions/${session.id}`)).agent.version, 1);
     await api(`${agents}/${first.id}`, 'PATCH', { baseRevisionId: first.revisionId, config }, 409);
     const { run: retry } = await api(

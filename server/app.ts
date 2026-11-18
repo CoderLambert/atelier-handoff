@@ -192,12 +192,26 @@ export async function createApp(options: {
     const agent = session.agentRevisionId
       ? agents.binding(agents.revision(session.projectId, session.agentRevisionId))
       : undefined;
+    const runs = store.list('runs').filter((run) => run.sessionId === id);
+    const messages = store.list('messages').filter((message) => message.sessionId === id);
+    const latest =
+      agent?.issues.length && session.status === 'active' && !runs.length && !messages.length
+        ? agents.card(session.projectId, agent.id)
+        : undefined;
     return {
-      ...(agent ? { agent } : {}),
+      ...(agent
+        ? {
+            agent: {
+              ...agent,
+              canUpgrade:
+                !!latest && latest.revisionId !== agent.revisionId && !latest.issues.length,
+            },
+          }
+        : {}),
       session,
       project: store.get('projects', session.projectId),
-      messages: store.list('messages').filter((m) => m.sessionId === id),
-      runs: store.list('runs').filter((r) => r.sessionId === id),
+      messages,
+      runs,
       tools: store.list('tools').filter((t) => t.sessionId === id),
       permissions: store.list('permissions').filter((p) => p.sessionId === id),
       artifacts: store.list('artifacts').filter((a) => a.sessionId === id),
@@ -319,6 +333,8 @@ export async function createApp(options: {
         throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
       const latest = store.get('sessions', sessionId);
       if (latest.status !== 'active') throw new AppError('SESSION_ARCHIVED', '会话已归档。', 409);
+      if (latest.agentRevisionId !== session.agentRevisionId)
+        throw new AppError('AGENT_CHANGED', '会话的智能体版本已变化，请重试。', 409);
       if (revision) agents.requireReady(project.id, revision.id);
       for (const extension of bundle?.used ?? []) {
         const current = extensions.get(project.id, extension.id);
@@ -559,7 +575,11 @@ export async function createApp(options: {
         }
         if (parts.length === 5 && id === 'skillhub-search' && method === 'GET') {
           store.get('projects', projectId);
-          const query = z.string().trim().min(1).max(120).parse(url.searchParams.get('q'));
+          const query = z
+            .string()
+            .trim()
+            .max(120)
+            .parse(url.searchParams.get('q') ?? '');
           return json(res, { items: await searchSkillHub(query) });
         }
         if (parts.length === 5 && id === 'market-preview' && method === 'POST') {
@@ -748,6 +768,35 @@ export async function createApp(options: {
         }
         const id = parts[2]!;
         if (parts.length === 3 && method === 'GET') return json(res, sessionSnapshot(id));
+        if (parts.length === 4 && parts[3] === 'upgrade-agent' && method === 'POST') {
+          const { revisionId } = z.object({ revisionId: z.string().uuid() }).parse(await body(req));
+          const session = store.transaction(() => {
+            const current = store.get('sessions', id);
+            if (
+              current.status !== 'active' ||
+              deletingSessions.has(id) ||
+              current.agentRevisionId !== revisionId ||
+              store.list('runs').some((run) => run.sessionId === id) ||
+              store.list('messages').some((message) => message.sessionId === id)
+            )
+              throw new AppError(
+                'AGENT_CHANGED',
+                '只有尚未发送消息的会话可以升级智能体版本。',
+                409,
+              );
+            const previous = agents.revision(current.projectId, revisionId);
+            const latest = agents.card(current.projectId, previous.agentId);
+            if (latest.revisionId === revisionId)
+              throw new AppError('AGENT_CHANGED', '请先发布修复后的智能体版本。', 409);
+            agents.requireReady(current.projectId, latest.revisionId);
+            return store.update('sessions', id, {
+              agentRevisionId: latest.revisionId,
+              updatedAt: now(),
+            });
+          });
+          store.event('session-' + id, id, 'session.updated', {});
+          return json(res, { session });
+        }
         if (parts.length === 3 && method === 'PATCH') {
           const update = z
             .object({

@@ -350,7 +350,10 @@ export class AgentProfiles {
     for (const kind of ['skills', 'mcp'] as const) {
       for (const dependency of current.dependencies[kind]) {
         const previous = saved.data[kind].find((item) => item.id === dependency.id);
-        if (canonical(previous) !== canonical(dependency))
+        if (
+          previous?.version === dependency.version &&
+          canonical(previous) !== canonical(dependency)
+        )
           current.issues.push(
             `${kind === 'skills' ? 'Skill' : 'MCP'} ${dependency.name} 的内容或授权已变化，请重新选择并发布新版本。`,
           );
