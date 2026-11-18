@@ -9,6 +9,7 @@ import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
 import { authorizeRoot, readProjectText, listProjectFiles, fingerprint, resolveProjectPath, inside } from './files.js';
 import { commandsAvailable } from './commands.js';
+import { pickProjectDirectory } from './project-picker.js';
 import { AppError, activeStatuses, emptyDraft, now, type Run, type Session, type AppConfig, type RunEvent } from '../shared/types.js';
 
 const inputSchema = z.object({ text: z.string().trim().min(1).max(32000), mode: z.enum(['readonly', 'edit']).default('readonly'), contextPaths: z.array(z.string().max(1000)).max(30).default([]), attachmentIds: z.array(z.string().uuid()).max(20).default([]), idempotencyKey: z.string().uuid() });
@@ -28,7 +29,7 @@ function page<T>(items: T[], url: URL) {
 async function branchFor(root: string): Promise<string> {
   try { if ((await lstat(join(root, '.git'))).isSymbolicLink() || (await lstat(join(root, '.git', 'HEAD'))).isSymbolicLink()) return ''; const text = (await readFile(join(root, '.git', 'HEAD'), 'utf8')).trim(); return text.startsWith('ref: refs/heads/') ? text.slice(16) : 'detached'; } catch { return ''; }
 }
-export async function createApp(options: { root: string; data: string; runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner; permissionTtlMs?: number }) {
+export async function createApp(options: { root: string; data: string; runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner; permissionTtlMs?: number; pickDirectory?: typeof pickProjectDirectory }) {
   const store = new Store(options.data); store.recover();
   const permissions = new PermissionService(store, options.permissionTtlMs);
   const files = new FileRecords(store);
@@ -36,6 +37,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const deletingSessions = new Set<string>();
+  let directoryPicker: AbortController | undefined;
   const streams = new Set<ServerResponse>();
   const connection = async (config: AppConfig) => {
     try { const response = await fetch(config.gateway.replace(/\/$/, '') + '/health', { signal: AbortSignal.timeout(3000) }); if (!response.ok) throw new Error(); return { available: true, message: '本机网关可访问；模型认证以实际执行结果为准。' }; }
@@ -120,6 +122,22 @@ export async function createApp(options: { root: string; data: string; runnerFac
       }
       if (parts[0] === 'api' && parts[1] === 'projects') {
         if (parts.length === 2 && method === 'GET') return json(res, page(await projects(), url));
+        if (parts.length === 3 && parts[2] === 'pick-directory' && method === 'POST') {
+          await body(req);
+          if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
+          if (directoryPicker) throw new AppError('PROJECT_PICKER_BUSY', '系统目录选择框已打开，请先完成或取消选择。', 409);
+          const picker = new AbortController();
+          directoryPicker = picker;
+          const cancel = () => picker.abort();
+          res.once('close', cancel);
+          try {
+            const path = await (options.pickDirectory ?? pickProjectDirectory)(picker.signal);
+            return json(res, { path });
+          } finally {
+            res.off('close', cancel);
+            directoryPicker = undefined;
+          }
+        }
         if (parts.length === 2 && method === 'POST') {
           const input = z.object({ path: z.string().min(1).max(2000) }).parse(await body(req)); const path = await authorizeRoot(input.path);
           if (path === options.data || path.startsWith(options.data + '/')) throw new AppError('PATH_DENIED', '不能把工作台私有数据目录绑定为项目。', 403);
@@ -223,7 +241,7 @@ export async function createApp(options: { root: string; data: string; runnerFac
     }
   });
   return { server, store, permissions, files, runner, close: async () => {
-    shuttingDown = true; await runner.shutdown(); for (const stream of streams) stream.end();
+    shuttingDown = true; directoryPicker?.abort(); await runner.shutdown(); for (const stream of streams) stream.end();
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); store.close();
   } };
 }

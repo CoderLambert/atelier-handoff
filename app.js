@@ -10,7 +10,7 @@ const pages={sessions:0,runs:0,artifacts:0}, pageInfo={}, filters={runStatus:'',
 const storage={get:key=>{try{return localStorage.getItem(key);}catch{return null;}},set:(key,value)=>{try{localStorage.setItem(key,value);}catch{}},remove:key=>{try{localStorage.removeItem(key);}catch{}}};
 function toast(message) { const el=$('#toast'); el.textContent=message; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,4500); }
 async function api(path, options={}) {
- const init={method:options.method || 'GET', headers:{}};
+ const init={method:options.method || 'GET', headers:{}, signal:options.signal};
  if(init.method!=='GET') { init.headers={'Content-Type':'application/json','X-Atelier-Token':state.token}; init.body=JSON.stringify(options.body || {}); }
  let response; try { response=await fetch(path,init); } catch { throw new Error('网络连接失败，请检查本地服务。'); }
  const data=await response.json().catch(()=>({}));
@@ -84,7 +84,44 @@ $('#detail-dialog').addEventListener('close',()=>{ const target=state.dialogTrig
 async function switchSession(id) { if($('#detail-dialog').open) closeDialog(); if(state.current) persistDraft(); state.current=id; storage.set('atelier-last-session',id); state.view='chat'; state.tab='conversation'; $('#conversation-content').dataset.rendered=''; closeDrawers(); await loadSnapshot(id); render(); }
 function closeDrawers() {const hadDrawer=document.body.classList.contains('nav-open') || document.body.classList.contains('drawer-aside'); document.body.classList.remove('nav-open','drawer-aside'); if(innerWidth<1024) document.body.classList.add('aside-closed'); setInert(); if(hadDrawer && drawerTrigger?.isConnected && drawerTrigger.getClientRects().length) drawerTrigger.focus();}
 function setInert() {const nav=document.body.classList.contains('nav-open'), aside=document.body.classList.contains('drawer-aside'); $('.main').inert=nav||aside; $('.sidebar').inert=aside; $('.right-panel').inert=nav; $('.nav-scrim').style.display=aside?'block':''; $('.mobile-menu').setAttribute('aria-expanded',String(nav)); $$('.topbar [data-action=toggle-aside]').forEach(b=>b.setAttribute('aria-expanded',String(innerWidth<1024?aside:!document.body.classList.contains('aside-closed'))));}
-async function projectDialog() {openDialog('项目目录',`<p class="settings-intro">输入本机项目的绝对路径，服务端将验证目录。</p><label>目录路径<input id="project-path" class="field" placeholder="/home/your/project"></label><div class="dialog-actions"><button class="btn btn-primary" data-action="bind-project">绑定项目</button></div><div class="context-options">${state.projects.map(p=>`<button class="context-option" data-action="choose-project" data-id="${esc(p.id)}">${esc(p.name)} · ${esc(p.path)}</button>`).join('')}</div>`);}
+async function projectDialog() {
+ openDialog('项目目录',`
+  <button class="btn btn-secondary" data-action="pick-project-directory" autofocus>选择文件夹…</button>
+  <p id="project-picker-status" role="status" class="muted"></p>
+  <label>目录路径（也可手动输入）<input id="project-path" class="field" placeholder="/home/your/project"></label>
+  <div class="dialog-actions"><button class="btn btn-primary" data-action="bind-project">绑定项目</button></div>
+  <div class="context-options">${state.projects.map(p=>`<button class="context-option" data-action="choose-project" data-id="${esc(p.id)}">${esc(p.name)} · ${esc(p.path)}</button>`).join('')}</div>`);
+}
+async function chooseProjectDirectory(button) {
+ const dialog = $('#detail-dialog');
+ const input = $('#project-path');
+ const status = $('#project-picker-status');
+ const controller = new AbortController();
+ const cancel = () => controller.abort();
+ dialog.addEventListener('close', cancel, { once: true });
+ button.disabled = true;
+ status.textContent = '请在系统窗口中选择文件夹。';
+ try {
+  const {path} = await api('/api/projects/pick-directory', {method:'POST', signal:controller.signal});
+  if (!input.isConnected || !dialog.open) return;
+  status.textContent = '';
+  if (path !== null) {
+   input.value = path;
+   $('[data-action=bind-project]', dialog).focus();
+  } else {
+   button.disabled = false;
+   button.focus();
+  }
+ } catch (error) {
+  if (input.isConnected && dialog.open && !controller.signal.aborted) {
+   status.textContent = error.message;
+   input.focus();
+  }
+ } finally {
+  dialog.removeEventListener('close', cancel);
+  button.disabled = false;
+ }
+}
 async function browse(path='') {const p=currentProject(); if(!p) return toast('请先绑定项目'); const data=await api(`/api/projects/${enc(p.id)}/files?path=${enc(path)}`); openDialog('选择项目上下文',`<div class="dialog-actions"><button class="btn btn-secondary" data-action="browse" data-path="${esc(path.split('/').slice(0,-1).join('/'))}">上一级</button><span>${esc(path || '/')}</span></div><div class="context-options">${data.items.map(f=>`<div class="file-choice"><button class="context-option" data-action="${f.isDirectory?'browse':'preview-file'}" data-path="${esc(f.path)}">${f.isDirectory?'📁':'▤'} ${esc(f.name)}</button>${!f.isDirectory?`<button class="btn btn-secondary" data-action="select-context" data-path="${esc(f.path)}">选择</button>`:''}</div>`).join('') || '<p>目录为空</p>'}</div>`,true); }
 async function settings() { const data=await api('/api/config'); state.config=data.config; state.connection=data.connection || {}; const c=state.config; openDialog('模型与网关设置',`<p class="settings-intro">${esc(state.connection.message || '')}</p><label>网关<input class="field" id="config-gateway" value="${esc(c.gateway)}"></label><label>模型<input class="field" id="config-model" value="${esc(c.model)}"></label><label>最大轮数<input class="field" type="number" id="config-turns" value="${esc(c.maxTurns)}"></label><label>超时（毫秒）<input class="field" type="number" id="config-timeout" value="${esc(c.timeoutMs)}"></label><div class="dialog-actions"><button class="btn btn-primary" data-action="save-settings">保存</button></div>`); }
 async function send() {const id=state.current, d=getDraft(id); if(!d.text.trim() && !d.attachmentIds.length && !d.contextPaths.length) return; if((state.uploading.get(id)||[]).some(x=>x.status==='上传中')) return toast('请等待附件上传完成'); let pending=state.pending.get(id); const payload={text:d.text,mode:d.mode,contextPaths:[...d.contextPaths],attachmentIds:[...d.attachmentIds]}; const fingerprint=JSON.stringify(payload); if(!pending || pending.fingerprint!==fingerprint) {pending={fingerprint,key:crypto.randomUUID()};state.pending.set(id,pending);} try {await api(`/api/sessions/${enc(id)}/messages`,{method:'POST',body:{...payload,idempotencyKey:pending.key}}); state.pending.delete(id); if(JSON.stringify({text:d.text,mode:d.mode,contextPaths:d.contextPaths,attachmentIds:d.attachmentIds})===fingerprint) {Object.assign(d,draftDefault(),{mode:d.mode}); if(id===state.current) $('#prompt-input').value=''; persistDraft(id);} await refresh();} catch(e) {toast('发送未确认，可使用相同内容重试：'+e.message);} }
@@ -92,6 +129,7 @@ async function upload(files) {const id=state.current;if(!id)return toast('请先
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-action]');if(!b)return; const a=b.dataset.action, id=b.dataset.id, path=b.dataset.path; try {
  if(a==='close') closeDialog();
  else if(a==='project') await projectDialog();
+ else if(a==='pick-project-directory') await chooseProjectDirectory(b);
  else if(a==='bind-project') {state.selectedRun=null;const result=await api('/api/projects',{method:'POST',body:{path:$('#project-path').value.trim()}}); state.projects.push(result.project); closeDialog(); const s=await api('/api/sessions',{method:'POST',body:{projectId:result.project.id}});await refreshLists();await switchSession(s.session.id);}
  else if(a==='choose-project') {state.selectedRun=null;closeDialog();const s=await api('/api/sessions',{method:'POST',body:{projectId:id}});await refreshLists();await switchSession(s.session.id);}
  else if(a==='new') {state.selectedRun=null;const p=currentProject() || state.projects[0]; if(!p)return projectDialog(); const result=await api('/api/sessions',{method:'POST',body:{projectId:p.id}});await refreshLists();await switchSession(result.session.id);}

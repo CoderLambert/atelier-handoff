@@ -24,7 +24,8 @@ function runData(sessionId = 'session', projectId = 'project'): Run {
 
 test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads, immutable artifacts and history', async () => fixture(async (base, project) => {
   let starts = 0;
-  const app = await createApp({ root: source, data: join(base, 'data'), runnerFactory: store => ({
+  let pickedDirectory: string | null = null;
+  const app = await createApp({ root: source, data: join(base, 'data'), pickDirectory: async () => pickedDirectory, runnerFactory: store => ({
     start(run) { starts++; store.update('runs', run.id, { status: 'running' }); },
     stop(id) { store.update('runs', id, { status: 'stopped', endedAt: now() }); },
     async shutdown() {},
@@ -40,7 +41,14 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
     token = (await request('/api/bootstrap')).csrfToken;
     const denied = await fetch(url + '/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: project }) }); assert.equal(denied.status, 403);
     const origin = await fetch(url + '/api/bootstrap', { headers: { Origin: 'https://example.com' } }); assert.equal(origin.status, 403);
-    const p = (await request('/api/projects', 'POST', { path: project }, 201)).project;
+    const pickerRoute = '/api/projects/pick-directory';
+    assert.equal((await fetch(url + pickerRoute, { method: 'POST' })).status, 403);
+    assert.deepEqual(await request(pickerRoute, 'POST', {}), { path: null });
+    pickedDirectory = project;
+    const selection = await request(pickerRoute, 'POST', {});
+    assert.deepEqual(selection, { path: project });
+    assert.equal((await request('/api/projects')).total, 0);
+    const p = (await request('/api/projects', 'POST', selection, 201)).project;
     const s1 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
     const s2 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
     await request(`/api/sessions/${s1.id}`, 'PATCH', { draft: { text: 'draft one', contextPaths: ['note.txt'], attachmentIds: [], mode: 'readonly' } });
