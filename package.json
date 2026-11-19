@@ -23,7 +23,9 @@
     "predev": "npm run build:markdown && npm run prepare:preview",
     "precheck": "npm run build:markdown",
     "prebuild": "npm run build:markdown && npm run prepare:preview",
-    "prepare:preview": "cd frontend && node ../node_modules/@lamberl-lee/file-preview/scripts/copy-pdf-worker.mjs"
+    "prepare:preview": "cd frontend && node ../node_modules/@lamberl-lee/file-preview/scripts/copy-pdf-worker.mjs",
+    "desktop": "electron desktop/main.mjs",
+    "predesktop": "npm run build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.326",
@@ -58,6 +60,7 @@
     "@types/react-dom": "19.3.0",
     "@types/yauzl": "3.4.0",
     "@vitejs/plugin-react": "6.3.0",
+    "electron": "45.4.1",
     "prettier": "3.10.1",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",

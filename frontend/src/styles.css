@@ -353,3 +353,56 @@
   height: auto;
   background: white;
 }
+
+.desktop-browser {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.react-side:has(.desktop-browser),
+.react-drawer-details:has(.desktop-browser) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (max-width: 1120px) {
+  .react-workspace .react-side:has(.desktop-browser) {
+    display: none;
+  }
+}
+.desktop-browser-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.desktop-browser-toolbar input {
+  flex: 1;
+  min-width: 110px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.desktop-browser-status {
+  padding: 8px 12px;
+  background: var(--surface-warm);
+  font-size: var(--text-sm);
+}
+.desktop-browser-slot {
+  flex: 1;
+  min-height: 0;
+  background: var(--surface-warm);
+}
+
+@media (min-width: 900px) and (max-width: 1120px) {
+  .react-workspace.desktop-workspace.browser-preview-open {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr) minmax(320px, 36vw);
+  }
+  .react-workspace.desktop-workspace .react-side:has(.desktop-browser) {
+    display: flex;
+  }
+}

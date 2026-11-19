@@ -17,6 +17,7 @@ import { keys, useRunEvents } from './events';
 import { ProjectsDialog } from './projects';
 import { Sidebar } from './sidebar';
 import { BrowserPreview, useBrowserPreview } from './browser-preview';
+import { DesktopBrowser, useDesktopBrowser } from './desktop-browser';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 
 const SessionChat = lazy(() => import('./session-chat'));
@@ -83,14 +84,17 @@ export default function Workspace() {
     ready.data?.projects[0];
   const [sideTab, setSideTab] = useState<'details' | 'browser'>('details');
   const previewProject = view === 'chat' ? project?.id : undefined;
-  const browser = useBrowserPreview(previewProject, sideTab === 'browser');
+  const desktop = Boolean(window.atelierDesktop);
+  const nativeBrowser = useDesktopBrowser(desktop ? previewProject : undefined);
+  const browser = useBrowserPreview(desktop ? undefined : previewProject, sideTab === 'browser');
+  const previewUrl = desktop ? nativeBrowser?.url : browser.data?.frame?.url;
   const firstPreview = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (previewProject && browser.data?.frame && firstPreview.current !== previewProject) {
+    if (previewProject && previewUrl && firstPreview.current !== previewProject) {
       firstPreview.current = previewProject;
       setSideTab('browser');
     }
-  }, [previewProject, browser.data?.frame]);
+  }, [previewProject, previewUrl]);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionChange, setSessionChange] = useState<{ type: SessionAction; session: Session }>();
@@ -255,7 +259,11 @@ export default function Workspace() {
         </Button>
       </div>
       {sideTab === 'browser' ? (
-        <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
+        desktop && previewProject ? (
+          <DesktopBrowser key={previewProject} projectId={previewProject} state={nativeBrowser} />
+        ) : (
+          <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
+        )
       ) : (
         inspector
       )}
@@ -268,7 +276,9 @@ export default function Workspace() {
         ? sessionActions[sessionChange.type]
         : '';
   return (
-    <div className={`app react-workspace${sideTab === 'browser' ? ' browser-preview-open' : ''}`}>
+    <div
+      className={`app react-workspace${desktop ? ' desktop-workspace' : ''}${sideTab === 'browser' ? ' browser-preview-open' : ''}`}
+    >
       <Sidebar {...sideProps} />
       <main className="main">
         <header className="topbar">

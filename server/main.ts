@@ -38,6 +38,8 @@ try {
     app.server.once('error', reject);
     app.server.listen(port, '127.0.0.1', resolve);
   });
+  if (process.env.ATELIER_DESKTOP_BROWSER === '1')
+    process.send?.({ type: 'desktop-browser-ready' });
   console.log(`atelier ready: http://127.0.0.1:${port}`);
   console.log(`Private data: ${data}`);
   let stopping = false;
