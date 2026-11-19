@@ -7,6 +7,8 @@ description: 在 atelier 设计、实现或评审 Electron 桌面功能时使用
 
 读取仓库根 `CLAUDE.md`、当前路线图阶段和 `package.json` 中锁定的 Electron 版本。用本地 `node_modules/electron/electron.d.ts` 核实依赖的 API，再打开相关官方页。用户要确认方案时，先交付架构取舍、数据影响与可测试结果。
 
+修改桌面、preload、打包或验收脚本时，执行源码采用 `.ts`、`.mts` 或 `.cts`。构建生成最终 Electron 使用的 JS。桌面和工具链分别运行 `npm run check:desktop` 和 `npm run check:tools`，跨进程契约从同一份运行时 schema 推导。
+
 ## 1. 给改动指定负责人
 
 列出发起操作的一方、最终裁决的一方、持有状态的一方和释放资源的时刻。窗口、系统原生对话框、网页实例由 main 管。可信 renderer 展示状态。preload 提供逐操作的窄接口。运行时保管项目记录、模型连接、审批和不可变成果。隔离工具、数据库、解码和长耗时工作留在适合的子进程。输入和输出先写成可检查的契约，明确取消和超时后由谁收尾。
