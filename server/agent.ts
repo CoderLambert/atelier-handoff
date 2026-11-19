@@ -38,6 +38,7 @@ import { callMcp } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
 import { mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
 import { executeSkillPackage, readSkillResource, supportsSearch } from './skill-package-runtime.js';
+import { lookupWeather, weatherLocation } from './weather.js';
 
 class InputQueue {
   private values: SDKUserMessage[] = [];
@@ -153,6 +154,9 @@ export class AgentRunner implements Runner {
       validateAgent?.();
     };
     const automaticSkills = skills.filter((skill) => !skill.manual);
+    const weatherEnabled =
+      automaticSkills.some((skill) => skill.name === 'weather') ||
+      run.extensions?.some((item) => item.kind === 'skill' && item.name === 'weather') === true;
     const candidates = new Map(automaticSkills.map((skill) => [sdkSkillName(skill), skill]));
     const packages = new Map(
       skills.filter((skill) => skill.package).map((skill) => [skill.name, skill]),
@@ -167,6 +171,7 @@ export class AgentRunner implements Runner {
         ...(run.agent ? { agent: run.agent, capabilityPolicy: 1 } : {}),
         ...(run.extensions ? { extensions: run.extensions } : {}),
         ...(skillRefs.length ? { skills: skillRefs } : {}),
+        ...(weatherEnabled ? { weatherLookup: true } : {}),
       }),
     );
     const resumeExisting =
@@ -487,6 +492,15 @@ export class AgentRunner implements Runner {
             await applyText(project.path, args.path, before, null, signal, verifyCurrent);
             return { path: args.path, deleted: true };
           },
+        ),
+      );
+    if (weatherEnabled)
+      mcpTools.push(
+        custom(
+          'weather_lookup',
+          'Read current weather and a three-day forecast from wttr.in. Only the requested place is sent to the provider. Report the matched place and ask for clarification if it does not match.',
+          { location: weatherLocation },
+          async (args) => lookupWeather(args.location, signal),
         ),
       );
     if (run.mode === 'edit' && allowed('command') && commandsAvailable())
@@ -1027,10 +1041,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       const packageGuidance = packages.size
         ? '本轮可用的技能包：' +
           [...packages.keys()].join('、') +
-          '。通过 read_skill_resource 读取包内文件。已开放 run_skill_script 时用它执行包内脚本。全网搜索使用 skill_search，对原请求依次报价、执行或取回，审批窗口绑定实际请求和费用上限。用工具返回的交付物 ID 交付文件。\n\n'
+          '。通过 read_skill_resource 读取包内文件。工具列表包含 run_skill_script 时用它执行包内脚本。工具列表包含 skill_search 时，可用它对搜索请求报价、执行或取回。用工具返回的交付物 ID 交付文件。\n\n'
+        : '';
+      const weatherGuidance = weatherEnabled
+        ? '用户请求实时天气或近期预报时，先调用 weather_lookup。可以使用城市的常用英文名（如昆山用 Kunshan）或用户提供的坐标。回复中注明来源、匹配地点和观测时间。\n\n'
         : '';
       input.push(
-        `${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}用户本轮任务：\n${inputText}`,
+        `${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}${weatherGuidance}用户本轮任务：\n${inputText}`,
       );
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {

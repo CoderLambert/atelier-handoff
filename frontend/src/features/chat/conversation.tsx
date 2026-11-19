@@ -30,6 +30,7 @@ const toolLabels: Record<string, string> = {
   write_file: '写入文件',
   delete_file: '删除文件',
   run_command: '运行命令',
+  weather_lookup: '查询天气',
   update_plan: '更新计划',
   publish_artifact: '发布交付物',
 };
