@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
         allow: [
           directory,
           fileURLToPath(new URL('../shared', import.meta.url)),
+          // Vite resolves the npm workspace symlink to the package's build directory.
+          fileURLToPath(new URL('../packages/markdown/dist', import.meta.url)),
           fileURLToPath(new URL('../node_modules', import.meta.url)),
         ],
         deny: [
