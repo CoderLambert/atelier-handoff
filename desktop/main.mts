@@ -1,7 +1,7 @@
 /**
- * @file 管理桌面应用生命周期和项目浏览器。
- * @implementation 启动后端与窗口，通过 IPC 和浏览器视图处理操作。
- * @updated 2026-11-20T02:00+08:00
+ * @file 管理桌面应用生命周期、原生浏览器与文件操作入口。
+ * @implementation 装配运行时监督、窗口、浏览器和原生文件入口，处理数据迁入、连接恢复与退出。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';

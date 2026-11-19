@@ -1,3 +1,8 @@
+/**
+ * @file 定义工作台及桌面浏览器的界面样式。
+ * @implementation 引入 Tailwind 和工作台基础样式，定义主题变量、工作区布局及浏览器标签、工具栏和响应式样式。
+ * @updated 2026-11-20T03:13:21+08:00
+ */
 @import 'tailwindcss/theme.css' layer(theme);
 @import './styles/atelier.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);

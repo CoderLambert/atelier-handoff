@@ -1,3 +1,8 @@
+/**
+ * @file 展示交付物预览弹窗和文件操作。
+ * @implementation 按交付物 ID 查询内容，选择 HTML 沙箱、图片、PDF 或文本视图，并提供预览状态、重试和共享的文件操作。
+ * @updated 2026-11-20T03:34:05+08:00
+ */
 import { Maximize, Minimize, X } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';

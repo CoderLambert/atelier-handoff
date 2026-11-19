@@ -1,7 +1,7 @@
 /**
- * @file 声明工作台可用的桌面文件能力。
- * @implementation 通过可选 preload 契约区分桌面与 Web，不暴露文件系统路径操作。
- * @updated 2026-11-20T11:00:00+08:00
+ * @file 提供前端访问可选桌面文件桥的入口。
+ * @implementation 声明 preload 暴露的文件桥类型，并在存在浏览器窗口时返回该桥；Web 环境可获得 `undefined`。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 import type { DesktopFilesBridge } from '@shared/desktop-files';
 

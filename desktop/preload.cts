@@ -1,7 +1,7 @@
 /**
- * @file 向渲染进程提供桌面浏览器桥接接口。
- * @implementation 校验请求与状态，通过 Electron IPC 转发并管理订阅。
- * @updated 2026-11-20T02:00+08:00
+ * @file 向渲染进程提供桌面浏览器和原生文件桥接接口。
+ * @implementation 使用共享 schema 校验请求和响应，经 Electron IPC 转发浏览器及文件操作，并管理浏览器状态订阅。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {

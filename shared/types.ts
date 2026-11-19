@@ -1,3 +1,8 @@
+/**
+ * @file 定义工作台共享业务类型和基础辅助方法。
+ * @implementation 描述项目、会话、运行、扩展及文件等数据结构，并提供状态、错误和常用数据处理方法。
+ * @updated 2026-11-20T03:13:21+08:00
+ */
 export type RunStatus =
   | 'queued'
   | 'running'

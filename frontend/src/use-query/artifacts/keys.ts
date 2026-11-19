@@ -1,7 +1,7 @@
 /**
- * @file 定义交付物内容与已保存副本的缓存键。
- * @implementation 内容沿用现有交付物键，原生保存状态按不可变交付物 ID 隔离。
- * @updated 2026-11-20T11:00:00+08:00
+ * @file 定义交付物内容、已保存副本和文件操作的查询键。
+ * @implementation 以交付物 ID 区分内容查询、原生保存状态及文件操作 mutation。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 export const artifactKeys = {
   content: (id: string) => ['artifacts', id, 'content'] as const,

@@ -1,3 +1,8 @@
+/**
+ * @file 提供聊天任务输入、上下文与附件编辑界面。
+ * @implementation 根据会话和智能体状态控制发送及停止，将文件选择、粘贴和拖入交给附件编排 hook，并展示处理状态与错误。
+ * @updated 2026-11-20T03:34:05+08:00
+ */
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
 import type { Draft } from '@shared/types';

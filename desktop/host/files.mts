@@ -1,7 +1,7 @@
 /**
- * @file 管理可信工作台窗口的目录选择和交付物另存与定位。
- * @implementation 通过本机对话框取得用户目的地，只从当前配对运行时读取成果并登记已保存的副本。
- * @updated 2026-11-20T02:00+08:00
+ * @file 管理可信工作台窗口的原生文件操作与诊断导出。
+ * @implementation 校验 IPC 来源，通过系统对话框选择目录或保存位置；从配对运行时读取交付物、登记并定位已保存副本，或写出诊断信息。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { access, rename, rm, writeFile } from 'node:fs/promises';

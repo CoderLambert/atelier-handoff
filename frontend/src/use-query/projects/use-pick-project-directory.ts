@@ -1,7 +1,7 @@
 /**
- * @file 请求系统目录选择器。
- * @implementation 调用可取消的目录选择 mutation，返回选中的本机路径。
- * @updated 2026-11-20T02:00+08:00
+ * @file 请求项目目录选择并返回选择结果。
+ * @implementation 桌面环境调用 preload 文件桥，其他环境调用项目 API；在异步操作前后处理取消信号。
+ * @updated 2026-11-20T03:34:05+08:00
  */
 import { useMutation } from '@tanstack/react-query';
 import { api } from '@/api/client';

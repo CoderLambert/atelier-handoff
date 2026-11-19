@@ -1,3 +1,8 @@
+/**
+ * @file 展示交付物卡片及其预览和文件操作入口。
+ * @implementation 根据交付物可用状态显示信息，按需加载预览弹窗，并在卡片和弹窗之间共享保存与定位状态。
+ * @updated 2026-11-20T03:34:05+08:00
+ */
 import { lazy, Suspense, useState } from 'react';
 import type { Artifact } from '@shared/types';
 import { useArtifactFileActions } from '@/use-query/artifacts/use-artifact-file-actions';

@@ -1,3 +1,8 @@
+/**
+ * @file 管理 MCP 连接、工具发现和调用。
+ * @implementation 通过 HTTP 或本地进程连接 MCP，管理常驻会话、权限校验和结果处理；桌面浏览器工具通过进程间桥接执行。
+ * @updated 2026-11-20T03:13:21+08:00
+ */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';

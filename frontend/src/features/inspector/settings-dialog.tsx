@@ -1,3 +1,8 @@
+/**
+ * @file 提供模型与网关设置及桌面诊断导出界面。
+ * @implementation 查询和保存应用配置；桌面桥可用时调用原生诊断导出并显示结果。
+ * @updated 2026-11-20T03:34:05+08:00
+ */
 import { useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';

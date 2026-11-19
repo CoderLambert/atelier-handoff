@@ -1,3 +1,8 @@
+/**
+ * @file 定义聊天会话、输入区和附件交互的样式。
+ * @implementation 为消息列表、输入框、文件拖入状态、附件控件和预览弹窗提供布局与交互样式。
+ * @updated 2026-11-20T03:34:05+08:00
+ */
 .chat-conversation.conversation-content {
   position: relative;
   flex: 1 1 0;
