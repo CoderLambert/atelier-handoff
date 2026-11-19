@@ -70,7 +70,14 @@ function loadMath() {
 const controls = {
   code: { copy: true, download: false },
   table: false,
-  mermaid: { copy: true, download: false, fullscreen: false, panZoom: true },
+  mermaid: { copy: true, download: false, fullscreen: true, panZoom: true },
+};
+const translations = {
+  viewFullscreen: '全屏查看',
+  exitFullscreen: '退出全屏',
+  zoomIn: '放大',
+  zoomOut: '缩小',
+  resetView: '重置视图',
 };
 const rawLanguages = ['mermaid'];
 const urlTransform = (url: string) => (/^(https?:\/\/|mailto:)/i.test(url) ? url : '');
@@ -170,6 +177,7 @@ export const Markdown = memo(function Markdown({
         components={components}
         urlTransform={urlTransform}
         controls={controls}
+        translations={translations}
         mermaid={diagramOptions}
         plugins={plugins}
         codeBlockRawLanguages={rawLanguages}
