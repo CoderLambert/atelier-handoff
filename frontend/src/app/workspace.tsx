@@ -62,7 +62,12 @@ export default function Workspace() {
     queryKey: keys.snapshot(sessionId),
     enabled: !!sessionId,
     queryFn: ({ signal }) =>
-      api<Snapshot>(`/api/sessions/${encodeURIComponent(sessionId!)}`, { signal }),
+      api<Snapshot>(`/api/sessions/${encodeURIComponent(sessionId!)}`, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+      }),
+    // Keep approvals visible if the browser temporarily misses an event.
+    refetchInterval: ({ state }) =>
+      state.data?.runs.some((run) => active.has(run.status)) ? 3000 : false,
   });
   const snapshot = session.data;
   const selectedRun =
@@ -116,11 +121,9 @@ export default function Workspace() {
     dispatch(actions.setTab(next));
   }
   async function revalidate(id: string) {
-    await Promise.all([
-      client.invalidateQueries({ queryKey: keys.sessions }),
-      client.invalidateQueries({ queryKey: keys.snapshot(id) }),
-      client.invalidateQueries({ queryKey: keys.runs }),
-    ]);
+    void client.invalidateQueries({ queryKey: keys.sessions });
+    void client.invalidateQueries({ queryKey: keys.runs });
+    await client.invalidateQueries({ queryKey: keys.snapshot(id) });
   }
   const createSession = useMutation({
     mutationFn: (projectId: string) =>

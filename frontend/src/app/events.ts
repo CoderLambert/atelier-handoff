@@ -20,26 +20,26 @@ export function useRunEvents(client: QueryClient, cursor?: number) {
     let latest = cursor ?? 0;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let running = false;
     const pending = new Map<string, RefreshKey>();
+    const running = new Set<string>();
     const source = new EventSource(`/api/events?after=${latest}`);
     function scheduleRefresh() {
-      if (disposed || running || timer || !pending.size) return;
+      if (disposed || timer || ![...pending.keys()].some((hash) => !running.has(hash))) return;
       timer = setTimeout(() => {
         timer = undefined;
-        const batch = [...pending.entries()];
-        pending.clear();
-        running = true;
-        void Promise.all(
-          batch.map(async ([hash, queryKey]) => {
-            const refetch = client.isFetching({ queryKey }) > 0;
-            await client.invalidateQueries({ queryKey }, { cancelRefetch: false });
-            if (refetch && !disposed) pending.set(hash, queryKey);
-          }),
-        ).finally(() => {
-          running = false;
-          scheduleRefresh();
-        });
+        for (const [hash, key] of pending) {
+          if (running.has(hash)) continue;
+          pending.delete(hash);
+          running.add(hash);
+          const alreadyFetching = client.isFetching({ queryKey: key }) > 0;
+          // An event can arrive after an in-flight request captured an older snapshot.
+          void client.invalidateQueries({ queryKey: key }, { cancelRefetch: false }).finally(() => {
+            running.delete(hash);
+            if (disposed) return;
+            if (alreadyFetching) pending.set(hash, key);
+            scheduleRefresh();
+          });
+        }
       }, 180);
     }
     function schedule(...queryKeys: RefreshKey[]) {
