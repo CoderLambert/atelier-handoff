@@ -390,7 +390,12 @@ export function ExtensionPicker({
               <span
                 key={selection.id}
                 className={`ext-chip ${reason ? 'ext-chip-unavailable' : ''}`}
-                title={reason || selection.tools?.join(', ') || item?.description}
+                title={
+                  reason ||
+                  (item?.kind === 'skill'
+                    ? '此会话会保留该 Skill，点击 × 可移除。'
+                    : selection.tools?.join(', ') || item?.description)
+                }
               >
                 <span aria-hidden="true">{item ? marks[item.kind] : '+'}</span>
                 <span>

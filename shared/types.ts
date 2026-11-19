@@ -89,6 +89,13 @@ export interface UsedExtension {
   version: number;
   tools?: string[];
 }
+export function retainedSkillSelections(
+  extensions: UsedExtension[] | undefined,
+): ExtensionSelection[] {
+  return (extensions ?? [])
+    .filter(({ kind }) => kind === 'skill')
+    .map(({ id, version }) => ({ id, version }));
+}
 export const agentCapabilities = [
   'read',
   'search',

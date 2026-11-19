@@ -94,6 +94,17 @@ test('project extensions resolve isolated, versioned commands and skills through
     assert.equal(run.prompt, '/brief src/');
     assert.equal(run.extensions.length, 2);
     assert.deepEqual(started[0]!.skills, []);
+    const saved = (await api(`/api/sessions/${session.id}`)).session.draft;
+    assert.equal(saved.text, '');
+    assert.deepEqual(saved.extensionSelections, [{ id: skill.id, version: skill.version }]);
+    const followUp = (
+      await api(submit, 'POST', { ...saved, text: 'Continue', idempotencyKey: randomUUID() }, 202)
+    ).run;
+    assert.deepEqual(
+      followUp.extensions.map(({ name }: { name: string }) => name),
+      ['review'],
+    );
+    assert.match(started[1]!.prompt, /Use a checklist/);
     await api(`${endpoint}/${skill.id}`, 'PATCH', { enabled: false, version: skill.version });
     assert.equal((await api(submit, 'POST', request, 202)).run.id, run.id);
     assert.equal(
@@ -107,7 +118,7 @@ test('project extensions resolve isolated, versioned commands and skills through
     );
     const other = (await api('/api/projects', 'POST', { path: directory }, 403)).error;
     assert.equal(other.code, 'PATH_DENIED');
-    assert.equal(started.length, 1);
+    assert.equal(started.length, 2);
     const registry = new ProjectExtensions(app.store);
     app.store.put('projects', {
       ...project,
@@ -181,12 +192,12 @@ test('project extensions resolve isolated, versioned commands and skills through
       202,
     );
     assert.equal(
-      started[1]!.skills.find((item) => item.id === skill.id)?.version,
+      started[2]!.skills.find((item) => item.id === skill.id)?.version,
       enabled.item.version,
     );
-    assert.equal(started[1]!.skills.find((item) => item.id === skill.id)?.text, 'Use a checklist.');
-    assert.deepEqual(started[1]!.skills.map((item) => item.name).sort(), ['design', 'review']);
-    assert.doesNotMatch(started[1]!.prompt, /Use a checklist/);
+    assert.equal(started[2]!.skills.find((item) => item.id === skill.id)?.text, 'Use a checklist.');
+    assert.deepEqual(started[2]!.skills.map((item) => item.name).sort(), ['design', 'review']);
+    assert.doesNotMatch(started[2]!.prompt, /Use a checklist/);
 
     const legacy = registry.save(project.id, {
       kind: 'skill',

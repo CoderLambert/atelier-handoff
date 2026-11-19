@@ -1,4 +1,4 @@
-import type { Draft } from '@shared/types';
+import { retainedSkillSelections, type Draft, type Run } from '@shared/types';
 import { api } from '@/api/client';
 import { actions, store } from './store';
 
@@ -101,12 +101,15 @@ export async function submitDraft(id: string, server: Draft) {
   save.sequence++;
   await save.write;
   try {
-    await api(`/api/sessions/${encodeURIComponent(id)}/messages`, {
+    const { run } = await api<{ run: Run }>(`/api/sessions/${encodeURIComponent(id)}/messages`, {
       method: 'POST',
       body: { ...draft, idempotencyKey: attempt.key },
     });
     if (JSON.stringify(readDraft(id, server)) === fingerprint)
-      updateDraft(id, emptyDraft(draft.mode));
+      updateDraft(id, {
+        ...emptyDraft(draft.mode),
+        extensionSelections: retainedSkillSelections(run.extensions),
+      });
     save.attempt = undefined;
   } catch (error) {
     updateDraft(id, readDraft(id, server));

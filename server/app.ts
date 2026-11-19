@@ -33,6 +33,7 @@ import {
   AppError,
   activeStatuses,
   emptyDraft,
+  retainedSkillSelections,
   now,
   type Extension,
   type Run,
@@ -399,7 +400,13 @@ export async function createApp(options: {
       store.update('sessions', sessionId, {
         title: latest.title === '新会话' ? request.text.slice(0, 40) : latest.title,
         updatedAt: now(),
-        draft: { ...emptyDraft(), mode: request.mode },
+        draft: {
+          ...emptyDraft(),
+          mode: request.mode,
+          extensionSelections: retryOf
+            ? latest.draft.extensionSelections
+            : retainedSkillSelections(run.extensions),
+        },
       });
       store.db
         .prepare('INSERT INTO idempotency(key,body_hash,run_id) VALUES(?,?,?)')
