@@ -893,6 +893,50 @@
   overflow-wrap: anywhere;
 }
 
+.ext-binding {
+  min-width: 0;
+  padding: 14px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.ext-binding legend {
+  padding-inline: 6px;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.ext-binding-fields,
+.ext-binding-mcp-status {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+.ext-binding-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ext-binding-pair select {
+  width: 100%;
+}
+.ext-binding-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ext-binding-warning {
+  color: var(--warn);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .ext-binding-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Completion is fixed to the viewport so scrolling composer ancestors cannot clip it. */
 .ext-completion {
   position: fixed;

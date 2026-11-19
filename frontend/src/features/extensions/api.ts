@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Extension, ExtensionSelection, McpTransport } from '@shared/types';
+import type { Extension, ExtensionSelection, McpTransport, SkillToolBinding } from '@shared/types';
 import { api } from '@/api/client';
 
 export type ExtensionKind = Extension['kind'];
@@ -54,6 +54,8 @@ export const extensionKeys = {
   all: (projectId: string) => ['extensions', projectId] as const,
   list: (projectId: string) => ['extensions', projectId, 'list'] as const,
   mutations: (projectId: string) => ['extensions', projectId, 'mutation'] as const,
+  toolBindings: (projectId: string, skillId: string) =>
+    ['extensions', projectId, 'tool-bindings', skillId] as const,
 };
 export function returnedItem(result: ItemResponse) {
   if (!result) return undefined;
@@ -73,6 +75,47 @@ export const extensionsQuery = (projectId: string) =>
   });
 export function useExtensions(projectId?: string) {
   return useQuery(extensionsQuery(projectId ?? ''));
+}
+interface ToolBindingsResponse {
+  bindings: SkillToolBinding[];
+}
+function bindingsOf(result: ToolBindingsResponse) {
+  if (!Array.isArray(result?.bindings)) throw new Error('工具绑定响应缺少 bindings。');
+  return result.bindings;
+}
+const toolBindingsEndpoint = (projectId: string, skillId: string) =>
+  endpoint(projectId, `${encodeURIComponent(skillId)}/tool-bindings`);
+export function useSkillToolBindings(projectId: string, skillId: string) {
+  return useQuery({
+    queryKey: extensionKeys.toolBindings(projectId, skillId),
+    queryFn: async ({ signal }) =>
+      bindingsOf(
+        await api<ToolBindingsResponse>(toolBindingsEndpoint(projectId, skillId), { signal }),
+      ),
+    enabled: Boolean(projectId && skillId),
+  });
+}
+export function useSaveSkillToolBindings(projectId: string, skillId: string) {
+  const client = useQueryClient();
+  const queryKey = extensionKeys.toolBindings(projectId, skillId);
+  return useMutation({
+    mutationKey: extensionKeys.mutations(projectId),
+    scope: { id: `extensions:${projectId}` },
+    mutationFn: async (bindings: SkillToolBinding[]) =>
+      bindingsOf(
+        await api<ToolBindingsResponse>(toolBindingsEndpoint(projectId, skillId), {
+          method: 'PUT',
+          body: { bindings },
+        }),
+      ),
+    onMutate: async () => {
+      await client.cancelQueries({ queryKey });
+    },
+    onSuccess: async (bindings) => {
+      client.setQueryData(queryKey, bindings);
+      await client.invalidateQueries({ queryKey: extensionKeys.list(projectId) });
+    },
+  });
 }
 interface ExtensionOperation {
   suffix?: string;

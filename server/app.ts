@@ -28,6 +28,7 @@ import { selectRunSkills, type RunSkill } from './run-skills.js';
 import { testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
 import { searchSkillHub } from './skillhub.js';
+import { readSkillToolBindings, saveSkillToolBindings } from './skill-tool-bindings.js';
 import {
   AppError,
   activeStatuses,
@@ -568,6 +569,15 @@ export async function createApp(options: {
         if (parts.length === 4 && method === 'POST')
           return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
         const id = parts[4]!;
+        if (parts.length === 6 && parts[5] === 'tool-bindings' && ['GET', 'PUT'].includes(method)) {
+          const skill = extensions.get(projectId, id);
+          if (skill.kind !== 'skill') throw new AppError('INVALID_INPUT', '请选择 Skill。');
+          const bindings =
+            method === 'GET'
+              ? readSkillToolBindings(store, projectId, id)
+              : saveSkillToolBindings(store, projectId, id, await body(req));
+          return json(res, { bindings });
+        }
         if (parts.length === 5 && id === 'skillhub-search' && method === 'GET') {
           store.get('projects', projectId);
           const query = z

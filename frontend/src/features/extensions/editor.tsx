@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AllowedMcpTool, DiscoveredTool, Extension, McpTransport } from '@shared/types';
 import { ActionButton, ErrorMessage, FeatureDialog, Field, MarkdownPreview } from './components';
+import { SkillToolBindingsDialog } from './tool-bindings';
 import {
   allowsAuto,
   autoEnabled,
@@ -84,6 +85,8 @@ export function ExtensionEditor({
   const [stale, setStale] = useState(false);
   const [working, setWorking] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
+  const [bindingsOpen, setBindingsOpen] = useState(false);
+  const bindingsButton = useRef<HTMLButtonElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const fileSequence = useRef(0);
   const startedTest = useRef(false);
@@ -318,7 +321,7 @@ export function ExtensionEditor({
     <FeatureDialog
       title={`${initialItem ? '编辑' : '新建'} ${kinds[kind]}`}
       description={`项目 · ${projectName}`}
-      busy={busy}
+      busy={busy || bindingsOpen}
       onClose={onClose}
     >
       <form className="ext-editor" onSubmit={(event) => void submit(event)}>
@@ -350,6 +353,25 @@ export function ExtensionEditor({
               启用此扩展
             </label>
           </div>
+          {kind === 'skill' ? (
+            <section className="ext-tool-section" aria-label="Skill 工具绑定">
+              <div className="ext-tool-heading">
+                <h3>工具绑定</h3>
+                <ActionButton
+                  ref={bindingsButton}
+                  disabled={!item}
+                  onClick={() => setBindingsOpen(true)}
+                >
+                  配置工具绑定
+                </ActionButton>
+              </div>
+              <p className="ext-help">
+                {item
+                  ? '配置 Skill 使用的内置工具、项目 MCP 工具、HTTPS 请求或命令预设，单独保存。'
+                  : '先保存 Skill，再打开详情配置工具绑定。'}
+              </p>
+            </section>
+          ) : null}
           <Field label="描述">
             <textarea
               rows={2}
@@ -578,6 +600,25 @@ export function ExtensionEditor({
           </ActionButton>
         </div>
       </form>
+      {bindingsOpen && item?.kind === 'skill' ? (
+        <SkillToolBindingsDialog
+          projectId={projectId}
+          projectName={projectName}
+          skillId={item.id}
+          skillName={item.name}
+          onClose={() => {
+            setBindingsOpen(false);
+            requestAnimationFrame(() => bindingsButton.current?.focus());
+          }}
+          onSaved={() => {
+            const latest = client
+              .getQueryData<Extension[]>(extensionKeys.list(projectId))
+              ?.find((value) => value.id === item.id);
+            if (latest) setItem(latest);
+            onSaved('工具绑定已保存');
+          }}
+        />
+      ) : null}
     </FeatureDialog>
   );
 }

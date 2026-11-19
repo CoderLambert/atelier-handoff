@@ -76,6 +76,12 @@ export type Extension = ExtensionBase &
         statusMessage?: string;
       }
   );
+export type SkillToolBinding =
+  | { name: string; kind: 'builtin'; tool: 'list_files' | 'search_files' | 'publish_artifact' }
+  | { name: string; kind: 'mcp'; extensionId: string; tool: string }
+  | { name: string; kind: 'http'; url: string; parameter: string; description: string }
+  | { name: string; kind: 'command'; preset: 'pdftotext' };
+
 export interface UsedExtension {
   id: string;
   kind: Extension['kind'];
