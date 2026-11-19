@@ -1,0 +1,96 @@
+{
+  "artifacts": {
+    "arch": {
+      "name": "atelier-0.2.0-1-x86_64.pkg.tar.zst",
+      "sha256": "f291c6adae5c13d4b5b9f0a620cd4d13536c6299c4864fb5ab2986fb82567646",
+      "bytes": 299495751
+    },
+    "portable": {
+      "name": "atelier-0.2.0-linux-x64.tar.zst",
+      "sha256": "0619e8a66174b498ae3bfd88a939a6c290bcdb0b2b09aaff6baab432125f0fd5",
+      "bytes": 299280448
+    }
+  },
+  "wayland": {
+    "compositor": "Hyprland 0.56.2",
+    "windowSize": [
+      1440,
+      960
+    ],
+    "zoomFactors": [
+      1,
+      1.25
+    ],
+    "expectedMaximumAlignmentErrorInHostPixels": 2,
+    "beforeFixAt125Percent": {
+      "view": {
+        "x": 646,
+        "y": 218,
+        "width": 506,
+        "height": 527
+      },
+      "slot": {
+        "x": 645.760009765625,
+        "y": 218.2899932861328,
+        "width": 506.239990234375,
+        "height": 527.3099822998047
+      }
+    },
+    "dialog": "模型与网关设置",
+    "result": {
+      "nativeWayland": true,
+      "x11Display": false,
+      "chromiumSandbox": true,
+      "normal": {
+        "view": {
+          "x": 807,
+          "y": 218,
+          "width": 633,
+          "height": 714
+        },
+        "slot": {
+          "x": 807.2000122070312,
+          "y": 218.4499969482422,
+          "width": 632.7999877929688,
+          "height": 713.5500030517578
+        }
+      },
+      "enlarged": {
+        "view": {
+          "x": 807,
+          "y": 273,
+          "width": 633,
+          "height": 659
+        },
+        "slot": {
+          "x": 645.760009765625,
+          "y": 218.2899932861328,
+          "width": 506.239990234375,
+          "height": 527.3099822998047
+        }
+      },
+      "dialogHidesAndRestoresNativeView": true
+    }
+  },
+  "x11Smoke": {
+    "status": "passed",
+    "metrics": {
+      "freshStarts": 10,
+      "slowestReadyMs": 762,
+      "peakTreeRssMiB": 1003.4,
+      "slowestShutdownMs": 106,
+      "rssSamplingIntervalMs": 150,
+      "budgets": {
+        "startupMs": 5000,
+        "shutdownMs": 3000,
+        "rssMiB": 1536
+      }
+    },
+    "processOwnership": {
+      "installedExecutablesOnly": true,
+      "cleanExitCount": 11,
+      "remainingProcesses": 0
+    },
+    "paidModelCalls": 0
+  }
+}

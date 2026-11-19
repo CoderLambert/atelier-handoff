@@ -10,7 +10,7 @@
 | P4 | 原生浏览器与人工接管 | 已验证 | 隔离网页、两标签、后台截图和慢导航交接。[验证记录](../../../docs/evidence/desktop-p4-linux-x64/tabs.json) |
 | P5 | 运行时工具与 Agent 桌面流程 | 已验证 | [聊天审批、流式回复与上下文续接](../../../docs/evidence/desktop-p5-linux-x64/agent.json)，取消和截图见 P2/P4 |
 | P6 | 桌面文件操作 | 已验证 | 拖入附件、另存、取消及定位。[文件记录](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) |
-| P7 | Linux x64 正式发行验收 | 本地候选已验证 | [安装态记录](../../../docs/evidence/desktop-p7-linux-x64/installed.json) · [许可证更新与复验](../../../docs/evidence/desktop-p7-linux-x64/license-update.json)。对外发行等待应用及工作区组件许可证和发布授权 |
+| P7 | Linux x64 正式发行验收 | 本地候选已验证 | [安装态记录](../../../docs/evidence/desktop-p7-linux-x64/installed.json) · [Linux 工件与 Wayland 复验](../../../docs/evidence/desktop-p7-linux-x64/wayland.json) · [第三方许可](../../../docs/evidence/desktop-p7-linux-x64/license-update.json)。对外发行等待应用及工作区组件许可证和发布授权 |
 | P8 | Windows 移植与安装验收 | 阻塞 | 当前环境为 Linux。需 Windows 构建与运行环境、签名身份 |
 | P9 | macOS 移植与安装验收 | 阻塞 | 需 macOS 构建与运行环境、Developer ID 和公证权限 |
 

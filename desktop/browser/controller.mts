@@ -249,10 +249,12 @@ export function createBrowserController(host: BrowserHost) {
     if (visible && visible !== tab) hideVisible();
     const [width, height] = owner.getContentSize();
     if (width === undefined || height === undefined) throw new Error('工作台窗口尺寸无效。');
-    const x = Math.max(0, Math.round(bounds.x));
-    const y = Math.max(0, Math.round(bounds.y));
-    const w = Math.min(width - x, Math.round(bounds.width));
-    const h = Math.min(height - y, Math.round(bounds.height));
+    // Renderer rectangles use CSS pixels. Native views use the host's unzoomed coordinates.
+    const zoom = owner.webContents.getZoomFactor();
+    const x = Math.max(0, Math.round(bounds.x * zoom));
+    const y = Math.max(0, Math.round(bounds.y * zoom));
+    const w = Math.min(width, Math.round((bounds.x + bounds.width) * zoom)) - x;
+    const h = Math.min(height, Math.round((bounds.y + bounds.height) * zoom)) - y;
     if (w < 1 || h < 1) {
       hideVisible();
       return;
