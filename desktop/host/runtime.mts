@@ -79,7 +79,9 @@ export class RuntimeSupervisor {
     }
     const child = fork(join(root, packaged ? 'server/main.js' : 'server/main.ts'), [], {
       cwd: root,
-      execPath: packaged ? join(nodeBin, 'node') : process.env.npm_node_execpath || 'node',
+      execPath: packaged
+        ? join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node')
+        : process.env.npm_node_execpath || 'node',
       execArgv: packaged ? [] : ['--env-file-if-exists=.env', '--import', 'tsx'],
       env,
       detached: process.platform !== 'win32',

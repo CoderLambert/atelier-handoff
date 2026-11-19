@@ -666,6 +666,16 @@ async function packageRelease(work: string): Promise<string[]> {
       await copy(join(source, name), join(stage, destination));
       texts.push({ path: destination, sha256: await hash(join(stage, destination)) });
     }
+    if (!texts.length) {
+      const supplement = `${item.manifest.name}-${item.manifest.version}`;
+      if (
+        ['remark-math-6.0.0', 'rehype-katex-7.0.1', 'standardwebhooks-1.1.1'].includes(supplement)
+      ) {
+        const destination = `resources/licenses/${item.path}/LICENSE-upstream.txt`;
+        await copy(join(root, 'docs/licenses', `${supplement}.txt`), join(stage, destination));
+        texts.push({ path: destination, sha256: await hash(join(stage, destination)) });
+      }
+    }
     licenseInventory.push({
       name: item.manifest.name,
       version: item.manifest.version,
@@ -817,7 +827,7 @@ async function packageRelease(work: string): Promise<string[]> {
     '--owner=0',
     '--group=0',
     '--numeric-owner',
-    '--use-compress-program=zstd -q -T1 -19',
+    '--use-compress-program=zstd -q -T1 -10',
     '-cf',
     join(artifacts, archiveName),
     '-C',
@@ -833,7 +843,7 @@ async function packageRelease(work: string): Promise<string[]> {
   const config = join(work, 'makepkg.conf');
   await put(
     config,
-    `source /etc/makepkg.conf\nPKGEXT='.pkg.tar.zst'\nPACKAGER='atelier local release'\nCOMPRESSZST=(zstd -c -T1 -19 -)\nBUILDENV=(!distcc !color !ccache !check !sign)\nOPTIONS=(!strip docs !libtool !staticlibs emptydirs !zipman !purge !debug !lto)\n`,
+    `source /etc/makepkg.conf\nPKGEXT='.pkg.tar.zst'\nPACKAGER='atelier local release'\nCOMPRESSZST=(zstd -c -T1 -10 -)\nBUILDENV=(!distcc !color !ccache !check !sign)\nOPTIONS=(!strip docs !libtool !staticlibs emptydirs !zipman !purge !debug !lto)\n`,
   );
   const makepkgOutput = run('makepkg', ['--config', config, '--nodeps', '--nocheck', '--nosign'], {
     cwd: makeDirectory,

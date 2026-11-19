@@ -1,4 +1,4 @@
-import { Download, Maximize, Minimize, X } from 'lucide-react';
+import { Maximize, Minimize, X } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,32 +9,26 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Artifact } from '@shared/types';
-import { ErrorNotice, Loading, formatBytes, formatDate, useResource } from './shared';
+import { useArtifactContent } from '@/use-query/artifacts/use-artifact-content';
+import type { ArtifactFileActionsState } from '@/use-query/artifacts/use-artifact-file-actions';
+import { ArtifactFileActions } from './artifact-file-actions';
+import { ErrorNotice, Loading, errorMessage, formatBytes, formatDate } from './shared';
 
 const FilePreview = lazy(() => import('@/components/file-preview'));
 
-type ArtifactContent = {
-  artifact: Artifact;
-  text: string;
-  previewable: boolean;
-  previewKind: 'html' | 'text';
-};
-
 export default function ArtifactDialog({
   artifact,
+  fileActions,
   onOpenChange,
 }: {
   artifact: Artifact;
+  fileActions: ArtifactFileActionsState;
   onOpenChange: (open: boolean) => void;
 }) {
   const [source, setSource] = useState(false);
   const [fullscreen, setFullscreen] = useState(true);
   const path = `/api/artifacts/${encodeURIComponent(artifact.id)}`;
-  const content = useResource<ArtifactContent>(`${path}/content`, [
-    'artifacts',
-    artifact.id,
-    'content',
-  ]);
+  const content = useArtifactContent(artifact.id);
   const item = content.data?.artifact ?? artifact;
   const html = content.data ? content.data.previewKind === 'html' : /\.html?$/i.test(item.name);
   const pdf = !html && item.mime === 'application/pdf';
@@ -96,16 +90,7 @@ export default function ArtifactDialog({
               </Button>
             ) : null}
             {content.data && !content.error ? (
-              <Button asChild size="icon-sm" variant="ghost">
-                <a
-                  href={`${path}/download`}
-                  download={item.name}
-                  aria-label="下载文件"
-                  title="下载文件"
-                >
-                  <Download size={16} />
-                </a>
-              </Button>
+              <ArtifactFileActions artifact={item} actions={fileActions} />
             ) : null}
             <Button asChild size="icon-sm" variant="ghost">
               <DialogClose aria-label="关闭预览" title="关闭预览">
@@ -114,14 +99,22 @@ export default function ArtifactDialog({
             </Button>
           </div>
         </header>
-        {content.loading && !content.data ? (
+        {fileActions.error ? (
+          <p className="px-4 text-sm text-destructive" role="alert">
+            {fileActions.error}
+          </p>
+        ) : null}
+        {content.isFetching && !content.data ? (
           <div className="p-4">
             <Loading>正在读取交付物…</Loading>
           </div>
         ) : null}
         {content.error ? (
           <div className="p-4">
-            <ErrorNotice message={content.error} onRetry={content.reload} />
+            <ErrorNotice
+              message={errorMessage(content.error)}
+              onRetry={() => void content.refetch()}
+            />
           </div>
         ) : null}
         {content.data ? (

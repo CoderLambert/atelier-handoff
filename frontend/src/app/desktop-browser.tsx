@@ -233,7 +233,7 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
           type="button"
           size="sm"
           variant={state?.control ? 'default' : 'outline'}
-          disabled={disabled || state?.busy}
+          disabled={disabled || (state?.control && state.busy)}
           onClick={() => void command(state?.control ? 'release' : 'take')}
         >
           {transferring

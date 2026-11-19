@@ -7,6 +7,7 @@ import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { importWorkspace } from './host/migration.mjs';
+import { createNativeFileActions } from './host/files.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { RuntimeSupervisor } from './host/runtime.mjs';
@@ -34,7 +35,11 @@ const root = app.isPackaged
   : fileURLToPath(new URL(import.meta.url.endsWith('.mts') ? '../' : '../../', import.meta.url));
 const dataHome = process.env.XDG_DATA_HOME;
 const packagedData = join(
-  dataHome && isAbsolute(dataHome) ? dataHome : join(homedir(), '.local/share'),
+  process.platform === 'linux'
+    ? dataHome && isAbsolute(dataHome)
+      ? dataHome
+      : join(homedir(), '.local/share')
+    : app.getPath('appData'),
   'atelier',
 );
 const dataDir = process.env.ATELIER_DATA_DIR
@@ -45,6 +50,11 @@ const dataDir = process.env.ATELIER_DATA_DIR
 
 let origin: string | undefined;
 let window: BrowserWindow | undefined;
+let runtimeConnection: Awaited<ReturnType<RuntimeSupervisor['start']>> | undefined;
+const nativeFiles = createNativeFileActions(
+  () => window,
+  () => runtimeConnection,
+);
 let stopping = false;
 const browser = createBrowserController({
   getWindow: () => window,
@@ -105,6 +115,8 @@ const supervisor = new RuntimeSupervisor(
 
 function clearRuntimeWindow(): void {
   origin = undefined;
+  runtimeConnection = undefined;
+  nativeFiles.reset();
   unbindPairing?.();
   unbindPairing = undefined;
   browser.reset();
@@ -115,6 +127,7 @@ async function start(): Promise<void> {
   if (stopping) return;
   const connection = await supervisor.start();
   if (stopping) return;
+  runtimeConnection = connection;
   origin = connection.origin;
   const owner =
     window && !window.isDestroyed()

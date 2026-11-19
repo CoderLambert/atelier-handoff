@@ -350,15 +350,13 @@ async function launch(
         append(Buffer.from(`\nRenderer ${message.type()}: ${message.text()}\n`));
     });
     const initialProjectDialog = page.getByRole('dialog', { name: '绑定项目目录', exact: true });
-    await page
-      .getByRole('button', { name: '新建会话', exact: true })
-      .or(initialProjectDialog)
-      .first()
-      .waitFor({
+    if (!reopen) {
+      await initialProjectDialog.waitFor({
         state: 'visible',
         timeout: Math.max(1, cfg.startupMs - (performance.now() - started)),
       });
-    if (await initialProjectDialog.isVisible()) await page.keyboard.press('Escape');
+      await initialProjectDialog.getByRole('button', { name: '关闭详情', exact: true }).click();
+    }
     await page
       .getByRole('button', { name: '模型与网关设置', exact: true })
       .waitFor({ state: 'visible' });

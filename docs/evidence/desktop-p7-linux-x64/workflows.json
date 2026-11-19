@@ -1,0 +1,55 @@
+{
+  "artifactSha256": "a8fc8aac7d2169b894771916f3cc022b84c8ccc42f397d6c44913148fd584c47",
+  "browser": {
+    "nativeTabs": 2,
+    "slowNavigationTakeover": true,
+    "visibleTabIndependent": true,
+    "observedPinnedTab": true,
+    "screenshotArtifact": true,
+    "realSdk": true,
+    "localGatewayRequests": 4,
+    "paidModelCalls": 0,
+    "takeoverInitiation": "workbench button"
+  },
+  "agent": {
+    "uiApproval": true,
+    "blockedBeforeApproval": true,
+    "approvedWriteVerified": true,
+    "streamedReplyVisible": true,
+    "sameSessionContinued": true,
+    "realSdk": true,
+    "gatewayRequests": 3,
+    "paidCalls": 0
+  },
+  "files": {
+    "diagnosticsExport": true,
+    "attachmentDrop": true,
+    "nativeIpc": true,
+    "directorySelection": true,
+    "cancelLeavesNoFile": true,
+    "saveBytesMatch": true,
+    "revealUsesSavedPath": true,
+    "nativeDialogResponses": "test substitutes"
+  },
+  "migration": {
+    "p1DataSource": true,
+    "nativeWizardSelectionAndConfirmation": "system dialog responses substituted",
+    "previousDatabaseUnchanged": true,
+    "finalInstalledBuildOpenedMigratedProject": true,
+    "newSessionWritten": true,
+    "oldRuntimeOpenedBackup": true,
+    "rollbackExcludesNewData": true
+  },
+  "recovery": {
+    "duplicateSingleWriter": true,
+    "unpairedDenied": true,
+    "realSdk": true,
+    "paidCalls": 0,
+    "crashDuringApproval": true,
+    "approvalReplayed": false,
+    "gracefulStopDuringRun": true,
+    "shutdownMs": 1033,
+    "runtimeProcessesExited": 3,
+    "recoveryDialogReply": "test substitute"
+  }
+}

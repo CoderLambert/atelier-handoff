@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import '@/desktop-files';
 import type { ConfigInfo } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,11 +46,47 @@ export default function SettingsDialog({
             }}
           />
         ) : null}
+        <DiagnosticExport />
         {settings.data ? (
           <SettingsForm initial={settings.data} onOpenChange={onOpenChange} />
         ) : null}
       </DialogContent>
     </Dialog>
+  );
+}
+function DiagnosticExport() {
+  const native = window.atelierDesktopFiles;
+  const [pending, setPending] = useState(false);
+  const [status, setStatus] = useState('');
+  if (!native) return null;
+  async function save() {
+    setPending(true);
+    setStatus('');
+    try {
+      if (await native?.exportDiagnostics()) setStatus('诊断文件已保存。');
+    } catch (error) {
+      setStatus(errorMessage(error));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={pending}
+        onClick={() => void save()}
+      >
+        导出诊断
+      </Button>
+      {status ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {status}
+        </p>
+      ) : null}
+    </div>
   );
 }
 function SettingsForm({

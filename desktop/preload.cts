@@ -44,3 +44,38 @@ const bridge: DesktopBrowserBridge = {
 };
 
 contextBridge.exposeInMainWorld('atelierDesktop', bridge);
+
+import {
+  desktopArtifactIdSchema,
+  desktopArtifactSaveSchema,
+  desktopDirectoryResultSchema,
+  desktopFileActionResultSchema,
+  desktopFilesChannels,
+  type DesktopFilesBridge,
+} from '../shared/desktop-files.js';
+
+const files: DesktopFilesBridge = {
+  async exportDiagnostics() {
+    return desktopFileActionResultSchema.parse(
+      await ipcRenderer.invoke(desktopFilesChannels.exportDiagnostics),
+    );
+  },
+  async pickDirectory() {
+    return desktopDirectoryResultSchema.parse(
+      await ipcRenderer.invoke(desktopFilesChannels.pickDirectory),
+    );
+  },
+  async saveArtifact(artifactId, name) {
+    const request = desktopArtifactSaveSchema.parse({ id: artifactId, name });
+    return desktopFileActionResultSchema.parse(
+      await ipcRenderer.invoke(desktopFilesChannels.saveArtifact, request),
+    );
+  },
+  async revealArtifact(artifactId) {
+    const id = desktopArtifactIdSchema.parse(artifactId);
+    return desktopFileActionResultSchema.parse(
+      await ipcRenderer.invoke(desktopFilesChannels.revealArtifact, id),
+    );
+  },
+};
+contextBridge.exposeInMainWorld('atelierDesktopFiles', files);

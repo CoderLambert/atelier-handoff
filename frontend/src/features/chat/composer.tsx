@@ -1,13 +1,7 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
-import {
-  attachmentImageMime,
-  maxImageAttachmentBytes,
-  type Attachment,
-  type Draft,
-} from '@shared/types';
-import { api } from '@/api/client';
+import type { Draft } from '@shared/types';
+import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { ExtensionPicker } from '@/features/extensions/picker';
@@ -15,55 +9,10 @@ import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { isActive } from './conversation';
 
-export type DraftChange = (draft: Draft | ((previous: Draft) => Draft)) => void;
-interface UploadEntry {
-  id: string;
-  name: string;
-  error?: string;
-}
-type AttachmentOperation = {
-  sessionId: string;
-  // Capture this callback when queuing, before a session switch can replace props.
-  changeDraft: DraftChange;
-} & ({ kind: 'upload'; file: File; entryId: string } | { kind: 'remove'; attachmentId: string });
-const ACCEPT =
-  '.png,.jpg,.jpeg,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.css,.html,.yaml,.yml,.log,.py';
-const textFile = /\.(txt|md|json|csv|js|ts|jsx|tsx|css|html|yaml|yml|log|py)$/i;
-const errorText = (error: unknown) => (error instanceof Error ? error.message : '操作失败，请重试');
+import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
 
-async function attachmentOperation(operation: AttachmentOperation): Promise<Attachment | null> {
-  const path = `/api/sessions/${encodeURIComponent(operation.sessionId)}/attachments`;
-  if (operation.kind === 'remove') {
-    await api(`${path}/${encodeURIComponent(operation.attachmentId)}`, { method: 'DELETE' });
-    return null;
-  }
-  const file = operation.file;
-  const image = attachmentImageMime(file.name);
-  if (
-    image
-      ? file.size > maxImageAttachmentBytes
-      : file.size > 1024 * 1024 || !textFile.test(file.name)
-  )
-    throw new Error('支持 5 MiB 以内的 PNG、JPEG 或 1 MiB 以内的 UTF-8 文本文件');
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!image) {
-    try {
-      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      if (bytes.includes(0)) throw new Error();
-    } catch {
-      throw new Error('请上传 UTF-8 文本文件');
-    }
-  }
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-  }
-  const result = await api<{ attachment: Attachment }>(path, {
-    method: 'POST',
-    body: { name: file.name, mime: file.type || 'text/plain', contentBase64: btoa(binary) },
-  });
-  return result.attachment;
-}
+export type { DraftChange } from './hooks/use-composer-attachments';
+const errorText = (error: unknown) => (error instanceof Error ? error.message : '操作失败，请重试');
 
 export function Composer({
   snapshot,
@@ -82,22 +31,36 @@ export function Composer({
 }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const pendingOperations = useRef(0);
   const sendLock = useRef(false);
-  const [uploads, setUploads] = useState<UploadEntry[]>([]);
-  const [removing, setRemoving] = useState<string[]>([]);
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [error, setError] = useState('');
-  const queryClient = useQueryClient();
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
   const contextAllowed = !agent || agent.capabilities.includes('context');
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
   const run = snapshot.runs.find(isActive);
-  const attachmentMutations = useIsMutating({ mutationKey: ['chat-attachments', sessionId] });
-  const busy =
-    attachmentMutations > 0 || uploads.some((entry) => !entry.error) || removing.length > 0;
+  const {
+    uploads,
+    removing,
+    pendingOperations,
+    busy,
+    canUpload,
+    queueUpload,
+    removeAttachment,
+    dismissUpload,
+  } = useComposerAttachments({
+    sessionId,
+    draft,
+    onDraftChange,
+    attachmentsAllowed,
+    archived,
+    submitting,
+    onError: setError,
+  });
+  const dropAllowed = canUpload && draft.attachmentIds.length < 20;
   const canSend =
     !archived &&
     snapshot.project.available &&
@@ -109,42 +72,6 @@ export function Composer({
   const attachments = new Map(
     snapshot.attachments.map((attachment) => [attachment.id, attachment]),
   );
-
-  const mutation = useMutation({
-    mutationKey: ['chat-attachments', sessionId],
-    scope: { id: `session-attachments:${sessionId}` },
-    mutationFn: attachmentOperation,
-    retry: false,
-    onSuccess: (attachment, operation) => {
-      if (operation.kind === 'upload' && attachment) {
-        operation.changeDraft((previous) => ({
-          ...previous,
-          attachmentIds: [...new Set([...previous.attachmentIds, attachment.id])],
-        }));
-        setUploads((previous) => previous.filter((entry) => entry.id !== operation.entryId));
-      } else if (operation.kind === 'remove') {
-        operation.changeDraft((previous) => ({
-          ...previous,
-          attachmentIds: previous.attachmentIds.filter((id) => id !== operation.attachmentId),
-        }));
-      }
-    },
-    onError: (failure, operation) => {
-      if (operation.kind === 'upload') {
-        setUploads((previous) =>
-          previous.map((entry) =>
-            entry.id === operation.entryId ? { ...entry, error: errorText(failure) } : entry,
-          ),
-        );
-      } else setError(`移除附件失败：${errorText(failure)}`);
-    },
-    onSettled: (_result, _failure, operation) => {
-      pendingOperations.current -= 1;
-      if (operation.kind === 'remove')
-        setRemoving((previous) => previous.filter((id) => id !== operation.attachmentId));
-      void queryClient.invalidateQueries({ queryKey: ['snapshot', operation.sessionId] });
-    },
-  });
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -167,36 +94,44 @@ export function Composer({
       sendLock.current = false;
     }
   }
-  function uploadFiles(files: FileList | File[] | null) {
-    if (
-      !files ||
-      !attachmentsAllowed ||
-      archived ||
-      submitting ||
-      busy ||
-      pendingOperations.current
-    )
-      return;
-    const available = Math.max(0, 20 - draft.attachmentIds.length);
-    if (files.length > available) setError('每条任务最多附加 20 个附件，请移除部分附件后再上传。');
-    for (const file of Array.from(files).slice(0, available)) {
-      const entryId = crypto.randomUUID();
-      pendingOperations.current += 1;
-      setUploads((previous) => [...previous, { id: entryId, name: file.name }]);
-      mutation.mutate({ kind: 'upload', sessionId, file, entryId, changeDraft: onDraftChange });
-    }
-  }
-  function removeAttachment(attachmentId: string) {
-    if (removing.includes(attachmentId) || archived || submitting) return;
-    pendingOperations.current += 1;
-    setRemoving((previous) => [...previous, attachmentId]);
-    mutation.mutate({ kind: 'remove', sessionId, attachmentId, changeDraft: onDraftChange });
-  }
 
   return (
     <form
       className="composer chat-composer"
       aria-label="撰写任务"
+      data-file-drag={dragging}
+      onDragEnter={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        dragDepth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = dropAllowed ? 'copy' : 'none';
+      }}
+      onDragLeave={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (!dragDepth.current) setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes('Files') && !event.dataTransfer.files.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth.current = 0;
+        setDragging(false);
+        if (!canUpload || pendingOperations.current) {
+          setError(
+            !attachmentsAllowed
+              ? '当前智能体未启用附件。'
+              : '当前无法添加附件，请等操作结束后重试。',
+          );
+          return;
+        }
+        queueUpload(event.dataTransfer.files);
+      }}
       onSubmit={(event) => void submit(event)}
     >
       <div className="context-row">
@@ -253,9 +188,7 @@ export function Composer({
                 type="button"
                 className="context-chip chat-upload-error"
                 aria-label={`移除失败的上传 ${entry.name}：${entry.error}`}
-                onClick={() =>
-                  setUploads((previous) => previous.filter((item) => item.id !== entry.id))
-                }
+                onClick={() => dismissUpload(entry.id)}
               >
                 {entry.name} · 失败：{entry.error} ×
               </button>
@@ -353,7 +286,7 @@ export function Composer({
               );
               return;
             }
-            uploadFiles(files);
+            queueUpload(files);
           }}
           onChange={(event) => {
             const text = event.target.value;
@@ -375,20 +308,24 @@ export function Composer({
         </fieldset>
         <div className="composer-toolbar">
           <span className="composer-run-status" role="status">
-            {submitting
-              ? '正在发送…'
-              : busy
-                ? '正在处理附件…'
-                : run
-                  ? (
-                      {
-                        queued: '排队中',
-                        running: '执行中',
-                        awaiting_permission: '等待审批',
-                        stopping: '正在停止',
-                      } as Record<string, string>
-                    )[run.status]
-                  : ''}
+            {dragging
+              ? dropAllowed
+                ? '松开以添加附件'
+                : '当前无法添加附件'
+              : submitting
+                ? '正在发送…'
+                : busy
+                  ? '正在处理附件…'
+                  : run
+                    ? (
+                        {
+                          queued: '排队中',
+                          running: '执行中',
+                          awaiting_permission: '等待审批',
+                          stopping: '正在停止',
+                        } as Record<string, string>
+                      )[run.status]
+                    : ''}
           </span>
           {run ? (
             <Button
@@ -443,10 +380,10 @@ export function Composer({
         ref={fileInput}
         type="file"
         multiple
-        accept={ACCEPT}
+        accept={attachmentAccept}
         hidden
         onChange={(event) => {
-          uploadFiles(event.target.files);
+          queueUpload(event.target.files);
           event.target.value = '';
         }}
       />

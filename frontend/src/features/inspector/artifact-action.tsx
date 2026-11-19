@@ -1,11 +1,14 @@
 import { lazy, Suspense, useState } from 'react';
 import type { Artifact } from '@shared/types';
+import { useArtifactFileActions } from '@/use-query/artifacts/use-artifact-file-actions';
+import { ArtifactFileActions } from './artifact-file-actions';
 import { Icon, Loading, formatBytes } from './shared';
 
 const ArtifactDialog = lazy(() => import('./artifact-dialog'));
 export type ArtifactActionProps = { artifact: Artifact; showDownload?: boolean };
 export function ArtifactAction({ artifact, showDownload = false }: ArtifactActionProps) {
   const [open, setOpen] = useState(false);
+  const fileActions = useArtifactFileActions(artifact);
   const available = artifact.availability === 'available';
   const html = /\.html?$/i.test(artifact.name);
   return (
@@ -49,20 +52,24 @@ export function ArtifactAction({ artifact, showDownload = false }: ArtifactActio
           )}
         </button>
         {showDownload && available ? (
-          <a
-            className="mx-2 flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            href={`/api/artifacts/${encodeURIComponent(artifact.id)}/download`}
-            download={artifact.name}
-            aria-label={`下载：${artifact.name}`}
-            title="下载文件"
-          >
-            <Icon name="download" className="size-4" />
-          </a>
+          <div className="mx-2 shrink-0">
+            <ArtifactFileActions artifact={artifact} actions={fileActions} />
+          </div>
         ) : null}
       </div>
+      {fileActions.error && !open ? (
+        <p className="mt-1 text-xs text-destructive" role="alert">
+          {fileActions.error}
+        </p>
+      ) : null}
       {open && available ? (
         <Suspense fallback={<Loading>正在打开交付物…</Loading>}>
-          <ArtifactDialog key={artifact.id} artifact={artifact} onOpenChange={setOpen} />
+          <ArtifactDialog
+            key={artifact.id}
+            artifact={artifact}
+            fileActions={fileActions}
+            onOpenChange={setOpen}
+          />
         </Suspense>
       ) : null}
     </>
