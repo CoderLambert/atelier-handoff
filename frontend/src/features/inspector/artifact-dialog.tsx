@@ -1,5 +1,5 @@
 import { Download, Maximize, Minimize, X } from 'lucide-react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Artifact } from '@shared/types';
-import { ErrorNotice, Loading, formatBytes, formatDate, preClass, useResource } from './shared';
+import { ErrorNotice, Loading, formatBytes, formatDate, useResource } from './shared';
+
+const FilePreview = lazy(() => import('@/components/file-preview'));
 
 type ArtifactContent = {
   artifact: Artifact;
@@ -35,7 +37,9 @@ export default function ArtifactDialog({
   ]);
   const item = content.data?.artifact ?? artifact;
   const html = content.data ? content.data.previewKind === 'html' : /\.html?$/i.test(item.name);
-  const expanded = fullscreen && html;
+  const pdf = !html && item.mime === 'application/pdf';
+  const canExpand = html || pdf;
+  const expanded = fullscreen && canExpand;
   const previewable = html && content.data?.previewable === true;
   const fullscreenLabel = expanded ? '退出全屏' : '全屏';
 
@@ -79,7 +83,7 @@ export default function ArtifactDialog({
             </div>
           ) : null}
           <div className="flex shrink-0 items-center gap-1">
-            {html ? (
+            {canExpand ? (
               <Button
                 size="icon-sm"
                 variant="ghost"
@@ -129,13 +133,23 @@ export default function ArtifactDialog({
               className={`block w-full border-0 bg-white ${expanded ? 'min-h-0 flex-1' : 'h-[62dvh] min-h-0'}`}
             />
           ) : (
-            <pre
-              tabIndex={0}
-              aria-label="交付物内容"
-              className={`${preClass} ${expanded ? 'min-h-0 flex-1' : 'max-h-[62dvh] min-h-48'}`}
+            <div
+              className={`overflow-auto ${expanded ? 'min-h-0 flex-1' : 'max-h-[62dvh] min-h-48'}`}
             >
-              {content.data.text || '（空文件）'}
-            </pre>
+              <Suspense
+                fallback={
+                  <div className="p-4">
+                    <Loading>正在加载预览…</Loading>
+                  </div>
+                }
+              >
+                {pdf ? (
+                  <FilePreview name={item.name} size={item.size} url={`${path}/download`} />
+                ) : (
+                  <FilePreview name={item.name} text={content.data.text} />
+                )}
+              </Suspense>
+            </div>
           )
         ) : null}
       </DialogContent>

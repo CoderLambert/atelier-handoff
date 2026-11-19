@@ -12,3 +12,5 @@ dist/
 !experiments/t01-agent-sdk/evidence/**/*.log
 playwright-report/
 test-results/
+
+/frontend/public/vendor/pdfjs/pdf.worker.min.mjs

@@ -10,6 +10,7 @@ const sharedHeaders = {
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -32,7 +33,8 @@ export async function serveClient(
   const index = pathname === '/' || pathname === '/index.html';
   const prototype = prototypeFiles.get(pathname);
   const asset = /^\/assets\/([a-zA-Z0-9_.-]+-[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9]+)$/.exec(pathname)?.[1];
-  const filename = index ? 'index.html' : (prototype ?? asset);
+  const worker = pathname === '/vendor/pdfjs/pdf.worker.min.mjs' ? pathname.slice(1) : undefined;
+  const filename = index ? 'index.html' : (prototype ?? asset ?? worker);
   const mime = filename ? contentTypes[extname(filename)] : undefined;
   if (!filename || !mime || (method !== 'GET' && method !== 'HEAD'))
     throw new AppError('NOT_FOUND', '页面不存在。', 404);

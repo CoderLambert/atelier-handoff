@@ -9,7 +9,12 @@ test('client server serves hashed Vite assets and confines reads to the build', 
   const root = await mkdtemp(join(tmpdir(), 'atelier-client-assets-'));
   const assets = join(root, 'dist/client/assets');
   const file = '/assets/index-12345678.js';
+  const pdfWorker = '/vendor/pdfjs/pdf.worker.min.mjs';
+  const vendor = join(root, 'dist/client/vendor/pdfjs');
   await mkdir(assets, { recursive: true });
+  await mkdir(vendor, { recursive: true });
+  await writeFile(join(vendor, 'pdf.worker.min.mjs'), 'export {};');
+  await writeFile(join(vendor, 'other.mjs'), 'export {};');
   await writeFile(
     join(root, 'dist/client/index.html'),
     `<script type="module" src="${file}"></script>`,
@@ -31,7 +36,13 @@ test('client server serves hashed Vite assets and confines reads to the build', 
     assert.match(asset.headers.get('cache-control') ?? '', /immutable/);
     assert.match(asset.headers.get('content-type') ?? '', /text\/javascript/);
     assert.equal(await asset.text(), '');
+    const worker = await fetch(base + pdfWorker);
+    assert.equal(worker.status, 200);
+    assert.match(worker.headers.get('content-type') ?? '', /text\/javascript/);
+    assert.equal(worker.headers.get('cache-control'), 'no-cache');
+    assert.equal(await worker.text(), 'export {};');
     for (const path of [
+      '/vendor/pdfjs/other.mjs',
       '/assets/escape-12345678.js',
       '/outside.js',
       '/api/unknown',

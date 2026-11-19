@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+
+const FilePreview = lazy(() => import('@/components/file-preview'));
 
 interface ProjectFile {
   name: string;
@@ -89,7 +91,14 @@ export function ContextPicker({
                 {errorText(document.error)}
               </p>
             ) : (
-              <pre className="safe-pre chat-file-preview">{document.data.text}</pre>
+              <div className="chat-file-preview" aria-label="项目文件预览">
+                <Suspense fallback={<p role="status">正在加载预览…</p>}>
+                  <FilePreview
+                    name={preview.split('/').at(-1) ?? preview}
+                    text={document.data.text}
+                  />
+                </Suspense>
+              </div>
             )}
             <div className="dialog-actions">
               <Button
