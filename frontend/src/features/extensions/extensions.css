@@ -893,6 +893,129 @@
   overflow-wrap: anywhere;
 }
 
+.react-dialog.ext-binding-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(920px, calc(100% - 32px));
+  max-height: min(780px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+.ext-binding-dialog .react-dialog-header {
+  flex: none;
+  margin: 0;
+  padding: 20px 56px 18px 24px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.ext-binding-dialog .react-dialog-header h2 {
+  font-size: 1.3rem;
+}
+.ext-binding-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ext-binding-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 24px;
+}
+.ext-binding-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.85fr) minmax(0, 2fr);
+  gap: 22px;
+  align-items: start;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.ext-binding-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+.ext-binding-list-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 6px 7px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.ext-binding-list-title h3 {
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+.ext-binding-list-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  text-align: start;
+}
+.ext-binding-list-item:hover,
+.ext-binding-list-item[aria-pressed='true'] {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.ext-binding-list-item[aria-pressed='true'] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+.ext-binding-list-item :is(strong, span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ext-binding-list-item strong {
+  font-size: var(--text-sm);
+}
+.ext-binding-list-item span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.ext-binding-add {
+  margin-top: 4px;
+}
+.ext-binding-refresh {
+  justify-self: start;
+}
+.ext-binding-empty {
+  padding: 20px 0;
+  color: var(--muted);
+}
+.ext-binding-form > .ext-dialog-actions {
+  flex: none;
+  margin: 0;
+  padding: 12px 24px;
+  background: var(--surface);
+}
+.ext-binding-form .ext-save-state {
+  margin-inline-end: auto;
+}
+.ext-binding-pair {
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .ext-binding-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .ext-binding-body,
+  .ext-binding-form > .ext-dialog-actions {
+    padding-inline: 14px;
+  }
+  .ext-binding-dialog .react-dialog-header {
+    padding-inline-start: 14px;
+  }
+}
+
 .ext-binding {
   min-width: 0;
   padding: 14px;
