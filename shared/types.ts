@@ -53,6 +53,10 @@ export interface ExtensionBase {
   marketId?: string;
   marketRevision?: string;
 }
+export interface SkillPackage {
+  digest: string;
+  files: { path: string; data: string }[];
+}
 export type Extension = ExtensionBase &
   (
     | {
@@ -63,6 +67,7 @@ export type Extension = ExtensionBase &
         userInvocable: boolean;
         modelInvocable?: boolean;
         autoInvoke?: boolean;
+        package?: SkillPackage;
       }
     | {
         kind: 'mcp';

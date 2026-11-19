@@ -36,8 +36,9 @@ const tabs: ExtensionKind[] = ['skill', 'command', 'mcp'];
 export interface ExtensionsPageProps {
   projects: Project[];
   projectId?: string;
+  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
 }
-export default function ExtensionsPage({ projects, projectId }: ExtensionsPageProps) {
+export default function ExtensionsPage({ projects, projectId, onStartSkill }: ExtensionsPageProps) {
   const [pinnedId, setPinnedId] = useState<string>();
   const project =
     projects.find((value) => value.id === pinnedId) ??
@@ -70,11 +71,21 @@ export default function ExtensionsPage({ projects, projectId }: ExtensionsPagePr
           </select>
         </label>
       </header>
-      <ProjectExtensions key={project?.id ?? 'none'} project={project} />
+      <ProjectExtensions
+        key={project?.id ?? 'none'}
+        project={project}
+        onStartSkill={onStartSkill}
+      />
     </section>
   );
 }
-function ProjectExtensions({ project }: { project?: Project }) {
+function ProjectExtensions({
+  project,
+  onStartSkill,
+}: {
+  project?: Project;
+  onStartSkill?: ExtensionsPageProps['onStartSkill'];
+}) {
   const projectId = project?.id ?? '';
   const query = useExtensions(projectId);
   const toggle = useExtensionMutation(projectId);
@@ -429,6 +440,7 @@ function ProjectExtensions({ project }: { project?: Project }) {
           onClose={close}
           onPreview={marketPreview}
           onSaved={setNotice}
+          onStartSkill={onStartSkill}
         />
       ) : modal?.type === 'preview' ? (
         <SkillMarketPreview

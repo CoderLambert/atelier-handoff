@@ -3,7 +3,7 @@ import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join, posix } from 'node:path';
 import { parseDocument } from 'yaml';
-import { AppError, type McpTransport } from '../shared/types.js';
+import { AppError, type McpTransport, type SkillPackage } from '../shared/types.js';
 import { fingerprint } from './files.js';
 import { previewSkillHub } from './skillhub.js';
 
@@ -20,6 +20,7 @@ export interface PublicEntry {
   upstreamName?: string;
   upstreamVersion?: string;
   body?: string;
+  package?: SkillPackage;
   transport?: McpTransport;
   issue?: string;
 }
@@ -249,11 +250,12 @@ export async function previewPublic(
   source: string,
   kind: PublicKind,
   request = fetch,
+  options: { includePackage?: boolean } = {},
 ): Promise<PublicEntry[]> {
   const invalidConfig = '此声明需要当前尚未支持的启动参数、传输方式或凭据格式。';
   try {
     if (source.startsWith('skillhub:') && kind === 'skill')
-      return [await previewSkillHub(source, request)];
+      return [await previewSkillHub(source, request, options)];
     if (source.startsWith('registry:') && kind === 'mcp') {
       const query = source.slice(9).trim();
       if (!query) throw new AppError('PUBLIC_SOURCE_INVALID', '请输入 MCP Registry 搜索词。');

@@ -302,7 +302,28 @@ export default function Workspace() {
             ) : null}
             {view === 'extensions' ? (
               <div className="react-collections">
-                <ExtensionsPage projects={ready.data?.projects ?? []} projectId={project?.id} />
+                <ExtensionsPage
+                  projects={ready.data?.projects ?? []}
+                  projectId={project?.id}
+                  onStartSkill={async (projectId, name, editable) => {
+                    const { session } = await api<{ session: Session }>('/api/sessions', {
+                      method: 'POST',
+                      body: { projectId },
+                    });
+                    await api(`/api/sessions/${encodeURIComponent(session.id)}`, {
+                      method: 'PATCH',
+                      body: {
+                        draft: {
+                          ...session.draft,
+                          text: `/${name} `,
+                          mode: editable ? 'edit' : 'readonly',
+                        },
+                      },
+                    });
+                    openSession(session.id);
+                    void revalidate(session.id);
+                  }}
+                />
               </div>
             ) : null}
             {view === 'runs' || view === 'artifacts' ? (

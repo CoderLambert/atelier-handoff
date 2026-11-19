@@ -37,10 +37,12 @@ export function SkillHubMarket({
   projectId,
   active,
   onSaved,
+  onStartSkill,
 }: {
   projectId: string;
   active: boolean;
   onSaved: (message: string) => void;
+  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
 }) {
   const detailId = useId();
   const resultScroll = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ export function SkillHubMarket({
   const [selected, setSelected] = useState<SkillHubItem>();
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [starting, setStarting] = useState(false);
   const install = useExtensionMutation(projectId);
   const extensions = useQuery(extensionsQuery(projectId));
   const results = useQuery({
@@ -81,7 +84,7 @@ export function SkillHubMarket({
   const entry = preview.data;
   const installed =
     entry &&
-    extensions.data?.some(
+    extensions.data?.find(
       (item) => item.origin?.location === entry.location && item.origin.key === entry.key,
     );
   const selectedSource = selected?.source;
@@ -118,13 +121,35 @@ export function SkillHubMarket({
       await install.mutateAsync({
         suffix: 'public-import',
         method: 'POST',
-        body: { kind: 'skill', source: selected.source, key: entry.key, revision: entry.revision },
+        body: {
+          kind: 'skill',
+          source: selected.source,
+          key: entry.key,
+          revision: entry.revision,
+          packageDigest: entry.packageManifest?.digest,
+        },
       });
       const status = `已导入 /${entry.name}，可在对话中手动调用。`;
       setMessage(status);
       onSaved(status);
     } catch (failure) {
       setError(messageOf(failure));
+    }
+  }
+  async function startSkill() {
+    if (!installed || !onStartSkill || starting) return;
+    setStarting(true);
+    setError('');
+    try {
+      await onStartSkill(
+        projectId,
+        installed.name,
+        entry?.packageManifest?.files.some((path) => /\.py$/i.test(path)) ?? false,
+      );
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setStarting(false);
     }
   }
   const items = results.data?.items ?? [];
@@ -261,6 +286,12 @@ export function SkillHubMarket({
                 <p className="skillhub-detail-description">{selected.description}</p>
                 {preview.isFetching ? <p role="status">正在读取 SKILL.md…</p> : null}
                 <ErrorMessage error={preview.error} />
+                {entry?.packageManifest ? (
+                  <details className="ext-preview">
+                    <summary>包内文件 · {entry.packageManifest.files.length} 项</summary>
+                    <pre className="ext-body-preview">{entry.packageManifest.files.join('\n')}</pre>
+                  </details>
+                ) : null}
                 {entry?.issue ? <p className="ext-compatibility">{entry.issue}</p> : null}
                 {entry?.body ? (
                   <MarkdownPreview
@@ -275,7 +306,11 @@ export function SkillHubMarket({
               <div className="skillhub-detail-footer">
                 <ErrorMessage error={error} />
                 <p className="ext-help">
-                  {installed ? '已加入当前项目' : '导入 SKILL.md，默认手动调用'}
+                  {installed
+                    ? '已加入当前项目'
+                    : entry?.packageManifest
+                      ? `导入技能包 · ${entry.packageManifest.files.length} 个文件`
+                      : '导入技能 · 默认手动调用'}
                 </p>
                 <ActionButton
                   primary
@@ -291,6 +326,16 @@ export function SkillHubMarket({
                 >
                   {installed ? '已导入' : install.isPending ? '正在导入…' : '导入当前项目'}
                 </ActionButton>
+                {installed &&
+                installed.kind === 'skill' &&
+                installed.enabled &&
+                installed.supported &&
+                installed.userInvocable &&
+                onStartSkill ? (
+                  <ActionButton primary disabled={starting} onClick={() => void startSkill()}>
+                    {starting ? '正在打开…' : '到对话中使用'}
+                  </ActionButton>
+                ) : null}
               </div>
             </>
           ) : null}

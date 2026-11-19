@@ -1,10 +1,10 @@
-import { fromBuffer, type Entry, type ZipFile } from 'yauzl';
 import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
 import { AppError } from '../shared/types.js';
 import { fingerprint } from './files.js';
 import { inspectMarkdown } from './extensions.js';
 import type { PublicEntry } from './public-extensions.js';
+import { readSkillPackage, skillPackageLimits } from './skill-package.js';
 
 const origin = 'https://api.skillhub.cn';
 const cdnHosts = new Set([
@@ -14,7 +14,6 @@ const cdnHosts = new Set([
 const coordinate =
   /^@([a-zA-Z0-9_-]{1,100})\/([a-zA-Z0-9_-]{1,100})(?:@([a-zA-Z0-9][a-zA-Z0-9.+-]{0,79}))?$/;
 const versionPattern = /^[a-zA-Z0-9][a-zA-Z0-9.+-]{0,79}$/;
-const markdownLimit = 65_000;
 const searchResult = z.object({
   namespace: z.object({ canonicalName: z.string().regex(coordinate) }),
   displayName: z.string(),
@@ -144,46 +143,7 @@ async function downloadPackage(
       throw new AppError('SKILLHUB_INVALID_RESPONSE', 'SkillHub 下载地址未通过校验。', 502);
     response = await doRequest(request, target, signal);
   }
-  return readLimited(response, 8 * 1024 * 1024);
-}
-
-async function readSkillDocument(data: Buffer) {
-  const zip = await new Promise<ZipFile>((resolve, reject) =>
-    fromBuffer(data, { lazyEntries: true, strictFileNames: true }, (error, zip) =>
-      error ? reject(error) : resolve(zip!),
-    ),
-  );
-  const matches: Entry[] = [];
-  await new Promise<void>((resolve, reject) => {
-    zip.once('error', reject);
-    zip.once('end', resolve);
-    zip.on('entry', (entry: Entry) => {
-      const symlink = ((entry.externalFileAttributes >>> 16) & 0o170000) === 0o120000;
-      if (!symlink && /^([^/]+\/)?SKILL\.md$/i.test(entry.fileName)) matches.push(entry);
-      zip.readEntry();
-    });
-    if (zip.entryCount > 1000) reject(new Error('Too many package entries'));
-    else zip.readEntry();
-  });
-  const [entry] = matches;
-  if (matches.length !== 1 || !entry || entry.uncompressedSize > markdownLimit)
-    throw new AppError(
-      'SKILLHUB_PACKAGE_UNSUPPORTED',
-      'SkillHub 包需要包含一份可独立读取的 SKILL.md。',
-      422,
-    );
-  const stream = await new Promise<NodeJS.ReadableStream>((resolve, reject) =>
-    zip.openReadStream(entry, (error, stream) => (error ? reject(error) : resolve(stream!))),
-  );
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of stream) {
-    size += chunk.length;
-    if (size > markdownLimit)
-      throw new AppError('SKILLHUB_TOO_LARGE', 'SKILL.md 超过读取上限。', 413);
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+  return readLimited(response, skillPackageLimits.archive);
 }
 
 export function normalizeSkillHubMarkdown(body: string): string {
@@ -223,7 +183,11 @@ export function normalizeSkillHubMarkdown(body: string): string {
   return `---\n${document.toString()}---\n${body.slice(header[0].length)}`;
 }
 
-export async function previewSkillHub(source: string, request = fetch): Promise<PublicEntry> {
+export async function previewSkillHub(
+  source: string,
+  request = fetch,
+  options: { includePackage?: boolean } = {},
+): Promise<PublicEntry> {
   const match = coordinate.exec(source.slice('skillhub:'.length));
   if (!match) throw new AppError('PUBLIC_SOURCE_INVALID', '请输入有效的 SkillHub 技能坐标。');
   const [, namespace, slug, version] = match;
@@ -242,8 +206,15 @@ export async function previewSkillHub(source: string, request = fetch): Promise<
   const selectedVersion = version ?? resolved.data.latestVersion.version;
   try {
     const archive = await downloadPackage(namespace!, slug!, selectedVersion, request, signal);
-    const body = normalizeSkillHubMarkdown(await readSkillDocument(archive));
-    const metadata = inspectMarkdown(body);
+    const skillPackage = await readSkillPackage(archive);
+    const manifest = skillPackage.files.find((file) => file.path === 'SKILL.md')!;
+    const body = normalizeSkillHubMarkdown(
+      new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(manifest.data, 'base64')),
+    );
+    if (Buffer.byteLength(body, 'utf8') > skillPackageLimits.markdown)
+      throw new AppError('SKILLHUB_TOO_LARGE', 'SKILL.md 超过读取上限。', 413);
+    manifest.data = Buffer.from(body).toString('base64');
+    const metadata = inspectMarkdown(body, skillPackage);
     return {
       kind: 'skill',
       location: `skillhub:${name}`,
@@ -256,6 +227,7 @@ export async function previewSkillHub(source: string, request = fetch): Promise<
       description: metadata.description,
       revision: fingerprint(body),
       body,
+      ...(options.includePackage ? { package: skillPackage } : {}),
       upstreamVersion: selectedVersion,
       issue: metadata.compatibility,
     };

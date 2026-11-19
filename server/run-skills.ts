@@ -1,28 +1,30 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Extension, UsedExtension } from '../shared/types.js';
+import type { Extension, SkillPackage, UsedExtension } from '../shared/types.js';
 import { inspectMarkdown } from './extensions.js';
 
 const pluginName = 'atelier-skills';
-export type RunSkill = UsedExtension & { kind: 'skill'; description: string; text: string };
+export type RunSkill = UsedExtension & {
+  kind: 'skill';
+  description: string;
+  text: string;
+  package?: SkillPackage;
+  manual?: boolean;
+};
 
 export function selectRunSkills(installed: Extension[], selected: UsedExtension[]): RunSkill[] {
   const explicit = new Set(selected.map((item) => item.id));
   return installed.flatMap((item) => {
-    if (
-      item.kind !== 'skill' ||
-      !item.enabled ||
-      item.autoInvoke === false ||
-      explicit.has(item.id)
-    )
-      return [];
-    const metadata = inspectMarkdown(item.body);
+    if (item.kind !== 'skill' || !item.enabled) return [];
+    const manual = explicit.has(item.id);
+    if (manual ? !item.package : item.autoInvoke === false) return [];
+    const metadata = inspectMarkdown(item.body, item.package);
     // Keep SDK command names exact and filesystem-safe, even for old stored records.
     const description = item.description || metadata.description;
     if (
       !metadata.supported ||
-      !metadata.modelInvocable ||
-      !description.trim() ||
+      (!manual && !metadata.modelInvocable) ||
+      (!manual && !description.trim()) ||
       !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(item.name)
     )
       return [];
@@ -34,6 +36,8 @@ export function selectRunSkills(installed: Extension[], selected: UsedExtension[
         version: item.version,
         description,
         text: metadata.text,
+        ...(item.package ? { package: item.package } : {}),
+        ...(manual ? { manual: true } : {}),
       },
     ];
   });

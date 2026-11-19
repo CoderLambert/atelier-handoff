@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, posix } from 'node:path';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
 import {
@@ -7,6 +7,7 @@ import {
   type Extension,
   type ExtensionSelection,
   type Mode,
+  type SkillPackage,
   type UsedExtension,
 } from '../shared/types.js';
 import { Store } from './store.js';
@@ -87,7 +88,24 @@ const extensionInput = z.union([
   }),
 ]);
 
-export function inspectMarkdown(body: string) {
+function packagedReference(reference: string, files: ReadonlySet<string>): boolean {
+  try {
+    const decoded = decodeURIComponent(reference.split(/[?#]/, 1)[0]!);
+    const relative = decoded.replace(/^\$\{CLAUDE_SKILL_DIR\}(?:\/|$)/, '');
+    if (!relative) return true;
+    if (/[\\:\u0000-\u001f\u007f]/.test(relative) || posix.isAbsolute(relative)) return false;
+    const path = posix.normalize(relative).replace(/\/$/, '');
+    return (
+      path !== '..' &&
+      !path.startsWith('../') &&
+      (files.has(path) || [...files].some((file) => file.startsWith(path + '/')))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
   const normalized = body.replace(/^﻿/, '').replaceAll('\r\n', '\n');
   const frontmatter = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   let metadata: Record<string, unknown> = {};
@@ -105,15 +123,34 @@ export function inspectMarkdown(body: string) {
   } else if (normalized.startsWith('---\n')) compatibility = 'Markdown frontmatter 缺少结束标记。';
   const text = (frontmatter ? normalized.slice(frontmatter[0].length) : normalized).trim();
   if (!text) compatibility ??= '请填写扩展说明正文。';
+  let unsupportedReference = false;
+  if (skillPackage) {
+    const files = new Set(skillPackage.files.map((file) => file.path));
+    for (const link of text.matchAll(/\]\(\s*(?:<([^>]+)>|([^\s)]+))/g)) {
+      const reference = link[1] ?? link[2]!;
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference) && !/^file:/i.test(reference)) continue;
+      if (!packagedReference(reference, files)) unsupportedReference = true;
+    }
+    for (const reference of text.matchAll(/\$\{CLAUDE_SKILL_DIR\}(?:\/[^\s"'`<>(){}]*)?/g)) {
+      if (!packagedReference(reference[0], files)) unsupportedReference = true;
+    }
+  } else {
+    unsupportedReference =
+      /\$\{CLAUDE_SKILL_DIR\}|\]\((?:\.\/|\.\.\/|(?:scripts|references|assets)\/)/m.test(text);
+  }
   if (
     ['hooks', 'mcpServers', 'context', 'agent'].some((key) => Object.hasOwn(metadata, key)) ||
-    /(?:^|\s)!`|\$\{CLAUDE_SKILL_DIR\}|\]\((?:\.\/|\.\.\/|(?:scripts|references|assets)\/)/m.test(
-      text,
-    ) ||
+    (skillPackage &&
+      ['permissions', 'permissionMode', 'dangerouslySkipPermissions', 'trust', 'trusted'].some(
+        (key) => Object.hasOwn(metadata, key),
+      )) ||
+    /(?:^|\s)!`/m.test(text) ||
+    unsupportedReference ||
     metadata['allowed-tools'] !== undefined
   ) {
-    compatibility ??=
-      '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。';
+    compatibility ??= skillPackage
+      ? '此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。'
+      : '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。';
   }
   return {
     text,
@@ -185,7 +222,13 @@ export class ProjectExtensions {
     return this.store.transaction(() => this.saveRecord(projectId, raw, id, marketId));
   }
 
-  private saveRecord(projectId: string, raw: unknown, id?: string, marketId?: string): Extension {
+  private saveRecord(
+    projectId: string,
+    raw: unknown,
+    id?: string,
+    marketId?: string,
+    importedPackage?: SkillPackage,
+  ): Extension {
     const catalog = this.list(projectId);
     const previous = id ? this.get(projectId, id) : undefined;
     if (previous) {
@@ -238,11 +281,26 @@ export class ProjectExtensions {
         statusMessage: sameTransport ? previous.statusMessage : undefined,
       };
     } else {
-      const meta = inspectMarkdown(input.body);
+      const savedPackage =
+        input.kind === 'skill'
+          ? (importedPackage ?? (previous?.kind === 'skill' ? previous.package : undefined))
+          : undefined;
+      const skillPackage = savedPackage
+        ? {
+            ...savedPackage,
+            files: savedPackage.files.map((file) =>
+              file.path === 'SKILL.md'
+                ? { ...file, data: Buffer.from(input.body).toString('base64') }
+                : file,
+            ),
+          }
+        : undefined;
+      const meta = inspectMarkdown(input.body, skillPackage);
       record = {
         ...base,
         kind: input.kind,
         body: input.body,
+        ...(skillPackage ? { package: skillPackage } : {}),
         source: input.source,
         supported: meta.supported,
         compatibility: meta.compatibility,
@@ -294,7 +352,8 @@ export class ProjectExtensions {
       if (
         previous &&
         previous.origin?.revision === entry.revision &&
-        previous.origin?.upstreamVersion === entry.upstreamVersion
+        previous.origin?.upstreamVersion === entry.upstreamVersion &&
+        (previous.kind === 'mcp' || previous.package?.digest === entry.package?.digest)
       )
         return { item: previous, changed: false };
       if (
@@ -339,7 +398,7 @@ export class ProjectExtensions {
               enabled: previous?.enabled ?? true,
               ...(!previous && entry.location.startsWith('skillhub:') ? { autoInvoke: false } : {}),
             };
-      const item = this.saveRecord(projectId, payload, previous?.id);
+      const item = this.saveRecord(projectId, payload, previous?.id, undefined, entry.package);
       return {
         item: this.store.put('extensions', {
           ...item,
@@ -507,7 +566,7 @@ export class ProjectExtensions {
       if (item.kind !== 'mcp') {
         if (!item.supported || !item.userInvocable)
           throw new AppError('EXTENSION_UNAVAILABLE', `/${item.name} 当前无法手动调用。`, 409);
-        const template = inspectMarkdown(item.body).text;
+        const template = inspectMarkdown(item.body, item.package).text;
         const rendered = template.replaceAll('$ARGUMENTS', () => args);
         instructions.push(`扩展 ${item.name}（${item.kind}）说明：\n${rendered}`);
         used.push(reference);

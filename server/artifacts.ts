@@ -1,10 +1,76 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
-import { join, extname } from 'node:path';
-import { AppError, now, type Run } from '../shared/types.js';
+import { constants, mkdirSync, writeFileSync } from 'node:fs';
+import { lstat, mkdir, open, readFile, realpath, writeFile, unlink } from 'node:fs/promises';
+import { join, extname, relative, sep } from 'node:path';
+import { AppError, now, type Artifact, type Run } from '../shared/types.js';
 import { Store } from './store.js';
-import { fingerprint, mimeFor, safeName, textExtensions } from './files.js';
+import { fingerprint, mimeFor, resolveProjectPath, safeName, textExtensions } from './files.js';
+
+const MAX_TEXT_ARTIFACT = 1024 * 1024;
+const MAX_PDF_ARTIFACT = 16 * 1024 * 1024;
+
+async function readOutputFile(root: string, path: string, limit: number): Promise<Buffer> {
+  const target = await resolveProjectPath(root, path);
+  const parts = relative(root, target).split(sep);
+  const directoryFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_DIRECTORY;
+  let directory;
+  let handle;
+  try {
+    directory = await open(root, directoryFlags);
+    const rootStat = await directory.stat();
+    const expectedRoot = await lstat(root);
+    if (
+      (await realpath(root)) !== root ||
+      !expectedRoot.isDirectory() ||
+      rootStat.dev !== expectedRoot.dev ||
+      rootStat.ino !== expectedRoot.ino
+    )
+      throw new AppError('PATH_DENIED', '成果输出目录已改变。', 403);
+    // Resolve one component at a time from an open directory. The scratch writer can
+    // replace names concurrently; O_NOFOLLOW alone only protects the final component.
+    for (const part of parts.slice(0, -1)) {
+      const next = await open(`/proc/self/fd/${directory.fd}/${part}`, directoryFlags);
+      await directory.close();
+      directory = next;
+    }
+    handle = await open(
+      `/proc/self/fd/${directory.fd}/${parts.at(-1)!}`,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const before = await handle.stat({ bigint: true });
+    if (!before.isFile() || before.nlink !== 1n)
+      throw new AppError('PATH_DENIED', '成果必须是没有链接的普通文件。', 403);
+    if (before.size > BigInt(limit))
+      throw new AppError('ARTIFACT_TOO_LARGE', '成果文件超过大小限制。', 413);
+    // One extra byte detects growth without an unbounded readFile allocation.
+    const buffer = Buffer.alloc(Number(before.size) + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, size, buffer.length - size, null);
+      if (bytesRead === 0) break;
+      size += bytesRead;
+    }
+    const after = await handle.stat({ bigint: true });
+    if (size > limit) throw new AppError('ARTIFACT_TOO_LARGE', '成果文件超过大小限制。', 413);
+    if (
+      BigInt(size) !== before.size ||
+      after.size !== before.size ||
+      after.mtimeNs !== before.mtimeNs ||
+      after.ctimeNs !== before.ctimeNs ||
+      after.nlink !== 1n
+    )
+      throw new AppError('ARTIFACT_CHANGED', '成果文件在发布期间变化，请重试。', 409);
+    return buffer.subarray(0, size);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    if (['ELOOP', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? ''))
+      throw new AppError('PATH_DENIED', '成果路径包含链接或非目录。', 403);
+    throw new AppError('FILE_UNAVAILABLE', '成果文件不存在或不可访问。', 404);
+  } finally {
+    await handle?.close();
+    await directory?.close();
+  }
+}
 
 export class FileRecords {
   constructor(private readonly store: Store) {}
@@ -78,27 +144,64 @@ export class FileRecords {
       attachmentId: id,
     });
   }
-  async publish(run: Run, name: string, content: string) {
-    if (Buffer.byteLength(content) > 1024 * 1024)
+  async publish(run: Run, name: string, content: string): Promise<Artifact> {
+    if (Buffer.byteLength(content) > MAX_TEXT_ARTIFACT)
       throw new AppError('ARTIFACT_TOO_LARGE', '成果超过 1 MiB 文本限制。', 413);
     name = safeName(name);
-    const artifact = {
+    return this.publishBytes(run, name, Buffer.from(content), mimeFor(name));
+  }
+  async publishFile(run: Run, outputRoot: string, path: string): Promise<Artifact> {
+    const name = safeName(path);
+    const extension = extname(name).toLowerCase();
+    const pdf = extension === '.pdf';
+    if (!pdf && !textExtensions.has(extension))
+      throw new AppError('UNSUPPORTED_FILE', '成果仅支持 PDF 和 UTF-8 文本文件。');
+    const bytes = await readOutputFile(
+      outputRoot,
+      path,
+      pdf ? MAX_PDF_ARTIFACT : MAX_TEXT_ARTIFACT,
+    );
+    if (pdf) {
+      if (!bytes.subarray(0, 5).equals(Buffer.from('%PDF-')))
+        throw new AppError('UNSUPPORTED_FILE', '成果文件不是有效的 PDF。');
+    } else {
+      try {
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        if (bytes.includes(0)) throw new Error();
+      } catch {
+        throw new AppError('UNSUPPORTED_ENCODING', '成果文本文件必须使用 UTF-8 编码。');
+      }
+    }
+    const mime = pdf
+      ? 'application/pdf'
+      : extension === '.csv'
+        ? 'text/csv'
+        : mimeFor(name.toLowerCase());
+    return this.publishBytes(run, name, bytes, mime);
+  }
+  private async publishBytes(
+    run: Run,
+    name: string,
+    bytes: Buffer,
+    mime: string,
+  ): Promise<Artifact> {
+    const artifact: Artifact = {
       id: randomUUID(),
       runId: run.id,
       sessionId: run.sessionId,
       projectId: run.projectId,
       name,
-      mime: mimeFor(name),
-      size: Buffer.byteLength(content),
-      fingerprint: fingerprint(content),
-      availability: 'available' as const,
+      mime,
+      size: bytes.length,
+      fingerprint: fingerprint(bytes),
+      availability: 'available',
       createdAt: now(),
     };
     await mkdir(join(this.store.directory, 'artifacts'), {
       recursive: true,
       mode: 0o700,
     });
-    await writeFile(this.path('artifacts', artifact.id), content, {
+    await writeFile(this.path('artifacts', artifact.id), bytes, {
       mode: 0o600,
       flag: 'wx',
     });

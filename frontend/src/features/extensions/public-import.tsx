@@ -97,6 +97,7 @@ export function PublicImport({
           source: entry.location,
           key: entry.key,
           revision: entry.revision,
+          packageDigest: entry.packageManifest?.digest,
           kind,
           ...(updating ? { update: { id: updating.id, version: updating.version } } : {}),
         },

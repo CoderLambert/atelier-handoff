@@ -15,6 +15,7 @@ export interface PublicEntry {
   sha256?: string;
   upstreamName?: string;
   upstreamVersion?: string;
+  packageManifest?: { digest: string; files: string[] };
   body?: string;
   transport?: McpTransport;
   issue?: string;

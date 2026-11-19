@@ -39,6 +39,7 @@ import {
   activeStatuses,
   emptyDraft,
   now,
+  type Extension,
   type Run,
   type Session,
   type AppConfig,
@@ -131,6 +132,15 @@ async function branchFor(root: string): Promise<string> {
 }
 const marketTarget = z.object({ id: z.string().min(1).max(64) });
 const marketRevision = z.string().regex(/^[a-f0-9]{64}$/);
+
+function publicExtension(item: Extension) {
+  if (item.kind === 'mcp' || !item.package) return item;
+  const { package: pkg, ...fields } = item;
+  return {
+    ...fields,
+    packageManifest: { digest: pkg.digest, files: pkg.files.map((file) => file.path) },
+  };
+}
 
 export async function createApp(options: {
   root: string;
@@ -375,7 +385,11 @@ export async function createApp(options: {
               .map((skill) => skill.id),
           );
         skillCandidates = selectRunSkills(
-          auto ? catalog.filter((item) => auto.has(item.id)) : catalog,
+          auto
+            ? catalog.filter(
+                (item) => auto.has(item.id) || bundle.used.some((ref) => ref.id === item.id),
+              )
+            : catalog,
           bundle.used,
         );
       }
@@ -551,9 +565,13 @@ export async function createApp(options: {
               .list(projectId)
               .map((item) =>
                 item.kind === 'skill' && item.modelInvocable === undefined
-                  ? { ...item, modelInvocable: inspectMarkdown(item.body).modelInvocable }
+                  ? {
+                      ...item,
+                      modelInvocable: inspectMarkdown(item.body, item.package).modelInvocable,
+                    }
                   : item,
-              ),
+              )
+              .map(publicExtension),
           });
         if (parts.length === 4 && method === 'POST')
           return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
@@ -621,26 +639,48 @@ export async function createApp(options: {
               kind: z.enum(['skill', 'command', 'mcp']),
               key: z.string().max(4096).optional(),
               revision: z.string().optional(),
+              packageDigest: marketRevision.optional(),
               update: z
                 .object({ id: z.string().uuid(), version: z.number().int().positive() })
                 .optional(),
             })
             .parse(await body(req));
-          const items = await previewPublic(input.source, input.kind);
-          if (id === 'public-preview') return json(res, { items });
+          const items = await previewPublic(input.source, input.kind, undefined, {
+            includePackage: true,
+          });
+          if (id === 'public-preview')
+            return json(res, {
+              items: items.map(({ package: pkg, ...entry }) =>
+                pkg
+                  ? {
+                      ...entry,
+                      packageManifest: {
+                        digest: pkg.digest,
+                        files: pkg.files.map((file) => file.path),
+                      },
+                    }
+                  : entry,
+              ),
+            });
           const item = items.find(
-            (entry) => entry.key === input.key && entry.revision === input.revision,
+            (entry) =>
+              entry.key === input.key &&
+              entry.revision === input.revision &&
+              entry.package?.digest === input.packageDigest,
           );
           if (!item || !item.revision)
             throw new AppError('PUBLIC_SOURCE_CHANGED', '公开来源已更新，请重新预览。', 409);
+          const saved = extensions.savePublic(projectId, item, input.update);
           return json(
             res,
-            extensions.savePublic(projectId, item, input.update),
+            { ...saved, item: publicExtension(saved.item) },
             input.update ? 200 : 201,
           );
         }
         if (parts.length === 5 && method === 'PATCH')
-          return json(res, { item: extensions.save(projectId, await body(req), id) });
+          return json(res, {
+            item: publicExtension(extensions.save(projectId, await body(req), id)),
+          });
         if (parts.length === 5 && method === 'DELETE') {
           extensions.remove(projectId, id);
           return json(res, { ok: true });
@@ -1063,8 +1103,11 @@ export async function createApp(options: {
           if (parts[3] === 'content')
             return json(res, {
               artifact,
-              text: bytes.toString('utf8'),
-              previewable: true,
+              text:
+                artifact.mime === 'application/pdf'
+                  ? 'PDF 交付物，请下载查看。'
+                  : bytes.toString('utf8'),
+              previewable: artifact.mime !== 'application/pdf',
               previewKind: html ? 'html' : 'text',
             });
           if (parts[3] === 'preview' && html) {

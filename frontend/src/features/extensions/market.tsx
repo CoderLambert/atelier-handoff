@@ -33,12 +33,14 @@ export function SkillMarket({
   onClose,
   onPreview,
   onSaved,
+  onStartSkill,
 }: {
   projectId: string;
   projectName: string;
   onClose: () => void;
   onPreview: (id: string, installedId?: string) => void;
   onSaved: (message: string) => void;
+  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
 }) {
   const query = useQuery(marketQuery(projectId));
   const install = useExtensionMutation(projectId);
@@ -128,6 +130,7 @@ export function SkillMarket({
             projectId={projectId}
             active={marketSource === 'skillhub'}
             onSaved={onSaved}
+            onStartSkill={onStartSkill}
           />
         </div>
         <div className="market-source-panel" hidden={marketSource !== 'curated'}>

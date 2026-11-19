@@ -81,6 +81,10 @@ const dependenciesSchema = z
           name: z.string(),
           description: z.string(),
           body: z.string(),
+          packageDigest: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
           activation: z.enum(['auto', 'manual']),
         })
         .strict(),
@@ -384,7 +388,7 @@ export class AgentProfiles {
       }
       if (!item.enabled || item.version !== reference.version)
         issues.push(`Skill ${item.name} 已停用或更新，请重新选择。`);
-      const metadata = inspectMarkdown(item.body);
+      const metadata = inspectMarkdown(item.body, item.package);
       const description = item.description || metadata.description;
       if (!item.supported || !metadata.supported)
         issues.push(`Skill ${item.name} 的内容不兼容，请检查扩展配置。`);
@@ -405,6 +409,7 @@ export class AgentProfiles {
         name: item.name,
         description,
         body: item.body,
+        ...(item.package ? { packageDigest: item.package.digest } : {}),
         activation: reference.activation,
       });
     }
