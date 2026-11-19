@@ -144,7 +144,7 @@ function RunProgress({
 function RunResult({
   run,
   tools,
-  artifacts,
+  hasArtifacts,
   hasText,
   retryDisabled,
   onRetry,
@@ -152,7 +152,7 @@ function RunResult({
 }: {
   run: Run;
   tools: ToolCall[];
-  artifacts: Artifact[];
+  hasArtifacts: boolean;
   hasText: boolean;
   retryDisabled: boolean;
   onRetry: (id: string) => void;
@@ -160,14 +160,8 @@ function RunResult({
 }) {
   if (isActive(run)) return null;
   const canRetry = recoverable(run);
-  if (!canRetry && !artifacts.length && (hasText || !tools.length)) return null;
-  const title = canRetry
-    ? hasText
-      ? '已保留部分回复'
-      : '回复未完成'
-    : artifacts.length
-      ? '本轮交付物'
-      : '本轮执行结果';
+  if (!canRetry && !hasArtifacts && (hasText || !tools.length)) return null;
+  const title = canRetry ? (hasText ? '已保留部分回复' : '回复未完成') : '本轮执行结果';
   return (
     <section className="run-recovery" aria-label="本轮运行结果">
       <strong>{title}</strong>
@@ -179,9 +173,6 @@ function RunResult({
         </p>
       ) : null}
       <div className="run-recovery-actions">
-        {artifacts.map((artifact) => (
-          <ArtifactAction key={artifact.id} artifact={artifact} />
-        ))}
         <Button
           type="button"
           variant="outline"
@@ -321,7 +312,7 @@ export function Conversation({
     for (const run of missing.values()) result.push(placeholder(run));
     return result;
   }, [snapshot.messages, snapshot.runs]);
-  const approvalOwners = useMemo(
+  const runFooterOwners = useMemo(
     () =>
       new Map(
         messages
@@ -396,7 +387,7 @@ export function Conversation({
                   {assistant && run && isActive(run) ? (
                     <RunProgress run={run} tools={tools} events={events} hasText={hasText} />
                   ) : null}
-                  {assistant && approvalOwners.get(message.runId) === message.id
+                  {assistant && runFooterOwners.get(message.runId) === message.id
                     ? indexes.permissions
                         .get(message.runId)
                         ?.map((item) => (
@@ -419,16 +410,32 @@ export function Conversation({
                   {!assistant && run ? (
                     <MessageContext run={run} attachments={indexes.attachments} />
                   ) : null}
-                  {assistant && run ? (
+                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunResult
                       run={run}
                       tools={tools}
-                      artifacts={artifacts}
+                      hasArtifacts={artifacts.length > 0}
                       hasText={hasText}
                       retryDisabled={retryDisabled}
                       onRetry={onRetry}
                       onTrace={onTrace}
                     />
+                  ) : null}
+                  {assistant &&
+                  run &&
+                  !isActive(run) &&
+                  runFooterOwners.get(message.runId) === message.id &&
+                  artifacts.length > 0 ? (
+                    <section className="chat-deliverables" aria-label="本轮交付物">
+                      <h3>本轮交付物</h3>
+                      <ul>
+                        {artifacts.map((artifact) => (
+                          <li key={artifact.id}>
+                            <ArtifactAction artifact={artifact} showDownload />
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ) : null}
                 </div>
               </article>
