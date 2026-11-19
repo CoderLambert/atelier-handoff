@@ -104,7 +104,7 @@
       display: none;
     }
   }
-  @media (max-width: 760px) {
+  @media (max-width: 767px) {
     .react-workspace.app {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -118,6 +118,66 @@
     .react-workspace .topbar-actions {
       gap: 4px;
     }
+  }
+}
+
+/* Keep the workspace bounded to the viewport. Each pane owns its own scroll. */
+#root {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.react-workspace.app {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.react-workspace .main {
+  height: 100%;
+}
+
+.react-workspace :is(.history-wrap, .react-side, .react-scroll-view, .react-collections) {
+  position: relative;
+  overscroll-behavior: contain;
+}
+
+.react-workspace .conversation-screen {
+  max-width: 1100px;
+  padding-inline: clamp(16px, 4vw, 40px);
+}
+
+.react-workspace .session-header {
+  padding-block: 18px 12px;
+}
+
+.react-workspace .session-title-row {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.react-workspace .session-title-row h1 {
+  font-size: clamp(20px, 2vw, 26px);
+}
+
+.react-workspace .session-meta {
+  margin-top: 7px;
+}
+
+@media (max-width: 767px) {
+  .react-workspace .main {
+    grid-column: 1;
+    grid-template-rows: 52px minmax(0, 1fr);
+  }
+
+  .react-workspace .conversation-screen {
+    padding-inline: 14px;
+  }
+
+  .react-workspace .session-header {
+    padding-block: 12px 9px;
   }
 }
 

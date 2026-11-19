@@ -1,16 +1,78 @@
-.chat-conversation {
-  flex: 1;
+.chat-conversation.conversation-content {
+  position: relative;
+  flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
+  padding: 18px 6px 12px 0;
   overflow-anchor: none;
+  overscroll-behavior: contain;
 }
+
+.chat-conversation .message-thread {
+  padding: 0;
+}
+
+.chat-conversation .message-thread .message {
+  margin-bottom: 16px;
+}
+
+.chat-conversation .message-thread .user-message {
+  padding: 12px 14px;
+}
+
+.chat-conversation .message-thread .assistant-message {
+  padding: 4px 0 8px;
+}
+
+.chat-conversation .message-thread .message:last-child {
+  margin-bottom: 0;
+}
+
 .chat-conversation .message-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.chat-composer {
+
+.chat-composer.composer {
+  position: relative;
   flex: none;
   min-width: 0;
+  padding: 9px 6px max(10px, env(safe-area-inset-bottom)) 0;
+  border-top: 1px solid var(--border-soft);
 }
+
+.chat-composer .context-row {
+  margin-bottom: 6px;
+}
+
+.chat-composer .composer-box {
+  padding: 8px 12px;
+}
+
+.chat-composer .composer-box textarea {
+  height: 42px;
+  min-height: 42px;
+}
+
+.chat-composer .composer-toolbar,
+.chat-composer .composer-footer {
+  margin-top: 5px;
+}
+
+@media (max-width: 620px) {
+  .chat-conversation.conversation-content {
+    padding-block-start: 12px;
+  }
+
+  .chat-conversation .message-thread .user-message {
+    padding-inline: 10px;
+  }
+
+  .chat-conversation .message-thread .message {
+    gap: 8px;
+  }
+}
+
 .chat-composer .mode-toggle {
   display: inline-flex;
   align-items: center;
