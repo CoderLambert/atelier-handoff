@@ -8,7 +8,9 @@
 
 Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运行 `sudo pacman -U ./dist/linux/atelier-0.2.0-1-x86_64.pkg.tar.zst`，然后从应用菜单打开 atelier。便携版可用 `tar -xf dist/linux/atelier-0.2.0-linux-x64.tar.zst -C <空目录>` 解包，从该目录运行 `./atelier/atelier`。包内含 Electron、Node 24.21.0、SQLite、SDK CLI 和静态资源，模型请求使用本机 Shunt。
 
-发行版的数据默认写入 `$XDG_DATA_HOME/atelier`（默认 `~/.local/share/atelier`），浏览器 profile 位于该目录下的 `desktop-profile`。首次启动得到空白工作区，原有开发数据的迁移属于 P3。可通过绝对路径 `ATELIER_DATA_DIR` 选择其他数据根。同一数据根使用单写者锁。
+发行版的数据默认写入 `$XDG_DATA_HOME/atelier`（默认 `~/.local/share/atelier`），浏览器 profile 位于该目录下的 `desktop-profile`。可通过绝对路径 `ATELIER_DATA_DIR` 选择其他数据根。同一数据根使用单写者锁。
+
+迁入旧版数据时先退出旧工作台，启动 `atelier --import-data` 并选择包含 `atelier.sqlite` 的目录。若默认位置已经有工作区，使用 `ATELIER_DATA_DIR=/新工作区的绝对路径 atelier --import-data`。目标目录在迁入时创建。向导显示回退副本位置，项目、会话、附件和交付物记录随数据库迁入。网页使用新 profile，打开网站后可重新登录。
 
 构建机安装包依赖 `makepkg`、`pacman`、`bsdtar`、`tar`、`zstd` 以及固定版本 Node 的可执行文件和许可证。在项目根执行 `ATELIER_BUILD_NODE=/绝对路径/node-v24.21.0/bin/node npm run package:linux`。`dist/linux/SHA256SUMS` 提供资源清单与工件校验，`release.json` 记录运行时版本。安装态验收入口为 `npm run smoke:linux -- --help`。
 

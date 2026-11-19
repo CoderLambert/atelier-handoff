@@ -6,7 +6,7 @@
 |---|---|---|---|
 | P1 | Linux x64 安装样包 | 已验证 | [Arch 与便携包验收](../../../docs/evidence/desktop-p1-linux-x64/acceptance.json) |
 | P2 | 宿主、运行时监督与恢复 | 已验证 | [安装态进程清理](../../../docs/evidence/desktop-p2-linux-x64/installed.json) 和 [故障恢复](../../../docs/evidence/desktop-p2-linux-x64/recovery.json) |
-| P3 | 旧数据迁入与备份恢复 | 待实施 | P2；隔离历史数据副本、迁移校验、失败回退 |
+| P3 | 旧数据迁入与备份恢复 | 进行中 | [迁入决策](../../../docs/decisions/2026-11-20-desktop-data-migration.md) · 隔离数据副本与桌面入口验收 |
 | P4 | 原生浏览器与人工接管 | 待实施 | P2/P3；项目分区、多标签、控制交接、截图交付 |
 | P5 | 运行时工具与 Agent 桌面流程 | 待实施 | P4；工具发现、流式回复、逐次审批、取消与交付 |
 | P6 | 桌面文件操作 | 待实施 | P3/P5；原生选择、粘贴/拖入、导出和定位 |

@@ -15,7 +15,8 @@ import {
 } from 'electron';
 import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { importWorkspace } from './host/migration.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { RuntimeSupervisor } from './host/runtime.mjs';
@@ -552,14 +553,22 @@ app.setName('atelier');
 // Set the profile before taking the lock: packaged and development instances must
 // not share Chromium partitions, and disposable smoke profiles must stay isolated.
 const requestedProfile = app.commandLine.getSwitchValue('user-data-dir');
-if (requestedProfile || app.isPackaged || process.env.ATELIER_DATA_DIR) {
-  const profile = requestedProfile
-    ? requireAbsolutePath(requestedProfile, '--user-data-dir')
-    : join(dataDir, 'desktop-profile');
+const migrationMode = app.commandLine.hasSwitch('import-data');
+const temporaryProfile = migrationMode
+  ? mkdtempSync(join(app.getPath('temp'), 'atelier-migration-profile-'))
+  : undefined;
+if (temporaryProfile || requestedProfile || app.isPackaged || process.env.ATELIER_DATA_DIR) {
+  const profile =
+    temporaryProfile ??
+    (requestedProfile
+      ? requireAbsolutePath(requestedProfile, '--user-data-dir')
+      : join(dataDir, 'desktop-profile'));
   mkdirSync(profile, { recursive: true, mode: 0o700 });
   app.setPath('userData', profile);
   app.setPath('sessionData', profile);
 }
+if (temporaryProfile)
+  app.once('will-quit', () => rmSync(temporaryProfile, { recursive: true, force: true }));
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -568,8 +577,26 @@ else {
   });
   void app
     .whenReady()
-    .then(start)
+    .then(async () => {
+      if (!migrationMode) return start();
+      if (
+        await importWorkspace({
+          runtimeRoot: root,
+          dataDir,
+          packaged: app.isPackaged,
+          signal: lifecycle.signal,
+        })
+      ) {
+        app.relaunch({ args: process.argv.slice(1).filter((arg) => arg !== '--import-data') });
+      }
+      app.quit();
+    })
     .catch((error: unknown) => {
+      if (migrationMode) {
+        console.error('无法打开工作台迁入向导。');
+        app.quit();
+        return;
+      }
       void recover(error instanceof Error ? error.message : '工作台启动失败。');
     });
 }
