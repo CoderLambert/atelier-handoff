@@ -229,3 +229,44 @@
 .chat-deliverables li {
   min-width: 0;
 }
+
+.context-chip.attachment-chip,
+.message-context li.message-attachment {
+  padding: 0;
+  gap: 0;
+}
+
+.attachment-preview-trigger,
+.attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: inherit;
+  color: var(--fg-2);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.attachment-preview-trigger svg,
+.attachment-remove svg {
+  flex: none;
+}
+
+.attachment-preview-trigger:hover,
+.attachment-remove:not(:disabled):hover {
+  background: var(--soft-accent);
+  color: var(--fg);
+}
+
+.attachment-remove {
+  flex: none;
+  border-inline-start: 1px solid var(--border-soft);
+}
+
+.react-dialog.attachment-preview-dialog {
+  width: min(800px, calc(100% - 32px));
+  gap: 12px;
+  padding: 16px;
+}

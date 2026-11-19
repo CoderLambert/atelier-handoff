@@ -164,6 +164,14 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
       }
       const attachment = (await uploading).attachment;
       app.files.upload = upload;
+      const attachmentContent = `/api/sessions/${s1.id}/attachments/${attachment.id}/content`;
+      assert.equal((await request(attachmentContent)).text, 'attached content');
+      await request(
+        `/api/sessions/${s2.id}/attachments/${attachment.id}/content`,
+        'GET',
+        undefined,
+        403,
+      );
       await request(
         `/api/sessions/${s2.id}`,
         'PATCH',
@@ -276,7 +284,9 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
         (await request(`/api/runs?sessionId=${s1.id}&status=stopped&limit=1&offset=1`)).items[0].id,
         run.id,
       );
+      assert.equal((await request(attachmentContent)).text, 'attached content');
       await request(`/api/sessions/${s1.id}/attachments/${attachment.id}`, 'DELETE', {});
+      await request(attachmentContent, 'GET', undefined, 403);
       const snapshot = await request(`/api/sessions/${s1.id}`);
       assert.equal(snapshot.runs.length, 2);
       assert.equal(snapshot.messages.length, 2);

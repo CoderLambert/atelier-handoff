@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, Paperclip, Plus } from 'lucide-react';
+import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
 import type { Attachment, Draft } from '@shared/types';
 import { api } from '@/api/client';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { ExtensionPicker } from '@/features/extensions/picker';
+import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { isActive } from './conversation';
 
@@ -205,19 +206,33 @@ export function Composer({
               上下文 · {path} ×
             </button>
           ))}
-          {draft.attachmentIds.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="context-chip"
-              disabled={archived || submitting || removing.includes(id)}
-              aria-label={`移除附件 ${attachments.get(id)?.name || id}`}
-              onClick={() => removeAttachment(id)}
-            >
-              附件 · {attachments.get(id)?.name || id} ·{' '}
-              {removing.includes(id) ? '移除中…' : '已附加 ×'}
-            </button>
-          ))}
+          {draft.attachmentIds.map((id) => {
+            const item = attachments.get(id);
+            const name = item?.name ?? id;
+            const isRemoving = removing.includes(id);
+            return (
+              <div key={id} className="context-chip attachment-chip">
+                {item ? (
+                  <AttachmentPreview attachment={item}>
+                    <Paperclip size={13} aria-hidden="true" />
+                    {name}
+                  </AttachmentPreview>
+                ) : (
+                  <span>{name}</span>
+                )}
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  disabled={archived || submitting || isRemoving}
+                  aria-label={`移除附件 ${name}`}
+                  title={isRemoving ? '移除中…' : '移除附件'}
+                  onClick={() => removeAttachment(id)}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
           {uploads.map((entry) =>
             entry.error ? (
               <button

@@ -13,6 +13,7 @@ import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { ArtifactAction } from '@/features/inspector';
 import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
+import { AttachmentPreview } from './attachment-preview';
 import { Markdown } from './markdown';
 
 const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
@@ -202,17 +203,23 @@ function MessageContext({ run, attachments }: { run: Run; attachments: Map<strin
       key: `file:${path}`,
       label: `已读取 · 项目文件 · ${path}`,
     })),
-    ...run.attachmentIds.map((id) => ({
-      key: `attachment:${id}`,
-      label: `已读取 · 附件 · ${attachments.get(id)?.name || id}`,
-    })),
     ...(run.extensions || []).map((extension) => ({
       key: `extension:${extension.id}`,
       label: `${extension.kind === 'mcp' ? 'MCP' : extension.kind === 'skill' ? 'Skill' : 'Command'} · ${extension.name}`,
     })),
   ];
-  return references.length ? (
+  return references.length || run.attachmentIds.length ? (
     <ul className="message-context" aria-label="本轮已读取的上下文">
+      {run.attachmentIds.map((id) => {
+        const item = attachments.get(id);
+        return item && !item.removed ? (
+          <li key={`attachment:${id}`} className="message-attachment">
+            <AttachmentPreview attachment={item}>附件 · {item.name}</AttachmentPreview>
+          </li>
+        ) : (
+          <li key={`attachment:${id}`}>附件 · {item?.name ?? id} · 已不可用</li>
+        );
+      })}
       {references.map((reference) => (
         <li key={reference.key}>{reference.label}</li>
       ))}

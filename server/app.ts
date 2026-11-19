@@ -864,6 +864,9 @@ export async function createApp(options: {
             return json(res, { run: await createRun(id, await body(req)) }, 202);
         }
         if (parts[3] === 'attachments') {
+          if (parts.length === 6 && parts[5] === 'content' && method === 'GET') {
+            return json(res, { text: await files.attachmentText(parts[4]!, id) });
+          }
           if (parts.length === 4 && method === 'POST') {
             const session = store.get('sessions', id);
             if (
