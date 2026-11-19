@@ -41,6 +41,7 @@ import {
 
 const root = '/smoke';
 const sampleInterval = 150;
+const freshStarts = 10;
 const evidence: AcceptanceEvidence = {
   schema: 1,
   status: 'failed',
@@ -50,10 +51,17 @@ const evidence: AcceptanceEvidence = {
 };
 const redactLog = (text: string): string => redact(text).replace(/\b[a-f0-9]{64}\b/gi, '<hex-64>');
 
-async function api(origin: string, path: string): Promise<Record<string, unknown>> {
-  const response = await fetch(origin + path, { signal: AbortSignal.timeout(5000) });
-  assert.ok(response.ok, `API ${path}: HTTP ${response.status}`);
-  return record((await response.json()) as unknown, path);
+async function appFetch(page: Page, path: string): Promise<{ status: number; body: string }> {
+  return page.evaluate(async (path) => {
+    const response = await fetch(path, { signal: AbortSignal.timeout(5000) });
+    return { status: response.status, body: await response.text() };
+  }, path);
+}
+
+async function api(page: Page, path: string): Promise<Record<string, unknown>> {
+  const response = await appFetch(page, path);
+  assert.equal(response.status, 200, `API ${path}`);
+  return record(JSON.parse(response.body), path);
 }
 
 async function processes(): Promise<ProcessSample[]> {
@@ -355,7 +363,7 @@ async function launch(
       .getByRole('button', { name: '模型与网关设置', exact: true })
       .waitFor({ state: 'visible' });
     const origin = new URL(page.url()).origin;
-    const bootstrap = await api(origin, '/api/bootstrap');
+    const bootstrap = await api(page, '/api/bootstrap');
     await access(join(directory, 'data/atelier.sqlite'), constants.R_OK);
     assert.equal(
       record(bootstrap.capabilities).commands,
@@ -427,19 +435,19 @@ async function functional(
   run: Launch,
   fixture: Fixtures,
 ): Promise<{ projectId: string; sessionId: string; runId: string; artifactId: string }> {
-  const { page, origin, directory } = run;
+  const { page, directory } = run;
   await settings(page, true);
   await page.getByRole('button', { name: '打开工作空间设置', exact: true }).click();
   await page.getByLabel('本机目录', { exact: true }).fill(join(directory, 'project'));
   await page.getByRole('button', { name: '绑定项目', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  let bootstrap = await api(origin, '/api/bootstrap');
+  let bootstrap = await api(page, '/api/bootstrap');
   const project = record(array(bootstrap.projects)[0], 'created project');
   const projectId = string(project.id);
   assert.equal(project.path, join(directory, 'project'));
   await until(
     async () => {
-      bootstrap = await api(origin, '/api/bootstrap');
+      bootstrap = await api(page, '/api/bootstrap');
       return array(bootstrap.sessions).length ? true : undefined;
     },
     5000,
@@ -488,7 +496,7 @@ async function functional(
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   const snapshot = await until(
     async () => {
-      const state = await api(origin, `/api/sessions/${sessionId}`);
+      const state = await api(page, `/api/sessions/${sessionId}`);
       const runs = array(state.runs).map((value) => record(value, 'run'));
       const latest = runs.at(-1);
       if (latest && ['failed', 'stopped', 'interrupted'].includes(string(latest.status)))
@@ -530,11 +538,9 @@ async function functional(
     ),
     'Observed SDK CLI must use the packaged native binary or packaged Node',
   );
-  const response = await fetch(`${origin}/api/artifacts/${artifactId}/download`, {
-    signal: AbortSignal.timeout(5000),
-  });
-  assert.ok(response.ok, 'Saved artifact content endpoint must work');
-  assert.equal(await response.text(), receipt);
+  const response = await appFetch(page, `/api/artifacts/${artifactId}/download`);
+  assert.equal(response.status, 200, 'Saved artifact content endpoint must work');
+  assert.equal(response.body, receipt);
   await page.getByText(answer, { exact: true }).waitFor({ state: 'visible' });
   await page.screenshot({
     path: join(root, 'sdk-completed.png'),
@@ -611,7 +617,7 @@ async function previewPdf(run: Launch, artifactId: string): Promise<void> {
   };
   run.page.on('response', capture);
   try {
-    const content = await api(run.origin, `/api/artifacts/${artifactId}/content`);
+    const content = await api(run.page, `/api/artifacts/${artifactId}/content`);
     assert.equal(record(content.artifact).mime, 'application/pdf');
     await run.page
       .getByRole('button', { name: /^交付物/ })
@@ -668,7 +674,7 @@ async function reopen(
   fixture: Fixtures,
   ids: { projectId: string; sessionId: string; runId: string; artifactId: string },
 ): Promise<void> {
-  const bootstrap = await api(run.origin, '/api/bootstrap');
+  const bootstrap = await api(run.page, '/api/bootstrap');
   assert.equal(record(bootstrap.connection).available, false);
   const project = array(bootstrap.projects)
     .map((value) => record(value))
@@ -677,7 +683,7 @@ async function reopen(
     project && project.available === true && project.path === join(run.directory, 'project'),
     'Bound project must reopen offline',
   );
-  const state = await api(run.origin, `/api/sessions/${ids.sessionId}`);
+  const state = await api(run.page, `/api/sessions/${ids.sessionId}`);
   assert.equal(record(state.session).id, ids.sessionId);
   assert.ok(
     array(state.runs).some((value) => {
@@ -692,11 +698,9 @@ async function reopen(
     }),
   );
   assert.ok(array(state.artifacts).some((value) => record(value).id === ids.artifactId));
-  const response = await fetch(`${run.origin}/api/artifacts/${ids.artifactId}/download`, {
-    signal: AbortSignal.timeout(5000),
-  });
-  assert.ok(response.ok);
-  assert.equal(await response.text(), receipt);
+  const response = await appFetch(run.page, `/api/artifacts/${ids.artifactId}/download`);
+  assert.equal(response.status, 200);
+  assert.equal(response.body, receipt);
   const session = record(state.session);
   await run.page
     .getByRole('button')
@@ -795,7 +799,7 @@ async function main(): Promise<void> {
     fixture = await fixtures();
     let ids: Awaited<ReturnType<typeof functional>> | undefined;
     let pdfArtifactId: string | undefined;
-    for (let index = 1; index <= 5; index++) {
+    for (let index = 1; index <= freshStarts; index++) {
       evidence.phase = `fresh-start-${index}`;
       await save();
       active = await launch(cfg, chromium, fixture, index, false);
@@ -818,7 +822,7 @@ async function main(): Promise<void> {
     await fixture.disconnectGateway();
     evidence.phase = 'offline-reopen';
     await save();
-    active = await launch(cfg, chromium, fixture, 6, true);
+    active = await launch(cfg, chromium, fixture, freshStarts + 1, true);
     try {
       await reopen(active, fixture, ids);
       await previewPdf(active, pdfArtifactId);
@@ -831,7 +835,7 @@ async function main(): Promise<void> {
       await active.stop();
       active = undefined;
     }
-    assert.equal(evidence.launches.filter((item) => item.kind === 'fresh').length, 5);
+    assert.equal(evidence.launches.filter((item) => item.kind === 'fresh').length, freshStarts);
     assert.ok(
       evidence.launches.every(
         (item) =>
@@ -853,7 +857,7 @@ async function main(): Promise<void> {
       remainingProcesses: 0,
     };
     evidence.metrics = {
-      freshStarts: 5,
+      freshStarts,
       slowestReadyMs: Math.max(
         ...evidence.launches
           .filter((item) => item.kind === 'fresh')

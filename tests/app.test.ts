@@ -609,6 +609,17 @@ test('restart persists distinct runs and invalidates ordinary pending approvals'
     const directory = join(base, 'data');
     let store = new Store(directory);
     const run = runData();
+    store.put('sessions', {
+      id: run.sessionId,
+      projectId: run.projectId,
+      title: 'Recovered session',
+      status: 'active',
+      sdkSessionId: randomUUID(),
+      sdkConfigKey: 'before-crash',
+      createdAt: now(),
+      updatedAt: now(),
+      draft: emptyDraft(),
+    });
     store.put('runs', run);
     store.put('messages', {
       id: 'message',

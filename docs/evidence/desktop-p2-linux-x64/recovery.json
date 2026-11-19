@@ -1,0 +1,16 @@
+{
+  "duplicateSingleWriter": true,
+  "unpairedDenied": true,
+  "realSdk": true,
+  "paidCalls": 0,
+  "crashDuringApproval": true,
+  "approvalReplayed": false,
+  "gracefulStopDuringRun": true,
+  "shutdownMs": 1038,
+  "runtimeProcessesExited": 3,
+  "recoveryDialogReply": "test substitute",
+  "oldHostRejected": true,
+  "occupiedPortReported": true,
+  "activeDataWriterProtected": true,
+  "artifactSha256": "eceb04537bad3b241e0f6a383e9075d6cf385d0cc7a70771d2c020ecc017c6a3"
+}

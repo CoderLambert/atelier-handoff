@@ -1,0 +1,934 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "validation": "installed-linux-p1",
+  "paidModelCalls": 0,
+  "resources": {
+    "verified": true,
+    "files": 4067,
+    "bytes": 823795743,
+    "manifestSha256": "bdab3c9c52028614eff51f1bdd903c73a816193a224e2c1b54cf46e41aad64fd",
+    "modesVerified": true,
+    "complete": true,
+    "testDriverDistributed": false
+  },
+  "system": {
+    "platform": "linux",
+    "arch": "x64",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700K",
+    "logicalCpus": 20,
+    "osRelease": "NAME=\"Omarchy\"\nPRETTY_NAME=\"Omarchy\"\nID=omarchy\nID_LIKE=arch\nBUILD_ID=\"4.0.4\"\nVERSION_ID=\"4.0.4\"\nANSI_COLOR=\"38;2;158;206;106\"\nHOME_URL=\"https://omarchy.org/\"\nDOCUMENTATION_URL=\"https://learn.omacom.io/2/the-omarchy-manual\"\nSUPPORT_URL=\"https://discord.gg/tXFUdasqhY\"\nBUG_REPORT_URL=\"https://github.com/basecamp/omarchy/issues\"\nLOGO=omarchy\n"
+  },
+  "artifact": {
+    "executable": "atelier",
+    "executableSha256": "03100c52299d74c8f05a8f95338e24ffc65bcff36eb40776a00389fc2fc409af",
+    "installed": {
+      "sha256": "70440d443e2a2bde4e8bbb06b56bbcc3a4f226355d1f1a8cbeec351dd59a044c",
+      "bytes": 824702523,
+      "files": 4068,
+      "algorithm": "sorted newline JSON [relative path, mode, SHA-256] or [relative path, link, target]; empty directories excluded"
+    },
+    "unchanged": true,
+    "distribution": {
+      "name": "atelier-0.2.0-1-x86_64.pkg.tar.zst",
+      "sha256": "eceb04537bad3b241e0f6a383e9075d6cf385d0cc7a70771d2c020ecc017c6a3",
+      "bytes": 271037383
+    }
+  },
+  "tooling": {
+    "controllerNode": "v24.21.0",
+    "playwright": "1.66.0-alpha-2026-11-18",
+    "xvfbSha256": "567a9b39284e303522fdc178059fe60d0e9917b811bd5066fb63260fd198a97c"
+  },
+  "isolation": {
+    "sourceMounted": false,
+    "privateNetwork": true,
+    "display": "dedicated Xvfb inside private PID/mount/network namespaces",
+    "applicationPath": "/opt/atelier",
+    "targetPath": "packaged runtime bin plus empty directory",
+    "directories": "separate HOME, XDG config/data/cache/runtime, Electron profile, application data, project; ten fresh datasets and first dataset reopened",
+    "missingBwrap": "bwrap masked on disk and absent from target PATH",
+    "driver": "TypeScript compiled as external temporary test resource; installed executable launched normally with CDP flags; no main/preload injection"
+  },
+  "testResource": {
+    "sha256": "d3c5206c8bc566904fcfe06a631cc294f48a4a3fbf07926c7dc8834d672fd3a3",
+    "distributedWithProgram": false
+  },
+  "durationMs": 13440,
+  "sandboxExit": {
+    "code": 0,
+    "signal": null
+  },
+  "acceptance": {
+    "schema": 1,
+    "status": "passed",
+    "phase": "complete",
+    "checks": {
+      "environment": {
+        "sourceUnavailable": true,
+        "developmentNodeUnavailable": true,
+        "npmUnavailable": true,
+        "bwrapUnavailable": true,
+        "packagedNode": "v24.21.0",
+        "externalNetwork": "unshared namespace: loopback only",
+        "chromiumSandbox": "enabled; no --no-sandbox argument"
+      },
+      "projectCreatedThroughUi": true,
+      "packagedSdk": {
+        "realSdk": true,
+        "transport": "loopback SSE replacement",
+        "paidModelCalls": 0,
+        "requests": 2,
+        "toolResultReturned": true,
+        "receiptPersisted": true,
+        "sdkCliObserved": true
+      },
+      "nativeHtml": {
+        "separateTarget": true,
+        "inputVerified": true
+      },
+      "pdfFixture": {
+        "seededBy": "installed FileRecords.publishFile",
+        "applicationStopped": true,
+        "singleWriter": true,
+        "bytes": 442
+      },
+      "offlineReopen": {
+        "project": true,
+        "session": true,
+        "messages": true,
+        "completedRun": true,
+        "artifactContent": true,
+        "uiHistory": true,
+        "connectionUnavailable": true,
+        "additionalModelRequests": 0
+      },
+      "pdfPreview": {
+        "width": 450,
+        "height": 450,
+        "blue": 53550,
+        "renderer": "installed FileVista PDF.js canvas",
+        "workerFetched": true,
+        "realLocalWorker": true,
+        "workers": [
+          {
+            "path": "/vendor/pdfjs/pdf.worker.min.mjs",
+            "status": 200
+          }
+        ],
+        "offline": true
+      },
+      "processOwnership": {
+        "installedExecutablesOnly": true,
+        "cleanExitCount": 11,
+        "remainingProcesses": 0
+      },
+      "fixture": {
+        "healthMode": "offline",
+        "gatewayStopped": true,
+        "requests": 2,
+        "toolResultReturned": true,
+        "pdfRequests": 0,
+        "errors": []
+      },
+      "xvfbStopped": true
+    },
+    "launches": [
+      {
+        "index": 1,
+        "kind": "fresh",
+        "readyMs": 759,
+        "peakRssMiB": 1152.4,
+        "samples": 22,
+        "processes": [
+          {
+            "pid": 16,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 19,
+            "parent": 16,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 20,
+            "parent": 16,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 22,
+            "parent": 20,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 53,
+            "parent": 19,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 55,
+            "parent": 16,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 57,
+            "parent": 16,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 58,
+            "parent": 53,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 87,
+            "parent": 22,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          },
+          {
+            "pid": 112,
+            "parent": 57,
+            "executable": "/opt/atelier/resources/runtime/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
+            "role": "packaged-sdk-cli"
+          },
+          {
+            "pid": 127,
+            "parent": 22,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 106,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 2,
+        "kind": "fresh",
+        "readyMs": 723,
+        "peakRssMiB": 951.8,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 142,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 145,
+            "parent": 142,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 146,
+            "parent": 142,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 148,
+            "parent": 146,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 177,
+            "parent": 145,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 180,
+            "parent": 142,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 181,
+            "parent": 142,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 182,
+            "parent": 177,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 213,
+            "parent": 148,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 3,
+        "kind": "fresh",
+        "readyMs": 728,
+        "peakRssMiB": 948.2,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 238,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 241,
+            "parent": 238,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 242,
+            "parent": 238,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 244,
+            "parent": 242,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 273,
+            "parent": 241,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 275,
+            "parent": 238,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 277,
+            "parent": 238,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 278,
+            "parent": 273,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 310,
+            "parent": 244,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 4,
+        "kind": "fresh",
+        "readyMs": 700,
+        "peakRssMiB": 955.6,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 332,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 335,
+            "parent": 332,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 336,
+            "parent": 332,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 338,
+            "parent": 336,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 367,
+            "parent": 335,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 369,
+            "parent": 332,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 371,
+            "parent": 332,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 372,
+            "parent": 367,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 403,
+            "parent": 338,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 105,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 5,
+        "kind": "fresh",
+        "readyMs": 742,
+        "peakRssMiB": 946.9,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 428,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 431,
+            "parent": 428,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 432,
+            "parent": 428,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 434,
+            "parent": 432,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 464,
+            "parent": 431,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 466,
+            "parent": 428,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 468,
+            "parent": 428,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 469,
+            "parent": 464,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 499,
+            "parent": 434,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 105,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 6,
+        "kind": "fresh",
+        "readyMs": 708,
+        "peakRssMiB": 946.5,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 521,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 524,
+            "parent": 521,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 525,
+            "parent": 521,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 527,
+            "parent": 525,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 556,
+            "parent": 524,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 558,
+            "parent": 521,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 559,
+            "parent": 521,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 561,
+            "parent": 556,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 594,
+            "parent": 527,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 7,
+        "kind": "fresh",
+        "readyMs": 697,
+        "peakRssMiB": 949.7,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 621,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 624,
+            "parent": 621,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 625,
+            "parent": 621,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 627,
+            "parent": 625,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 656,
+            "parent": 624,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 658,
+            "parent": 621,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 660,
+            "parent": 621,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 661,
+            "parent": 656,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 693,
+            "parent": 627,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 8,
+        "kind": "fresh",
+        "readyMs": 722,
+        "peakRssMiB": 949.3,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 718,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 721,
+            "parent": 718,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 722,
+            "parent": 718,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 724,
+            "parent": 722,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 754,
+            "parent": 721,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 756,
+            "parent": 718,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 758,
+            "parent": 718,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 759,
+            "parent": 754,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 788,
+            "parent": 724,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 9,
+        "kind": "fresh",
+        "readyMs": 710,
+        "peakRssMiB": 952.9,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 814,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 817,
+            "parent": 814,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 818,
+            "parent": 814,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 820,
+            "parent": 818,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 849,
+            "parent": 817,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 851,
+            "parent": 814,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 853,
+            "parent": 814,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 854,
+            "parent": 849,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 884,
+            "parent": 820,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 105,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 10,
+        "kind": "fresh",
+        "readyMs": 723,
+        "peakRssMiB": 947.8,
+        "samples": 8,
+        "processes": [
+          {
+            "pid": 909,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 912,
+            "parent": 909,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 913,
+            "parent": 909,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 915,
+            "parent": 913,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 944,
+            "parent": 912,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 946,
+            "parent": 909,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 948,
+            "parent": 909,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 949,
+            "parent": 944,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 980,
+            "parent": 915,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 106,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      },
+      {
+        "index": 11,
+        "kind": "offline-reopen",
+        "readyMs": 530,
+        "peakRssMiB": 1016.8,
+        "samples": 22,
+        "processes": [
+          {
+            "pid": 1004,
+            "parent": 2,
+            "executable": "/opt/atelier/atelier",
+            "role": "electron-main"
+          },
+          {
+            "pid": 1007,
+            "parent": 1004,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 1008,
+            "parent": 1004,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 1010,
+            "parent": 1008,
+            "executable": "/opt/atelier/atelier",
+            "role": "zygote"
+          },
+          {
+            "pid": 1039,
+            "parent": 1007,
+            "executable": "/opt/atelier/atelier",
+            "role": "gpu-process"
+          },
+          {
+            "pid": 1041,
+            "parent": 1004,
+            "executable": "/opt/atelier/atelier",
+            "role": "utility"
+          },
+          {
+            "pid": 1043,
+            "parent": 1004,
+            "executable": "/opt/atelier/resources/runtime/bin/node",
+            "role": "packaged-sidecar"
+          },
+          {
+            "pid": 1044,
+            "parent": 1039,
+            "executable": "/opt/atelier/atelier",
+            "role": "broker"
+          },
+          {
+            "pid": 1074,
+            "parent": 1010,
+            "executable": "/opt/atelier/atelier",
+            "role": "renderer"
+          }
+        ],
+        "shutdownMs": 104,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "remaining": [],
+        "forced": false
+      }
+    ],
+    "metrics": {
+      "freshStarts": 10,
+      "slowestReadyMs": 759,
+      "peakTreeRssMiB": 1152.4,
+      "slowestShutdownMs": 106,
+      "rssSamplingIntervalMs": 150,
+      "budgets": {
+        "startupMs": 5000,
+        "shutdownMs": 3000,
+        "rssMiB": 1536
+      }
+    }
+  }
+}

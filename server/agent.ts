@@ -222,6 +222,13 @@ export class AgentRunner implements Runner {
     let child: ChildProcessWithoutNullStreams | undefined;
     let childExit: Promise<void> | undefined;
     let processExited = false;
+    let cancelChildTimer: ReturnType<typeof setTimeout> | undefined;
+    const boundSdkCancellation = () => {
+      cancelChildTimer = setTimeout(() => {
+        if (!processExited) child?.kill('SIGKILL');
+      }, 1_000);
+      cancelChildTimer.unref();
+    };
     let stderrBytes = 0;
     let firstText = true;
     let initialized = false;
@@ -1212,6 +1219,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               stdio: ['pipe', 'pipe', 'pipe'],
             });
             child = process;
+            if (signal.aborted) boundSdkCancellation();
+            else signal.addEventListener('abort', boundSdkCancellation, { once: true });
             this.store.event(run.id, run.sessionId, 'process.spawned', {
               pid: process.pid ?? null,
             });
@@ -1219,11 +1228,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               stderrBytes += chunk.length;
             });
             childExit = new Promise((resolve) => {
-              process.once('exit', (code, signal) => {
+              process.once('exit', (code, exitSignal) => {
                 processExited = true;
+                clearTimeout(cancelChildTimer);
+                signal.removeEventListener('abort', boundSdkCancellation);
                 this.store.event(run.id, run.sessionId, 'process.exited', {
                   code,
-                  signal,
+                  signal: exitSignal,
                   stderrBytes,
                 });
                 resolve();
@@ -1419,6 +1430,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         clearTimeout(deadline);
         if (!processExited) await childExit;
       }
+      clearTimeout(cancelChildTimer);
+      signal.removeEventListener('abort', boundSdkCancellation);
       await Promise.allSettled([...commands, ...toolWork]);
       if (pluginDirectory) {
         try {
@@ -1428,7 +1441,10 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         }
       }
       if (initialized && !finalResult)
-        this.store.update('sessions', session.id, { sdkCostTotal: undefined });
+        this.store.update('sessions', session.id, {
+          sdkCostTotal: undefined,
+          sdkConfigKey: undefined,
+        });
       const status: RunStatus =
         live.reason === 'user'
           ? 'stopped'

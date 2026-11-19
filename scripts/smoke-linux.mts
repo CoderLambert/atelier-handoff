@@ -45,7 +45,7 @@ A positional installed executable is also accepted. Installs/extracts nothing.
   --startup-ms N     Usable UI budget per launch (default: 30000)
   --shutdown-ms N    Graceful process-tree shutdown budget (default: 10000)
   --rss-mib N        Optional sampled process-tree RSS budget
-Five fresh profile/data starts plus an offline persistence reopen. Dedicated Xvfb,
+Ten fresh profile/data starts plus an offline persistence reopen. Dedicated Xvfb,
 private PID/mount/network namespaces, separate HOME/XDG/profile/data/project,
 installed artifact read-only, no source or development Node/npm/tsx in target.
 Requires Linux, working bubblewrap, Xvfb and existing playwright-core. No paid call.
@@ -370,7 +370,7 @@ async function main(): Promise<void> {
       applicationPath: '/opt/atelier',
       targetPath: 'packaged runtime bin plus empty directory',
       directories:
-        'separate HOME, XDG config/data/cache/runtime, Electron profile, application data, project; five fresh datasets and first dataset reopened',
+        'separate HOME, XDG config/data/cache/runtime, Electron profile, application data, project; ten fresh datasets and first dataset reopened',
       missingBwrap: 'bwrap masked on disk and absent from target PATH',
       driver:
         'TypeScript compiled as external temporary test resource; installed executable launched normally with CDP flags; no main/preload injection',

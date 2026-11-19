@@ -36,7 +36,14 @@ export function samplePdf(): string {
   );
 }
 
-function streamMessage(res: ServerResponse, invokeTool: boolean): void {
+function streamMessage(
+  res: ServerResponse,
+  invokeTool: boolean,
+  tool: { name: string; input: Record<string, string> } = {
+    name: 'mcp__atelier__publish_artifact',
+    input: { name: receiptName, content: receipt },
+  },
+): void {
   const usage = {
     input_tokens: 12,
     output_tokens: 8,
@@ -61,7 +68,7 @@ function streamMessage(res: ServerResponse, invokeTool: boolean): void {
       type: 'content_block_start',
       index: 0,
       content_block: invokeTool
-        ? { type: 'tool_use', id: toolUseId, name: 'mcp__atelier__publish_artifact', input: {} }
+        ? { type: 'tool_use', id: toolUseId, name: tool.name, input: {} }
         : { type: 'text', text: '' },
     },
     {
@@ -70,7 +77,7 @@ function streamMessage(res: ServerResponse, invokeTool: boolean): void {
       delta: invokeTool
         ? {
             type: 'input_json_delta',
-            partial_json: JSON.stringify({ name: receiptName, content: receipt }),
+            partial_json: JSON.stringify(tool.input),
           }
         : { type: 'text_delta', text: answer },
     },
@@ -91,7 +98,18 @@ function streamMessage(res: ServerResponse, invokeTool: boolean): void {
   res.end();
 }
 
-async function listen(server: Server): Promise<string> {
+export function streamFixtureApproval(res: ServerResponse): void {
+  streamMessage(res, true, {
+    name: 'mcp__atelier__write_file',
+    input: {
+      path: 'approval-fixture.txt',
+      content: 'pending write',
+      reason: 'desktop recovery test',
+    },
+  });
+}
+
+export async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);

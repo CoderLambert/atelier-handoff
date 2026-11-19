@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { desktopPairingHeader } from '../shared/desktop-host.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, lstat, rm } from 'node:fs/promises';
@@ -142,6 +143,7 @@ export async function createApp(options: {
   data: string;
   runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner;
   permissionTtlMs?: number;
+  desktopPairing?: string;
   pickDirectory?: typeof pickProjectDirectory;
 }) {
   const store = new Store(options.data);
@@ -160,6 +162,7 @@ export async function createApp(options: {
   const uploadingSessions = new Set<string>();
   let directoryPicker: AbortController | undefined;
   const streams = new Set<ServerResponse>();
+  const requests = new Set<Promise<unknown>>();
   const connection = async (config: AppConfig) => {
     try {
       const response = await fetch(config.gateway.replace(/\/$/, '') + '/health', {
@@ -340,6 +343,7 @@ export async function createApp(options: {
     };
     let skillCandidates: RunSkill[] = [];
     const raced = store.transaction(() => {
+      if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
       const duplicate = store.db.prepare('SELECT * FROM idempotency WHERE key=?').get(key);
       if (duplicate) {
         if (duplicate.body_hash !== bodyHash)
@@ -448,11 +452,12 @@ export async function createApp(options: {
     return store.get('runs', run.id);
   };
 
-  const server = createServer(async (req, res) => {
+  const handle = async (req: IncomingMessage, res: ServerResponse) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
     try {
+      if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
       const host = req.headers.host;
       if (!host || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
         throw new AppError('ORIGIN_DENIED', '仅接受本机访问。', 403);
@@ -469,6 +474,12 @@ export async function createApp(options: {
         throw new AppError('TOKEN_REQUIRED', '本机应用令牌已更新，请刷新页面后重试。', 403);
       const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
       const method = req.method || 'GET';
+      if (
+        parts[0] === 'api' &&
+        options.desktopPairing &&
+        req.headers[desktopPairingHeader] !== options.desktopPairing
+      )
+        throw new AppError('DESKTOP_PAIRING_REQUIRED', '此运行时仅接受配对的桌面窗口。', 403);
       if (url.pathname === '/api/bootstrap' && method === 'GET') {
         const projectList = await projects();
         const info = await configInfo();
@@ -1205,22 +1216,34 @@ export async function createApp(options: {
         failure.status,
       );
     }
+  };
+  const server = createServer((req, res) => {
+    const task = handle(req, res);
+    requests.add(task);
+    void task.finally(() => requests.delete(task));
   });
+  let close: Promise<void> | undefined;
   return {
     server,
     store,
     permissions,
     files,
     runner,
-    close: async () => {
-      shuttingDown = true;
-      directoryPicker?.abort();
-      await runner.shutdown();
-      for (const stream of streams) stream.end();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-      store.close();
-    },
+    close: () =>
+      (close ??= (async () => {
+        shuttingDown = true;
+        directoryPicker?.abort();
+        const networkClosed = new Promise<void>((resolve) => server.close(() => resolve()));
+        try {
+          await runner.shutdown();
+        } finally {
+          for (const stream of streams) stream.end();
+          await Promise.allSettled(requests);
+          server.closeAllConnections();
+          await networkClosed;
+          await mcpSessions.shutdown();
+          store.close();
+        }
+      })()),
   };
 }

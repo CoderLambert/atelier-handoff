@@ -13,11 +13,19 @@ import {
   type IpcMainInvokeEvent,
   type WebContents,
 } from 'electron';
-import { fork, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, isAbsolute, join, delimiter } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
+import { RuntimeSupervisor } from './host/runtime.mjs';
+import {
+  bindPairing,
+  createWindow,
+  focusWindow,
+  loadWindow,
+  retryRuntime,
+} from './host/window.mjs';
 import { homedir } from 'node:os';
 import { z } from 'zod';
 import {
@@ -27,13 +35,11 @@ import {
   desktopBrowserLayoutSchema,
   desktopBrowserProjectIdSchema,
   desktopBrowserProtocolVersion,
-  desktopBrowserReadySchema,
   desktopBrowserResultSchema,
   desktopBrowserStateSchema,
   desktopBrowserUrlSchema,
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
-  type DesktopBrowserReady,
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
 
@@ -66,7 +72,6 @@ interface BrowserTab {
 
 let origin: string | undefined;
 let window: BrowserWindow | undefined;
-let backend: ChildProcess | undefined;
 let visible: BrowserTab | undefined;
 let stopping = false;
 const tabs = new Map<string, BrowserTab>();
@@ -444,41 +449,8 @@ async function runTool(request: DesktopBrowserCall) {
   }
 }
 
-function waitForReady(child: ChildProcess): Promise<DesktopBrowserReady> {
-  return new Promise((resolve, reject) => {
-    const clean = () => {
-      clearTimeout(timeout);
-      child.off('message', onMessage);
-      child.off('error', onError);
-      child.off('exit', onExit);
-      child.off('disconnect', onDisconnect);
-    };
-    const onError = (error: Error) => {
-      clean();
-      reject(error);
-    };
-    const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
-      onError(new Error(`工作台服务已退出 (${signal ?? code})。`));
-    const onDisconnect = () => onError(new Error('工作台服务连接已断开。'));
-    const onMessage = (value: unknown) => {
-      const ready = desktopBrowserReadySchema.safeParse(value);
-      if (!ready.success) {
-        onError(new Error('工作台服务就绪响应无效。'));
-        return;
-      }
-      clean();
-      resolve(ready.data);
-    };
-    const timeout = setTimeout(() => onError(new Error('工作台服务启动超时。')), 12_000);
-    child.on('message', onMessage);
-    child.once('error', onError);
-    child.once('exit', onExit);
-    child.once('disconnect', onDisconnect);
-  });
-}
-
 async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<void> {
-  if (child !== backend || stopping) return;
+  if (!supervisor.owns(child) || stopping) return;
   const request = desktopBrowserCallSchema.safeParse(value);
   if (!request.success) return;
   let result: DesktopBrowserResult;
@@ -495,70 +467,85 @@ async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<v
       error: error instanceof Error ? error.message : '浏览器操作失败。',
     });
   }
-  if (child === backend && child.connected && !stopping)
+  if (supervisor.owns(child) && child.connected && !stopping)
     child.send(result, (error) => {
       if (error && !stopping) console.error('浏览器响应发送失败。');
     });
 }
 
+const lifecycle = new AbortController();
+let unbindPairing: (() => void) | undefined;
+let recovery: Promise<void> | undefined;
+let quitting = false;
+const supervisor = new RuntimeSupervisor(
+  { packaged: app.isPackaged, root, dataDir },
+  (child, value) => {
+    void handleBrowserCall(child, value).catch(() => console.error('浏览器操作失败。'));
+  },
+  (reason) => {
+    void recover(reason);
+  },
+);
+
+function clearRuntimeWindow(): void {
+  origin = undefined;
+  unbindPairing?.();
+  unbindPairing = undefined;
+  hideVisible();
+  for (const tab of tabs.values()) {
+    tab.refs.clear();
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+  }
+  tabs.clear();
+  if (window && !window.isDestroyed()) window.hide();
+}
+
 async function start(): Promise<void> {
   if (stopping) return;
-  const packaged = app.isPackaged;
-  const nodeBin = join(root, 'bin');
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ATELIER_DESKTOP_BROWSER: '1',
-  };
-  if (packaged) {
-    env.ATELIER_DATA_DIR = dataDir;
-    env.ATELIER_PORT ??= '0';
-    env.PATH = [nodeBin, process.env.PATH].filter(Boolean).join(delimiter);
-    delete env.NODE_PATH;
-    delete env.NODE_OPTIONS;
-  }
-  const child = fork(join(root, packaged ? 'server/main.js' : 'server/main.ts'), [], {
-    cwd: root,
-    execPath: packaged ? join(nodeBin, 'node') : process.env.npm_node_execpath || 'node',
-    execArgv: packaged ? [] : ['--env-file-if-exists=.env', '--import', 'tsx'],
-    env,
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-  });
-  backend = child;
-  child.on('error', (error: Error) => {
-    if (!stopping) console.error(error.message);
-  });
-  const ready = await waitForReady(child);
-  if (stopping || !child.connected || child.exitCode !== null || child.signalCode !== null)
-    throw new Error('工作台服务已断开。');
-  origin = `http://127.0.0.1:${ready.port}`;
-  child.on('message', (value: unknown) => {
-    void handleBrowserCall(child, value).catch((error: unknown) => {
-      if (!stopping) console.error(error instanceof Error ? error.message : '浏览器操作失败。');
-    });
-  });
-  const owner = new BrowserWindow({
-    width: 1440,
-    height: 960,
-    title: 'atelier',
-    webPreferences: {
-      preload: join(here, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
+  const connection = await supervisor.start();
+  if (stopping) return;
+  origin = connection.origin;
+  const owner =
+    window && !window.isDestroyed()
+      ? window
+      : createWindow(join(here, 'preload.cjs'), () => origin);
   window = owner;
-  owner.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  owner.webContents.on('will-attach-webview', (event) => event.preventDefault());
-  owner.webContents.on('will-navigate', (event, url) => {
-    try {
-      if (new URL(url).origin !== origin) event.preventDefault();
-    } catch {
-      event.preventDefault();
+  owner.webContents.removeListener('render-process-gone', rendererGone);
+  owner.webContents.on('render-process-gone', rendererGone);
+  unbindPairing = bindPairing(owner, origin, connection.pairing);
+  await loadWindow(owner, origin);
+  if (!supervisor.connected || stopping) throw new Error('工作台服务连接已断开。');
+  focusWindow(owner);
+}
+
+function rendererGone(): void {
+  void recover('工作台窗口意外退出。');
+}
+
+function recover(reason: string): Promise<void> {
+  if (stopping) return Promise.resolve();
+  return (recovery ??= (async () => {
+    while (!stopping) {
+      clearRuntimeWindow();
+      await supervisor.stop();
+      if (stopping) return;
+      if (!(await retryRuntime(reason, lifecycle.signal))) {
+        app.quit();
+        return;
+      }
+      try {
+        await start();
+        if (origin || stopping) return;
+        reason = '工作台服务连接已断开。';
+      } catch (error) {
+        reason = error instanceof Error ? error.message : '工作台启动失败。';
+      }
     }
-  });
-  await owner.loadURL(origin);
+  })()
+    .catch(() => app.quit())
+    .finally(() => {
+      recovery = undefined;
+    }));
 }
 
 app.setName('atelier');
@@ -577,35 +564,25 @@ if (requestedProfile || app.isPackaged || process.env.ATELIER_DATA_DIR) {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {
-    if (!window || window.isDestroyed()) return;
-    if (window.isMinimized()) window.restore();
-    window.show();
-    window.focus();
+    if (origin && window) focusWindow(window);
   });
   void app
     .whenReady()
     .then(start)
     .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : '工作台启动失败。');
-      app.quit();
+      void recover(error instanceof Error ? error.message : '工作台启动失败。');
     });
 }
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
   if (stopping) return;
   stopping = true;
-  hideVisible();
-  for (const tab of tabs.values())
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
-  const child = backend;
-  if (child?.pid !== undefined && child.exitCode === null && child.signalCode === null) {
-    event.preventDefault();
-    const timeout = setTimeout(() => child.kill('SIGKILL'), 7_000);
-    timeout.unref();
-    child.once('exit', () => {
-      clearTimeout(timeout);
-      app.quit();
-    });
-    child.kill('SIGTERM');
-  }
+  lifecycle.abort();
+  clearRuntimeWindow();
+  void supervisor.stop().finally(() => {
+    quitting = true;
+    app.quit();
+  });
 });

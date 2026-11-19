@@ -14,7 +14,6 @@ export const desktopBrowserChannels = {
 
 export const desktopBrowserProjectIdSchema = z.uuid();
 export const desktopBrowserRequestIdSchema = z.uuid();
-export const desktopBrowserPortSchema = z.int().min(1).max(65535);
 export const desktopBrowserUrlSchema = z
   .string()
   .max(16_384)
@@ -161,19 +160,12 @@ export const desktopBrowserResultSchema = z.union([
   }),
 ]);
 
-export const desktopBrowserReadySchema = z.strictObject({
-  type: z.literal('desktop-browser-ready'),
-  protocolVersion: z.literal(desktopBrowserProtocolVersion),
-  port: desktopBrowserPortSchema,
-});
-
 export type DesktopBrowserLayout = z.infer<typeof desktopBrowserLayoutSchema>;
 export type DesktopBrowserCommand = z.infer<typeof desktopBrowserCommandSchema>;
 export type DesktopBrowserAction = DesktopBrowserCommand['action'];
 export type DesktopBrowserState = z.infer<typeof desktopBrowserStateSchema>;
 export type DesktopBrowserCall = z.infer<typeof desktopBrowserCallSchema>;
 export type DesktopBrowserResult = z.infer<typeof desktopBrowserResultSchema>;
-export type DesktopBrowserReady = z.infer<typeof desktopBrowserReadySchema>;
 
 export interface DesktopBrowserBridge {
   layout(

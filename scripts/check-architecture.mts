@@ -1,7 +1,7 @@
 /**
  * @file 检查项目架构规则和源码边界。
- * @implementation 验证规则引用与路径范围，并检查指定目录的源码扩展名。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 验证规则引用、路径范围与源码扩展名，并检查 P2 导入边界和宿主模块循环。
+ * @updated 2026-11-20T02:27:00+08:00
  */
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
@@ -9,6 +9,7 @@ import { matchesGlob, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { checkImportBoundaries } from './check-import-boundaries.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const rules = {
@@ -80,4 +81,8 @@ for (const dir of sourceDirs) {
     }
   }
 }
-console.log('Architecture rules: six path scopes and TypeScript source boundaries checked.');
+const importErrors = await checkImportBoundaries(root);
+assert.equal(importErrors.length, 0, importErrors.join('\n'));
+console.log(
+  'Architecture rules: six path scopes, TypeScript source boundaries and P2 import boundaries checked.',
+);
