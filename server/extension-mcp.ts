@@ -229,6 +229,7 @@ export async function callMcp(
   signal: AbortSignal,
   beforeCall?: () => void,
   sessions?: McpSessions,
+  publishScreenshot?: (data: string) => Promise<string>,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
@@ -244,12 +245,24 @@ export async function callMcp(
       throw new AppError('MCP_TOOL_CHANGED', '工具定义已变化。请重新测试连接并检查工具权限。', 409);
     }
     beforeCall?.();
-    const response = await client.callTool({ name, arguments: args }, CallToolResultSchema, {
+    const screenshot = name === 'browser_take_screenshot' && publishScreenshot;
+    const input = screenshot ? { ...args, filename: undefined, type: 'png' } : args;
+    const response = await client.callTool({ name, arguments: input }, CallToolResultSchema, {
       timeout: MCP_CALL_TIMEOUT,
       signal,
     });
     const result = CallToolResultSchema.parse(response);
     signal.throwIfAborted();
+    if (screenshot && !result.isError) {
+      const image = result.content.find(
+        (block) => block.type === 'image' && block.mimeType === 'image/png',
+      );
+      if (!image || image.type !== 'image')
+        throw new AppError('MCP_SCREENSHOT_MISSING', '浏览器没有返回 PNG 截图。', 502);
+      beforeCall?.();
+      const artifactId = await screenshot(image.data);
+      return `已保存网页截图到本轮交付物（ID ${artifactId}）。请提示用户点击下方卡片查看。`;
+    }
     const blocks = result.content.map((block) =>
       block.type === 'text' ? block.text : `[MCP ${block.type}]`,
     );

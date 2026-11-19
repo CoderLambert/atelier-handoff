@@ -1075,16 +1075,27 @@ export async function createApp(options: {
         if (parts.length === 4 && method === 'GET') {
           const { artifact, bytes } = await files.content(parts[2]!);
           const html = /\.html?$/i.test(artifact.name);
+          const image = artifact.mime === 'image/png';
           if (parts[3] === 'content')
             return json(res, {
               artifact,
-              text:
-                artifact.mime === 'application/pdf'
+              text: image
+                ? ''
+                : artifact.mime === 'application/pdf'
                   ? 'PDF 交付物，请下载查看。'
                   : bytes.toString('utf8'),
               previewable: artifact.mime !== 'application/pdf',
               previewKind: html ? 'html' : 'text',
             });
+          if (parts[3] === 'preview' && image) {
+            res.writeHead(200, {
+              'Content-Type': 'image/png',
+              'Content-Security-Policy': "sandbox; default-src 'none'",
+              'Cache-Control': 'no-store',
+            });
+            res.end(bytes);
+            return;
+          }
           if (parts[3] === 'preview' && html) {
             res.removeHeader('X-Frame-Options');
             res.writeHead(200, {

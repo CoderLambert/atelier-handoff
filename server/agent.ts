@@ -511,6 +511,12 @@ export class AgentRunner implements Runner {
           },
         ),
       );
+    const publishScreenshot = allowed('artifact')
+      ? async (data: string) => {
+          verifyCurrent();
+          return (await this.files.publishScreenshot(run, data)).id;
+        }
+      : undefined;
     const bindingGuidance: string[] = [];
     const bindingUnavailable = () =>
       new AppError('SKILL_TOOL_UNAVAILABLE', 'Skill 工具未授权、已变更或当前运行模式不可用。', 403);
@@ -667,6 +673,7 @@ export class AgentRunner implements Runner {
                 AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
                 recheck,
                 this.mcpSessions,
+                publishScreenshot,
               );
             },
           ),
@@ -972,6 +979,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
                   recheck,
                   this.mcpSessions,
+                  publishScreenshot,
                 );
                 signal.throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {

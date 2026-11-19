@@ -38,7 +38,8 @@ export default function ArtifactDialog({
   const item = content.data?.artifact ?? artifact;
   const html = content.data ? content.data.previewKind === 'html' : /\.html?$/i.test(item.name);
   const pdf = !html && item.mime === 'application/pdf';
-  const canExpand = html || pdf;
+  const image = item.mime === 'image/png';
+  const canExpand = html || pdf || image;
   const expanded = fullscreen && canExpand;
   const previewable = html && content.data?.previewable === true;
   const fullscreenLabel = expanded ? '退出全屏' : '全屏';
@@ -141,7 +142,13 @@ export default function ArtifactDialog({
                   </div>
                 }
               >
-                {pdf ? (
+                {image ? (
+                  <img
+                    src={`${path}/preview`}
+                    alt={item.name}
+                    className="mx-auto block max-w-full object-contain"
+                  />
+                ) : pdf ? (
                   <FilePreview name={item.name} size={item.size} url={`${path}/download`} />
                 ) : (
                   <FilePreview name={item.name} text={content.data.text} />

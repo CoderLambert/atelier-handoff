@@ -179,6 +179,25 @@ export class FileRecords {
         : mimeFor(name.toLowerCase());
     return this.publishBytes(run, name, bytes, mime);
   }
+  async publishScreenshot(run: Run, data: string) {
+    const max = 768 * 1024;
+    if (data.length > Math.ceil(max / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data))
+      throw new AppError('INVALID_SCREENSHOT', '浏览器截图数据无效或超过大小限制。', 422);
+    const bytes = Buffer.from(data, 'base64');
+    if (
+      bytes.length < 33 ||
+      bytes.length > max ||
+      !bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ||
+      bytes.readUInt32BE(8) !== 13 ||
+      bytes.toString('ascii', 12, 16) !== 'IHDR'
+    )
+      throw new AppError('INVALID_SCREENSHOT', '浏览器没有返回有效的 PNG 截图。', 422);
+    const width = bytes.readUInt32BE(16),
+      height = bytes.readUInt32BE(20);
+    if (!width || !height || width * height > 16_000_000)
+      throw new AppError('INVALID_SCREENSHOT', '浏览器截图尺寸超出限制。', 422);
+    return this.publishBytes(run, '网页截图.png', bytes, 'image/png');
+  }
   private async publishBytes(
     run: Run,
     name: string,
