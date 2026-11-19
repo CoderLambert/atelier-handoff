@@ -1,3 +1,8 @@
+/**
+ * @file 验证工作台服务、持久化与权限行为。
+ * @implementation 利用隔离临时目录、HTTP、SQLite 和运行器替身验证会话、运行、文件、审批和恢复。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';

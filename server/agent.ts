@@ -1,3 +1,8 @@
+/**
+ * @file 编排智能体运行、工具调用与取消。
+ * @implementation 对接 Agent SDK，使用项目权限、文件记录和 MCP 会话执行任务，维护运行状态并处理停止与关闭。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { lstat, mkdir, rm } from 'node:fs/promises';

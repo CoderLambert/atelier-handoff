@@ -1,3 +1,8 @@
+/**
+ * @file 创建工作台 HTTP 应用并组织业务服务。
+ * @implementation 组合存储、运行器、权限和扩展服务，处理配对请求、会话事件和静态资源，并协调关闭。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { desktopPairingHeader } from '../shared/desktop-host.js';

@@ -1,6 +1,6 @@
 /**
  * @file 提供安装验收所需的离线测试夹具。
- * @implementation 模拟服务与 SDK 响应，生成 PDF 并检查截图像素。
+ * @implementation 提供回环模型接口和网页夹具，生成 PDF 并检查截图中的像素。
  * @updated 2026-11-20T02:00+08:00
  */
 import assert from 'node:assert/strict';
