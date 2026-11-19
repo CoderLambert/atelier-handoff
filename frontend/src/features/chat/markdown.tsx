@@ -1,59 +1,105 @@
-import { memo, useMemo, useState, type MouseEvent } from 'react';
-import MarkdownIt from 'markdown-it';
+import { memo } from 'react';
+import {
+  defaultRehypePlugins,
+  Streamdown,
+  type Components,
+  type DiagramPlugin,
+  type MermaidErrorComponentProps,
+} from 'streamdown';
 
-const markdown = new MarkdownIt({ html: false, linkify: true, typographer: false });
-const escape = markdown.utils.escapeHtml;
+const safePlugins = Object.entries(defaultRehypePlugins)
+  .filter(([name]) => name !== 'raw')
+  .map(([, plugin]) => plugin);
 
-// Model output must not load remote images or navigate to local/active URLs.
-markdown.validateLink = (url) => /^(https?:\/\/|mailto:)/i.test(url);
-markdown.renderer.rules.image = (tokens, index) => escape(tokens[index].content || '图片');
-markdown.renderer.rules.link_open = (tokens, index, options, _env, renderer) => {
-  tokens[index].attrSet('target', '_blank');
-  tokens[index].attrSet('rel', 'noopener noreferrer');
-  return renderer.renderToken(tokens, index, options);
+const components: Components = {
+  strong: ({ children }) => <strong>{children}</strong>,
+  img: ({ alt }) => <span>{alt || '图片'}</span>,
+  a: ({ href, children }) =>
+    href ? (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    ),
 };
-const renderFence = markdown.renderer.rules.fence!;
-markdown.renderer.rules.fence = (tokens, index, options, env, renderer) => {
-  const language = tokens[index].info.trim().split(/\s+/)[0] || '代码';
-  return `<div class="code-panel"><div class="code-toolbar"><span>${escape(language)}</span><button type="button" data-copy-code>复制代码</button></div>${renderFence(tokens, index, options, env, renderer)}</div>`;
-};
-markdown.renderer.rules.table_open = () =>
-  '<div class="table-scroll" tabindex="0" role="region" aria-label="表格"><table>';
-markdown.renderer.rules.table_close = () => '</table></div>';
 
-export function renderMarkdown(text: string) {
-  return markdown.render(text);
+const mermaid: DiagramPlugin = {
+  name: 'mermaid',
+  type: 'diagram',
+  language: 'mermaid',
+  getMermaid() {
+    return {
+      initialize() {},
+      async render(id, source) {
+        if (source.length > 24_000) throw new Error('图表源码超过显示上限。');
+        if (/^\s*---(?:\r?\n|$)|%%\s*\{/.test(source)) throw new Error('图表包含自定义运行配置。');
+        const { mermaid } = await import('@streamdown/mermaid');
+        return mermaid
+          .getMermaid({
+            securityLevel: 'strict',
+            startOnLoad: false,
+            suppressErrorRendering: true,
+            fontFamily: 'system-ui, sans-serif',
+          })
+          .render(id, source);
+      },
+    };
+  },
+};
+const plugins = { mermaid };
+const controls = {
+  code: { copy: true, download: false },
+  table: false,
+  mermaid: { copy: true, download: false, fullscreen: false, panZoom: true },
+};
+
+function DiagramError({ chart }: MermaidErrorComponentProps) {
+  return (
+    <div className="chat-diagram-error">
+      <p>图表暂时无法渲染，可以查看 Mermaid 源码。</p>
+      <pre>
+        <code>{chart}</code>
+      </pre>
+    </div>
+  );
+}
+const diagramOptions = { errorComponent: DiagramError };
+
+function standaloneMindmap(text: string) {
+  const trimmed = text.trim();
+  const [first, ...lines] = trimmed.split(/\r?\n/);
+  if (
+    first !== 'mindmap' ||
+    !lines.length ||
+    !lines.every((line) => !line.trim() || /^\s+\S/.test(line))
+  )
+    return text;
+  return `\`\`\`mermaid\n${trimmed}\n\`\`\``;
 }
 
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
-  const html = useMemo(() => renderMarkdown(text), [text]);
-  const [feedback, setFeedback] = useState('');
-
-  async function copyCode(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const button = target.closest<HTMLButtonElement>('button[data-copy-code]');
-    if (!button || !event.currentTarget.contains(button)) return;
-    const code = button.closest('.code-panel')?.querySelector('pre code');
-    if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code.textContent || '');
-      setFeedback('代码已复制');
-    } catch {
-      setFeedback('复制失败，请选择代码后手动复制。');
-    }
-  }
-
+export const Markdown = memo(function Markdown({
+  text,
+  streaming = false,
+}: {
+  text: string;
+  streaming?: boolean;
+}) {
+  // Show diagram source until the reply finishes to avoid parsing partial diagrams.
   return (
-    <div>
-      <div
-        className="markdown-body"
-        onClick={copyCode}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-      <span className="sr-only" role="status">
-        {feedback}
-      </span>
-    </div>
+    <Streamdown
+      className="markdown-body chat-markdown min-w-0"
+      mode={streaming ? 'streaming' : 'static'}
+      isAnimating={streaming}
+      skipHtml
+      rehypePlugins={safePlugins}
+      components={components}
+      urlTransform={(url) => (/^(https?:\/\/|mailto:)/i.test(url) ? url : '')}
+      controls={controls}
+      mermaid={diagramOptions}
+      plugins={streaming ? undefined : plugins}
+    >
+      {standaloneMindmap(text)}
+    </Streamdown>
   );
 });

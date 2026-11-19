@@ -400,7 +400,7 @@ export function Conversation({
                     : null}
                   {assistant ? (
                     hasText ? (
-                      <Markdown text={message.text} />
+                      <Markdown text={message.text} streaming={run ? isActive(run) : false} />
                     ) : run && isActive(run) ? null : (
                       <p className="message-placeholder">本轮没有文字回复</p>
                     )

@@ -2,6 +2,7 @@
 @import './styles/atelier.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './';
+@source '../../node_modules/streamdown/dist/*.js';
 
 @theme inline {
   --color-background: var(--bg);
