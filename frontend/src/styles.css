@@ -357,8 +357,54 @@
 .desktop-browser {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
+}
+@media (min-width: 1121px) {
+  .react-workspace.desktop-workspace.browser-preview-open:has(.desktop-browser) {
+    --aside-width: clamp(440px, 44vw, 880px);
+  }
+}
+.desktop-browser-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-warm);
+}
+.desktop-browser-tabs {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.desktop-browser-tab {
+  display: flex;
+  flex: 0 0 clamp(180px, 18vw, 260px);
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+}
+.desktop-browser-tab[data-active='true'] {
+  border-bottom-color: var(--accent);
+}
+.desktop-browser-tab-select {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.desktop-browser :is(.desktop-browser-tab-select svg, .desktop-browser-new-tab) {
+  flex-shrink: 0;
 }
 .react-side:has(.desktop-browser),
 .react-drawer-details:has(.desktop-browser) {
@@ -388,9 +434,21 @@
   font-size: var(--text-sm);
 }
 .desktop-browser-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
   padding: 8px 12px;
   background: var(--surface-warm);
   font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.desktop-browser-status p {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.desktop-browser-status[role='alert'] {
+  color: var(--danger);
 }
 .desktop-browser-slot {
   flex: 1;

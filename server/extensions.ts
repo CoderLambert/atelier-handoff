@@ -158,8 +158,33 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
   };
 }
 
+function browserProvider(
+  transport: McpExtension['transport'],
+): Pick<McpExtension, 'provider' | 'browserOrigins'> {
+  if (
+    transport.type !== 'stdio' ||
+    !transport.args.some((arg) => arg.replaceAll('\\', '/').endsWith('/@playwright/mcp/cli.js'))
+  )
+    return { provider: 'mcp' };
+  const prefix = '--allowed-origins=';
+  const flag = transport.args.find((arg) => arg.startsWith(prefix));
+  const index = transport.args.indexOf('--allowed-origins');
+  const allowed =
+    flag?.slice(prefix.length) ?? (index >= 0 ? transport.args[index + 1] : undefined);
+  return { provider: 'playwright-browser', browserOrigins: allowed?.split(';').filter(Boolean) };
+}
+
 export class ProjectExtensions {
   constructor(private store: Store) {}
+
+  assignLegacyProviders(): void {
+    this.store.transaction(() => {
+      for (const item of this.store.list('extensions')) {
+        if (item.kind === 'mcp' && !item.provider)
+          this.store.put('extensions', { ...item, ...browserProvider(item.transport) });
+      }
+    });
+  }
 
   list(projectId: string): Extension[] {
     this.store.get('projects', projectId);
@@ -229,6 +254,7 @@ export class ProjectExtensions {
         ...base,
         kind: 'mcp',
         transport: input.transport,
+        ...browserProvider(input.transport),
         autoUseInChat: input.autoUseInChat,
         source: input.transport.type === 'stdio' ? '本机进程' : 'HTTP',
         tools,

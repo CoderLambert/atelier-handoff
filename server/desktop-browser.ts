@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../shared/types.js';
 import {
   desktopBrowserCallSchema,
+  desktopBrowserCancelSchema,
   desktopBrowserProtocolVersion,
   desktopBrowserResultIdentitySchema,
   desktopBrowserResultSchema,
@@ -47,6 +48,7 @@ if (desktopBrowserEnabled()) {
 
 export async function callDesktopBrowser(
   projectId: string,
+  runId: string,
   name: string,
   args: Record<string, unknown>,
   signal: AbortSignal,
@@ -59,6 +61,7 @@ export async function callDesktopBrowser(
     protocolVersion: desktopBrowserProtocolVersion,
     id: randomUUID(),
     projectId,
+    runId,
     name,
     args,
     allowedOrigins,
@@ -77,7 +80,17 @@ export async function callDesktopBrowser(
       clean();
       reject(error);
     };
-    const abort = () => fail(deadline.reason);
+    const abort = () => {
+      if (process.connected && process.send) {
+        const message = desktopBrowserCancelSchema.parse({
+          type: 'desktop-browser-cancel',
+          protocolVersion: desktopBrowserProtocolVersion,
+          id: request.id,
+        });
+        process.send(message, () => {});
+      }
+      fail(deadline.reason);
+    };
     pending.set(request.id, {
       resolve(result) {
         clean();

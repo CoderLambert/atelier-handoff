@@ -17,11 +17,15 @@ const bridge: DesktopBrowserBridge = {
     const request = desktopBrowserLayoutSchema.parse({ projectId, bounds });
     ipcRenderer.send(desktopBrowserChannels.layout, request);
   },
-  async command(projectId, action, url) {
+  async command(projectId, action, value) {
     const request = desktopBrowserCommandSchema.parse({
       projectId,
       action,
-      ...(url === undefined ? {} : { url }),
+      ...(action === 'select-tab' || action === 'close-tab'
+        ? { tabId: value }
+        : action === 'navigate'
+          ? { url: value }
+          : {}),
     });
     const response: unknown = await ipcRenderer.invoke(desktopBrowserChannels.command, request);
     if (response !== undefined) throw new Error('浏览器返回了无效响应。');

@@ -156,6 +156,7 @@ export async function createApp(options: {
   const permissions = new PermissionService(store, options.permissionTtlMs);
   const files = new FileRecords(store);
   const extensions = new ProjectExtensions(store);
+  extensions.assignLegacyProviders();
   const agents = new AgentProfiles(store, extensions);
   const mcpSessions = new McpSessions();
   const runner =

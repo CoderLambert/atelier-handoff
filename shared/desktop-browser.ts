@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-export const desktopBrowserProtocolVersion = 1;
+export const desktopBrowserProtocolVersion = 2;
 export const desktopBrowserChannels = {
   layout: 'browser:layout',
   command: 'browser:command',
@@ -41,7 +41,12 @@ export const desktopBrowserLayoutSchema = z.strictObject({
 export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
-    action: z.literal(['state', 'take', 'release', 'reload', 'back', 'forward']),
+    action: z.literal(['state', 'take', 'release', 'reload', 'back', 'forward', 'new-tab']),
+  }),
+  z.strictObject({
+    projectId: desktopBrowserProjectIdSchema,
+    action: z.literal(['select-tab', 'close-tab']),
+    tabId: z.uuid(),
   }),
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
@@ -52,6 +57,10 @@ export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
 
 export const desktopBrowserStateSchema = z.strictObject({
   projectId: desktopBrowserProjectIdSchema,
+  tabs: z.array(z.strictObject({ id: z.uuid(), title: z.string(), url: z.string() })),
+  activeTabId: z.uuid().nullable(),
+  agentTabId: z.uuid().nullable(),
+  transferring: z.boolean(),
   url: z.union([z.literal(''), desktopBrowserUrlSchema]),
   title: z.string(),
   control: z.boolean(),
@@ -63,6 +72,7 @@ const callHeader = {
   protocolVersion: z.literal(desktopBrowserProtocolVersion),
   id: desktopBrowserRequestIdSchema,
   projectId: desktopBrowserProjectIdSchema,
+  runId: z.uuid(),
   allowedOrigins: z
     .array(
       desktopBrowserUrlSchema.refine(
@@ -129,6 +139,12 @@ export const desktopBrowserCallSchema = z.discriminatedUnion('name', [
   }),
 ]);
 
+export const desktopBrowserCancelSchema = z.strictObject({
+  type: z.literal('desktop-browser-cancel'),
+  protocolVersion: z.literal(desktopBrowserProtocolVersion),
+  id: desktopBrowserRequestIdSchema,
+});
+
 const resultHeader = {
   type: z.literal('desktop-browser-result'),
   protocolVersion: z.literal(desktopBrowserProtocolVersion),
@@ -175,7 +191,7 @@ export interface DesktopBrowserBridge {
   command(
     projectId: DesktopBrowserCommand['projectId'],
     action: DesktopBrowserAction,
-    url?: string,
+    value?: string,
   ): Promise<void>;
   subscribe(callback: (state: DesktopBrowserState) => void): () => void;
 }

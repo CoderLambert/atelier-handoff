@@ -697,6 +697,7 @@ export class AgentRunner implements Runner {
                 recheck,
                 this.mcpSessions,
                 publishScreenshot,
+                run.id,
               );
             },
           ),
@@ -1003,6 +1004,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   recheck,
                   this.mcpSessions,
                   publishScreenshot,
+                  run.id,
                 );
                 signal.throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {

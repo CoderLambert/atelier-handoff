@@ -1,0 +1,12 @@
+{
+  "nativeTabs": 2,
+  "slowNavigationTakeover": true,
+  "visibleTabIndependent": true,
+  "observedPinnedTab": true,
+  "screenshotArtifact": true,
+  "realSdk": true,
+  "localGatewayRequests": 4,
+  "paidModelCalls": 0,
+  "runtime": "development Electron sandboxed page",
+  "gateway": "localhost SDK fixture"
+}

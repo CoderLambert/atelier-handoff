@@ -69,6 +69,8 @@ export type Extension = ExtensionBase &
       }
     | {
         kind: 'mcp';
+        provider?: 'mcp' | 'playwright-browser';
+        browserOrigins?: string[];
         autoUseInChat?: boolean;
         transport: McpTransport;
         allowedTools: AllowedMcpTool[];

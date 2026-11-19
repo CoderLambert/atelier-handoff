@@ -6,7 +6,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { AppError, type DiscoveredTool } from '../shared/types.js';
 import type { EnabledMcp } from './extensions.js';
 import { launchPreviewBrowser, readBrowserFrame } from './browser-preview.js';
-import { callDesktopBrowser, desktopBrowserEnabled } from './desktop-browser.js';
+import { callDesktopBrowser } from './desktop-browser.js';
 
 export const MCP_CONNECT_TIMEOUT = 8_000;
 const MCP_CALL_TIMEOUT = 30_000;
@@ -290,15 +290,16 @@ export async function callMcp(
   beforeCall?: () => void,
   sessions?: McpSessions,
   publishScreenshot?: (data: string) => Promise<string>,
+  runId?: string,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
   if (
-    desktopBrowserEnabled() &&
-    server.transport.type === 'stdio' &&
-    server.transport.args.some((arg) => arg.endsWith('/@playwright/mcp/cli.js')) &&
+    server.provider === 'playwright-browser' &&
+    process.env.ATELIER_DESKTOP_BROWSER === '1' &&
     name.startsWith('browser_')
   ) {
+    if (!runId) throw new AppError('DESKTOP_BROWSER_FAILED', '桌面浏览器需要有效的运行标识。', 409);
     if (
       ![
         'browser_navigate',
@@ -311,18 +312,15 @@ export async function callMcp(
       throw new AppError('DESKTOP_BROWSER_UNSUPPORTED', '该工具尚未接入桌面浏览器。', 409);
     signal.throwIfAborted();
     beforeCall?.();
-    const originFlag = server.transport.args.find((arg) => arg.startsWith('--allowed-origins='));
-    const originIndex = server.transport.args.indexOf('--allowed-origins');
-    const origins =
-      originFlag?.slice('--allowed-origins='.length) ??
-      (originIndex >= 0 ? server.transport.args[originIndex + 1] : undefined);
     const result = await callDesktopBrowser(
       server.projectId,
+      runId,
       name,
       args,
       signal,
-      origins?.split(';').filter(Boolean),
+      server.browserOrigins,
     );
+    signal.throwIfAborted();
     if (result.png && publishScreenshot) {
       beforeCall?.();
       const artifactId = await publishScreenshot(result.png);
