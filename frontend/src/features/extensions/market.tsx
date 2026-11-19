@@ -9,6 +9,7 @@ import {
   Capabilities,
   ErrorMessage,
   FeatureDialog,
+  MarketCategoryIcon,
   MarketSource,
   MarketStatus,
   MarkdownPreview,
@@ -84,11 +85,26 @@ export function SkillMarket({
     <FeatureDialog
       title="Skill 市场"
       className="market-catalog-dialog"
-      description={`安装项目 · ${projectName}`}
+      description={`安装到 ${projectName}`}
       busy={pending}
       onClose={onClose}
     >
       <div className="market-catalog-content">
+        <div className="market-intro">
+          <div className="market-intro-copy">
+            <strong>{marketSource === 'curated' ? '为项目扩展工作流程' : '发现社区技能'}</strong>
+            <p>
+              {marketSource === 'curated'
+                ? '从界面设计、开发到写作，选择适合当前任务的技能。'
+                : '浏览推荐或按分类查找，预览说明后导入当前项目。'}
+            </p>
+          </div>
+          <span className="market-intro-art" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
         <div role="group" aria-label="市场来源" className="market-source-tabs">
           <ActionButton
             primary={marketSource === 'curated'}
@@ -177,12 +193,16 @@ export function SkillMarket({
                         disabled={!ready || pending}
                         onClick={() => onPreview(skill.id, skill.installedId)}
                       >
+                        <MarketCategoryIcon category={skill.category} />
                         <span className="market-result-copy">
-                          <strong>{skill.title || skill.name}</strong>
+                          <span className="market-result-title">
+                            <strong>{skill.title || skill.name}</strong>
+                            <span className="market-row-category">{skill.category}</span>
+                          </span>
                           <span className="market-result-summary">{skill.description}</span>
                         </span>
                         <span className="market-result-meta">
-                          {skill.category} · {skill.publisher}
+                          <span>{skill.publisher}</span>
                         </span>
                         <span aria-hidden="true" className="market-result-arrow">
                           ›

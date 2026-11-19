@@ -1,3 +1,11 @@
+import {
+  Braces,
+  ChartNoAxesColumnIncreasing,
+  FileText,
+  Layers3,
+  Palette,
+  Sparkles,
+} from 'lucide-react';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,6 +16,28 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { marketLabels, messageOf, type MarketSkill } from './api';
+
+const marketIcons = {
+  设计: { icon: Palette, tone: 'design' },
+  'design-media': { icon: Palette, tone: 'design' },
+  开发: { icon: Braces, tone: 'development' },
+  'dev-programming': { icon: Braces, tone: 'development' },
+  写作: { icon: FileText, tone: 'writing' },
+  'content-creation': { icon: FileText, tone: 'writing' },
+  'office-efficiency': { icon: FileText, tone: 'writing' },
+  'data-analysis': { icon: ChartNoAxesColumnIncreasing, tone: 'data' },
+  'ai-agent': { icon: Sparkles, tone: 'development' },
+} as const;
+
+export function MarketCategoryIcon({ category }: { category?: string }) {
+  const entry = marketIcons[category as keyof typeof marketIcons];
+  const Icon = entry?.icon ?? Layers3;
+  return (
+    <span className="market-category-icon" data-tone={entry?.tone ?? 'default'} aria-hidden="true">
+      <Icon size={18} strokeWidth={1.8} />
+    </span>
+  );
+}
 
 export function FeatureDialog({
   title,

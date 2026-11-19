@@ -8,7 +8,7 @@ import {
   useExtensionMutation,
   type PublicEntry,
 } from './api';
-import { ActionButton, ErrorMessage, MarkdownPreview } from './components';
+import { ActionButton, ErrorMessage, MarketCategoryIcon, MarkdownPreview } from './components';
 
 interface SkillHubItem {
   source: string;
@@ -211,20 +211,23 @@ export function SkillHubMarket({
                       setMessage('');
                     }}
                   >
+                    <MarketCategoryIcon category={item.category} />
                     <span className="market-result-copy">
-                      <strong>{item.title}</strong>
+                      <span className="market-result-title">
+                        <strong>{item.title}</strong>
+                        {item.category ? (
+                          <span className="market-row-category">
+                            {categoryLabels[item.category] ?? item.category}
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="market-result-summary">
                         {item.description || '暂无简介'}
                       </span>
                     </span>
                     <span className="market-result-meta">
                       <span>{item.publisher || item.coordinate.split('/')[0]}</span>
-                      <span>
-                        {item.category
-                          ? `${categoryLabels[item.category] ?? item.category} · `
-                          : ''}
-                        v{item.version}
-                      </span>
+                      <span>v{item.version}</span>
                     </span>
                     <span aria-hidden="true" className="market-result-arrow">
                       ›
