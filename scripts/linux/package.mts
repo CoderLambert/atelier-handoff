@@ -669,7 +669,14 @@ async function packageRelease(work: string): Promise<string[]> {
     if (!texts.length) {
       const supplement = `${item.manifest.name}-${item.manifest.version}`;
       if (
-        ['remark-math-6.0.0', 'rehype-katex-7.0.1', 'standardwebhooks-1.1.1'].includes(supplement)
+        [
+          'fastdom-1.0.12',
+          'react-remove-scroll-bar-2.3.8',
+          'rehype-katex-7.0.1',
+          'remark-math-6.0.0',
+          'standardwebhooks-1.1.1',
+          'strictdom-1.0.1',
+        ].includes(supplement)
       ) {
         const destination = `resources/licenses/${item.path}/LICENSE-upstream.txt`;
         await copy(join(root, 'docs/licenses', `${supplement}.txt`), join(stage, destination));
