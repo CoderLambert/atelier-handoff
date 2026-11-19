@@ -408,3 +408,43 @@ test('stopping search aborts upstream work and removes its Unix socket', sandbox
   );
   assert.ok(after.every((name) => before.has(name)));
 });
+
+test('broker and whole-run deadlines abort pending upstream work', sandboxTest, async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const options = await fixture(
+    t,
+    httpFixture +
+      "\nprint(json.dumps(request('POST', '/api/v1/skills/multi-search-engine/quote', '{}')))\n",
+  );
+  let started!: () => void;
+  let aborted = 0;
+  fakeFetch(t, async (_input, init) => {
+    started();
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        aborted++;
+        reject(new Error('fixture deadline'));
+      });
+    });
+  });
+  for (const milliseconds of [30_000, 120_000]) {
+    const ready = new Promise<void>((done) => (started = done));
+    const run = runPackagePython({ ...options, args: ['prepare'], search: true });
+    await Promise.race([
+      ready,
+      run.then((result) => {
+        throw new Error('Fixture exited before making a request: ' + result.output);
+      }),
+    ]);
+    t.mock.timers.tick(milliseconds);
+    const result = await run;
+    if (milliseconds === 30_000) {
+      assert.equal(result.code, 0, result.output);
+      assert.equal(JSON.parse(result.output).status, 504);
+    } else {
+      assert.equal(result.code, null);
+      assert.match(result.output, /120 秒/);
+    }
+  }
+  assert.equal(aborted, 2);
+});
