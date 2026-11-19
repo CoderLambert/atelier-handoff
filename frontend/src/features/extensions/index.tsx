@@ -13,6 +13,7 @@ import {
   useExtensionMutation,
   useExtensions,
   type ExtensionKind,
+  type StartSkill,
 } from './api';
 import { ExtensionEditor } from './editor';
 import { SkillMarket } from './market';
@@ -34,7 +35,7 @@ const tabs: ExtensionKind[] = ['skill', 'command', 'mcp'];
 export interface ExtensionsPageProps {
   projects: Project[];
   projectId?: string;
-  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
+  onStartSkill?: StartSkill;
 }
 export default function ExtensionsPage({ projects, projectId, onStartSkill }: ExtensionsPageProps) {
   const [pinnedId, setPinnedId] = useState<string>();

@@ -1,5 +1,5 @@
 import { useIsMutating } from '@tanstack/react-query';
-import { extensionKeys } from './api';
+import { extensionKeys, type StartSkill } from './api';
 import { FeatureDialog } from './components';
 import { SkillHubMarket } from './skillhub-market';
 
@@ -14,7 +14,7 @@ export function SkillMarket({
   projectName: string;
   onClose: () => void;
   onSaved: (message: string) => void;
-  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
+  onStartSkill?: StartSkill;
 }) {
   const busy = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
   return (

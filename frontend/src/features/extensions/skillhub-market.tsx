@@ -7,6 +7,7 @@ import {
   messageOf,
   useExtensionMutation,
   type PublicEntry,
+  type StartSkill,
 } from './api';
 import { ActionButton, ErrorMessage, MarketCategoryIcon, MarkdownPreview } from './components';
 
@@ -40,7 +41,7 @@ export function SkillHubMarket({
 }: {
   projectId: string;
   onSaved: (message: string) => void;
-  onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
+  onStartSkill?: StartSkill;
 }) {
   const detailId = useId();
   const resultScroll = useRef<HTMLDivElement>(null);
@@ -140,7 +141,7 @@ export function SkillHubMarket({
     try {
       await onStartSkill(
         projectId,
-        installed.name,
+        { id: installed.id, version: installed.version },
         entry?.packageManifest?.files.some((path) => /\.py$/i.test(path)) ?? false,
       );
     } catch (cause) {

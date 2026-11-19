@@ -1,10 +1,15 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Extension, McpTransport } from '@shared/types';
+import type { Extension, ExtensionSelection, McpTransport } from '@shared/types';
 import { api } from '@/api/client';
 
 export type ExtensionKind = Extension['kind'];
 export type McpExtension = Extract<Extension, { kind: 'mcp' }>;
 export type MarkdownExtension = Exclude<Extension, McpExtension>;
+export type StartSkill = (
+  projectId: string,
+  selection: ExtensionSelection,
+  editable: boolean,
+) => Promise<void>;
 export interface PublicEntry {
   location: string;
   key: string;

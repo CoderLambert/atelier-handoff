@@ -308,7 +308,7 @@ export default function Workspace() {
                 <ExtensionsPage
                   projects={ready.data?.projects ?? []}
                   projectId={project?.id}
-                  onStartSkill={async (projectId, name, editable) => {
+                  onStartSkill={async (projectId, selection, editable) => {
                     const { session } = await api<{ session: Session }>('/api/sessions', {
                       method: 'POST',
                       body: { projectId },
@@ -318,7 +318,7 @@ export default function Workspace() {
                       body: {
                         draft: {
                           ...session.draft,
-                          text: `/${name} `,
+                          extensionSelections: [selection],
                           mode: editable ? 'edit' : 'readonly',
                         },
                       },
