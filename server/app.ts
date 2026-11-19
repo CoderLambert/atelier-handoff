@@ -571,6 +571,31 @@ export async function createApp(options: {
         }
         throw new AppError('NOT_FOUND', '接口不存在。', 404);
       }
+      if (
+        parts[0] === 'api' &&
+        parts[1] === 'projects' &&
+        parts[3] === 'browser-preview' &&
+        parts.length === 4 &&
+        method === 'POST'
+      ) {
+        const projectId = parts[2]!;
+        store.get('projects', projectId);
+        const enabled = extensions
+          .list(projectId)
+          .filter(
+            (item) =>
+              item.kind === 'mcp' &&
+              item.enabled &&
+              item.allowedTools.some(({ name }) => name === 'browser_navigate'),
+          );
+        return json(res, {
+          frame: await mcpSessions.preview(
+            projectId,
+            new Set(enabled.map(({ id }) => id)),
+            url.searchParams.get('frame') === '1',
+          ),
+        });
+      }
       if (parts[0] === 'api' && parts[1] === 'projects' && parts[3] === 'extensions') {
         const projectId = parts[2]!;
         if (parts.length === 4 && method === 'GET')

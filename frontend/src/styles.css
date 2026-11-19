@@ -301,3 +301,55 @@
     display: inline-flex;
   }
 }
+
+.workspace-side-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+@media (min-width: 1121px) {
+  .react-workspace.browser-preview-open {
+    --aside-width: clamp(350px, 36vw, 680px);
+  }
+}
+
+.workspace-browser-address {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-warm);
+  border-bottom: 1px solid var(--border-soft);
+}
+.workspace-browser-address svg {
+  flex: none;
+  color: var(--muted);
+}
+.workspace-browser-address div {
+  min-width: 0;
+}
+.workspace-browser-address :is(strong, span) {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-browser-address strong {
+  font-size: var(--text-sm);
+}
+.workspace-browser-address span {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.workspace-browser-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: white;
+}

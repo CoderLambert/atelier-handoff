@@ -16,6 +16,7 @@ import { deleteDraft, lastSession, rememberSession } from './drafts';
 import { keys, useRunEvents } from './events';
 import { ProjectsDialog } from './projects';
 import { Sidebar } from './sidebar';
+import { BrowserPreview, useBrowserPreview } from './browser-preview';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 
 const SessionChat = lazy(() => import('./session-chat'));
@@ -80,6 +81,16 @@ export default function Workspace() {
       (item) => item.id === ready.data?.sessions.find((item) => item.id === sessionId)?.projectId,
     ) ??
     ready.data?.projects[0];
+  const [sideTab, setSideTab] = useState<'details' | 'browser'>('details');
+  const previewProject = view === 'chat' ? project?.id : undefined;
+  const browser = useBrowserPreview(previewProject, sideTab === 'browser');
+  const firstPreview = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (previewProject && browser.data?.frame && firstPreview.current !== previewProject) {
+      firstPreview.current = previewProject;
+      setSideTab('browser');
+    }
+  }, [previewProject, browser.data?.frame]);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionChange, setSessionChange] = useState<{ type: SessionAction; session: Session }>();
@@ -223,6 +234,33 @@ export default function Workspace() {
       onSessionAction={openSessionAction}
     />
   );
+  const sidePanel = (
+    <>
+      <div className="workspace-side-tabs" role="group" aria-label="右侧面板">
+        <Button
+          size="sm"
+          variant={sideTab === 'details' ? 'secondary' : 'ghost'}
+          aria-pressed={sideTab === 'details'}
+          onClick={() => setSideTab('details')}
+        >
+          任务详情
+        </Button>
+        <Button
+          size="sm"
+          variant={sideTab === 'browser' ? 'secondary' : 'ghost'}
+          aria-pressed={sideTab === 'browser'}
+          onClick={() => setSideTab('browser')}
+        >
+          浏览器
+        </Button>
+      </div>
+      {sideTab === 'browser' ? (
+        <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
+      ) : (
+        inspector
+      )}
+    </>
+  );
   const archiveLabel =
     sessionChange?.type === 'archive' && sessionChange.session.status === 'archived'
       ? '恢复会话'
@@ -230,7 +268,7 @@ export default function Workspace() {
         ? sessionActions[sessionChange.type]
         : '';
   return (
-    <div className="app react-workspace">
+    <div className={`app react-workspace${sideTab === 'browser' ? ' browser-preview-open' : ''}`}>
       <Sidebar {...sideProps} />
       <main className="main">
         <header className="topbar">
@@ -453,7 +491,7 @@ export default function Workspace() {
       </main>
       {drawer !== 'details' ? (
         <aside className="react-side" aria-label="任务详情">
-          <Suspense fallback={loading}>{inspector}</Suspense>
+          <Suspense fallback={loading}>{sidePanel}</Suspense>
         </aside>
       ) : (
         <aside className="react-side" />
@@ -472,7 +510,7 @@ export default function Workspace() {
           </DialogTitle>
           <DialogDescription className="sr-only">本地工作台</DialogDescription>
           {drawer === 'navigation' ? <Sidebar {...sideProps} /> : null}
-          {drawer === 'details' ? <Suspense fallback={loading}>{inspector}</Suspense> : null}
+          {drawer === 'details' ? <Suspense fallback={loading}>{sidePanel}</Suspense> : null}
         </DialogContent>
       </Dialog>
       {projectsOpen ? (
