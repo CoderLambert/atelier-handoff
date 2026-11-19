@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
+      // Match the production image policy when previewing Markdown files.
+      headers: { 'Content-Security-Policy': "img-src 'self' data:" },
       fs: {
         allow: [
           directory,

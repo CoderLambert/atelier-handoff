@@ -3,6 +3,7 @@ import {
   PluginPreviewRenderer,
   createPreviewPluginRegistry,
   csvPlugin,
+  markdownPlugin,
   sourceCodePlugin,
   textPlugin,
   type FileInfo,
@@ -12,8 +13,15 @@ import '@lamberl-lee/file-preview/styles/index.css';
 
 type PreviewFile = { name: string; text: string } | { name: string; size: number; url: string };
 
-const registry = createPreviewPluginRegistry([sourceCodePlugin, textPlugin, csvPlugin, pdfPlugin]);
-const sourceFile = /\.(?:[cm]?[jt]sx?|css|html?|json|md|py|sh|sql|toml|xml|ya?ml)$/i;
+const registry = createPreviewPluginRegistry([
+  sourceCodePlugin,
+  textPlugin,
+  csvPlugin,
+  markdownPlugin,
+  pdfPlugin,
+]);
+const markdownFile = /\.(?:md|markdown)$/i;
+const sourceFile = /\.(?:[cm]?[jt]sx?|css|html?|json|py|sh|sql|toml|xml|ya?ml)$/i;
 
 function toFileInfo(file: PreviewFile): FileInfo {
   const { name } = file;
@@ -27,7 +35,8 @@ function toFileInfo(file: PreviewFile): FileInfo {
       source: { kind: 'url', url: file.url, name },
     };
   }
-  const blob = new Blob([file.text], { type: 'text/plain' });
+  const markdown = markdownFile.test(name);
+  const blob = new Blob([file.text], { type: markdown ? 'text/markdown' : 'text/plain' });
   // FileVista's CSV parser splits on newlines before interpreting quotes.
   const simpleCsv = /\.csv$/i.test(name) && !file.text.includes('"');
   return {
@@ -35,7 +44,7 @@ function toFileInfo(file: PreviewFile): FileInfo {
     name,
     size: blob.size,
     type: blob.type,
-    fileType: simpleCsv ? 'csv' : sourceFile.test(name) ? 'code' : 'text',
+    fileType: markdown ? 'markdown' : simpleCsv ? 'csv' : sourceFile.test(name) ? 'code' : 'text',
     source: { kind: 'blob', blob, name },
   };
 }
