@@ -133,9 +133,7 @@ export default function ArtifactDialog({
               className={`block w-full border-0 bg-white ${expanded ? 'min-h-0 flex-1' : 'h-[62dvh] min-h-0'}`}
             />
           ) : (
-            <div
-              className={`overflow-auto ${expanded ? 'min-h-0 flex-1' : 'max-h-[62dvh] min-h-48'}`}
-            >
+            <div className={`min-h-0 overflow-auto ${expanded ? 'flex-1' : 'max-h-[75dvh]'}`}>
               <Suspense
                 fallback={
                   <div className="p-4">

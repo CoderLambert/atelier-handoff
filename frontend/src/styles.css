@@ -193,6 +193,9 @@
 }
 
 .react-dialog.artifact-dialog {
+  --preview-gutter: clamp(12px, 4vw, 48px);
+  width: min(1080px, calc(100% - 2 * var(--preview-gutter)));
+  max-height: calc(100dvh - 24px);
   padding: 0;
 }
 
