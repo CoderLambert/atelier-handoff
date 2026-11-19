@@ -55,6 +55,22 @@
   margin: 0;
 }
 
+.atelier-markdown [data-streamdown='code-block-body'] {
+  background-color: #fff;
+  color: #0e1116;
+  --markdown-line-number: #59636e;
+}
+
+.atelier-markdown [data-streamdown='code-block-body']:where([data-theme='dark'] *) {
+  background-color: #0a0c10;
+  color: #f0f3f6;
+  --markdown-line-number: #9eaab6;
+}
+
+.atelier-markdown [data-streamdown='code-block-body'] code > span::before {
+  color: var(--markdown-line-number);
+}
+
 .atelier-markdown .atelier-markdown-diagram-error {
   padding: 0.5rem 0.75rem;
 }

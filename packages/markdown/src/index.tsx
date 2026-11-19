@@ -118,8 +118,14 @@ export const Markdown = memo(function Markdown({
     if (!needsCode) return;
     let active = true;
     void import('@streamdown/code').then(
-      ({ code }) => {
-        if (active) setCode(code);
+      ({ createCodePlugin }) => {
+        if (active) {
+          setCode(
+            createCodePlugin({
+              themes: ['github-light-high-contrast', 'github-dark-high-contrast'],
+            }),
+          );
+        }
       },
       () => {},
     );

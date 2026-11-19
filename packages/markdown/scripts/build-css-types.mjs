@@ -15,6 +15,7 @@ const scanner = new Scanner({
 const compiler = await compile(
   `@import 'tailwindcss/theme.css' layer(atelier-markdown-theme) prefix(am);
    @import 'tailwindcss/utilities.css' layer(atelier-markdown-utilities) prefix(am) source(none);
+   @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
    @theme inline {
      --color-background: var(--markdown-bg, #fff);
      --color-foreground: var(--markdown-fg, #18202b);
