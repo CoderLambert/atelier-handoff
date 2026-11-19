@@ -15,14 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { marketLabels, messageOf, type MarketSkill } from './api';
+import { messageOf } from './api';
 
 const marketIcons = {
-  设计: { icon: Palette, tone: 'design' },
   'design-media': { icon: Palette, tone: 'design' },
-  开发: { icon: Braces, tone: 'development' },
   'dev-programming': { icon: Braces, tone: 'development' },
-  写作: { icon: FileText, tone: 'writing' },
   'content-creation': { icon: FileText, tone: 'writing' },
   'office-efficiency': { icon: FileText, tone: 'writing' },
   'data-analysis': { icon: ChartNoAxesColumnIncreasing, tone: 'data' },
@@ -244,63 +241,6 @@ export function BackupActions({
       </p>
       <ErrorMessage error={error} />
     </>
-  );
-}
-export function MarketStatus({ skill }: { skill: MarketSkill }) {
-  const labels = new Set([marketLabels[skill.status] ?? '状态未知']);
-  if (skill.legacy) labels.add(marketLabels.legacy);
-  if (skill.updateAvailable && !skill.legacy) labels.add(marketLabels['update-available']);
-  if (skill.localModified) labels.add(marketLabels['local-modified']);
-  if (typeof skill.enabled === 'boolean') labels.add(skill.enabled ? '已启用' : '已停用');
-  return (
-    <div className="ext-market-status" data-ext-market-status={skill.status}>
-      {[...labels].map((label) => (
-        <span key={label}>{label}</span>
-      ))}
-    </div>
-  );
-}
-export function Capabilities({ skill }: { skill: MarketSkill }) {
-  return skill.capabilities?.length ? (
-    <ul className="ext-capabilities">
-      {skill.capabilities.map((capability) => (
-        <li key={capability}>{capability}</li>
-      ))}
-    </ul>
-  ) : null;
-}
-export function MarketSource({ skill }: { skill: MarketSkill }) {
-  const repositoryURL = /^[\w.-]+\/[\w.-]+$/.test(skill.repository)
-    ? `https://github.com/${skill.repository}`
-    : skill.repository;
-  const fields: [string, ReactNode][] = [
-    ['发布者', skill.publisher],
-    ['仓库', <SourceLink url={repositoryURL}>{skill.repository || '未提供'}</SourceLink>],
-    ['文件', <SourceLink url={skill.url}>{skill.path || '查看固定来源'}</SourceLink>],
-    ['上游名称', skill.upstreamName || skill.name],
-    ['Commit', skill.commit],
-    ['SHA-256', skill.sha256],
-    ['目录修订', skill.revision],
-    ...(skill.installedVersion != null
-      ? [['项目版本', `v${skill.installedVersion}`] as [string, ReactNode]]
-      : []),
-    ...(skill.installedRevision
-      ? [['已装修订', skill.installedRevision] as [string, ReactNode]]
-      : []),
-    ['许可证', <SourceLink url={skill.license?.url}>{skill.license?.name || '未提供'}</SourceLink>],
-  ];
-  return (
-    <details className="ext-preview ext-source-details">
-      <summary>来源与版本</summary>
-      <dl className="ext-source-list">
-        {fields.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value || '未提供'}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
   );
 }
 export function Switch({

@@ -36,9 +36,6 @@
     border-radius: var(--radius-lg);
     box-shadow: 0 18px 56px #2223;
   }
-  .react-dialog:has(.ext-market, .ext-market-preview) {
-    width: min(860px, calc(100% - 32px));
-  }
   .react-dialog-header {
     display: grid;
     gap: 8px;

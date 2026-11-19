@@ -13,13 +13,6 @@ import {
 import { Store } from './store.js';
 import type { PublicEntry } from './public-extensions.js';
 import { fingerprint } from './files.js';
-import {
-  identifyMarketSkill,
-  marketCurrent,
-  marketLocalModified,
-  marketSkillFromSource,
-  type MarketSkill,
-} from './skill-market-catalog.js';
 
 type McpExtension = Extract<Extension, { kind: 'mcp' }>;
 const name = z
@@ -163,44 +156,6 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
   };
 }
 
-export interface MarketUpdate {
-  id: string;
-  version: number;
-  revision: string;
-  replaceLocal?: boolean;
-}
-
-export function validateMarketEntry(skill: MarketSkill, entry: PublicEntry) {
-  if (
-    entry.kind !== 'skill' ||
-    entry.location !== skill.url ||
-    entry.key !== skill.path ||
-    entry.name !== skill.upstreamName ||
-    (entry.upstreamName !== undefined && entry.upstreamName !== skill.upstreamName) ||
-    !entry.body ||
-    entry.issue ||
-    entry.sha256 !== skill.sha256 ||
-    entry.revision !== fingerprint(entry.body) ||
-    // TextDecoder strips a leading UTF-8 BOM. Keep ordinary import revision semantics,
-    // while verifying that the decoded body really corresponds to the reviewed bytes.
-    (fingerprint(entry.body) !== skill.sha256 && fingerprint('﻿' + entry.body) !== skill.sha256)
-  )
-    throw new AppError(
-      'MARKET_SKILL_SOURCE_CHANGED',
-      '精选 Skill 的来源、名称或内容摘要与审核目录不符，请刷新目录后重试。',
-      409,
-    );
-  const metadata = inspectMarkdown(entry.body);
-  if (metadata.name !== skill.upstreamName)
-    throw new AppError('MARKET_SKILL_SOURCE_CHANGED', '公开 Skill 的名称与审核目录不符。', 409);
-  if (!metadata.supported || !metadata.userInvocable)
-    throw new AppError(
-      'EXTENSION_UNAVAILABLE',
-      metadata.compatibility || '公开 Skill 暂时无法手动调用。',
-      409,
-    );
-}
-
 export class ProjectExtensions {
   constructor(private store: Store) {}
 
@@ -218,15 +173,14 @@ export class ProjectExtensions {
     return record;
   }
 
-  save(projectId: string, raw: unknown, id?: string, marketId?: string): Extension {
-    return this.store.transaction(() => this.saveRecord(projectId, raw, id, marketId));
+  save(projectId: string, raw: unknown, id?: string): Extension {
+    return this.store.transaction(() => this.saveRecord(projectId, raw, id));
   }
 
   private saveRecord(
     projectId: string,
     raw: unknown,
     id?: string,
-    marketId?: string,
     importedPackage?: SkillPackage,
   ): Extension {
     const catalog = this.list(projectId);
@@ -258,8 +212,6 @@ export class ProjectExtensions {
       description: input.description,
       enabled: input.enabled,
       origin: previous?.origin,
-      marketId: previous?.marketId ?? marketId,
-      marketRevision: previous?.marketRevision,
     };
     let record: Extension;
     if (input.kind === 'mcp') {
@@ -323,12 +275,6 @@ export class ProjectExtensions {
       );
     return this.store.transaction(() => {
       const previous = update ? this.get(projectId, update.id) : undefined;
-      if (previous?.marketId || (previous && identifyMarketSkill(previous)))
-        throw new AppError(
-          'MARKET_UPDATE_REQUIRED',
-          '此 Skill 已关联精选市场，请从市场预览并应用审核版本。',
-          409,
-        );
       if (
         update &&
         (!previous?.origin ||
@@ -339,16 +285,6 @@ export class ProjectExtensions {
       ) {
         throw new AppError('EXTENSION_CHANGED', '扩展来源或版本已变化，请刷新后重新同步。', 409);
       }
-      const sourceMarket = marketSkillFromSource(entry.location, entry.key);
-      if (
-        sourceMarket &&
-        this.list(projectId).some((item) => identifyMarketSkill(item)?.id === sourceMarket.id)
-      )
-        throw new AppError(
-          'MARKET_UPDATE_REQUIRED',
-          '此 Skill 已关联精选市场，请从市场预览并应用审核版本。',
-          409,
-        );
       if (
         previous &&
         previous.origin?.revision === entry.revision &&
@@ -398,7 +334,7 @@ export class ProjectExtensions {
               enabled: previous?.enabled ?? true,
               ...(!previous && entry.location.startsWith('skillhub:') ? { autoInvoke: false } : {}),
             };
-      const item = this.saveRecord(projectId, payload, previous?.id, undefined, entry.package);
+      const item = this.saveRecord(projectId, payload, previous?.id, entry.package);
       return {
         item: this.store.put('extensions', {
           ...item,
@@ -413,95 +349,6 @@ export class ProjectExtensions {
         }),
         changed: true,
       };
-    });
-  }
-
-  private installedMarket(projectId: string, skill: MarketSkill) {
-    const installed = this.list(projectId).filter(
-      (item) => identifyMarketSkill(item)?.id === skill.id,
-    );
-    if (installed.length > 1)
-      throw new AppError(
-        'MARKET_SKILL_CONFLICT',
-        '项目中有多条记录关联此 Skill，请先保留需要的正文并移除重复记录。',
-        409,
-      );
-    return installed[0];
-  }
-
-  private activateMarketRecord(projectId: string, item: Extension) {
-    if (item.kind !== 'skill')
-      throw new AppError('EXTENSION_UNAVAILABLE', '项目中的 Skill 类型不匹配。', 409);
-    const metadata = inspectMarkdown(item.body);
-    if (!metadata.supported || !metadata.userInvocable)
-      throw new AppError(
-        'EXTENSION_UNAVAILABLE',
-        '项目中此 Skill 的当前版本无法手动调用，请在已安装列表检查配置。',
-        409,
-      );
-    return item.enabled
-      ? item
-      : this.saveRecord(projectId, { version: item.version, enabled: true }, item.id);
-  }
-
-  activateMarket(projectId: string, skill: MarketSkill): Extension | undefined {
-    return this.store.transaction(() => {
-      const previous = this.installedMarket(projectId, skill);
-      return previous ? this.activateMarketRecord(projectId, previous) : undefined;
-    });
-  }
-
-  saveMarket(projectId: string, skill: MarketSkill, entry: PublicEntry, update?: MarketUpdate) {
-    validateMarketEntry(skill, entry);
-    return this.store.transaction(() => {
-      const installed = this.installedMarket(projectId, skill);
-      if (!update && installed) return this.activateMarketRecord(projectId, installed);
-      const previous = update ? this.get(projectId, update.id) : undefined;
-      if (
-        update &&
-        (update.revision !== skill.revision ||
-          previous?.version !== update.version ||
-          previous.kind !== 'skill' ||
-          identifyMarketSkill(previous)?.id !== skill.id ||
-          installed?.id !== previous.id)
-      )
-        throw new AppError(
-          'EXTENSION_CHANGED',
-          'Skill 来源、目录或项目记录已变化，请重新预览后更新。',
-          409,
-        );
-      if (previous && marketLocalModified(skill, previous) && !update?.replaceLocal)
-        throw new AppError(
-          'MARKET_LOCAL_MODIFIED',
-          '此 Skill 包含本地修改，请先复制或保存正文，再明确选择替换本地修改。',
-          409,
-        );
-      if (previous && marketCurrent(skill, previous) && !marketLocalModified(skill, previous))
-        return previous;
-      const item = this.saveRecord(
-        projectId,
-        {
-          kind: 'skill',
-          name: previous?.name ?? skill.name,
-          description: entry.description,
-          body: entry.body,
-          enabled: previous?.enabled ?? true,
-          ...(previous ? { version: previous.version } : {}),
-        },
-        previous?.id,
-      );
-      return this.store.put('extensions', {
-        ...item,
-        marketId: skill.id,
-        marketRevision: skill.revision,
-        source: entry.location,
-        origin: {
-          location: entry.location,
-          key: entry.key,
-          revision: entry.revision!,
-          sha256: entry.sha256,
-        },
-      });
     });
   }
 

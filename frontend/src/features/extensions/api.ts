@@ -20,46 +20,6 @@ export interface PublicEntry {
   transport?: McpTransport;
   issue?: string;
 }
-export type MarketStatus =
-  | 'available'
-  | 'enabled'
-  | 'disabled'
-  | 'legacy'
-  | 'update-available'
-  | 'local-modified'
-  | 'conflict';
-export interface MarketSkill {
-  id: string;
-  name: string;
-  title: string;
-  category: string;
-  description: string;
-  publisher: string;
-  repository: string;
-  url: string;
-  path: string;
-  upstreamName: string;
-  commit: string;
-  sha256: string;
-  revision: string;
-  license?: { name: string; url: string };
-  capabilities?: string[];
-  status: MarketStatus;
-  enabled?: boolean;
-  installedId?: string;
-  installedVersion?: number;
-  installedRevision?: string;
-  localModified?: boolean;
-  legacy?: boolean;
-  updateAvailable?: boolean;
-}
-export interface MarketPreview {
-  skill: MarketSkill;
-  entry: PublicEntry & { body: string };
-  update?: { id: string; version: number; revision: string };
-  localBody?: string;
-  requiresReplacement?: boolean;
-}
 export interface TestResult {
   status: 'connected' | 'needs-auth' | 'failed';
   tools: McpExtension['tools'];
@@ -76,15 +36,6 @@ export const kinds: Record<ExtensionKind, string> = {
 };
 export const marks: Record<ExtensionKind, string> = { skill: '*', command: '/', mcp: '#' };
 export const testLabels = { connected: '已连接', 'needs-auth': '需要认证', failed: '连接失败' };
-export const marketLabels: Record<MarketStatus, string> = {
-  available: '可安装',
-  enabled: '已启用',
-  disabled: '已停用',
-  legacy: '旧版待迁移',
-  'update-available': '有审核更新',
-  'local-modified': '本地已修改',
-  conflict: '同名冲突',
-};
 export const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : '操作失败，请重试。';
 export const isConflict = (error: unknown) =>
@@ -92,21 +43,11 @@ export const isConflict = (error: unknown) =>
 export const allowsAuto = (item?: MarkdownExtension) => item?.modelInvocable !== false;
 export const autoEnabled = (item?: MarkdownExtension) =>
   allowsAuto(item) && item?.autoInvoke !== false;
-export const needsMarketReview = (skill: MarketSkill) =>
-  Boolean(
-    skill.legacy ||
-    skill.localModified ||
-    skill.updateAvailable ||
-    ['legacy', 'update-available', 'local-modified'].includes(skill.status),
-  );
 export const endpoint = (projectId: string, suffix?: string) =>
   `/api/projects/${encodeURIComponent(projectId)}/extensions${suffix ? `/${suffix}` : ''}`;
 export const extensionKeys = {
   all: (projectId: string) => ['extensions', projectId] as const,
   list: (projectId: string) => ['extensions', projectId, 'list'] as const,
-  market: (projectId: string) => ['extensions', projectId, 'market'] as const,
-  preview: (projectId: string, id: string) =>
-    ['extensions', projectId, 'market-preview', id] as const,
   mutations: (projectId: string) => ['extensions', projectId, 'mutation'] as const,
 };
 export function returnedItem(result: ItemResponse) {
@@ -124,18 +65,6 @@ export const extensionsQuery = (projectId: string) =>
     },
     staleTime: 30_000,
     enabled: Boolean(projectId),
-  });
-export const marketQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: extensionKeys.market(projectId),
-    queryFn: async ({ signal }) => {
-      const result = await api<{ items: MarketSkill[] }>(endpoint(projectId, 'market'), { signal });
-      if (!Array.isArray(result?.items)) throw new Error('精选目录响应缺少 items，请重试。');
-      return result.items;
-    },
-    staleTime: 0,
-    enabled: Boolean(projectId),
-    retry: false,
   });
 export function useExtensions(projectId?: string) {
   return useQuery(extensionsQuery(projectId ?? ''));
@@ -159,10 +88,7 @@ export function useExtensionMutation<T = ItemResponse>(projectId: string) {
         body: operation.body,
       }),
     onMutate: async () => {
-      await Promise.all([
-        client.cancelQueries({ queryKey: extensionKeys.list(projectId) }),
-        client.cancelQueries({ queryKey: extensionKeys.market(projectId) }),
-      ]);
+      await client.cancelQueries({ queryKey: extensionKeys.list(projectId) });
     },
     onSuccess: (result, operation) => {
       const item = returnedItem(result as ItemResponse);
@@ -179,11 +105,7 @@ export function useExtensionMutation<T = ItemResponse>(projectId: string) {
         );
     },
     onSettled: async () => {
-      await Promise.all([
-        client.invalidateQueries({ queryKey: extensionKeys.list(projectId) }),
-        client.invalidateQueries({ queryKey: extensionKeys.market(projectId) }),
-        client.invalidateQueries({ queryKey: ['extensions', projectId, 'market-preview'] }),
-      ]);
+      await client.invalidateQueries({ queryKey: extensionKeys.list(projectId) });
     },
   });
 }

@@ -29,12 +29,6 @@ import { testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
 import { searchSkillHub } from './skillhub.js';
 import {
-  installMarketSkill,
-  listSkillMarket,
-  previewMarketSkill,
-  updateMarketSkill,
-} from './skill-market.js';
-import {
   AppError,
   activeStatuses,
   emptyDraft,
@@ -130,8 +124,7 @@ async function branchFor(root: string): Promise<string> {
     return '';
   }
 }
-const marketTarget = z.object({ id: z.string().min(1).max(64) });
-const marketRevision = z.string().regex(/^[a-f0-9]{64}$/);
+const packageDigestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 
 function publicExtension(item: Extension) {
   if (item.kind === 'mcp' || !item.package) return item;
@@ -146,7 +139,6 @@ export async function createApp(options: {
   root: string;
   data: string;
   runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner;
-  fetchMarketSkill?: typeof previewPublic;
   permissionTtlMs?: number;
   pickDirectory?: typeof pickProjectDirectory;
 }) {
@@ -576,21 +568,6 @@ export async function createApp(options: {
         if (parts.length === 4 && method === 'POST')
           return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
         const id = parts[4]!;
-        if (parts.length === 5 && id === 'market') {
-          if (method === 'GET') return json(res, { items: listSkillMarket(extensions, projectId) });
-          if (method === 'POST') {
-            const input = marketTarget.extend({ revision: marketRevision }).parse(await body(req));
-            return json(res, {
-              item: await installMarketSkill(
-                extensions,
-                projectId,
-                input.id,
-                options.fetchMarketSkill,
-                input.revision,
-              ),
-            });
-          }
-        }
         if (parts.length === 5 && id === 'skillhub-search' && method === 'GET') {
           store.get('projects', projectId);
           const query = z
@@ -599,33 +576,6 @@ export async function createApp(options: {
             .max(120)
             .parse(url.searchParams.get('q') ?? '');
           return json(res, { items: await searchSkillHub(query) });
-        }
-        if (parts.length === 5 && id === 'market-preview' && method === 'POST') {
-          const input = marketTarget.parse(await body(req));
-          return json(
-            res,
-            await previewMarketSkill(extensions, projectId, input.id, options.fetchMarketSkill),
-          );
-        }
-        if (parts.length === 5 && id === 'market-update' && method === 'POST') {
-          const input = marketTarget
-            .extend({
-              update: z.object({
-                id: z.string().uuid(),
-                version: z.number().int().positive(),
-                revision: marketRevision,
-                replaceLocal: z.boolean().optional(),
-              }),
-            })
-            .parse(await body(req));
-          const item = await updateMarketSkill(
-            extensions,
-            projectId,
-            input.id,
-            input.update,
-            options.fetchMarketSkill,
-          );
-          return json(res, { item });
         }
         if (
           parts.length === 5 &&
@@ -639,7 +589,7 @@ export async function createApp(options: {
               kind: z.enum(['skill', 'command', 'mcp']),
               key: z.string().max(4096).optional(),
               revision: z.string().optional(),
-              packageDigest: marketRevision.optional(),
+              packageDigest: packageDigestSchema.optional(),
               update: z
                 .object({ id: z.string().uuid(), version: z.number().int().positive() })
                 .optional(),

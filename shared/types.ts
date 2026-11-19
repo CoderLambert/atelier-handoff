@@ -50,8 +50,6 @@ export interface ExtensionBase {
   enabled: boolean;
   version: number;
   origin?: ExtensionOrigin;
-  marketId?: string;
-  marketRevision?: string;
 }
 export interface SkillPackage {
   digest: string;

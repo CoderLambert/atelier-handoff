@@ -35,12 +35,10 @@ const categoryLabels: Record<string, string> = {
 
 export function SkillHubMarket({
   projectId,
-  active,
   onSaved,
   onStartSkill,
 }: {
   projectId: string;
-  active: boolean;
   onSaved: (message: string) => void;
   onStartSkill?: (projectId: string, name: string, editable: boolean) => Promise<void>;
 }) {
@@ -62,7 +60,6 @@ export function SkillHubMarket({
   const extensions = useQuery(extensionsQuery(projectId));
   const results = useQuery({
     queryKey: ['extensions', projectId, 'skillhub-search', query],
-    enabled: active,
     queryFn: ({ signal }) =>
       api<{ items: SkillHubItem[] }>(
         `${endpoint(projectId, 'skillhub-search')}?q=${encodeURIComponent(query)}`,

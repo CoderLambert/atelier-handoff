@@ -15,8 +15,8 @@ import {
   type ExtensionKind,
 } from './api';
 import { ExtensionEditor } from './editor';
-import { SkillMarket, SkillMarketPreview } from './market';
-import { InstalledSourceResolver, PublicImport } from './public-import';
+import { SkillMarket } from './market';
+import { PublicImport } from './public-import';
 import './extensions.css';
 
 type Modal =
@@ -28,9 +28,7 @@ type Modal =
       testOnOpen?: boolean;
     }
   | { type: 'market' }
-  | { type: 'preview'; id: string; installedId?: string }
   | { type: 'public'; kind: ExtensionKind; item?: Extension }
-  | { type: 'resolve'; item: Extension }
   | { type: 'delete'; item: Extension };
 const tabs: ExtensionKind[] = ['skill', 'command', 'mcp'];
 export interface ExtensionsPageProps {
@@ -107,14 +105,6 @@ function ProjectExtensions({
       `${item.name} ${item.description} ${item.source}`.toLocaleLowerCase().includes(searchText),
   );
   const close = () => setModal(undefined);
-  const marketPreview = (marketId: string, installedId?: string) =>
-    setModal({ type: 'preview', id: marketId, installedId });
-  const publicSync = (item: Extension) => setModal({ type: 'public', kind: item.kind, item });
-  function checkUpdates(item: Extension) {
-    if (item.marketId) marketPreview(item.marketId, item.id);
-    else if (item.kind === 'skill') setModal({ type: 'resolve', item });
-    else publicSync(item);
-  }
   async function toggleItem(item: Extension, field: 'enabled' | 'autoInvoke') {
     if (
       pending ||
@@ -365,16 +355,6 @@ function ProjectExtensions({
                     </small>
                   </div>
                 ) : null}
-                {item.marketId ? (
-                  <p className="ext-card-source">
-                    市场 · {item.marketId}
-                    {item.marketRevision ? (
-                      <span title={item.marketRevision}>
-                        目录 {item.marketRevision.slice(0, 12)}
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
                 {item.origin ? (
                   <p className="ext-card-source">
                     <SourceLink url={item.origin.location}>公开来源</SourceLink>
@@ -394,8 +374,11 @@ function ProjectExtensions({
                   >
                     查看与编辑
                   </ActionButton>
-                  {item.origin || item.marketId || item.kind === 'skill' ? (
-                    <ActionButton disabled={pending} onClick={() => checkUpdates(item)}>
+                  {item.origin ? (
+                    <ActionButton
+                      disabled={pending}
+                      onClick={() => setModal({ type: 'public', kind: item.kind, item })}
+                    >
                       检查更新
                     </ActionButton>
                   ) : null}
@@ -438,20 +421,8 @@ function ProjectExtensions({
           projectId={projectId}
           projectName={project?.name ?? projectId}
           onClose={close}
-          onPreview={marketPreview}
           onSaved={setNotice}
           onStartSkill={onStartSkill}
-        />
-      ) : modal?.type === 'preview' ? (
-        <SkillMarketPreview
-          key={modal.id}
-          projectId={projectId}
-          projectName={project?.name ?? projectId}
-          id={modal.id}
-          installedId={modal.installedId}
-          onBack={() => setModal({ type: 'market' })}
-          onClose={close}
-          onSaved={setNotice}
         />
       ) : modal?.type === 'public' ? (
         <PublicImport
@@ -461,14 +432,6 @@ function ProjectExtensions({
           updating={modal.item}
           onClose={close}
           onSaved={setNotice}
-        />
-      ) : modal?.type === 'resolve' ? (
-        <InstalledSourceResolver
-          projectId={projectId}
-          item={modal.item}
-          onMarket={marketPreview}
-          onPublic={publicSync}
-          onClose={close}
         />
       ) : modal?.type === 'delete' ? (
         <DeleteExtension

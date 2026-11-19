@@ -19,16 +19,9 @@ test('project extensions resolve isolated, versioned commands and skills through
   const directory = await mkdtemp(join(tmpdir(), 'atelier-extensions-'));
   const projectPath = await mkdtemp(join(tmpdir(), 'atelier-selected-project-'));
   const started: { run: Run; prompt: string; skills: RunSkill[] }[] = [];
-  let requestedSource = '';
-  let marketDownloads = 0;
   const app = await createApp({
     root,
     data: directory,
-    fetchMarketSkill: async (source) => {
-      requestedSource = source;
-      marketDownloads++;
-      return [];
-    },
     runnerFactory: (store) => ({
       start(run, prompt, _mcp, skills = []) {
         started.push({ run, prompt, skills });
@@ -195,50 +188,24 @@ test('project extensions resolve isolated, versioned commands and skills through
     assert.deepEqual(started[1]!.skills.map((item) => item.name).sort(), ['design', 'review']);
     assert.doesNotMatch(started[1]!.prompt, /Use a checklist/);
 
-    const market = `${endpoint}/market`;
-    const { items: cards } = await api(market);
-    assert.equal(cards.length, 6);
-    assert.equal(marketDownloads, 0);
-    for (const card of cards) {
-      assert.match(card.commit, /^[a-f0-9]{40}$/);
-      assert.match(card.sha256, /^[a-f0-9]{64}$/);
-      assert.match(card.revision, /^[a-f0-9]{64}$/);
-      assert.ok(card.url.includes(card.commit));
-      assert.equal(card.body, undefined);
-    }
-    const testPlan = cards.find((item: { id: string }) => item.id === 'test-plan');
-    assert.equal(testPlan.status, 'available');
-    const requestInstall = { id: testPlan.id, revision: testPlan.revision };
-    await api(market, 'POST', requestInstall, 409);
-    assert.equal(requestedSource, testPlan.url);
+    const legacy = registry.save(project.id, {
+      kind: 'skill',
+      name: 'test-plan',
+      description: 'Old curated install',
+      body: 'Local changes',
+      enabled: true,
+    });
+    app.store.put('extensions', { ...legacy, ...{ marketId: 'test-plan' } });
+    await api(`${endpoint}/market`, 'GET', undefined, 404);
+    const { items: retained } = await api(endpoint);
     assert.equal(
-      registry.list(project.id).some((item) => item.marketId === 'test-plan'),
-      false,
+      retained.find((item: { id: string }) => item.id === legacy.id)?.body,
+      'Local changes',
     );
-    const legacy = registry.save(
-      project.id,
-      {
-        kind: 'skill',
-        name: 'test-plan',
-        description: 'Legacy test plan',
-        body: 'Local changes',
-        enabled: false,
-        source: 'atelier 精选',
-      },
-      undefined,
-      'test-plan',
+    assert.match(
+      registry.resolve(project.id, 'readonly', '/test-plan example', []).prompt,
+      /Local changes/,
     );
-    const installed = (await api(market, 'POST', requestInstall)).item;
-    assert.equal(installed.id, legacy.id);
-    assert.equal(installed.enabled, true);
-    assert.equal(installed.body, 'Local changes');
-    assert.equal((await api(market, 'POST', requestInstall)).item.version, installed.version);
-    assert.equal(marketDownloads, 1);
-    const localCard = (await api(market)).items.find(
-      (item: { id: string }) => item.id === 'test-plan',
-    );
-    assert.equal(localCard.legacy, true);
-    assert.equal(localCard.localModified, true);
     assert.equal(registry.list('another-project').length, 0);
   } finally {
     await app.close();

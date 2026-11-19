@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Extension } from '@shared/types';
 import { api } from '@/api/client';
@@ -13,7 +13,6 @@ import {
 import {
   endpoint,
   isConflict,
-  marketQuery,
   messageOf,
   useExtensionMutation,
   type ExtensionKind,
@@ -225,46 +224,6 @@ export function PublicImport({
           </ActionButton>
         </div>
       </form>
-    </FeatureDialog>
-  );
-}
-
-export function InstalledSourceResolver({
-  projectId,
-  item,
-  onMarket,
-  onPublic,
-  onClose,
-}: {
-  projectId: string;
-  item: Extension;
-  onMarket: (id: string, installedId?: string) => void;
-  onPublic: (item: Extension) => void;
-  onClose: () => void;
-}) {
-  const query = useQuery({ ...marketQuery(projectId), refetchOnMount: 'always' });
-  const match = query.data?.find((skill) => skill.installedId === item.id);
-  useEffect(() => {
-    if (!query.isSuccess || query.isFetching) return;
-    if (match) onMarket(match.id, item.id);
-    else if (item.origin) onPublic(item);
-  }, [query.isSuccess, query.isFetching, match, item, onMarket, onPublic]);
-  return (
-    <FeatureDialog title="检查 Skill 更新" onClose={onClose}>
-      <p className="ext-help" role="status">
-        {query.isFetching
-          ? '正在核对市场来源…'
-          : query.isSuccess && !match && !item.origin
-            ? '此 Skill 尚未关联公开来源。可在“查看与编辑”中检查正文，或从 Skill 市场导入。'
-            : ''}
-      </p>
-      <ErrorMessage error={query.error} />
-      <div className="ext-dialog-actions">
-        <ActionButton onClick={onClose}>取消</ActionButton>
-        <ActionButton disabled={query.isFetching} onClick={() => void query.refetch()}>
-          重新检查
-        </ActionButton>
-      </div>
     </FeatureDialog>
   );
 }
