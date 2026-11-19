@@ -280,6 +280,13 @@ export interface Artifact {
   availability: 'available' | 'unavailable';
   createdAt: string;
 }
+export const maxImageAttachmentBytes = 5 * 1024 * 1024;
+export type AttachmentImageMime = 'image/png' | 'image/jpeg';
+export function attachmentImageMime(name: string): AttachmentImageMime | undefined {
+  if (/\.png$/i.test(name)) return 'image/png';
+  if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+}
+
 export interface Attachment {
   id: string;
   sessionId: string;

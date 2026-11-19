@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { constants, mkdirSync, writeFileSync } from 'node:fs';
 import { lstat, mkdir, open, readFile, realpath, writeFile, unlink } from 'node:fs/promises';
 import { join, extname, relative, sep } from 'node:path';
-import { AppError, now, type Artifact, type Run } from '../shared/types.js';
+import {
+  AppError,
+  attachmentImageMime,
+  maxImageAttachmentBytes,
+  now,
+  type Artifact,
+  type Run,
+} from '../shared/types.js';
 import { Store } from './store.js';
 import { fingerprint, mimeFor, resolveProjectPath, safeName, textExtensions } from './files.js';
 
@@ -81,27 +88,42 @@ export class FileRecords {
   async upload(sessionId: string, name: string, contentBase64: string) {
     this.store.get('sessions', sessionId);
     name = safeName(name);
-    if (!textExtensions.has(extname(name).toLowerCase()))
-      throw new AppError('UNSUPPORTED_FILE', '首版仅接受支持的 UTF-8 文本文件。');
-    if (
-      contentBase64.length > 1_400_000 ||
-      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contentBase64)
-    )
+    const image = attachmentImageMime(name);
+    if (!image && !textExtensions.has(extname(name).toLowerCase()))
+      throw new AppError('UNSUPPORTED_FILE', '仅接受 PNG、JPEG 和支持的 UTF-8 文本文件。');
+    const limit = image ? maxImageAttachmentBytes : 1024 * 1024;
+    if (contentBase64.length > Math.ceil(limit / 3) * 4 || /[^A-Za-z0-9+/=]/.test(contentBase64))
       throw new AppError('INVALID_UPLOAD', '附件编码无效或文件过大。', 413);
     const bytes = Buffer.from(contentBase64, 'base64');
-    if (bytes.length > 1024 * 1024)
-      throw new AppError('UPLOAD_TOO_LARGE', '单个附件不能超过 1 MiB。', 413);
-    try {
-      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      if (bytes.includes(0)) throw new Error();
-    } catch {
-      throw new AppError('UNSUPPORTED_ENCODING', '请上传 UTF-8 文本文件。');
+    if (bytes.length > limit || bytes.toString('base64') !== contentBase64)
+      throw new AppError('INVALID_UPLOAD', '附件编码无效或文件过大。', 413);
+    if (image) {
+      const valid =
+        image === 'image/png'
+          ? bytes.length >= 33 &&
+            bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) &&
+            bytes.readUInt32BE(8) === 13 &&
+            bytes.toString('ascii', 12, 16) === 'IHDR' &&
+            bytes.readUInt32BE(16) > 0 &&
+            bytes.readUInt32BE(20) > 0 &&
+            bytes.readUInt32BE(16) * bytes.readUInt32BE(20) <= 20_000_000
+          : bytes.length >= 8 &&
+            bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')) &&
+            bytes.subarray(-2).equals(Buffer.from('ffd9', 'hex'));
+      if (!valid) throw new AppError('INVALID_IMAGE', '图片格式无效或尺寸超出限制。', 422);
+    } else {
+      try {
+        new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        if (bytes.includes(0)) throw new Error();
+      } catch {
+        throw new AppError('UNSUPPORTED_ENCODING', '请上传 UTF-8 文本文件。');
+      }
     }
     const attachment = {
       id: randomUUID(),
       sessionId,
       name,
-      mime: mimeFor(name),
+      mime: image ?? mimeFor(name),
       size: bytes.length,
       status: 'ready' as const,
       createdAt: now(),
@@ -120,11 +142,11 @@ export class FileRecords {
     });
     return attachment;
   }
-  async attachmentText(id: string, sessionId: string): Promise<string> {
+  async attachmentContent(id: string, sessionId: string) {
     const attachment = this.store.get('attachments', id);
     if (attachment.sessionId !== sessionId || attachment.removed)
       throw new AppError('CONTEXT_DENIED', '附件不属于当前会话或已移除。', 403);
-    return readFile(this.path('attachments', id), 'utf8');
+    return { attachment, bytes: await readFile(this.path('attachments', id)) };
   }
   async removeAttachment(id: string, sessionId: string): Promise<void> {
     const item = this.store.get('attachments', id);

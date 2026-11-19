@@ -46,14 +46,22 @@ import {
   readSkillToolBindings,
 } from './skill-tool-bindings.js';
 
+export type AttachmentImages = {
+  type: 'image';
+  source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg'; data: string };
+}[];
+
 class InputQueue {
   private values: SDKUserMessage[] = [];
   private ended = false;
   private wake?: () => void;
-  push(text: string) {
+  push(text: string, images: AttachmentImages = []) {
     this.values.push({
       type: 'user',
-      message: { role: 'user', content: text },
+      message: {
+        role: 'user',
+        content: images.length ? [{ type: 'text', text }, ...images] : text,
+      },
       parent_tool_use_id: null,
       uuid: randomUUID(),
     });
@@ -89,6 +97,7 @@ export interface Runner {
     mcp?: EnabledMcp[],
     skills?: RunSkill[],
     validateAgent?: () => void,
+    images?: AttachmentImages,
   ): void;
   stop(id: string): void;
   shutdown(): Promise<void>;
@@ -107,10 +116,11 @@ export class AgentRunner implements Runner {
     mcp: EnabledMcp[] = [],
     skills: RunSkill[] = [],
     validateAgent?: () => void,
+    images?: AttachmentImages,
   ): void {
     const live: LiveRun = { cancellation: new AbortController(), done: Promise.resolve() };
     this.active.set(run.id, live);
-    live.done = this.execute(run, input, live, mcp, skills, validateAgent).finally(() =>
+    live.done = this.execute(run, input, live, mcp, skills, validateAgent, images).finally(() =>
       this.active.delete(run.id),
     );
   }
@@ -151,6 +161,7 @@ export class AgentRunner implements Runner {
     mcp: EnabledMcp[],
     skills: RunSkill[],
     validateAgent?: () => void,
+    images?: AttachmentImages,
   ): Promise<void> {
     const signal = live.cancellation.signal;
     const project = this.store.get('projects', run.projectId);
@@ -1252,6 +1263,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         : '';
       input.push(
         `${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}${weatherGuidance}${bindingGuidance.length ? `本轮 Skill 工具绑定（优先使用绑定工具，无需照抄 Skill 中的命令）：\n${bindingGuidance.join('\n')}\n\n` : ''}用户本轮任务：\n${inputText}`,
+        images,
       );
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {

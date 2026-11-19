@@ -22,17 +22,15 @@ export function AttachmentPreview({
 }) {
   const [open, setOpen] = useState(false);
   const { id, sessionId, name, size } = attachment;
+  const image = attachment.mime === 'image/png' || attachment.mime === 'image/jpeg';
+  const path = `/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(id)}/content`;
   const content = useQuery({
     queryKey: ['attachment-preview', sessionId, id],
-    enabled: open && !attachment.removed,
+    enabled: open && !attachment.removed && !image,
     gcTime: 0,
     staleTime: 0,
     retry: false,
-    queryFn: ({ signal }) =>
-      api<{ text: string }>(
-        `/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(id)}/content`,
-        { signal },
-      ),
+    queryFn: ({ signal }) => api<{ text: string }>(path, { signal }),
   });
 
   return (
@@ -55,6 +53,8 @@ export function AttachmentPreview({
         <div className="min-h-0 overflow-auto">
           {attachment.removed ? (
             <p>附件已移除。</p>
+          ) : image ? (
+            <img src={path} alt={name} className="mx-auto block max-w-full object-contain" />
           ) : content.error ? (
             <ErrorNotice
               message={errorMessage(content.error)}

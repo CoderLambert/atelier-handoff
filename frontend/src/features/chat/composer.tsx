@@ -1,7 +1,12 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
-import type { Attachment, Draft } from '@shared/types';
+import {
+  attachmentImageMime,
+  maxImageAttachmentBytes,
+  type Attachment,
+  type Draft,
+} from '@shared/types';
 import { api } from '@/api/client';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -21,7 +26,8 @@ type AttachmentOperation = {
   // Capture this callback when queuing, before a session switch can replace props.
   changeDraft: DraftChange;
 } & ({ kind: 'upload'; file: File; entryId: string } | { kind: 'remove'; attachmentId: string });
-const ACCEPT = '.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.css,.html,.yaml,.yml,.log,.py';
+const ACCEPT =
+  '.png,.jpg,.jpeg,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.css,.html,.yaml,.yml,.log,.py';
 const textFile = /\.(txt|md|json|csv|js|ts|jsx|tsx|css|html|yaml|yml|log|py)$/i;
 const errorText = (error: unknown) => (error instanceof Error ? error.message : '操作失败，请重试');
 
@@ -32,14 +38,21 @@ async function attachmentOperation(operation: AttachmentOperation): Promise<Atta
     return null;
   }
   const file = operation.file;
-  if (file.size > 1024 * 1024 || !textFile.test(file.name))
-    throw new Error('仅支持 1 MiB 以内的文本文件');
+  const image = attachmentImageMime(file.name);
+  if (
+    image
+      ? file.size > maxImageAttachmentBytes
+      : file.size > 1024 * 1024 || !textFile.test(file.name)
+  )
+    throw new Error('支持 5 MiB 以内的 PNG、JPEG 或 1 MiB 以内的 UTF-8 文本文件');
   const bytes = new Uint8Array(await file.arrayBuffer());
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    if (bytes.includes(0)) throw new Error();
-  } catch {
-    throw new Error('请上传 UTF-8 文本文件');
+  if (!image) {
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (bytes.includes(0)) throw new Error();
+    } catch {
+      throw new Error('请上传 UTF-8 文本文件');
+    }
   }
   let binary = '';
   for (let offset = 0; offset < bytes.length; offset += 8192) {
@@ -154,7 +167,7 @@ export function Composer({
       sendLock.current = false;
     }
   }
-  function uploadFiles(files: FileList | null) {
+  function uploadFiles(files: FileList | File[] | null) {
     if (
       !files ||
       !attachmentsAllowed ||
@@ -313,6 +326,35 @@ export function Composer({
           disabled={archived}
           aria-describedby="input-help chat-composer-error"
           placeholder="输入消息…（/ 调用 Command 或 Skill，# 选择 MCP）"
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData.files)
+              .filter((file) => file.type === 'image/png' || file.type === 'image/jpeg')
+              .map(
+                (file, index) =>
+                  new File(
+                    [file],
+                    `截图-${Date.now()}-${index + 1}.${file.type === 'image/png' ? 'png' : 'jpg'}`,
+                    { type: file.type },
+                  ),
+              );
+            if (!files.length) return;
+            if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+            if (
+              !attachmentsAllowed ||
+              archived ||
+              submitting ||
+              busy ||
+              pendingOperations.current
+            ) {
+              setError(
+                !attachmentsAllowed
+                  ? '当前智能体未启用附件。'
+                  : '当前无法粘贴截图，请等操作结束后重试。',
+              );
+              return;
+            }
+            uploadFiles(files);
+          }}
           onChange={(event) => {
             const text = event.target.value;
             onDraftChange((previous) => ({ ...previous, text }));
@@ -369,8 +411,8 @@ export function Composer({
               busy ||
               draft.attachmentIds.length >= 20
             }
-            aria-label="上传文本附件"
-            title="上传 1 MiB 以内的 UTF-8 文本附件"
+            aria-label="上传附件"
+            title="上传文本或 PNG、JPEG 图片"
             onClick={() => fileInput.current?.click()}
           >
             <Paperclip size={18} aria-hidden="true" />

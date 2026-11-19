@@ -7,7 +7,7 @@ import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
 import { serveClient } from './client-assets.js';
-import { AgentRunner, type Runner } from './agent.js';
+import { AgentRunner, type AttachmentImages, type Runner } from './agent.js';
 import { AgentProfiles } from './agent-profiles.js';
 import { agentCapabilitiesFor, agentRunInfo, resolveAgentExtensions } from './agent-scope.js';
 import { PermissionService } from './permissions.js';
@@ -70,14 +70,14 @@ function json(res: ServerResponse, data: unknown, status = 200) {
   });
   res.end(JSON.stringify(data));
 }
-async function body(req: IncomingMessage): Promise<unknown> {
+async function body(req: IncomingMessage, maxBytes = 1_500_000): Promise<unknown> {
   if (!req.headers['content-type']?.startsWith('application/json'))
     throw new AppError('INVALID_INPUT', '请求必须使用 JSON。', 415);
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of req) {
     bytes += Buffer.byteLength(chunk);
-    if (bytes > 1_500_000) throw new AppError('UPLOAD_TOO_LARGE', '请求体过大。', 413);
+    if (bytes > maxBytes) throw new AppError('UPLOAD_TOO_LARGE', '请求体过大。', 413);
     chunks.push(Buffer.from(chunk));
   }
   try {
@@ -297,11 +297,23 @@ export async function createApp(options: {
       contextBytes += Buffer.byteLength(text);
       context += `\n<project_context path=${JSON.stringify(path)}>\n${text}\n</project_context>\n`;
     }
+    const images: AttachmentImages = [];
+    let imageBytes = 0;
     for (const id of [...new Set(request.attachmentIds)]) {
-      const text = await files.attachmentText(id, sessionId);
-      contextBytes += Buffer.byteLength(text);
-      const attachment = store.get('attachments', id);
-      context += `\n<attachment name=${JSON.stringify(attachment.name)}>\n${text}\n</attachment>\n`;
+      const { attachment, bytes } = await files.attachmentContent(id, sessionId);
+      const mime = attachment.mime;
+      if (mime === 'image/png' || mime === 'image/jpeg') {
+        imageBytes += bytes.length;
+        if (imageBytes > 10 * 1024 * 1024)
+          throw new AppError('CONTEXT_TOO_LARGE', '每条消息的图片附件合计不能超过 10 MiB。', 413);
+        images.push({
+          type: 'image',
+          source: { type: 'base64', media_type: mime, data: bytes.toString('base64') },
+        });
+      } else {
+        contextBytes += bytes.length;
+        context += `\n<attachment name=${JSON.stringify(attachment.name)}>\n${bytes.toString('utf8')}\n</attachment>\n`;
+      }
     }
     if (contextBytes > 128 * 1024)
       throw new AppError('CONTEXT_TOO_LARGE', '本轮附件与附加上下文总量不能超过 128 KiB。', 413);
@@ -431,6 +443,7 @@ export async function createApp(options: {
             agents.requireReady(project.id, revision.id);
           }
         : undefined,
+      images,
     );
     return store.get('runs', run.id);
   };
@@ -894,7 +907,12 @@ export async function createApp(options: {
         }
         if (parts[3] === 'attachments') {
           if (parts.length === 6 && parts[5] === 'content' && method === 'GET') {
-            return json(res, { text: await files.attachmentText(parts[4]!, id) });
+            const { attachment, bytes } = await files.attachmentContent(parts[4]!, id);
+            if (attachment.mime === 'image/png' || attachment.mime === 'image/jpeg') {
+              res.writeHead(200, { 'Content-Type': attachment.mime, 'Cache-Control': 'no-store' });
+              return res.end(bytes);
+            }
+            return json(res, { text: bytes.toString('utf8') });
           }
           if (parts.length === 4 && method === 'POST') {
             const session = store.get('sessions', id);
@@ -911,7 +929,7 @@ export async function createApp(options: {
                 mime: z.string().optional(),
                 contentBase64: z.string(),
               })
-              .parse(await body(req));
+              .parse(await body(req, 7_100_000));
             if (deletingSessions.has(id))
               throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
             if (uploadingSessions.has(id))
