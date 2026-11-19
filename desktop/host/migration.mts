@@ -1,6 +1,6 @@
 /**
  * @file 提供旧版工作台数据的原生迁入流程。
- * @implementation 由 Electron 选择来源并确认，通过随包的 Node 运行迁移和回退校验。
+ * @implementation 通过原生对话框确认来源，调用随包 Node 迁入并展示回退副本位置。
  * @updated 2026-11-20T02:00+08:00
  */
 import { execFile } from 'node:child_process';
