@@ -1,0 +1,60 @@
+@import 'katex/dist/katex.min.css';
+
+.atelier-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.atelier-markdown :is(p, ul, ol, blockquote, pre) {
+  margin-block: 0.65em;
+}
+
+.atelier-markdown :is(ul, ol) {
+  padding-inline-start: 1.5em;
+}
+
+.atelier-markdown ul {
+  list-style: disc;
+}
+
+.atelier-markdown ol {
+  list-style: decimal;
+}
+
+.atelier-markdown :is(blockquote, table, td, th) {
+  border-color: var(--markdown-border, #d1d5db);
+}
+
+.atelier-markdown blockquote {
+  border-inline-start: 3px solid var(--markdown-border, #d1d5db);
+  padding-inline-start: 1em;
+}
+
+.atelier-markdown a {
+  color: var(--markdown-link, #2563eb);
+  text-decoration: underline;
+}
+
+.atelier-markdown :is(pre, .katex-display) {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+}
+
+.atelier-markdown .katex-display {
+  padding-block: 0.25em;
+}
+
+.atelier-markdown .katex-display > .katex {
+  width: max-content;
+  min-width: 100%;
+}
+
+.atelier-markdown [data-streamdown='code-block'] pre {
+  margin: 0;
+}
+
+.atelier-markdown .atelier-markdown-diagram-error {
+  padding: 0.5rem 0.75rem;
+}

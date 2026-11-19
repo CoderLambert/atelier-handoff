@@ -2,7 +2,15 @@
 @import './styles/atelier.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './';
-@source '../../node_modules/streamdown/dist/*.js';
+
+.chat-markdown {
+  --markdown-bg: var(--surface);
+  --markdown-fg: var(--fg);
+  --markdown-border: var(--border);
+  --markdown-muted: var(--surface-warm);
+  --markdown-muted-fg: var(--muted);
+  --markdown-link: var(--accent);
+}
 
 @theme inline {
   --color-background: var(--bg);
