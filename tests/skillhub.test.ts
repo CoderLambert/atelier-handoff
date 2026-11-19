@@ -63,3 +63,24 @@ test('SkillHub repairs plain description punctuation and keeps project tool poli
   const duplicate = body.replace('name: resume', 'name: resume\nname: other');
   assert.equal(normalizeSkillHubMarkdown(duplicate), duplicate);
 });
+
+test('SkillHub repairs quoted descriptions and literal shell punctuation without enabling commands', () => {
+  const body = [
+    '---',
+    'name: browser-fixture',
+    'description: "Use when asked to "open a website" or "read a page"."',
+    '---',
+    'Watch for `!` characters in shell examples.',
+  ].join('\n');
+  const pkg = { digest: '', files: [] };
+  const repaired = inspectMarkdown(normalizeSkillHubMarkdown(body), pkg);
+  assert.equal(repaired.supported, true);
+  assert.equal(repaired.description, 'Use when asked to "open a website" or "read a page".');
+  assert.equal(repaired.text, 'Watch for &#33; characters in shell examples.');
+  assert.equal(
+    inspectMarkdown(normalizeSkillHubMarkdown(body + '\nRun !`echo test`.'), pkg).supported,
+    false,
+  );
+  const malformed = body.replace('name: browser-fixture', 'name: "browser" unexpected');
+  assert.equal(normalizeSkillHubMarkdown(malformed), malformed);
+});

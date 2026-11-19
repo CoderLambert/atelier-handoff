@@ -165,6 +165,25 @@ export function normalizeSkillHubMarkdown(body: string): string {
     );
     if (repaired !== yaml) document = parseDocument(repaired, { uniqueKeys: true });
   }
+  let repairedQuotes = false;
+  if (
+    document.errors.length &&
+    document.errors.every((error) => error.code === 'UNEXPECTED_TOKEN')
+  ) {
+    const descriptionLines = new Set<number>();
+    const repaired = yaml.split(/\r?\n/).map((line, index) => {
+      const match = /^(description(?:_[a-zA-Z-]+)?:[ \t]+)"(.*)"[ \t]*$/.exec(line);
+      if (!match) return line;
+      const value = match[2]!.replace(/\\.|"/g, (token) => (token === '"' ? '\\"' : token));
+      if (value === match[2]) return line;
+      descriptionLines.add(index + 1);
+      return `${match[1]}"${value}"`;
+    });
+    if (document.errors.every((error) => descriptionLines.has(error.linePos?.[0]?.line ?? 0))) {
+      document = parseDocument(repaired.join('\n'), { uniqueKeys: true });
+      repairedQuotes = true;
+    }
+  }
   if (document.errors.length || !isMap(document.contents)) return body;
   const toolsNode = document.get('allowed-tools');
   const declaredTools = isSeq(toolsNode)
@@ -179,8 +198,12 @@ export function normalizeSkillHubMarkdown(body: string): string {
     // Atelier provides its own per-run tool scope and approvals.
     document.delete('allowed-tools');
   }
-  if (!repairable && !advisoryTools) return body;
-  return `---\n${document.toString()}---\n${body.slice(header[0].length)}`;
+  const markdown = body.slice(header[0].length);
+  // Disambiguate the documented literal shell character from SDK command substitution.
+  const normalizedMarkdown = markdown.replace(/(?<!\S)`!`(?=[ \t]+characters\b)/g, '&#33;');
+  if (!repairable && !repairedQuotes && !advisoryTools)
+    return normalizedMarkdown === markdown ? body : header[0] + normalizedMarkdown;
+  return `---\n${document.toString()}---\n${normalizedMarkdown}`;
 }
 
 export async function previewSkillHub(
