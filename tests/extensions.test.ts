@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.js';
 import { ProjectExtensions } from '../server/extensions.js';
-import { callMcp, testMcp } from '../server/extension-mcp.js';
+import { callMcp, McpSessions, testMcp } from '../server/extension-mcp.js';
 import { previewPublic } from '../server/public-extensions.js';
 import type { RunSkill } from '../server/run-skills.js';
 import type { Run } from '../shared/types.js';
@@ -258,4 +258,44 @@ test('MCP stdio discovery and calling use only explicitly allowed tools', async 
   await assert.rejects(callMcp(configured, root, 'missing', {}, AbortSignal.timeout(12_000)), {
     code: 'MCP_TOOL_NOT_ALLOWED',
   });
+});
+
+test('opt-in stdio MCP sessions reuse state, isolate services, and reset after closing', async () => {
+  const sessions = new McpSessions();
+  const server = {
+    kind: 'mcp' as const,
+    id: randomUUID(),
+    projectId: randomUUID(),
+    name: 'state',
+    description: '',
+    source: 'local',
+    enabled: true,
+    version: 1,
+    transport: {
+      type: 'stdio' as const,
+      command: process.execPath,
+      args: [fixture],
+      envNames: [],
+      keepAlive: true,
+    },
+    tools: [],
+    allowedTools: [{ name: 'fixture_count', access: 'read' as const }],
+  };
+  try {
+    const discovered = await testMcp(server, root, AbortSignal.timeout(10_000));
+    assert.equal(discovered.status, 'connected');
+    const configured = { ...server, ...discovered };
+    const count = (item: typeof configured) =>
+      callMcp(item, root, 'fixture_count', {}, AbortSignal.timeout(10_000), undefined, sessions);
+    assert.deepEqual(await Promise.all([count(configured), count(configured)]), ['1', '2']);
+    assert.equal(await count({ ...configured, id: randomUUID(), projectId: randomUUID() }), '1');
+    assert.equal(await count(configured), '3');
+    await sessions.close(configured.id);
+    assert.equal(await count(configured), '1');
+    const ephemeral = { ...configured, transport: { ...configured.transport, keepAlive: false } };
+    assert.equal(await count(ephemeral), '1');
+    assert.equal(await count(ephemeral), '1');
+  } finally {
+    await sessions.shutdown();
+  }
 });

@@ -14,6 +14,14 @@ function fixture() {
     },
     async ({ text }) => ({ content: [{ type: 'text', text: `fixture-result:${text}` }] }),
   );
+  let calls = 0;
+  server.registerTool(
+    'fixture_count',
+    { description: 'Count calls on this process.' },
+    async () => ({
+      content: [{ type: 'text', text: String(++calls) }],
+    }),
+  );
   return server;
 }
 

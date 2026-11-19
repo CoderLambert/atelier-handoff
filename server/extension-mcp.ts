@@ -24,13 +24,7 @@ function configurationError(error: unknown): AppError {
   );
 }
 
-async function useClient<T>(
-  server: EnabledMcp,
-  cwd: string,
-  signal: AbortSignal,
-  work: (client: Client, secrets: string[]) => Promise<T>,
-): Promise<T> {
-  signal.throwIfAborted();
+function createConnection(server: EnabledMcp, cwd: string) {
   const config = server.transport;
   const client = new Client({ name: 'atelier', version: '0.2.0' });
   const secrets: string[] = [];
@@ -64,6 +58,96 @@ async function useClient<T>(
         });
   let closing: Promise<void> | undefined;
   const close = () => (closing ??= client.close().catch(() => {}));
+  return { client, transport, secrets, close };
+}
+
+type Connection = ReturnType<typeof createConnection>;
+type Session = {
+  transportKey: string;
+  connection?: Connection;
+  tail: Promise<unknown>;
+};
+
+export class McpSessions {
+  private readonly sessions = new Map<string, Session>();
+
+  async close(id: string) {
+    const session = this.sessions.get(id);
+    this.sessions.delete(id);
+    await session?.connection?.close();
+  }
+
+  async shutdown() {
+    await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
+  }
+
+  async use<T>(
+    server: EnabledMcp,
+    cwd: string,
+    signal: AbortSignal,
+    work: (client: Client, secrets: string[]) => Promise<T>,
+    verify?: () => void,
+  ): Promise<T> {
+    signal.throwIfAborted();
+    verify?.();
+    const id = server.id;
+    const transportKey = JSON.stringify([server.projectId, cwd, server.transport]);
+    let session = this.sessions.get(id);
+    if (session && session.transportKey !== transportKey) {
+      await this.close(id);
+      return this.use(server, cwd, signal, work, verify);
+    }
+    if (!session) {
+      if (this.sessions.size >= 8)
+        throw new AppError(
+          'MCP_SESSION_LIMIT',
+          '已打开 8 个常驻 MCP。停用不再使用的服务后重试。',
+          409,
+        );
+      session = { transportKey, tail: Promise.resolve() };
+      this.sessions.set(id, session);
+    }
+    const entry = session;
+    const execute = entry.tail
+      .catch(() => undefined)
+      .then(async () => {
+        signal.throwIfAborted();
+        verify?.();
+        if (this.sessions.get(id) !== entry)
+          throw new AppError('MCP_SESSION_CLOSED', 'MCP 会话已关闭，请重新发起工具调用。', 409);
+        try {
+          if (!entry.connection) {
+            const connection = createConnection(server, cwd);
+            entry.connection = connection;
+            connection.client.onclose = () => {
+              if (this.sessions.get(id) === entry) this.sessions.delete(id);
+            };
+            await connection.client.connect(connection.transport, {
+              timeout: MCP_CONNECT_TIMEOUT,
+              signal,
+            });
+          }
+          signal.throwIfAborted();
+          return await work(entry.connection.client, entry.connection.secrets);
+        } catch (error) {
+          if (!(error instanceof AppError) && this.sessions.get(id) === entry) await this.close(id);
+          signal.throwIfAborted();
+          throw configurationError(error);
+        }
+      });
+    entry.tail = execute;
+    return execute;
+  }
+}
+
+async function useClient<T>(
+  server: EnabledMcp,
+  cwd: string,
+  signal: AbortSignal,
+  work: (client: Client, secrets: string[]) => Promise<T>,
+): Promise<T> {
+  signal.throwIfAborted();
+  const { client, transport, secrets, close } = createConnection(server, cwd);
   const abort = () => {
     void close();
   };
@@ -144,10 +228,11 @@ export async function callMcp(
   args: Record<string, unknown>,
   signal: AbortSignal,
   beforeCall?: () => void,
+  sessions?: McpSessions,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
-  return useClient(server, cwd, signal, async (client, secrets) => {
+  const work = async (client: Client, secrets: string[]) => {
     const discovered = await discover(client, signal);
     const current = discovered.find((tool) => tool.name === name);
     const expected = server.tools.find((tool) => tool.name === name);
@@ -180,5 +265,8 @@ export async function callMcp(
         502,
       );
     return text.length > 32000 ? text.slice(0, 32000) + '\n[结果已截断]' : text || '工具执行完成。';
-  });
+  };
+  return sessions && server.transport.type === 'stdio' && server.transport.keepAlive
+    ? sessions.use(server, cwd, signal, work, beforeCall)
+    : useClient(server, cwd, signal, work);
 }

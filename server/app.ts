@@ -25,7 +25,7 @@ import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
-import { testMcp } from './extension-mcp.js';
+import { McpSessions, testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
 import { searchSkillHub } from './skillhub.js';
 import { readSkillToolBindings, saveSkillToolBindings } from './skill-tool-bindings.js';
@@ -149,9 +149,10 @@ export async function createApp(options: {
   const files = new FileRecords(store);
   const extensions = new ProjectExtensions(store);
   const agents = new AgentProfiles(store, extensions);
+  const mcpSessions = new McpSessions();
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
-    new AgentRunner(store, permissions, files);
+    new AgentRunner(store, permissions, files, mcpSessions);
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const deletingSessions = new Set<string>();
@@ -631,18 +632,29 @@ export async function createApp(options: {
           if (!item || !item.revision)
             throw new AppError('PUBLIC_SOURCE_CHANGED', '公开来源已更新，请重新预览。', 409);
           const saved = extensions.savePublic(projectId, item, input.update);
+          if (saved.changed && saved.item.kind === 'mcp') await mcpSessions.close(saved.item.id);
           return json(
             res,
             { ...saved, item: publicExtension(saved.item) },
             input.update ? 200 : 201,
           );
         }
-        if (parts.length === 5 && method === 'PATCH')
-          return json(res, {
-            item: publicExtension(extensions.save(projectId, await body(req), id)),
-          });
+        if (parts.length === 5 && method === 'PATCH') {
+          const input = await body(req);
+          const previous = extensions.get(projectId, id);
+          const item = extensions.save(projectId, input, id);
+          if (
+            previous.kind === 'mcp' &&
+            (item.kind !== 'mcp' ||
+              !item.enabled ||
+              JSON.stringify(item.transport) !== JSON.stringify(previous.transport))
+          )
+            await mcpSessions.close(id);
+          return json(res, { item: publicExtension(item) });
+        }
         if (parts.length === 5 && method === 'DELETE') {
           extensions.remove(projectId, id);
+          await mcpSessions.close(id);
           return json(res, { ok: true });
         }
         if (parts.length === 6 && parts[5] === 'test' && method === 'POST') {

@@ -73,6 +73,9 @@ export function ExtensionEditor({
   const [args, setArgs] = useState(
     mcp?.transport.type === 'stdio' ? JSON.stringify(mcp.transport.args, null, 2) : '[]',
   );
+  const [keepAlive, setKeepAlive] = useState(
+    mcp?.transport.type === 'stdio' && mcp.transport.keepAlive === true,
+  );
   const [envNames, setEnvNames] = useState(
     mcp?.transport.type === 'stdio' ? mcp.transport.envNames.join('\n') : '',
   );
@@ -206,6 +209,7 @@ export function ExtensionEditor({
         command: command.trim(),
         args: stringArray(args),
         envNames: variables,
+        ...(keepAlive ? { keepAlive: true } : {}),
       };
     }
     return { ...fields, transport, allowedTools };
@@ -432,6 +436,17 @@ export function ExtensionEditor({
                       onChange={(event) => setArgs(event.target.value)}
                     />
                   </Field>
+                  <label className="ext-auto-field">
+                    <input
+                      type="checkbox"
+                      checked={keepAlive}
+                      onChange={(event) => setKeepAlive(event.target.checked)}
+                    />
+                    <span>
+                      跨会话保留进程{' '}
+                      <small>同一项目的聊天共享此 MCP 状态，直到服务停止或配置变更。</small>
+                    </span>
+                  </label>
                   <Field label="环境变量名 · 每行一个" help="仅填写变量名，值由本地服务端提供。">
                     <textarea
                       className="ext-code-input"

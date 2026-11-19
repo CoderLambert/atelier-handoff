@@ -35,7 +35,7 @@ import {
 } from './files.js';
 import { commandsAvailable, runCommand } from './commands.js';
 import { readRunUsage } from './usage.js';
-import { callMcp } from './extension-mcp.js';
+import { callMcp, McpSessions } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
 import { mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
 import { executeSkillPackage, readSkillResource, supportsSearch } from './skill-package-runtime.js';
@@ -99,6 +99,7 @@ export class AgentRunner implements Runner {
     private readonly store: Store,
     private readonly permissions: PermissionService,
     private readonly files: FileRecords,
+    private readonly mcpSessions = new McpSessions(),
   ) {}
   start(
     run: Run,
@@ -129,6 +130,7 @@ export class AgentRunner implements Runner {
     const tasks = [...this.active.entries()];
     for (const [id] of tasks) this.cancel(id, 'shutdown');
     await Promise.all(tasks.map(([, live]) => live.done));
+    await this.mcpSessions.shutdown();
   }
   private clean(error: unknown): string {
     let text =
@@ -664,6 +666,7 @@ export class AgentRunner implements Runner {
                 args,
                 AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
                 recheck,
+                this.mcpSessions,
               );
             },
           ),
@@ -944,7 +947,20 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   signal,
                 );
               }
-              verifyCurrent();
+              const recheck = () => {
+                verifyCurrent();
+                const current = this.store.get('extensions', server.id);
+                if (
+                  current.kind !== 'mcp' ||
+                  !current.enabled ||
+                  current.version !== server.version ||
+                  !current.allowedTools.some(
+                    (tool) => tool.name === selected.name && tool.access === selected.access,
+                  )
+                )
+                  throw new AppError('MCP_TOOL_NOT_ALLOWED', 'MCP 工具授权或配置已变更。', 403);
+              };
+              recheck();
               const identity = { server: server.name, tool: selected.name, toolCallId: id };
               this.store.event(run.id, session.id, 'mcp.call_started', identity);
               try {
@@ -954,7 +970,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   selected.name,
                   args,
                   AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
-                  verifyCurrent,
+                  recheck,
+                  this.mcpSessions,
                 );
                 signal.throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {

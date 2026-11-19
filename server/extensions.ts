@@ -61,6 +61,7 @@ const stdio = z.object({
     .refine((path) => isAbsolute(path) && !path.includes('\0'), '请输入可执行文件的绝对路径。'),
   args: z.array(z.string().max(2048)).max(40),
   envNames: z.array(envName).max(20),
+  keepAlive: z.boolean().optional(),
 });
 const extensionInput = z.union([
   z.object({
@@ -217,7 +218,8 @@ export class ProjectExtensions {
     if (input.kind === 'mcp') {
       const sameTransport =
         previous?.kind === 'mcp' &&
-        JSON.stringify(previous.transport) === JSON.stringify(input.transport);
+        JSON.stringify({ ...previous.transport, keepAlive: undefined }) ===
+          JSON.stringify({ ...input.transport, keepAlive: undefined });
       const tools = sameTransport ? previous.tools : [];
       const allowedTools = [
         ...new Map(input.allowedTools.map((entry) => [entry.name, entry])).values(),

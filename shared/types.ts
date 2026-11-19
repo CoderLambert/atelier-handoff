@@ -33,7 +33,7 @@ export interface AllowedMcpTool {
 }
 export type McpTransport =
   | { type: 'http'; url: string; tokenEnv?: string }
-  | { type: 'stdio'; command: string; args: string[]; envNames: string[] };
+  | { type: 'stdio'; command: string; args: string[]; envNames: string[]; keepAlive?: boolean };
 export interface ExtensionOrigin {
   location: string;
   key: string;
