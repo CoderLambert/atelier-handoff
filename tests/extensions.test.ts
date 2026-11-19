@@ -245,6 +245,64 @@ test('public Skill preview hashes the bytes received and rejects oversized bodie
   );
 });
 
+test('project MCP opt-in gives normal chats only tools allowed in their mode', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'atelier-auto-mcp-'));
+  const app = await createApp({ root, data: folder });
+  await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  try {
+    const registry = new ProjectExtensions(app.store);
+    const projectId = randomUUID();
+    app.store.put('projects', {
+      id: projectId,
+      name: 'Fixture',
+      path: folder,
+      branch: '',
+      available: true,
+      createdAt: new Date().toISOString(),
+    });
+    const service = app.store.put('extensions', {
+      id: randomUUID(),
+      projectId,
+      kind: 'mcp',
+      name: 'browser',
+      description: '',
+      source: 'local',
+      enabled: true,
+      version: 1,
+      autoUseInChat: true,
+      status: 'connected',
+      transport: { type: 'stdio', command: process.execPath, args: [], envNames: [] },
+      tools: [
+        { name: 'snapshot', description: '' },
+        { name: 'click', description: '' },
+      ],
+      allowedTools: [
+        { name: 'snapshot', access: 'read' },
+        { name: 'click', access: 'approval' },
+      ],
+    });
+    const tools = (mode: 'readonly' | 'edit') =>
+      registry.resolve(projectId, mode, 'Browse', []).used.flatMap((item) => item.tools ?? []);
+    assert.deepEqual(tools('readonly'), ['snapshot']);
+    assert.deepEqual(tools('edit'), ['snapshot', 'click']);
+    assert.deepEqual(
+      registry.resolve(projectId, 'edit', 'Browse', [], new Set([service.id])).used,
+      [],
+    );
+    assert.deepEqual(
+      registry.resolve(projectId, 'edit', 'Browse', [
+        { id: service.id, version: service.version, tools: ['snapshot'] },
+      ]).used[0]?.tools,
+      ['snapshot'],
+    );
+    registry.save(projectId, { version: service.version, autoUseInChat: false }, service.id);
+    assert.deepEqual(tools('edit'), []);
+  } finally {
+    await app.close();
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
 test('MCP stdio discovery and calling use only explicitly allowed tools', async () => {
   const server = {
     kind: 'mcp' as const,

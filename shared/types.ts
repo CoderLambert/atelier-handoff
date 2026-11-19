@@ -69,6 +69,7 @@ export type Extension = ExtensionBase &
       }
     | {
         kind: 'mcp';
+        autoUseInChat?: boolean;
         transport: McpTransport;
         allowedTools: AllowedMcpTool[];
         tools: DiscoveredTool[];

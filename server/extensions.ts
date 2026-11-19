@@ -74,6 +74,7 @@ const extensionInput = z.union([
   z.object({
     ...shared,
     kind: z.literal('mcp'),
+    autoUseInChat: z.boolean().optional(),
     transport: z.union([http, stdio]),
     allowedTools: z
       .array(z.object({ name: toolName, access: z.enum(['read', 'approval']) }))
@@ -228,6 +229,7 @@ export class ProjectExtensions {
         ...base,
         kind: 'mcp',
         transport: input.transport,
+        autoUseInChat: input.autoUseInChat,
         source: input.transport.type === 'stdio' ? '本机进程' : 'HTTP',
         tools,
         allowedTools,
@@ -399,6 +401,26 @@ export class ProjectExtensions {
         );
       if (!supplied.has(item.id)) supplied.set(item.id, { id: item.id, version: item.version });
       args = text.slice(slash[0].length).trim();
+    }
+    if (!scope) {
+      for (const item of catalog) {
+        if (
+          item.kind !== 'mcp' ||
+          !item.enabled ||
+          !item.autoUseInChat ||
+          item.status !== 'connected' ||
+          supplied.has(item.id)
+        )
+          continue;
+        const tools = item.allowedTools
+          .filter(
+            (tool) =>
+              (mode === 'edit' || tool.access === 'read') &&
+              item.tools.some(({ name }) => name === tool.name),
+          )
+          .map(({ name }) => name);
+        if (tools.length) supplied.set(item.id, { id: item.id, version: item.version, tools });
+      }
     }
     const instructions: string[] = [];
     const used: UsedExtension[] = [];

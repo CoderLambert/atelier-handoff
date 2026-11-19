@@ -59,6 +59,7 @@ export function ExtensionEditor({
   const mcp = initialItem?.kind === 'mcp' ? initialItem : undefined;
   const [source, setSource] = useState(markdown?.source ?? 'manual');
   const [body, setBody] = useState(markdown?.body ?? '');
+  const [autoUseInChat, setAutoUseInChat] = useState(mcp?.autoUseInChat === true);
   const [autoInvoke, setAutoInvoke] = useState(autoEnabled(markdown));
   const [transportType, setTransportType] = useState<McpTransport['type']>(
     mcp?.transport.type ?? 'http',
@@ -212,7 +213,7 @@ export function ExtensionEditor({
         ...(keepAlive ? { keepAlive: true } : {}),
       };
     }
-    return { ...fields, transport, allowedTools };
+    return { ...fields, transport, allowedTools, autoUseInChat };
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -386,6 +387,16 @@ export function ExtensionEditor({
           </Field>
           {kind === 'mcp' ? (
             <>
+              <label className="ext-auto-field">
+                <input
+                  type="checkbox"
+                  checked={autoUseInChat}
+                  onChange={(event) => setAutoUseInChat(event.target.checked)}
+                />
+                <span>
+                  在项目普通会话中自动提供工具<small>会话模式和已授权工具决定本轮可用范围。</small>
+                </span>
+              </label>
               <Field label="连接方式">
                 <select
                   value={transportType}
