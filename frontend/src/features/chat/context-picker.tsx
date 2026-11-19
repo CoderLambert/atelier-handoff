@@ -1,6 +1,11 @@
+/**
+ * @file 为聊天任务选择项目上下文文件。
+ * @implementation 浏览目录、预览文件并限制重复选择和文件数量。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { lazy, Suspense, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/api/client';
+import { useProjectFiles } from '@/use-query/projects/use-project-files';
+import { useProjectFile } from '@/use-query/projects/use-project-file';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,17 +16,6 @@ import {
 } from '@/components/ui/dialog';
 
 const FilePreview = lazy(() => import('@/components/file-preview'));
-
-interface ProjectFile {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size: number;
-}
-interface FileList {
-  path: string;
-  items: ProjectFile[];
-}
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : '读取项目文件失败');
 
@@ -38,23 +32,8 @@ export function ContextPicker({
 }) {
   const [directory, setDirectory] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
-  const files = useQuery({
-    queryKey: ['project-files', projectId, directory],
-    queryFn: ({ signal }) =>
-      api<FileList>(
-        `/api/projects/${encodeURIComponent(projectId)}/files?path=${encodeURIComponent(directory)}`,
-        { signal },
-      ),
-  });
-  const document = useQuery({
-    queryKey: ['project-file', projectId, preview],
-    queryFn: ({ signal }) =>
-      api<{ path: string; text: string }>(
-        `/api/projects/${encodeURIComponent(projectId)}/file?path=${encodeURIComponent(preview!)}`,
-        { signal },
-      ),
-    enabled: preview !== null,
-  });
+  const files = useProjectFiles(projectId, directory);
+  const document = useProjectFile(projectId, preview);
   const limitReached = selectedPaths.length >= 30;
 
   function select(path: string) {

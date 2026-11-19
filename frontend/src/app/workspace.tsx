@@ -1,3 +1,8 @@
+/**
+ * @file 编排工作区、会话及各功能页面。
+ * @implementation 组合会话查询、操作、布局与按需加载的功能组件。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, PanelRight, Settings2 } from 'lucide-react';
@@ -16,7 +21,8 @@ import { deleteDraft, lastSession, rememberSession } from './drafts';
 import { keys, useRunEvents } from './events';
 import { ProjectsDialog } from './projects';
 import { Sidebar } from './sidebar';
-import { BrowserPreview, useBrowserPreview } from './browser-preview';
+import { BrowserPreview } from './browser-preview';
+import { useBrowserPreview } from '@/use-query/browser/use-browser-preview';
 import { DesktopBrowser, useDesktopBrowser } from './desktop-browser';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 

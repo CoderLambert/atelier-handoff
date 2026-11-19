@@ -1,0 +1,1021 @@
+#!/usr/bin/env node
+/**
+ * @file 构建 Linux x64 应用发布包。
+ * @implementation 校验输入与依赖，组装运行时并生成便携包和 Arch 包。
+ * @updated 2026-11-20T02:00+08:00
+ */
+// Linux x64/glibc only: build the production frontend, then run with tsx.
+// Uses installed inputs only; no downloads, dependency installs, root, or git.
+import {
+  access,
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { builtinModules } from 'node:module';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { pipeline } from 'node:stream/promises';
+import { build, type BuildOptions, type Plugin } from 'esbuild';
+import { z } from 'zod';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const output = join(root, 'dist/linux');
+const ELECTRON_VERSION = '45.4.1';
+const NODE_VERSION = '24.21.0';
+// LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
+const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
+const DEFAULT_EPOCH = 1795132800; // 2026-11-20T00:00:00Z
+const epochText = process.env.SOURCE_DATE_EPOCH ?? String(DEFAULT_EPOCH);
+const epoch = Number(epochText);
+const environment: NodeJS.ProcessEnv = {
+  ...process.env,
+  SOURCE_DATE_EPOCH: String(epoch),
+  TZ: 'UTC',
+  LC_ALL: 'C',
+  PACKAGER: 'atelier local release',
+  NODE_PATH: '',
+  NODE_OPTIONS: '',
+  ELECTRON_RUN_AS_NODE: '',
+};
+
+const runtimeRoots = [
+  '@anthropic-ai/claude-agent-sdk',
+  '@anthropic-ai/sdk',
+  '@modelcontextprotocol/sdk',
+  'diff',
+  'yaml',
+  'yauzl',
+  'zod',
+];
+const nativeCli = '@anthropic-ai/claude-agent-sdk-linux-x64';
+const forbiddenDirectories = new Set([
+  'node_modules',
+  'test',
+  'tests',
+  '__tests__',
+  'spec',
+  'example',
+  'examples',
+  'benchmark',
+  'benchmarks',
+  'bench',
+  'docs',
+  'doc',
+  'coverage',
+  '.data',
+]);
+const licenseName = /^(?:licen[cs]e|copying|notice|copyright)(?:[.-].*)?$/i;
+const configName =
+  /^(?:tsconfig|eslint|prettier|rollup|webpack|vite|vitest|jest|gulp|grunt|babel)(?:[.-]|$)/i;
+const releaseExtensions = new Set(['.js', '.mjs', '.cjs', '.json', '.node', '.wasm']);
+const electronFiles = [
+  'electron',
+  'chrome-sandbox',
+  'chrome_crashpad_handler',
+  'chrome_100_percent.pak',
+  'chrome_200_percent.pak',
+  'icudtl.dat',
+  'libffmpeg.so',
+  'libvk_swiftshader.so',
+  'libvulkan.so.1',
+  'resources.pak',
+  'snapshot_blob.bin',
+  'v8_context_snapshot.bin',
+  'vk_swiftshader_icd.json',
+  'LICENSE',
+  'LICENSES.chromium.html',
+  'version',
+];
+
+// Validate every field used from npm metadata and subprocess JSON. Unknown fields
+// stay unknown; they never stand in for validation of a release decision.
+const packageName = z.string().regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/);
+const dependencyMap = z.record(packageName, z.string().min(1));
+const manifestSchema = z.looseObject({
+  name: packageName,
+  version: z.string().min(1),
+  license: z
+    .union([z.string(), z.object({ type: z.string(), url: z.string().optional() })])
+    .optional(),
+  dependencies: dependencyMap.optional(),
+  devDependencies: dependencyMap.optional(),
+  optionalDependencies: dependencyMap.optional(),
+  peerDependencies: dependencyMap.optional(),
+  peerDependenciesMeta: z
+    .record(packageName, z.looseObject({ optional: z.boolean().optional() }))
+    .optional(),
+  os: z.array(z.string()).optional(),
+  cpu: z.array(z.string()).optional(),
+  libc: z.array(z.string()).optional(),
+  claudeCodeVersion: z.string().optional(),
+});
+type Manifest = z.infer<typeof manifestSchema>;
+const lockEntrySchema = z.looseObject({
+  version: z.string().optional(),
+  link: z.boolean().optional(),
+  resolved: z.string().optional(),
+  dev: z.boolean().optional(),
+});
+function safeRelative(path: string): boolean {
+  return (
+    path.length > 0 &&
+    !isAbsolute(path) &&
+    !path.includes('\\') &&
+    path.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
+  );
+}
+const lockSchema = z.looseObject({
+  lockfileVersion: z.literal(3),
+  packages: z.record(
+    z.string().refine((path) => path === '' || safeRelative(path)),
+    lockEntrySchema,
+  ),
+});
+type Lock = z.infer<typeof lockSchema>;
+const electronIdentitySchema = z.object({
+  version: z.literal(ELECTRON_VERSION),
+  arch: z.literal('x64'),
+  platform: z.literal('linux'),
+});
+const nodeIdentitySchema = z.object({
+  version: z.literal(NODE_VERSION),
+  arch: z.literal('x64'),
+  platform: z.literal('linux'),
+  glibc: z.string().min(1),
+});
+interface ReleasePackage {
+  path: string;
+  manifest: Manifest;
+}
+interface StagedDependency {
+  path: string;
+  name: string;
+  version: string;
+  files: string[];
+}
+interface LicenseText {
+  path: string;
+  sha256: string;
+}
+interface LicenseEntry {
+  name: string;
+  version: string;
+  dependencyPath: string;
+  license: NonNullable<Manifest['license']>;
+  shippedAsRuntimePackage: boolean;
+  texts: LicenseText[];
+  missingLicenseText: boolean;
+}
+interface InventoryEntry {
+  path: string;
+  bytes: number;
+  mode: string;
+  sha256: string;
+}
+interface InputEntry {
+  path: string;
+  bytes: number;
+  sha256: string;
+  uses: string[];
+}
+interface RunOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  timeout?: number;
+}
+const inputs = new Map<string, InputEntry>();
+
+function run(command: string, args: string[], options: RunOptions = {}): string {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    env: environment,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 10 * 60 * 1000,
+    ...options,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} exited ${result.status} (signal ${result.signal}):\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+    );
+  }
+  return result.stdout.trim();
+}
+function parseJson(text: string): unknown {
+  const value: unknown = JSON.parse(text);
+  return value;
+}
+function inputName(path: string): string {
+  const name = relative(root, path);
+  return name.startsWith(`..${sep}`) || isAbsolute(name) ? path : name;
+}
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+async function hash(path: string): Promise<string> {
+  const digest = createHash('sha256');
+  await pipeline(createReadStream(path), digest);
+  return digest.digest('hex');
+}
+async function rememberInput(path: string, use: string): Promise<string> {
+  const info = await lstat(path);
+  if (!info.isFile()) throw new Error(`Release input must be a regular file: ${path}`);
+  const sha256 = await hash(path);
+  const previous = inputs.get(path);
+  if (previous && previous.sha256 !== sha256)
+    throw new Error(`Input changed during packaging: ${path}`);
+  if (previous) {
+    if (!previous.uses.includes(use)) previous.uses.push(use);
+  } else inputs.set(path, { path: inputName(path), bytes: info.size, sha256, uses: [use] });
+  return sha256;
+}
+async function inputText(path: string, use = 'metadata'): Promise<string> {
+  const expected = await rememberInput(path, use);
+  const text = await readFile(path, 'utf8');
+  if (createHash('sha256').update(text).digest('hex') !== expected)
+    throw new Error(`Input changed while reading: ${path}`);
+  return text;
+}
+async function manifest(path: string): Promise<Manifest> {
+  return manifestSchema.parse(parseJson(await inputText(join(path, 'package.json'))));
+}
+async function put(path: string, data: string, mode = 0o644): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, data, { mode });
+  await chmod(path, mode);
+}
+async function putJson(path: string, data: unknown): Promise<void> {
+  await put(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+async function copy(source: string, destination: string, mode?: number): Promise<void> {
+  const expected = await rememberInput(source, `copied:${inputName(destination)}`);
+  const info = await lstat(source);
+  await mkdir(dirname(destination), { recursive: true });
+  await copyFile(source, destination);
+  await chmod(destination, mode ?? (info.mode & 0o111 ? 0o755 : 0o644));
+  if ((await hash(destination)) !== expected)
+    throw new Error(`Input changed while copying: ${source}`);
+}
+async function files(directory: string, prefix = ''): Promise<string[]> {
+  const result: string[] = [];
+  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name, 'en'),
+  )) {
+    const path = join(directory, entry.name);
+    const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isSymbolicLink())
+      throw new Error(`Symlinks are not allowed in release input: ${path}`);
+    if (entry.isDirectory()) result.push(...(await files(path, name)));
+    else if (entry.isFile()) result.push(name);
+    else throw new Error(`Unexpected release input type: ${path}`);
+  }
+  return result;
+}
+async function normalize(directory: string): Promise<void> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) await normalize(path);
+    await utimes(path, epoch, epoch);
+  }
+  await chmod(directory, 0o755);
+  await utimes(directory, epoch, epoch);
+}
+function platformAllowed(values: string[] | undefined, target: string): boolean {
+  return (
+    !values ||
+    (!values.includes(`!${target}`) &&
+      (!values.some((value) => !value.startsWith('!')) || values.includes(target)))
+  );
+}
+function onPlatform(value: Manifest): boolean {
+  return (
+    platformAllowed(value.os, 'linux') &&
+    platformAllowed(value.cpu, 'x64') &&
+    platformAllowed(value.libc, 'glibc')
+  );
+}
+async function dependency(name: string, from: string): Promise<string> {
+  packageName.parse(name);
+  for (let directory = from; ; directory = dirname(directory)) {
+    const candidate = join(directory, 'node_modules', name);
+    if (await exists(join(candidate, 'package.json'))) return candidate;
+    if (directory === root) break;
+    const parent = dirname(directory);
+    if (parent !== root && !safeRelative(relative(root, parent))) break;
+  }
+  throw new Error(
+    `Missing locked release dependency ${name}, requested from ${relative(root, from)}`,
+  );
+}
+async function closure(seeds: string[], lock: Lock, strict = true): Promise<ReleasePackage[]> {
+  const packages = new Map<string, ReleasePackage>();
+  async function visit(path: string): Promise<void> {
+    if (packages.has(path)) return;
+    const value = await manifest(path);
+    if (!onPlatform(value))
+      throw new Error(`Required dependency does not support Linux x64/glibc: ${path}`);
+    const lockPath = relative(root, path);
+    const locked = lock.packages[lockPath];
+    if (locked?.link && (!locked.resolved || !safeRelative(locked.resolved)))
+      throw new Error(`Invalid workspace link in package-lock.json: ${lockPath}`);
+    const resolvedLock = locked?.link && locked.resolved ? lock.packages[locked.resolved] : locked;
+    if (!resolvedLock || resolvedLock.version !== value.version)
+      throw new Error(`Installed package does not match package-lock.json: ${lockPath}`);
+    if (resolvedLock.dev) {
+      if (!strict) return;
+      throw new Error(`Developer dependency would enter release: ${lockPath}`);
+    }
+    packages.set(path, { path: lockPath, manifest: value });
+    const names = new Set([
+      ...Object.keys(value.dependencies ?? {}),
+      ...Object.keys(value.peerDependencies ?? {}).filter(
+        (name) => !value.peerDependenciesMeta?.[name]?.optional,
+      ),
+    ]);
+    if (value.name === '@anthropic-ai/claude-agent-sdk') names.add(nativeCli);
+    for (const name of [...names].sort()) await visit(await dependency(name, path));
+  }
+  for (const name of seeds) await visit(await dependency(name, root));
+  return [...packages.values()].sort((a, b) => a.path.localeCompare(b.path, 'en'));
+}
+async function packageFiles(directory: string, value: Manifest, prefix = ''): Promise<string[]> {
+  const selected: string[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    // Package roots may contain development trees; nested names such as
+    // yaml/dist/doc are executable modules and must not be mistaken for docs.
+    if (
+      entry.name.startsWith('.') ||
+      entry.name === 'node_modules' ||
+      (prefix === '' && forbiddenDirectories.has(entry.name))
+    )
+      continue;
+    const path = join(directory, entry.name);
+    const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isSymbolicLink()) throw new Error(`Dependency contains unexpected symlink: ${path}`);
+    if (entry.isDirectory()) selected.push(...(await packageFiles(path, value, name)));
+    else if (entry.isFile()) {
+      const legal =
+        licenseName.test(entry.name) ||
+        (value.name.startsWith('@anthropic-ai/claude-agent-sdk') && name === 'README.md');
+      const code =
+        releaseExtensions.has(extname(entry.name)) &&
+        !configName.test(entry.name) &&
+        !/(?:^|[.-])(?:test|spec|bench)(?:[.-]|$)/i.test(entry.name) &&
+        !entry.name.endsWith('.map');
+      if (legal || code || (value.name === nativeCli && name === 'claude')) selected.push(name);
+    } else throw new Error(`Unexpected dependency input type: ${path}`);
+  }
+  return selected.sort();
+}
+function requirePackage(packages: ReleasePackage[], name: string): ReleasePackage {
+  const result = packages.find(
+    (item) => item.manifest.name === name && item.path === `node_modules/${name}`,
+  );
+  if (!result) throw new Error(`Missing release root package: ${name}`);
+  return result;
+}
+const inputPlugin: Plugin = {
+  name: 'record-release-inputs',
+  setup(context) {
+    context.onLoad({ filter: /\.(?:[cm]?[jt]s|json)$/ }, async ({ path }) => {
+      await rememberInput(path, 'compiled');
+      return undefined;
+    });
+  },
+};
+async function compileDesktop(entry: string, outfile: string, preload: boolean): Promise<string[]> {
+  const result = await build({
+    absWorkingDir: root,
+    entryPoints: [entry],
+    outfile,
+    bundle: true,
+    packages: 'bundle',
+    external: ['electron'],
+    platform: 'node',
+    format: preload ? 'cjs' : 'esm',
+    target: 'node24',
+    sourcemap: false,
+    legalComments: 'eof',
+    metafile: true,
+    plugins: [inputPlugin],
+  });
+  const builtins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
+  for (const value of Object.values(result.metafile.outputs)) {
+    for (const imported of value.imports) {
+      if (
+        !imported.external ||
+        (imported.path !== 'electron' && (preload || !builtins.has(imported.path)))
+      )
+        throw new Error(
+          `Unexpected ${preload ? 'sandbox preload' : 'main'} import: ${imported.path}`,
+        );
+    }
+  }
+  // A sandboxed preload can require Electron only. Shared schema dependencies
+  // must be bundled rather than left for its restricted require implementation.
+  return Object.keys(result.metafile.inputs).sort();
+}
+async function safeOutputDirectory(path: string): Promise<void> {
+  await mkdir(path, { recursive: true });
+  const info = await lstat(path);
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new Error(`Output must be a real directory: ${path}`);
+}
+async function verifyInputs(): Promise<void> {
+  for (const [path, value] of inputs)
+    if ((await hash(path)) !== value.sha256)
+      throw new Error(`Input changed during packaging; rebuild from stable source: ${path}`);
+}
+
+async function packageRelease(work: string): Promise<string[]> {
+  const stage = join(work, 'atelier');
+  const runtime = join(stage, 'resources/runtime');
+  const artifacts = join(work, 'artifacts');
+  await mkdir(artifacts, { recursive: true });
+  const project = await manifest(root);
+  const lock = lockSchema.parse(parseJson(await inputText(join(root, 'package-lock.json'))));
+  if (!/^\d+\.\d+\.\d+$/.test(project.version))
+    throw new Error('Expected a numeric release version.');
+  if (!project.dependencies) throw new Error('Application dependencies are missing.');
+  if (
+    project.devDependencies?.electron !== ELECTRON_VERSION ||
+    lock.packages['node_modules/electron']?.version !== ELECTRON_VERSION
+  )
+    throw new Error(`Electron must be pinned to ${ELECTRON_VERSION}.`);
+  const electronPackage = await manifest(join(root, 'node_modules/electron'));
+  const electronDist = join(root, 'node_modules/electron/dist');
+  if (
+    electronPackage.version !== ELECTRON_VERSION ||
+    (await inputText(join(electronDist, 'version'))).trim() !== ELECTRON_VERSION
+  )
+    throw new Error('Installed Electron package/distribution version mismatch.');
+  electronIdentitySchema.parse(
+    parseJson(
+      run(
+        join(electronDist, 'electron'),
+        [
+          '-p',
+          'JSON.stringify({version:process.versions.electron,arch:process.arch,platform:process.platform})',
+        ],
+        { env: { ...environment, ELECTRON_RUN_AS_NODE: '1' } },
+      ),
+    ),
+  );
+
+  const explicitNode = process.env.ATELIER_BUILD_NODE ?? process.env.ATELIER_NODE_BINARY;
+  if (
+    process.env.ATELIER_BUILD_NODE &&
+    process.env.ATELIER_NODE_BINARY &&
+    resolve(process.env.ATELIER_BUILD_NODE) !== resolve(process.env.ATELIER_NODE_BINARY)
+  )
+    throw new Error('ATELIER_BUILD_NODE and ATELIER_NODE_BINARY disagree.');
+  const candidates = explicitNode
+    ? [resolve(explicitNode)]
+    : [
+        process.execPath,
+        join(homedir(), `.local/share/mise/installs/node/${NODE_VERSION}/bin/node`),
+        `/opt/node-v${NODE_VERSION}-linux-x64/bin/node`,
+      ];
+  let node: string | undefined;
+  for (const candidate of candidates) {
+    if (!(await exists(candidate))) continue;
+    const identity = nodeIdentitySchema.safeParse(
+      parseJson(
+        run(candidate, [
+          '-p',
+          'JSON.stringify({version:process.versions.node,arch:process.arch,platform:process.platform,glibc:process.report.getReport().header.glibcVersionRuntime})',
+        ]),
+      ),
+    );
+    if (identity.success) {
+      node = await realpath(candidate);
+      break;
+    }
+  }
+  if (!node)
+    throw new Error(
+      `Install Node ${NODE_VERSION} Linux x64/glibc or set ATELIER_BUILD_NODE to its exact binary.`,
+    );
+  const nodeLicense = process.env.ATELIER_NODE_LICENSE
+    ? resolve(process.env.ATELIER_NODE_LICENSE)
+    : join(dirname(dirname(node)), 'LICENSE');
+  if ((await hash(nodeLicense)) !== NODE_LICENSE_SHA256)
+    throw new Error(
+      `Node ${NODE_VERSION} LICENSE does not match the pinned distribution; set ATELIER_NODE_LICENSE.`,
+    );
+  for (const path of [
+    'dist/client/index.html',
+    'dist/client/vendor/pdfjs/pdf.worker.min.mjs',
+    'desktop/main.mts',
+    'desktop/preload.cts',
+  ])
+    if (!(await exists(join(root, path))))
+      throw new Error(
+        `Missing build input ${path}; finish desktop sources and run npm run build first.`,
+      );
+
+  const releasePackages = await closure(runtimeRoots, lock);
+  const sdk = requirePackage(releasePackages, '@anthropic-ai/claude-agent-sdk');
+  const cli = requirePackage(releasePackages, nativeCli);
+  if (sdk.manifest.version !== cli.manifest.version || !sdk.manifest.claudeCodeVersion)
+    throw new Error(
+      'SDK and Linux x64 CLI package versions must match and declare the CLI version.',
+    );
+  await mkdir(runtime, { recursive: true });
+  for (const name of electronFiles)
+    await copy(join(electronDist, name), join(stage, name === 'electron' ? 'atelier' : name));
+  // Some Electron Linux distributions omit the standalone ANGLE libraries.
+  for (const name of ['libEGL.so', 'libGLESv2.so'])
+    if (await exists(join(electronDist, name)))
+      await copy(join(electronDist, name), join(stage, name));
+  for (const name of await files(join(electronDist, 'locales'))) {
+    if (!/^[A-Za-z0-9_-]+\.pak$/.test(name)) throw new Error(`Unexpected Electron locale: ${name}`);
+    await copy(join(electronDist, 'locales', name), join(stage, 'locales', name));
+  }
+  const app = join(stage, 'resources/app');
+  await mkdir(app, { recursive: true });
+  const desktopInputs = {
+    main: await compileDesktop('desktop/main.mts', join(app, 'main.mjs'), false),
+    preload: await compileDesktop('desktop/preload.cts', join(app, 'preload.cjs'), true),
+  };
+  await putJson(join(app, 'package.json'), {
+    name: project.name,
+    productName: 'atelier',
+    version: project.version,
+    type: 'module',
+    main: 'main.mjs',
+    desktopName: 'atelier.desktop',
+  });
+  const entryPoints: string[] = [];
+  for (const directory of ['server', 'shared'])
+    for (const name of await files(join(root, directory)))
+      if (name.endsWith('.ts') && !name.endsWith('.d.ts')) entryPoints.push(`${directory}/${name}`);
+  // Keep import.meta.url beneath server/: it derives the installed runtime root.
+  const runtimeBuild: BuildOptions = {
+    absWorkingDir: root,
+    entryPoints,
+    outdir: runtime,
+    outbase: root,
+    bundle: false,
+    platform: 'node',
+    format: 'esm',
+    target: 'node24',
+    sourcemap: false,
+    legalComments: 'eof',
+    plugins: [inputPlugin],
+  };
+  await build(runtimeBuild);
+  await putJson(join(runtime, 'package.json'), {
+    name: `${project.name}-runtime`,
+    version: project.version,
+    type: 'module',
+    dependencies: Object.fromEntries(
+      runtimeRoots.map((name) => [name, requirePackage(releasePackages, name).manifest.version]),
+    ),
+  });
+  await copy(node, join(runtime, 'bin/node'), 0o755);
+  await copy(nodeLicense, join(stage, 'resources/licenses/node-LICENSE'));
+  for (const name of await files(join(root, 'dist/client'))) {
+    if (
+      name.split('/').some((part) => part.startsWith('.')) ||
+      ![
+        '.html',
+        '.js',
+        '.mjs',
+        '.css',
+        '.svg',
+        '.png',
+        '.webp',
+        '.jpg',
+        '.jpeg',
+        '.woff',
+        '.woff2',
+        '.ttf',
+        '.ico',
+      ].includes(extname(name))
+    )
+      throw new Error(`Unallowlisted renderer resource: ${name}`);
+    await copy(join(root, 'dist/client', name), join(runtime, 'dist/client', name));
+  }
+  for (const name of ['index.html', 'app.js', 'styles.css'])
+    await copy(join(root, 'prototype', name), join(runtime, 'prototype', name));
+  if (await exists(join(root, 'examples')))
+    for (const name of await files(join(root, 'examples'))) {
+      if (
+        name.split('/').some((part) => part.startsWith('.')) ||
+        !['.pdf', '.txt', '.md', '.json', '.png', '.jpg', '.jpeg', '.svg', '.csv'].includes(
+          extname(name),
+        )
+      )
+        throw new Error(`Unallowlisted example resource: ${name}`);
+      await copy(join(root, 'examples', name), join(runtime, 'examples', name));
+    }
+  const stagedDependencies: StagedDependency[] = [];
+  for (const item of releasePackages) {
+    const selected = await packageFiles(join(root, item.path), item.manifest);
+    if (!selected.includes('package.json'))
+      throw new Error(`No package manifest selected: ${item.path}`);
+    for (const name of selected)
+      await copy(join(root, item.path, name), join(runtime, item.path, name));
+    stagedDependencies.push({
+      path: item.path,
+      name: item.manifest.name,
+      version: item.manifest.version,
+      files: selected,
+    });
+  }
+
+  // License evidence covers compiled renderer/desktop dependencies and the runtime.
+  const licensedPackages = await closure(Object.keys(project.dependencies), lock, false);
+  const licenseInventory: LicenseEntry[] = [];
+  for (const item of licensedPackages) {
+    const source = join(root, item.path);
+    const names = (await readdir(source))
+      .filter(
+        (name) =>
+          licenseName.test(name) ||
+          (item.manifest.name.startsWith('@anthropic-ai/claude-agent-sdk') && name === 'README.md'),
+      )
+      .sort();
+    const texts: LicenseText[] = [];
+    for (const name of names) {
+      if (!(await lstat(join(source, name))).isFile()) continue;
+      const destination = `resources/licenses/${item.path}/${name}`;
+      await copy(join(source, name), join(stage, destination));
+      texts.push({ path: destination, sha256: await hash(join(stage, destination)) });
+    }
+    licenseInventory.push({
+      name: item.manifest.name,
+      version: item.manifest.version,
+      dependencyPath: item.path,
+      license: item.manifest.license ?? 'UNDECLARED',
+      shippedAsRuntimePackage: stagedDependencies.some((dep) => dep.path === item.path),
+      texts,
+      missingLicenseText: texts.length === 0,
+    });
+  }
+  await putJson(join(stage, 'resources/licenses/inventory.json'), {
+    application: {
+      name: project.name,
+      version: project.version,
+      license: project.license ?? 'UNLICENSED',
+    },
+    electron: { version: ELECTRON_VERSION, files: ['LICENSE', 'LICENSES.chromium.html'] },
+    node: {
+      version: NODE_VERSION,
+      path: 'resources/licenses/node-LICENSE',
+      sha256: NODE_LICENSE_SHA256,
+    },
+    packages: licenseInventory,
+  });
+  await copy(join(root, 'scripts/linux/atelier.desktop'), join(stage, 'atelier.desktop'));
+  await copy(join(root, 'scripts/linux/atelier.svg'), join(stage, 'atelier.svg'));
+  const esbuildManifest = await manifest(join(root, 'node_modules/esbuild'));
+  await putJson(join(stage, 'resources/release.json'), {
+    schemaVersion: 1,
+    name: project.name,
+    version: project.version,
+    platform: 'linux',
+    arch: 'x64',
+    libc: 'glibc',
+    sourceDateEpoch: epoch,
+    packaging: 'local Electron distribution + native makepkg (Forge not required)',
+    electron: { version: ELECTRON_VERSION, sha256: await hash(join(stage, 'atelier')) },
+    node: {
+      version: NODE_VERSION,
+      sha256: await hash(join(runtime, 'bin/node')),
+      licenseSha256: NODE_LICENSE_SHA256,
+    },
+    sdk: {
+      version: sdk.manifest.version,
+      cliPackage: nativeCli,
+      cliVersion: sdk.manifest.claudeCodeVersion,
+    },
+    build: {
+      lockSha256: await hash(join(root, 'package-lock.json')),
+      esbuild: esbuildManifest.version,
+      desktopInputs,
+      runtimeSources: entryPoints,
+    },
+    runtimeDependencyRoots: runtimeRoots,
+    runtimeDependencies: stagedDependencies,
+  });
+  // Record the packager and recipe before freezing the input inventory.
+  const pkgbuildTemplate = await inputText(join(root, 'scripts/linux/PKGBUILD'), 'recipe');
+  if (pkgbuildTemplate.split('@VERSION@').length !== 2)
+    throw new Error('PKGBUILD must contain exactly one version placeholder.');
+  await rememberInput(fileURLToPath(import.meta.url), 'packager');
+  const inputInventory = {
+    schemaVersion: 1,
+    sourceDateEpoch: epoch,
+    sourcePolicy:
+      'Current filesystem inputs only; no git operation or source snapshot is performed.',
+    files: [...inputs.values()]
+      .sort((a, b) => a.path.localeCompare(b.path, 'en'))
+      .map((value) => ({
+        ...value,
+        // Temporary paths must not make release metadata vary between invocations.
+        uses: value.uses
+          .map((use) =>
+            use.startsWith('copied:') ? use.replace(inputName(stage), 'atelier') : use,
+          )
+          .sort(),
+      })),
+  };
+  await putJson(join(stage, 'resources/input-inventory.json'), inputInventory);
+  const inventory: InventoryEntry[] = [];
+  for (const name of await files(stage)) {
+    if (
+      name
+        .split('/')
+        .some(
+          (part) =>
+            part === '.data' || part.startsWith('.env') || part === '.claude' || part === '.config',
+        )
+    )
+      throw new Error(`Private path entered release: ${name}`);
+    const path = join(stage, name);
+    const info = await stat(path);
+    inventory.push({
+      path: name,
+      bytes: info.size,
+      mode: (info.mode & 0o777).toString(8),
+      sha256: await hash(path),
+    });
+  }
+  const resourceInventory = {
+    schemaVersion: 1,
+    sourceDateEpoch: epoch,
+    platform: 'linux-x64-glibc',
+    totalBytes: inventory.reduce((sum, item) => sum + item.bytes, 0),
+    selfExcluded: 'resources/resource-inventory.json',
+    files: inventory,
+  };
+  await putJson(join(stage, 'resources/resource-inventory.json'), resourceInventory);
+  await normalize(stage);
+  for (const path of [
+    'resources/app/main.mjs',
+    'resources/app/preload.cjs',
+    'resources/runtime/server/main.js',
+  ])
+    run(join(runtime, 'bin/node'), ['--check', join(stage, path)]);
+  const runtimeIdentity = z
+    .object({ node: z.literal(NODE_VERSION), sqlite: z.literal(true) })
+    .parse(
+      parseJson(
+        run(
+          join(runtime, 'bin/node'),
+          [
+            '--input-type=module',
+            '-e',
+            `await import('./server/app.js'); await import('@anthropic-ai/claude-agent-sdk'); await import('@anthropic-ai/sdk'); const {DatabaseSync}=await import('node:sqlite'); const db=new DatabaseSync(':memory:'); const row=db.prepare('select 1 as ok').get(); db.close(); console.log(JSON.stringify({node:process.versions.node,sqlite:row?.ok===1}));`,
+          ],
+          { cwd: runtime },
+        ),
+      ),
+    );
+  const cliOutput = run(join(runtime, 'node_modules', nativeCli, 'claude'), ['--version'], {
+    cwd: runtime,
+  });
+  if (cliOutput !== `${sdk.manifest.claudeCodeVersion} (Claude Code)`)
+    throw new Error(`Staged SDK CLI identity mismatch: ${cliOutput}`);
+  console.log(
+    `Verified staged Node ${runtimeIdentity.node}, SQLite, runtime imports and SDK CLI ${sdk.manifest.claudeCodeVersion}.`,
+  );
+
+  const archiveName = `atelier-${project.version}-linux-x64.tar.zst`;
+  const packageName = `atelier-${project.version}-1-x86_64.pkg.tar.zst`;
+  console.log(
+    `Staged ${inventory.length + 1} files, ${releasePackages.length} runtime packages; creating archives…`,
+  );
+  run('tar', [
+    '--sort=name',
+    '--format=gnu',
+    `--mtime=@${epoch}`,
+    '--owner=0',
+    '--group=0',
+    '--numeric-owner',
+    '--use-compress-program=zstd -q -T1 -19',
+    '-cf',
+    join(artifacts, archiveName),
+    '-C',
+    work,
+    'atelier',
+  ]);
+  const makeDirectory = join(work, 'makepkg');
+  await mkdir(makeDirectory, { recursive: true });
+  await put(
+    join(makeDirectory, 'PKGBUILD'),
+    pkgbuildTemplate.replace('@VERSION@', project.version),
+  );
+  const config = join(work, 'makepkg.conf');
+  await put(
+    config,
+    `source /etc/makepkg.conf\nPKGEXT='.pkg.tar.zst'\nPACKAGER='atelier local release'\nCOMPRESSZST=(zstd -c -T1 -19 -)\nBUILDENV=(!distcc !color !ccache !check !sign)\nOPTIONS=(!strip docs !libtool !staticlibs emptydirs !zipman !purge !debug !lto)\n`,
+  );
+  const makepkgOutput = run('makepkg', ['--config', config, '--nodeps', '--nocheck', '--nosign'], {
+    cwd: makeDirectory,
+    env: {
+      ...environment,
+      ATELIER_STAGE: stage,
+      PKGDEST: artifacts,
+      BUILDDIR: makeDirectory,
+      SRCDEST: makeDirectory,
+      SRCPKGDEST: makeDirectory,
+      LOGDEST: makeDirectory,
+      XDG_CONFIG_HOME: join(work, 'empty-config'),
+      MAKEPKG_CONF: config,
+    },
+  });
+  const portableListing = run('tar', ['-tf', join(artifacts, archiveName)]).split('\n');
+  const archListing = run('bsdtar', ['-tf', join(artifacts, packageName)]).split('\n');
+  for (const path of [
+    'atelier/atelier',
+    'atelier/resources/app/main.mjs',
+    'atelier/resources/app/preload.cjs',
+    'atelier/resources/runtime/bin/node',
+    'atelier/resources/runtime/server/main.js',
+    'atelier/resources/runtime/dist/client/index.html',
+    'atelier/resources/runtime/dist/client/vendor/pdfjs/pdf.worker.min.mjs',
+    'atelier/resources/licenses/inventory.json',
+    'atelier/resources/input-inventory.json',
+    `atelier/resources/runtime/node_modules/${nativeCli}/claude`,
+  ])
+    if (!portableListing.includes(path)) throw new Error(`Portable archive is missing ${path}`);
+  for (const path of [
+    '.PKGINFO',
+    'opt/atelier/atelier',
+    'usr/bin/atelier',
+    'usr/share/applications/atelier.desktop',
+  ])
+    if (!archListing.includes(path)) throw new Error(`Arch package is missing ${path}`);
+  for (const listing of [portableListing, archListing])
+    for (const name of listing) {
+      const plain = name.endsWith('/') ? name.slice(0, -1) : name;
+      if (
+        !safeRelative(plain) ||
+        /(?:^|\/)(?:\.data|\.env(?:\.[^/]*)?|\.claude|\.config)(?:\/|$)/.test(name)
+      )
+        throw new Error(`Invalid/private path entered an archive: ${name}`);
+    }
+  const pkgInfo = run('bsdtar', ['-xOf', join(artifacts, packageName), '.PKGINFO']);
+  for (const expected of ['pkgname = atelier', `pkgver = ${project.version}-1`, 'arch = x86_64'])
+    if (!pkgInfo.split('\n').includes(expected))
+      throw new Error(`Arch metadata is missing ${expected}`);
+  const packageInfo = run('pacman', ['-Qip', join(artifacts, packageName)]);
+  await put(join(artifacts, 'portable-files.txt'), `${portableListing.join('\n')}\n`);
+  await put(join(artifacts, 'arch-files.txt'), `${archListing.join('\n')}\n`);
+  await put(join(artifacts, 'arch-package-info.txt'), `${packageInfo}\n`);
+  await put(join(artifacts, 'makepkg.log'), `${makepkgOutput}\n`);
+  await putJson(join(artifacts, 'resource-inventory.json'), resourceInventory);
+  // These are generated outputs, so do not add them to the source input inventory.
+  for (const [from, to] of [
+    ['resources/licenses/inventory.json', 'license-inventory.json'],
+    ['resources/release.json', 'release.json'],
+    ['resources/input-inventory.json', 'input-inventory.json'],
+  ]) {
+    if (!from || !to) throw new Error('Incomplete metadata copy mapping.');
+    await copyFile(join(stage, from), join(artifacts, to));
+  }
+  const releaseSize = {
+    version: project.version,
+    sourceDateEpoch: epoch,
+    stagedBytes:
+      (await stat(join(stage, 'resources/resource-inventory.json'))).size +
+      resourceInventory.totalBytes,
+    stagedFiles: inventory.length + 1,
+    artifacts: await Promise.all(
+      [archiveName, packageName].map(async (name) => ({
+        name,
+        bytes: (await stat(join(artifacts, name))).size,
+        sha256: await hash(join(artifacts, name)),
+      })),
+    ),
+    listingVerified: true,
+    stagedChecks: {
+      node: runtimeIdentity.node,
+      sqlite: true,
+      runtimeImports: true,
+      sdkCli: cliOutput,
+    },
+    missingLicenseTexts: licenseInventory
+      .filter((item) => item.missingLicenseText)
+      .map((item) => `${item.name}@${item.version}`),
+    limitations: [
+      'Unsigned local P1 sample. No root install or system menu cache mutation performed.',
+      'Portable means relocatable on compatible Linux x64/glibc hosts; system shared libraries are required.',
+      'Reproducibility requires identical input bytes, pinned runtimes, SOURCE_DATE_EPOCH and Arch tools/package database; makepkg build paths may vary.',
+      'Application source has no declared license; missing upstream license texts are enumerated explicitly.',
+    ],
+  };
+  await putJson(join(artifacts, 'size.json'), releaseSize);
+  const checksumFiles = [
+    archiveName,
+    packageName,
+    'resource-inventory.json',
+    'license-inventory.json',
+    'input-inventory.json',
+    'release.json',
+    'size.json',
+    'portable-files.txt',
+    'arch-files.txt',
+    'arch-package-info.txt',
+    'makepkg.log',
+  ];
+  await put(
+    join(artifacts, 'SHA256SUMS'),
+    `${(await Promise.all(checksumFiles.map(async (name) => `${await hash(join(artifacts, name))}  ${name}`))).join('\n')}\n`,
+  );
+  await verifyInputs();
+  // Publish only after every build, archive, dependency and input check succeeds.
+  // The lock covers promotion; old output survives all earlier failures.
+  const previousStage = join(work, 'previous-atelier');
+  const publishedStage = join(output, 'atelier');
+  if (await exists(publishedStage)) {
+    const info = await lstat(publishedStage);
+    if (!info.isDirectory() || info.isSymbolicLink())
+      throw new Error(`Existing stage must be a real directory: ${publishedStage}`);
+    await rename(publishedStage, previousStage);
+  }
+  try {
+    await rename(stage, publishedStage);
+  } catch (error: unknown) {
+    if (await exists(previousStage)) await rename(previousStage, publishedStage);
+    throw error;
+  }
+  for (const name of [...checksumFiles, 'SHA256SUMS'])
+    await rename(join(artifacts, name), join(output, name));
+  console.log(JSON.stringify(releaseSize, null, 2));
+  return [join(output, archiveName), join(output, packageName)];
+}
+
+async function main(): Promise<void> {
+  if (process.platform !== 'linux' || process.arch !== 'x64')
+    throw new Error('This packager requires Linux x64/glibc.');
+  if (process.getuid?.() === 0)
+    throw new Error('Run packaging as an ordinary user; no root installation is performed.');
+  if (
+    !/^\d+$/.test(epochText) ||
+    !Number.isSafeInteger(epoch) ||
+    epoch < 1 ||
+    epoch > 8_640_000_000_000
+  )
+    throw new Error(
+      'SOURCE_DATE_EPOCH must be a positive integer representable as a filesystem timestamp.',
+    );
+  for (const tool of ['makepkg', 'pacman', 'tar', 'zstd', 'bsdtar']) run('which', [tool]);
+  await safeOutputDirectory(join(root, 'dist'));
+  await safeOutputDirectory(output);
+  const lockDirectory = join(output, '.package-lock');
+  try {
+    await mkdir(lockDirectory, { mode: 0o700 });
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'EEXIST')
+      throw new Error(
+        `Another package run holds ${lockDirectory}. If its process has stopped, remove that lock before retrying.`,
+      );
+    throw error;
+  }
+  let work: string | undefined;
+  try {
+    await putJson(join(lockDirectory, 'owner.json'), {
+      pid: process.pid,
+      started: new Date().toISOString(),
+    });
+    work = await mkdtemp(join(output, '.package-'));
+    const archives = await packageRelease(work);
+    console.log(`Archives:\n${archives.join('\n')}`);
+  } finally {
+    try {
+      if (work) await rm(work, { recursive: true, force: true });
+    } finally {
+      await rm(lockDirectory, { recursive: true, force: true });
+    }
+  }
+}
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+  process.exitCode = 1;
+});

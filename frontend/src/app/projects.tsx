@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+/**
+ * @file 提供项目选择与目录绑定对话框。
+ * @implementation 展示已有项目，调用项目选择 hook 处理路径、选择与绑定。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { FolderOpen } from 'lucide-react';
-import { api } from '@/api/client';
+import { useProjectSelection } from '@/features/projects/hooks/use-project-selection';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,67 +26,10 @@ export function ProjectsDialog({
   projects: Project[];
   onChoose: (id: string) => Promise<void>;
 }) {
-  const [path, setPath] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [error, setError] = useState('');
-  const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
-  async function pick() {
-    const request = new AbortController();
-    controller.current = request;
-    setPicking(true);
-    setError('');
-    try {
-      const result = await api<{ path: string | null }>('/api/projects/pick-directory', {
-        method: 'POST',
-        body: {},
-        signal: request.signal,
-      });
-      if (result.path) setPath(result.path);
-    } catch (error) {
-      if (!request.signal.aborted) setError((error as Error).message);
-    } finally {
-      setPicking(false);
-      controller.current = null;
-    }
-  }
-  async function choose(id: string) {
-    setBusy(true);
-    setError('');
-    try {
-      await onChoose(id);
-      onOpenChange(false);
-    } catch (error) {
-      setError((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function bind(event: FormEvent) {
-    event.preventDefault();
-    if (!path.trim() || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      const result = await api<{ project: Project }>('/api/projects', {
-        method: 'POST',
-        body: { path: path.trim() },
-      });
-      await choose(result.project.id);
-    } catch (error) {
-      setError((error as Error).message);
-      setBusy(false);
-    }
-  }
+  const { path, setPath, busy, picking, error, close, pickDirectory, openProject } =
+    useProjectSelection(onChoose, onOpenChange);
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) controller.current?.abort();
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>绑定项目目录</DialogTitle>
@@ -95,14 +42,20 @@ export function ProjectsDialog({
               variant="secondary"
               className="justify-start break-all"
               disabled={busy || !project.available}
-              onClick={() => void choose(project.id)}
+              onClick={() => void openProject(project.id)}
             >
               {project.name} · {project.path}
               {project.available ? '' : '（不可访问）'}
             </Button>
           ))}
         </div>
-        <form className="mt-4 grid gap-3" onSubmit={(event) => void bind(event)}>
+        <form
+          className="mt-4 grid gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void openProject();
+          }}
+        >
           <label htmlFor="project-path">本机目录</label>
           <input
             id="project-path"
@@ -117,11 +70,16 @@ export function ProjectsDialog({
             </p>
           ) : null}
           <div className="dialog-actions">
-            <Button variant="secondary" disabled={busy || picking} onClick={() => void pick()}>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void pickDirectory()}
+            >
               <FolderOpen size={16} />
               {picking ? '等待系统选择…' : '选择目录'}
             </Button>
-            <Button type="submit" disabled={!path.trim() || busy || picking}>
+            <Button type="submit" disabled={!path.trim() || busy}>
               绑定项目
             </Button>
           </div>

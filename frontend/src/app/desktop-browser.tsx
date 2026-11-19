@@ -1,27 +1,21 @@
+/**
+ * @file 提供桌面浏览器控件与网页显示区域。
+ * @implementation 订阅浏览器状态、发送操作并同步视图位置和可见性。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, RotateCw } from 'lucide-react';
 
-interface DesktopState {
-  projectId: string;
-  url: string;
-  title: string;
-  control: boolean;
-  busy: boolean;
-}
-
-type BrowserAction = 'state' | 'take' | 'release' | 'navigate' | 'reload' | 'back' | 'forward';
+import type {
+  DesktopBrowserAction as BrowserAction,
+  DesktopBrowserBridge,
+  DesktopBrowserState as DesktopState,
+} from '@shared/desktop-browser';
 
 declare global {
   interface Window {
-    atelierDesktop?: {
-      layout(
-        projectId: string,
-        bounds: { x: number; y: number; width: number; height: number } | null,
-      ): void;
-      command(projectId: string, action: BrowserAction, url?: string): Promise<void>;
-      subscribe(callback: (state: DesktopState) => void): () => void;
-    };
+    atelierDesktop?: DesktopBrowserBridge;
   }
 }
 

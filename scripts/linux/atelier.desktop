@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=atelier
+Comment=Local-first agent desktop workbench
+Exec=atelier
+TryExec=atelier
+Icon=atelier
+Terminal=false
+Categories=Development;
+StartupWMClass=atelier
+StartupNotify=true

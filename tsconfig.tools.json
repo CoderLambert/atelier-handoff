@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "scripts/**/*.mts",
+    "scripts/**/*.cts",
+    "scripts/linux/**/*.ts",
+    "scripts/p1-smoke/**/*.ts",
+    "packages/markdown/scripts/**/*.mts"
+  ]
+}

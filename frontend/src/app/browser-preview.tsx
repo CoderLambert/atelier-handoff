@@ -1,27 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+/**
+ * @file 展示浏览器页面的实时预览。
+ * @implementation 根据帧数据渲染地址、JPEG 画面及加载或错误状态。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { Globe } from 'lucide-react';
-import { api } from '@/api/client';
-
-interface BrowserFrame {
-  title: string;
-  url: string;
-  jpeg?: string;
-}
-
-export function useBrowserPreview(projectId: string | undefined, showImage: boolean) {
-  return useQuery({
-    queryKey: ['browser-preview', projectId, showImage],
-    enabled: Boolean(projectId),
-    gcTime: 0,
-    refetchInterval: showImage ? 700 : 1800,
-    retry: false,
-    queryFn: ({ signal }) =>
-      api<{ frame: BrowserFrame | null }>(
-        `/api/projects/${encodeURIComponent(projectId!)}/browser-preview${showImage ? '?frame=1' : ''}`,
-        { method: 'POST', signal },
-      ),
-  });
-}
+import type { BrowserFrame } from '@/use-query/browser/use-browser-preview';
 
 export function BrowserPreview({ frame, error }: { frame?: BrowserFrame | null; error: boolean }) {
   return (

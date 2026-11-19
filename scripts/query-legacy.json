@@ -1,0 +1,121 @@
+{
+  "app/drafts.ts": [
+    "api:2f4280d227d35892",
+    "api:bdd06c5d89645dd0"
+  ],
+  "app/sidebar.tsx": [
+    "api:33693fda3e062523",
+    "api:614b39a568648b46",
+    "useQueries:2bab4375cf524194",
+    "useQuery:d977d4ce5da747b0"
+  ],
+  "app/workspace.tsx": [
+    "api:0f6e695217a38d87",
+    "api:1b5c725693ff9300",
+    "api:4b7e089ea486f1d6",
+    "api:b8e27b2f8ffa1a01",
+    "api:cc86768cd48a3807",
+    "api:d89b7da0f1f9e8f6",
+    "api:e20bfee22a68e417",
+    "api:e91a762a07b5aca0",
+    "useMutation:0775e48318d1ce48",
+    "useMutation:15221630cd6e2169",
+    "useMutation:609cb9fd287312bc",
+    "useMutation:8f50d8bd760da2c5",
+    "useQuery:20fb5e930d99cd1f",
+    "useQuery:9f6fcd45413b92dd",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/agents/api.tsx": [
+    "api:d793198efecd4cd8",
+    "api:f8be8f7a13a23f92",
+    "queryOptions:d10962dfe9095247",
+    "useMutation:a63f6a786de3ffa3",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/agents/editor.tsx": [
+    "useQuery:9e95a63e814bddee",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/agents/index.tsx": [
+    "api:b081466c077ecee7",
+    "useMutation:c32dbc9bc2b54124",
+    "useQuery:9e95a63e814bddee",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/chat/attachment-preview.tsx": [
+    "api:08011cb86c008786",
+    "useQuery:3c9750885bfd75f2"
+  ],
+  "features/chat/composer.tsx": [
+    "api:029df6236a8a67ef",
+    "api:9d7636391f56b26b",
+    "useMutation:f7621d86c147723c",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/extensions/api.ts": [
+    "api:44337d7061ec39b7",
+    "api:7115ee278194b822",
+    "api:86a55c0f6be0506f",
+    "api:d2d7a564a384dc8e",
+    "queryOptions:218370ea48ebcfc1",
+    "useMutation:81e31baceaa1dd6b",
+    "useMutation:f53856b9a4686fb2",
+    "useQuery:d7e866e38eccf9b7",
+    "useQuery:ecf3173277d3e7a0",
+    "useQueryClient:88aaac3e2e5480e1",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/extensions/editor.tsx": [
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/extensions/picker.tsx": [
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/extensions/public-import.tsx": [
+    "api:0a8940875a8e9b75",
+    "useQuery:1f7825fddcbdfa88"
+  ],
+  "features/extensions/skillhub-market.tsx": [
+    "api:160d6c5696fd9022",
+    "api:aa5c6fbeeea280a0",
+    "useQuery:1449319b96798a08",
+    "useQuery:e615fc1cb6fa2337",
+    "useQuery:f8c0c5cb5a40d270"
+  ],
+  "features/inspector/artifact-dialog.tsx": [
+    "useResource:0a2f7bbc229e6c68"
+  ],
+  "features/inspector/collections.tsx": [
+    "useResource:057341a686a6713d",
+    "useResource:86cfb5e5753234f1"
+  ],
+  "features/inspector/index.tsx": [
+    "api:fedf8e13c029816e",
+    "useMutation:5c6dda648a613d9b",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/inspector/permission-dialog.tsx": [
+    "api:2dd9882cbc4f4ee1",
+    "api:6536fe7af65a3ac7",
+    "api:8656db5451e30e5a",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/inspector/run-trace.tsx": [
+    "useResource:787da3e9b5207b88"
+  ],
+  "features/inspector/settings-dialog.tsx": [
+    "api:2e1fa1dfd2d98a6b",
+    "api:70fa71195694c24b",
+    "useMutation:468bf6afc64549e3",
+    "useQuery:01df7a584cbf7563",
+    "useQueryClient:88aaac3e2e5480e1"
+  ],
+  "features/inspector/shared.tsx": [
+    "api:47592d2f13a15e5f",
+    "useQuery:46291be0b4468207"
+  ],
+  "features/inspector/tool-output-dialog.tsx": [
+    "useResource:b99057a06073ad6d"
+  ]
+}

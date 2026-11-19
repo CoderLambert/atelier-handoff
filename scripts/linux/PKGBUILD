@@ -1,0 +1,31 @@
+# @file 定义 Linux Arch 包的安装规则。
+# @implementation 从已验证的暂存目录安装应用、启动器、图标和许可证。
+# @updated 2026-11-20T02:00+08:00
+# Materialized by package.mts with a validated version and an allowlisted stage.
+pkgname=atelier
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Local-first agent desktop workbench (P1 Linux sample)'
+arch=('x86_64')
+license=('custom')
+depends=('alsa-lib' 'at-spi2-core' 'cairo' 'dbus' 'expat' 'gcc-libs' 'glibc'
+         'gtk3' 'libcups' 'libdrm' 'libx11' 'libxcb' 'libxcomposite' 'libxdamage'
+         'libxext' 'libxfixes' 'libxkbcommon' 'libxrandr' 'mesa' 'nspr' 'nss' 'pango')
+optdepends=('bubblewrap: controlled shell commands'
+            'git: project branch detection and agent workflows'
+            'python: imported skills that explicitly use Python')
+options=('!strip' '!debug' '!lto' '!zipman' '!purge')
+
+package() {
+  [[ -n "$ATELIER_STAGE" && -f "$ATELIER_STAGE/resources/release.json" ]] || return 1
+  install -d "$pkgdir/opt" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps" "$pkgdir/usr/share/licenses"
+  cp -a -- "$ATELIER_STAGE" "$pkgdir/opt/atelier"
+  install -m644 "$ATELIER_STAGE/atelier.desktop" "$pkgdir/usr/share/applications/atelier.desktop"
+  install -m644 "$ATELIER_STAGE/atelier.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/atelier.svg"
+  # Arch extracts this helper as root:root. Portable users use Chromium's user namespace sandbox.
+  chmod 4755 "$pkgdir/opt/atelier/chrome-sandbox"
+  ln -s /opt/atelier/resources/licenses "$pkgdir/usr/share/licenses/atelier"
+  printf '%s\n' '#!/bin/sh' 'unset ELECTRON_RUN_AS_NODE' 'exec /opt/atelier/atelier "$@"' > "$pkgdir/usr/bin/atelier"
+  chmod 755 "$pkgdir/usr/bin/atelier"
+}

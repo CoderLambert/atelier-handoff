@@ -6,7 +6,13 @@
 
 ## 桌面版
 
-开发环境在项目目录运行 `npm run desktop`。桌面宿主会启动本机运行时并打开 Electron 工作台。同一数据目录只允许一个运行时，切换入口前先结束占用它的服务。桌面版规划从 Linux x64 安装件开始，阶段和验收记录见[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)。开发时先读[项目协作规则](CLAUDE.md)。
+Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运行 `sudo pacman -U ./dist/linux/atelier-0.2.0-1-x86_64.pkg.tar.zst`，然后从应用菜单打开 atelier。便携版可用 `tar -xf dist/linux/atelier-0.2.0-linux-x64.tar.zst -C <空目录>` 解包，从该目录运行 `./atelier/atelier`。包内含 Electron、Node 24.21.0、SQLite、SDK CLI 和静态资源，模型请求使用本机 Shunt。
+
+发行版的数据默认写入 `$XDG_DATA_HOME/atelier`（默认 `~/.local/share/atelier`），浏览器 profile 位于该目录下的 `desktop-profile`。首次启动得到空白工作区，原有开发数据的迁移属于 P3。可通过绝对路径 `ATELIER_DATA_DIR` 选择其他数据根。同一数据根使用单写者锁。
+
+构建机安装包依赖 `makepkg`、`pacman`、`bsdtar`、`tar`、`zstd` 以及固定版本 Node 的可执行文件和许可证。在项目根执行 `ATELIER_BUILD_NODE=/绝对路径/node-v24.21.0/bin/node npm run package:linux`。`dist/linux/SHA256SUMS` 提供资源清单与工件校验，`release.json` 记录运行时版本。安装态验收入口为 `npm run smoke:linux -- --help`。
+
+开发版从项目根运行 `npm run desktop`。先读[项目协作规则](AGENTS.md)。[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)和[发行选型记录](docs/decisions/2026-11-20-linux-release.md)说明当前阶段的交付范围。
 
 ## 启动
 

@@ -1,3 +1,8 @@
+/**
+ * @file 生成 Markdown 包的样式和类型产物。
+ * @implementation 扫描依赖类名并编译前缀样式，生成声明并复制许可证。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

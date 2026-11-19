@@ -1,13 +1,25 @@
+/**
+ * @file 启动和关闭工作台服务。
+ * @implementation 管理数据目录锁、本地监听、桌面就绪通知及退出清理。
+ * @updated 2026-11-20T02:00+08:00
+ */
 import { mkdir, open, readFile, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
+import { desktopBrowserEnabled } from './desktop-browser.js';
+import {
+  desktopBrowserProtocolVersion,
+  desktopBrowserReadySchema,
+} from '../shared/desktop-browser.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const data = resolve(process.env.ATELIER_DATA_DIR || join(root, '.data'));
-const port = Number(process.env.ATELIER_PORT || '4317');
-if (!Number.isInteger(port) || port < 1 || port > 65535)
-  throw new Error('ATELIER_PORT must be a valid port.');
+const desktopIpc = desktopBrowserEnabled();
+const portSetting = process.env.ATELIER_PORT ?? '4317';
+const port = Number(portSetting);
+if (!/^(0|[1-9]\d{0,4})$/.test(portSetting) || port > 65535 || (port === 0 && !desktopIpc))
+  throw new Error('ATELIER_PORT must be a valid port; 0 requires desktop IPC.');
 await mkdir(data, { recursive: true, mode: 0o700 });
 const lockFile = join(data, 'server.lock');
 async function lock(): Promise<void> {
@@ -32,15 +44,32 @@ async function lock(): Promise<void> {
   }
 }
 await lock();
+let running: Awaited<ReturnType<typeof createApp>> | undefined;
 try {
   const app = await createApp({ root, data });
+  running = app;
   await new Promise<void>((resolve, reject) => {
     app.server.once('error', reject);
     app.server.listen(port, '127.0.0.1', resolve);
   });
-  if (process.env.ATELIER_DESKTOP_BROWSER === '1')
-    process.send?.({ type: 'desktop-browser-ready' });
-  console.log(`atelier ready: http://127.0.0.1:${port}`);
+  const address = app.server.address();
+  if (!address || typeof address === 'string') throw new Error('Server did not bind a TCP port.');
+  if (desktopIpc) {
+    const ready = desktopBrowserReadySchema.parse({
+      type: 'desktop-browser-ready',
+      protocolVersion: desktopBrowserProtocolVersion,
+      port: address.port,
+    });
+    await new Promise<void>((resolve, reject) => {
+      const send = process.send;
+      if (!send || !process.connected) {
+        reject(new Error('Desktop IPC disconnected before readiness.'));
+        return;
+      }
+      send.call(process, ready, (error: Error | null) => (error ? reject(error) : resolve()));
+    });
+  }
+  console.log(`atelier ready: http://127.0.0.1:${address.port}`);
   console.log(`Private data: ${data}`);
   let stopping = false;
   const stop = async () => {
@@ -59,7 +88,17 @@ try {
   process.on('SIGTERM', () => {
     void stop().then(() => process.exit(0));
   });
+  if (desktopIpc)
+    process.once('disconnect', () => {
+      void stop().then(() => process.exit(0));
+    });
 } catch (error) {
-  await unlink(lockFile).catch(() => {});
+  try {
+    await running?.close();
+  } catch {
+    console.error('工作台服务启动失败后未能完整清理。');
+  } finally {
+    await unlink(lockFile).catch(() => {});
+  }
   throw error;
 }

@@ -9,9 +9,9 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env --import tsx server/main.ts",
     "dev": "vite --config frontend/vite.config.ts",
-    "format": "prettier --write \"{server,shared,scripts,tests}/**/*.{ts,js,mjs}\" package.json tsconfig.json .prettierrc.json \"frontend/**/*.{tsx,ts,css,html,json}\"",
-    "format:check": "prettier --check \"{server,shared,scripts,tests}/**/*.{ts,js,mjs}\" package.json tsconfig.json .prettierrc.json \"frontend/**/*.{tsx,ts,css,html,json}\"",
-    "check": "tsc --noEmit && tsc -p frontend/tsconfig.json",
+    "format": "prettier --write \"{desktop,server,shared,scripts,tests}/**/*.{ts,mts,cts,js,mjs}\" packages/markdown/scripts/*.mts package.json \"tsconfig*.json\" .prettierrc.json \"frontend/**/*.{tsx,ts,css,html,json}\"",
+    "format:check": "prettier --check \"{desktop,server,shared,scripts,tests}/**/*.{ts,mts,cts,js,mjs}\" packages/markdown/scripts/*.mts package.json \"tsconfig*.json\" .prettierrc.json \"frontend/**/*.{tsx,ts,css,html,json}\"",
+    "check": "npm run check:architecture && npm run check:query && tsc --noEmit && tsc -p frontend/tsconfig.json && npm run check:desktop && npm run check:tools",
     "test": "node --import tsx --test tests/*.test.ts && npm run test:frontend",
     "test:live": "node --import tsx scripts/verify-live.ts",
     "dev:server": "node --env-file-if-exists=.env --import tsx --watch server/main.ts",
@@ -24,8 +24,17 @@
     "precheck": "npm run build:markdown",
     "prebuild": "npm run build:markdown && npm run prepare:preview",
     "prepare:preview": "cd frontend && node ../node_modules/@lamberl-lee/file-preview/scripts/copy-pdf-worker.mjs",
-    "desktop": "electron desktop/main.mjs",
-    "predesktop": "npm run build"
+    "desktop": "electron dist/desktop/main.mjs",
+    "predesktop": "npm run check:desktop && npm run build && npm run build:desktop",
+    "check:architecture": "tsx scripts/check-architecture.mts",
+    "check:desktop": "tsc -p tsconfig.desktop.json",
+    "check:tools": "tsc -p tsconfig.tools.json",
+    "build:desktop": "tsx scripts/build-desktop.mts",
+    "package:linux": "tsx scripts/linux/package.mts",
+    "prepackage:linux": "npm run check && npm run build",
+    "smoke:linux": "tsx scripts/smoke-linux.mts",
+    "check:query": "tsx scripts/check-query-boundaries.mts",
+    "check:headers": "tsx scripts/check-file-headers.mts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.326",
@@ -51,6 +60,8 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@babel/parser": "7.29.14",
+    "@babel/types": "7.29.14",
     "@tailwindcss/node": "4.3.5",
     "@tailwindcss/oxide": "4.3.5",
     "@tailwindcss/vite": "4.3.5",
@@ -61,6 +72,8 @@
     "@types/yauzl": "3.4.0",
     "@vitejs/plugin-react": "6.3.0",
     "electron": "45.4.1",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.66.0-alpha-2026-11-18",
     "prettier": "3.10.1",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",

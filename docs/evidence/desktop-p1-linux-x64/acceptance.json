@@ -1,0 +1,202 @@
+{
+  "stage": "P1",
+  "date": "2026-11-20",
+  "system": {
+    "platform": "linux",
+    "arch": "x64",
+    "kernel": "7.2.5-3-omarchy",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700K",
+    "logicalCpus": 20
+  },
+  "distribution": {
+    "name": "atelier-0.2.0-1-x86_64.pkg.tar.zst",
+    "sha256": "94fea6119c96535163ad86143aecb7a4cd7fd1c19a8784b1b83e5e9bd76f5d40",
+    "bytes": 271034638
+  },
+  "installation": {
+    "sha256": "8ed653aaaf77e6f10799750441232aa788a29aa4b39aeaf2c694446d5e2bf247",
+    "bytes": 824729329,
+    "files": 4066,
+    "algorithm": "sorted newline JSON [relative path, mode, SHA-256] or [relative path, link, target]; empty directories excluded"
+  },
+  "unchangedAfterRun": true,
+  "method": {
+    "sourceMounted": false,
+    "privateNetwork": true,
+    "display": "dedicated Xvfb inside private PID/mount/network namespaces",
+    "applicationPath": "/opt/atelier",
+    "targetPath": "packaged runtime bin plus empty directory",
+    "directories": "separate HOME, XDG config/data/cache/runtime, Electron profile, application data, project; five fresh datasets and first dataset reopened",
+    "missingBwrap": "bwrap masked on disk and absent from target PATH",
+    "driver": "TypeScript compiled as external temporary test resource; installed executable launched normally with CDP flags; no main/preload injection"
+  },
+  "checks": {
+    "environment": {
+      "sourceUnavailable": true,
+      "developmentNodeUnavailable": true,
+      "npmUnavailable": true,
+      "bwrapUnavailable": true,
+      "packagedNode": "v24.21.0",
+      "externalNetwork": "unshared namespace: loopback only",
+      "chromiumSandbox": "enabled; no --no-sandbox argument"
+    },
+    "packageLauncher": {
+      "executed": true,
+      "argumentsForwarded": true,
+      "startedWithInheritedElectronRunAsNode": true,
+      "electronModeRestored": true
+    },
+    "projectCreatedThroughUi": true,
+    "packagedSdk": {
+      "realSdk": true,
+      "transport": "loopback SSE replacement",
+      "paidModelCalls": 0,
+      "requests": 2,
+      "toolResultReturned": true,
+      "receiptPersisted": true,
+      "sdkCliObserved": true
+    },
+    "nativeHtml": {
+      "separateTarget": true,
+      "inputVerified": true
+    },
+    "pdfFixture": {
+      "seededBy": "installed FileRecords.publishFile",
+      "applicationStopped": true,
+      "singleWriter": true,
+      "bytes": 442
+    },
+    "offlineReopen": {
+      "project": true,
+      "session": true,
+      "messages": true,
+      "completedRun": true,
+      "artifactContent": true,
+      "uiHistory": true,
+      "connectionUnavailable": true,
+      "additionalModelRequests": 0
+    },
+    "pdfPreview": {
+      "width": 450,
+      "height": 450,
+      "blue": 53550,
+      "renderer": "installed FileVista PDF.js canvas",
+      "workerFetched": true,
+      "realLocalWorker": true,
+      "workers": [
+        {
+          "path": "/vendor/pdfjs/pdf.worker.min.mjs",
+          "status": 200
+        }
+      ],
+      "offline": true
+    },
+    "processOwnership": {
+      "installedExecutablesOnly": true,
+      "cleanExitCount": 6,
+      "remainingProcesses": 0
+    },
+    "fixture": {
+      "healthMode": "offline",
+      "gatewayStopped": true,
+      "requests": 2,
+      "toolResultReturned": true,
+      "pdfRequests": 0,
+      "errors": []
+    },
+    "xvfbStopped": true
+  },
+  "launches": [
+    {
+      "index": 1,
+      "kind": "fresh",
+      "readyMs": 718,
+      "peakRssMiB": 995.4,
+      "shutdownMs": 108,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    },
+    {
+      "index": 2,
+      "kind": "fresh",
+      "readyMs": 701,
+      "peakRssMiB": 794.8,
+      "shutdownMs": 104,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    },
+    {
+      "index": 3,
+      "kind": "fresh",
+      "readyMs": 693,
+      "peakRssMiB": 796.5,
+      "shutdownMs": 112,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    },
+    {
+      "index": 4,
+      "kind": "fresh",
+      "readyMs": 703,
+      "peakRssMiB": 796.9,
+      "shutdownMs": 104,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    },
+    {
+      "index": 5,
+      "kind": "fresh",
+      "readyMs": 694,
+      "peakRssMiB": 793.6,
+      "shutdownMs": 105,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    },
+    {
+      "index": 6,
+      "kind": "offline-reopen",
+      "readyMs": 486,
+      "peakRssMiB": 863.1,
+      "shutdownMs": 105,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "remaining": [],
+      "forced": false
+    }
+  ],
+  "metrics": {
+    "freshStarts": 5,
+    "slowestReadyMs": 718,
+    "peakTreeRssMiB": 995.4,
+    "slowestShutdownMs": 112,
+    "rssSamplingIntervalMs": 150,
+    "budgets": {
+      "startupMs": 5000,
+      "shutdownMs": 3000,
+      "rssMiB": 1536
+    }
+  },
+  "paidModelCalls": 0
+}
