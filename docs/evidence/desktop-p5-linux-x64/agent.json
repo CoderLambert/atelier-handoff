@@ -1,0 +1,13 @@
+{
+  "uiApproval": true,
+  "blockedBeforeApproval": true,
+  "approvedWriteVerified": true,
+  "streamedReplyVisible": true,
+  "sameSessionContinued": true,
+  "realSdk": true,
+  "gatewayRequests": 3,
+  "paidCalls": 0,
+  "runtime": "development Electron",
+  "submission": "paired runtime API",
+  "approval": "real chat approval dialog"
+}
