@@ -4,6 +4,10 @@
 
 现有浅色三栏设计继续沿用。原来的静态演示完整保留在 [prototype/](prototype/index.html)，与真实应用的数据和执行逻辑分开。
 
+## 桌面版
+
+开发环境在项目目录运行 `npm run desktop`。桌面宿主会启动本机运行时并打开 Electron 工作台。同一数据目录只允许一个运行时，切换入口前先结束占用它的服务。桌面版规划从 Linux x64 安装件开始，阶段和验收记录见[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)。开发时先读[项目协作规则](CLAUDE.md)。
+
 ## 启动
 
 本轮验证环境：Node **24.21.0**、npm 11.19.0、Claude Agent SDK **0.3.326** / CLI **2.1.326**、Shunt **0.64.0**。Node 最低要求 24，推荐使用已验证版本。

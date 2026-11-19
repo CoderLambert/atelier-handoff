@@ -1,0 +1,29 @@
+{
+  "v": 1,
+  "page": "roadmap-review.html",
+  "revisions": [
+    {
+      "n": 1,
+      "at": "2026-11-20T01:03:56+08:00",
+      "event": "首次生成",
+      "docs": {
+        "roadmap": {
+          "path": "openspec/roadmaps/build-atelier-desktop/roadmap.md",
+          "sha256": "2f5aa3742f43974a19cfce0d0bfba64015e14e4aac9ed87b26c40d876cf14e9f"
+        },
+        "design": {
+          "path": "openspec/roadmaps/build-atelier-desktop/design.md",
+          "sha256": "08e10ceba3e5f95987f72601958018c002cdf2c4d7a8f5b3f5a9405d245b39a3"
+        },
+        "task-log": {
+          "path": "openspec/roadmaps/build-atelier-desktop/task-log.md",
+          "sha256": "cedcceadd034e39292303dcf9bd210dc767c784c3116bb7b67e54ca3d9bc11ce"
+        }
+      },
+      "notes": 0,
+      "dispositions": 0,
+      "changed": [],
+      "fp": "2ee952ce8ed9814b5df99b08b15a6b2fdd3fa21b0b275221336e3325dc518c43"
+    }
+  ]
+}
