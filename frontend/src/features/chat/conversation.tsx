@@ -1,10 +1,21 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Artifact, Attachment, Message, Run, RunEvent, ToolCall } from '@shared/types';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type {
+  Artifact,
+  Attachment,
+  Message,
+  Permission,
+  Run,
+  RunEvent,
+  ToolCall,
+} from '@shared/types';
 import { activeStatuses } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { ArtifactAction } from '@/features/inspector';
+import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
 import { Markdown } from './markdown';
+
+const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
 
 export const isActive = (run: Run) => activeStatuses.includes(run.status);
 const recoverable = (run: Run) => ['failed', 'stopped', 'interrupted'].includes(run.status);
@@ -218,6 +229,33 @@ function MessageContext({ run, attachments }: { run: Run; attachments: Map<strin
   ) : null;
 }
 
+function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: () => void }) {
+  const pending = permission.status === 'pending';
+  return (
+    <section className="chat-approval" data-pending={pending}>
+      <div className="chat-approval-copy">
+        <div className="chat-approval-title" role="status">
+          <strong>{pending ? '需要你的审批' : permissionOperation(permission)}</strong>
+          {pending ? (
+            <span>{permissionOperation(permission)}</span>
+          ) : (
+            <StatusBadge status={permission.status} />
+          )}
+        </div>
+        {permission.path || permission.command ? (
+          <p className="chat-approval-target">{permission.path || permission.command}</p>
+        ) : null}
+        {pending && permission.reason ? (
+          <p className="chat-approval-reason">{permission.reason}</p>
+        ) : null}
+      </div>
+      <Button type="button" size="sm" variant={pending ? 'default' : 'outline'} onClick={onOpen}>
+        {pending ? '查看并审批' : '查看审批记录'}
+      </Button>
+    </section>
+  );
+}
+
 export function Conversation({
   snapshot,
   onRetry,
@@ -233,15 +271,26 @@ export function Conversation({
   const thread = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const [unseen, setUnseen] = useState(false);
+  const [permissionId, setPermissionId] = useState<string>();
+  const permission = snapshot.permissions.find((item) => item.id === permissionId);
+  const hasPendingApproval = snapshot.permissions.some((item) => item.status === 'pending');
   const indexes = useMemo(
     () => ({
       runs: new Map(snapshot.runs.map((run) => [run.id, run])),
       tools: groupByRun(snapshot.tools),
       events: groupByRun(snapshot.events),
       artifacts: groupByRun(snapshot.artifacts),
+      permissions: groupByRun(snapshot.permissions),
       attachments: new Map(snapshot.attachments.map((attachment) => [attachment.id, attachment])),
     }),
-    [snapshot.runs, snapshot.tools, snapshot.events, snapshot.artifacts, snapshot.attachments],
+    [
+      snapshot.runs,
+      snapshot.tools,
+      snapshot.events,
+      snapshot.artifacts,
+      snapshot.attachments,
+      snapshot.permissions,
+    ],
   );
   const messages = useMemo(() => {
     const replies = new Set(
@@ -272,6 +321,15 @@ export function Conversation({
     for (const run of missing.values()) result.push(placeholder(run));
     return result;
   }, [snapshot.messages, snapshot.runs]);
+  const approvalOwners = useMemo(
+    () =>
+      new Map(
+        messages
+          .filter((message) => message.role === 'assistant')
+          .map((message) => [message.runId, message.id]),
+      ),
+    [messages],
+  );
   const retryDisabled =
     submitting || snapshot.session.status === 'archived' || snapshot.runs.some(isActive);
 
@@ -282,7 +340,7 @@ export function Conversation({
     if (!element) return;
     if (nearBottom.current) element.scrollTop = element.scrollHeight;
     else setUnseen(true);
-  }, [snapshot.messages, snapshot.runs, snapshot.tools, snapshot.artifacts]);
+  }, [snapshot.messages, snapshot.runs, snapshot.tools, snapshot.artifacts, snapshot.permissions]);
   useEffect(() => {
     if (!thread.current || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
@@ -338,6 +396,17 @@ export function Conversation({
                   {assistant && run && isActive(run) ? (
                     <RunProgress run={run} tools={tools} events={events} hasText={hasText} />
                   ) : null}
+                  {assistant && approvalOwners.get(message.runId) === message.id
+                    ? indexes.permissions
+                        .get(message.runId)
+                        ?.map((item) => (
+                          <ChatApproval
+                            key={item.id}
+                            permission={item}
+                            onOpen={() => setPermissionId(item.id)}
+                          />
+                        ))
+                    : null}
                   {assistant ? (
                     hasText ? (
                       <Markdown text={message.text} />
@@ -384,8 +453,19 @@ export function Conversation({
             setUnseen(false);
           }}
         >
-          查看新消息 ↓
+          {hasPendingApproval ? '有待审批操作 ↓' : '查看新消息 ↓'}
         </Button>
+      ) : null}
+      {permission ? (
+        <Suspense fallback={<p role="status">正在打开审批…</p>}>
+          <PermissionDialog
+            key={permission.id}
+            permission={permission}
+            onOpenChange={(open) => {
+              if (!open) setPermissionId(undefined);
+            }}
+          />
+        </Suspense>
       ) : null}
     </div>
   );
