@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Markdown } from '@atelier/markdown';
+import '@atelier/markdown/style.css';
+import { markdownBody } from './markdown-frontmatter';
 import {
   PluginPreviewRenderer,
   createPreviewPluginRegistry,
@@ -49,6 +52,42 @@ function toFileInfo(file: PreviewFile): FileInfo {
   };
 }
 
+function FrontmatterPreview({ file, body }: { file: FileInfo; body: string }) {
+  const [source, setSource] = useState(false);
+
+  return (
+    <div className="fv-markdown">
+      <div className="fv-view-mode-bar">
+        <div className="fv-view-mode-group" role="group" aria-label="文件视图">
+          <button
+            type="button"
+            className={`fv-view-mode-btn${source ? '' : ' fv-view-mode-btn--active'}`}
+            aria-pressed={!source}
+            onClick={() => setSource(false)}
+          >
+            预览
+          </button>
+          <button
+            type="button"
+            className={`fv-view-mode-btn${source ? ' fv-view-mode-btn--active' : ''}`}
+            aria-pressed={source}
+            onClick={() => setSource(true)}
+          >
+            源码
+          </button>
+        </div>
+      </div>
+      {source ? (
+        <PluginPreviewRenderer file={{ ...file, fileType: 'code' }} registry={registry} />
+      ) : (
+        <div className="fv-markdown__preview">
+          {body.trim() ? <Markdown text={body} className="fv-prose" /> : '（无正文）'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FilePreview(file: PreviewFile) {
   const text = 'text' in file ? file.text : undefined;
   const url = 'url' in file ? file.url : undefined;
@@ -59,6 +98,11 @@ export default function FilePreview(file: PreviewFile) {
       toFileInfo(url === undefined ? { name, text: text ?? '' } : { name, url, size: size ?? 0 }),
     [name, size, text, url],
   );
+  const body = useMemo(
+    () => (info.fileType === 'markdown' && text !== undefined ? markdownBody(text) : undefined),
+    [info.fileType, text],
+  );
   if (text === '') return <p className="p-4">（空文件）</p>;
+  if (body !== undefined) return <FrontmatterPreview key={info.id} file={info} body={body} />;
   return <PluginPreviewRenderer key={info.id} file={info} registry={registry} />;
 }
