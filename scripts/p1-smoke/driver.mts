@@ -37,6 +37,7 @@ import {
   automaticPrompt,
   automaticReceipt,
   automaticReceiptName,
+  automaticToolCount,
   bluePixels,
   browserEditAnswer,
   browserEditPrompt,
@@ -1015,7 +1016,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.equal(writePermission?.before, null);
     assert.equal(writePermission?.after, automaticReceipt);
     const tools = array(state.tools).map((value) => record(value));
-    assert.equal(tools.length, 6);
+    assert.equal(tools.length, automaticToolCount);
+    assert.equal(record(accepted.config).limitExecution, false);
     assert.ok(tools.every((tool) => tool.runId === runId && tool.status === 'succeeded'));
     for (const permission of permissions)
       assert.ok(
@@ -1037,7 +1039,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     await native
       .getByText('Browser action completed', { exact: true })
       .waitFor({ state: 'visible' });
-    assert.equal(fixture.evidence.automatic.requests, 7);
+    assert.equal(fixture.evidence.automatic.requests, automaticToolCount + 1);
     assert.equal(fixture.evidence.automatic.clickResultReturned, true);
     assert.equal(fixture.evidence.automatic.writeResultReturned, true);
     assert.equal(fixture.evidence.automatic.mcpResultReturned, true);
@@ -1381,7 +1383,7 @@ async function reopen(
   );
   assert.equal(
     fixture.evidence.automatic.requests,
-    7,
+    automaticToolCount + 1,
     'Offline reopen must make no automatic model request',
   );
   assert.equal(

@@ -191,14 +191,24 @@ export class Store {
   }
   config(): AppConfig {
     const row = this.db.prepare("SELECT value FROM settings WHERE key='config'").get();
-    return row
-      ? JSON.parse(row.value as string)
-      : {
-          gateway: process.env.ATELIER_GATEWAY || 'http://127.0.0.1:3001',
-          model: process.env.ATELIER_MODEL || 'gpt-6.1-sol',
-          maxTurns: 16,
-          timeoutMs: 300000,
-        };
+    const maxTurns = 16;
+    const timeoutMs = 300_000;
+    if (row) {
+      const saved = JSON.parse(row.value as string) as AppConfig;
+      return {
+        ...saved,
+        // Older settings always saved the numeric defaults, even without user edits.
+        limitExecution:
+          saved.limitExecution ?? (saved.maxTurns !== maxTurns || saved.timeoutMs !== timeoutMs),
+      };
+    }
+    return {
+      gateway: process.env.ATELIER_GATEWAY || 'http://127.0.0.1:3001',
+      model: process.env.ATELIER_MODEL || 'gpt-6.1-sol',
+      limitExecution: false,
+      maxTurns,
+      timeoutMs,
+    };
   }
   setConfig(config: AppConfig): void {
     this.db

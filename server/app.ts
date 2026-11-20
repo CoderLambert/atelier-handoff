@@ -71,6 +71,7 @@ const draftSchema = z.object({
 const configSchema = z.object({
   gateway: z.string().url().optional(),
   model: z.string().min(1).max(200).optional(),
+  limitExecution: z.boolean().optional(),
   maxTurns: z.number().int().min(1).max(100).optional(),
   timeoutMs: z.number().int().min(10000).max(1800000).optional(),
 });
@@ -583,7 +584,12 @@ export async function createApp(options: {
               throw new AppError('INVALID_GATEWAY', '首版只连接不含凭据的本机 Shunt 地址。');
             changes.gateway = changes.gateway.replace(/\/$/, '');
           }
-          store.setConfig({ ...store.config(), ...changes });
+          const setsLimits = changes.maxTurns !== undefined || changes.timeoutMs !== undefined;
+          store.setConfig({
+            ...store.config(),
+            ...(setsLimits ? { limitExecution: true } : {}),
+            ...changes,
+          });
         } else if (method !== 'GET') throw new AppError('NOT_FOUND', '接口不存在。', 404);
         return json(res, await configInfo());
       }

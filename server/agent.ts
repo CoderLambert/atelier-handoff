@@ -1266,8 +1266,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           canUseTool: async () => ({ behavior: 'deny', message: '请使用工作台提供的受控工具。' }),
           persistSession: true,
           includePartialMessages: true,
-          maxTurns: run.config.maxTurns,
-          maxBudgetUsd: 1,
+          ...(run.config.limitExecution ? { maxTurns: run.config.maxTurns } : {}),
           ...(resumeExisting ? { resume: session.sdkSessionId! } : { sessionId: randomUUID() }),
           env,
           abortController: live.cancellation,
@@ -1361,7 +1360,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           },
         },
       });
-      timer = setTimeout(() => this.cancel(run.id, 'timeout'), run.config.timeoutMs);
+      if (run.config.limitExecution)
+        timer = setTimeout(() => this.cancel(run.id, 'timeout'), run.config.timeoutMs);
       const modeInstruction =
         run.mode === 'readonly'
           ? '只读；不允许项目写入或执行命令。'

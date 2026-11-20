@@ -35,6 +35,7 @@ export const browserManualValue = 'installed-browser-manual-handoff';
 export const automaticPrompt =
   'Complete the isolated automatic fixture: click the native page, write its local receipt, and call the local approval MCP.';
 export const automaticAnswer = 'INSTALLED_AUTOMATIC_TOOLS_COMPLETED';
+export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
 export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
 export const automaticMcpName = 'installed-auto-fixture';
@@ -168,7 +169,7 @@ function automaticMessage(
     assert.ok(tools.some((tool) => tool.name === `mcp__atelier__${name}`));
   const url = `${siteUrl}/browser-automatic`;
   const step = ++evidence.requests;
-  assert.ok(step <= 7, 'Expected six automatic tools followed by one final reply');
+  assert.ok(step <= automaticToolCount + 1, 'Expected a long task followed by one final reply');
   const invoke = (id: string, name: string, input: Record<string, unknown>) => {
     evidence.calls.push({ name, input });
     streamMessage(res, { id, name, input });
@@ -204,9 +205,16 @@ function automaticMessage(
     evidence.writeResultReturned = true;
     return invoke(automaticToolIds.mcp, string(external[0]?.name), { arguments: {} });
   }
-  assert.ok(toolResultText(messages, automaticToolIds.mcp).includes(automaticMcpResult));
-  assert.equal(evidence.mcpCalls, 1, 'Exactly one call must execute on the local MCP server');
-  evidence.mcpResultReturned = true;
+  if (step === 7) {
+    assert.ok(toolResultText(messages, automaticToolIds.mcp).includes(automaticMcpResult));
+    assert.equal(evidence.mcpCalls, 1, 'Exactly one call must execute on the local MCP server');
+    evidence.mcpResultReturned = true;
+  } else {
+    const { snapshot } = snapshotButton(messages, `toolu_installed_long_${step - 1}`, url);
+    assert.ok(JSON.stringify(snapshot).includes('Browser action completed'));
+  }
+  if (step <= automaticToolCount)
+    return invoke(`toolu_installed_long_${step}`, 'mcp__atelier__browser_snapshot', {});
   streamMessage(res, undefined, automaticAnswer);
 }
 

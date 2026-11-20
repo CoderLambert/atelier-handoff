@@ -1,11 +1,11 @@
 /**
  * @file 提供模型与网关设置及桌面诊断导出界面。
- * @implementation 查询和保存应用配置；桌面桥可用时调用原生诊断导出并显示结果。
- * @updated 2026-11-20T03:34:05+08:00
+ * @implementation 通过设置查询 hooks 读取和保存配置，按开关展示执行限制并保留数值；桌面桥可用时导出诊断。
+ * @updated 2026-11-20T15:07:56+08:00
  */
 import { useRef, useState, type FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/client';
+import { useAppConfig } from '@/use-query/settings/use-app-config';
+import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
 import '@/desktop-files';
 import type { ConfigInfo } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { AppConfig } from '@shared/types';
 import { ErrorNotice, Icon, Loading, errorMessage, fieldClass } from './shared';
 
 export default function SettingsDialog({
@@ -25,13 +24,7 @@ export default function SettingsDialog({
 }: {
   onOpenChange: (open: boolean) => void;
 }) {
-  const settings = useQuery<ConfigInfo>({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => api<ConfigInfo>('/api/config', { signal }),
-    refetchOnWindowFocus: false,
-    retry: false,
-    gcTime: 0,
-  });
+  const settings = useAppConfig();
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl">
@@ -103,21 +96,13 @@ function SettingsForm({
 }) {
   const [gateway, setGateway] = useState(initial.config.gateway);
   const [model, setModel] = useState(initial.config.model);
+  const [limitExecution, setLimitExecution] = useState(initial.config.limitExecution ?? false);
   const [maxTurns, setMaxTurns] = useState(String(initial.config.maxTurns));
   const [timeoutMs, setTimeoutMs] = useState(String(initial.config.timeoutMs));
   const [validation, setValidation] = useState<string>();
   const [saved, setSaved] = useState<ConfigInfo>();
   const lock = useRef(false);
-  const client = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: (config: AppConfig) =>
-      api<ConfigInfo>('/api/config', { method: 'PATCH', body: config }),
-    onSuccess: (data) => {
-      setSaved(data);
-      client.setQueryData(['config'], data);
-      void client.invalidateQueries({ queryKey: ['bootstrap'] });
-    },
-  });
+  const mutation = useUpdateAppConfig();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (lock.current) return;
@@ -149,22 +134,26 @@ function SettingsForm({
       setValidation('模型名称须为 1–200 个字符。');
       return;
     }
-    if (!Number.isInteger(turns) || turns < 1 || turns > 100) {
+    const validTurns = Number.isInteger(turns) && turns >= 1 && turns <= 100;
+    const validTimeout = Number.isInteger(timeout) && timeout >= 10000 && timeout <= 1800000;
+    if (limitExecution && !validTurns) {
       setValidation('最大轮数须为 1–100 的整数。');
       return;
     }
-    if (!Number.isInteger(timeout) || timeout < 10000 || timeout > 1800000) {
+    if (limitExecution && !validTimeout) {
       setValidation('超时须为 10,000–1,800,000 毫秒的整数。');
       return;
     }
     lock.current = true;
     try {
-      await mutation.mutateAsync({
+      const data = await mutation.mutateAsync({
         gateway: gateway.trim().replace(/\/$/, ''),
         model: model.trim(),
-        maxTurns: turns,
-        timeoutMs: timeout,
+        limitExecution,
+        maxTurns: validTurns ? turns : initial.config.maxTurns,
+        timeoutMs: validTimeout ? timeout : initial.config.timeoutMs,
       });
+      setSaved(data);
     } catch {
       /* The mutation exposes the server error below. */
     } finally {
@@ -223,44 +212,64 @@ function SettingsForm({
           spellCheck={false}
         />
       </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-xs font-medium">
-          最大轮数
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-xs font-medium">
           <input
-            required
-            type="number"
-            min={1}
-            max={100}
-            step={1}
+            type="checkbox"
+            checked={limitExecution}
             disabled={mutation.isPending}
-            className={fieldClass}
-            value={maxTurns}
+            aria-describedby="execution-limit-help"
             onChange={(event) => {
               change();
-              setMaxTurns(event.target.value);
+              setLimitExecution(event.target.checked);
             }}
           />
-          <span className="text-[11px] font-normal text-muted-foreground">1–100 轮</span>
+          限制任务执行轮数和时长
         </label>
-        <label className="grid gap-2 text-xs font-medium">
-          超时（毫秒）
-          <input
-            required
-            type="number"
-            min={10000}
-            max={1800000}
-            step={1}
-            disabled={mutation.isPending}
-            className={fieldClass}
-            value={timeoutMs}
-            onChange={(event) => {
-              change();
-              setTimeoutMs(event.target.value);
-            }}
-          />
-          <span className="text-[11px] font-normal text-muted-foreground">10 秒至 30 分钟</span>
-        </label>
+        <p id="execution-limit-help" className="text-[11px] leading-6 text-muted-foreground">
+          默认持续执行，直到任务完成或手动停止。
+        </p>
       </div>
+      {limitExecution ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-xs font-medium">
+            最大轮数
+            <input
+              required
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              disabled={mutation.isPending}
+              className={fieldClass}
+              value={maxTurns}
+              onChange={(event) => {
+                change();
+                setMaxTurns(event.target.value);
+              }}
+            />
+            <span className="text-[11px] font-normal text-muted-foreground">1–100 轮</span>
+          </label>
+          <label className="grid gap-2 text-xs font-medium">
+            超时（毫秒）
+            <input
+              required
+              type="number"
+              min={10000}
+              max={1800000}
+              step={1}
+              disabled={mutation.isPending}
+              className={fieldClass}
+              value={timeoutMs}
+              onChange={(event) => {
+                change();
+                setTimeoutMs(event.target.value);
+              }}
+            />
+            <span className="text-[11px] font-normal text-muted-foreground">10 秒至 30 分钟</span>
+          </label>
+        </div>
+      ) : null}
       <p className="text-[11px] leading-6 text-muted-foreground">
         命令执行：
         {(saved ?? initial).capabilities.commands ? '可用，仍需逐次审批' : '当前环境不可用'}

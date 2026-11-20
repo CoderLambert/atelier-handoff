@@ -57,6 +57,28 @@ function runData(sessionId = 'session', projectId = 'project'): Run {
   };
 }
 
+test('long tasks are the default and legacy custom limits are preserved', async () =>
+  fixture(async (base) => {
+    const store = new Store(join(base, 'data'));
+    try {
+      const { limitExecution, ...legacy } = store.config();
+      assert.equal(limitExecution, false);
+      assert.equal(legacy.maxTurns, 16);
+      assert.equal(legacy.timeoutMs, 300_000);
+      store.setConfig(legacy);
+      assert.equal(store.config().limitExecution, false);
+      store.setConfig({ ...legacy, maxTurns: 40 });
+      assert.equal(store.config().limitExecution, true);
+      store.setConfig({ ...store.config(), limitExecution: false });
+      assert.equal(store.config().limitExecution, false);
+      assert.equal(store.config().maxTurns, 40);
+      store.setConfig({ ...legacy, limitExecution: true });
+      assert.equal(store.config().limitExecution, true);
+    } finally {
+      store.close();
+    }
+  }));
+
 test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads, immutable artifacts and history', async () =>
   fixture(async (base, project) => {
     let starts = 0;

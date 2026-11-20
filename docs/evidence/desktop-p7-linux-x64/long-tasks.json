@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archiveSha256": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "95c806de0fe25d9eef179430d18865203611b4a48a9d5b23d89014f8796ee3fa",
+    "atelier-0.2.0-linux-x64.tar.zst": "d25cea52bbd9bda5759889b7d267d85e5b32cb913bba579ebe0c61793aefebbd"
+  },
+  "regression": {
+    "checkAndProductionBuild": "passed",
+    "runtimeTestsPassed": 106,
+    "frontendTestsPassed": 35,
+    "legacyCustomLimitsPreserved": true
+  },
+  "installedSdk": {
+    "environment": "Linux x64, isolated Xvfb, real bundled SDK with loopback model transport",
+    "executionLimitsEnabled": false,
+    "runStatus": "completed",
+    "successfulToolCalls": 17,
+    "modelRequestsIncludingFinalResponse": 18,
+    "finalResponseVisible": true,
+    "finalResponseMarker": "INSTALLED_AUTOMATIC_TOOLS_COMPLETED",
+    "offlineReopen": true,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 106,
+    "runtimeLockReleasedBeforeLaunch": true,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "projectsPreserved": 1,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true,
+    "newWaylandWindowMapped": true
+  }
+}

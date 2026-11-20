@@ -73,13 +73,6 @@
     "api:8656db5451e30e5a",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/inspector/settings-dialog.tsx": [
-    "api:2e1fa1dfd2d98a6b",
-    "api:70fa71195694c24b",
-    "useMutation:468bf6afc64549e3",
-    "useQuery:01df7a584cbf7563",
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
   "features/inspector/shared.tsx": ["api:47592d2f13a15e5f", "useQuery:46291be0b4468207"],
   "features/inspector/tool-output-dialog.tsx": ["useResource:b99057a06073ad6d"]
 }

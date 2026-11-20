@@ -97,8 +97,10 @@ export function buildRunDiagnostics(
       endedAt: run.endedAt,
       model: label(run.config?.model),
       gateway,
-      maxTurns: run.config?.maxTurns,
-      timeoutMs: run.config?.timeoutMs,
+      limitExecution: run.config?.limitExecution,
+      ...(run.config?.limitExecution !== false
+        ? { maxTurns: run.config?.maxTurns, timeoutMs: run.config?.timeoutMs }
+        : {}),
     },
     usage: usage && {
       inputTokens: usage.inputTokens,

@@ -322,6 +322,7 @@ export interface RunEvent {
 export interface AppConfig {
   gateway: string;
   model: string;
+  limitExecution?: boolean;
   maxTurns: number;
   timeoutMs: number;
 }
