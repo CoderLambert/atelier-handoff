@@ -1,13 +1,14 @@
 /**
  * @file 组合会话消息和任务输入界面。
- * @implementation 将会话快照、持久草稿、模型与推理深度选择、临时搜索上限及运行操作传给消息区和输入区。
- * @updated 2026-11-20T17:14:57+08:00
+ * @implementation 组合消息区、按会话隔离的待处理队列和输入区，传递持久草稿、运行偏好、单次搜索上限与语义动作。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 import type { Draft, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import type { ChatLinkOpener } from './chat-web-link-dialog';
 import { Composer, type DraftChange } from './composer';
 import { Conversation } from './conversation';
+import { MessageQueue } from './message-queue';
 import type { ComposerMode } from './run-mode';
 import './chat.css';
 
@@ -41,6 +42,15 @@ export default function Chat(props: ChatProps) {
         onOpenLink={onOpenLink}
         submitting={submitting}
       />
+      {snapshot.messageQueue ? (
+        <MessageQueue
+          key={`queue:${snapshot.session.id}`}
+          sessionId={snapshot.session.id}
+          queue={snapshot.messageQueue}
+          archived={snapshot.session.status === 'archived'}
+          available={snapshot.project.available}
+        />
+      ) : null}
       <Composer
         key={`composer:${snapshot.session.id}`}
         snapshot={snapshot}

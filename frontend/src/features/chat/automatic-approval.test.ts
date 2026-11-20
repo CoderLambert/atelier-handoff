@@ -1,11 +1,11 @@
 /**
  * @file 验证会话自动审批模式与任务发送行为。
- * @implementation 使用存储和发送替身检查模式恢复、单次搜索上限、幂等、草稿保护、会话隔离及只读限制。
- * @updated 2026-11-20T15:58:31+08:00
+ * @implementation 使用存储和发送替身检查直接运行或入队后的模式、Skill 与单次费用处理，以及串行保存、迟到编辑保护和会话隔离。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
-import type { Draft, Run } from '@shared/types';
+import type { Draft, Run, SendSessionMessageResult } from '@shared/types';
 import { actions, store } from '@/app/store';
 import {
   deleteDraft,
@@ -278,6 +278,119 @@ test('invalid cap rejects before a send, empty is optional, and run mode preserv
     assert.equal(runModeLabel({ ...run, approvalMode: undefined, mode: 'readonly' }), '只读');
   } finally {
     await deleteDraft(id, async () => {});
+  }
+});
+
+for (const responseKind of ['run', 'queuedMessage'] as const) {
+  test(`${responseKind} acceptance retains skills and sticky preferences but consumes the search allowance once`, async (t) => {
+    memoryStorage(t);
+    const id = `queue-retain-${responseKind}`;
+    const draft: Draft = {
+      ...emptyDraft('edit'),
+      text: 'first task',
+      approvalMode: 'automatic',
+      model: 'selected-model',
+      effort: 'xhigh',
+      contextPaths: ['src/task.ts'],
+      attachmentIds: ['attachment'],
+      extensionSelections: [
+        { id: 'command', version: 1 },
+        { id: 'skill', version: 2 },
+      ],
+    };
+    const extensions: NonNullable<Run['extensions']> = [
+      { id: 'command', version: 1, kind: 'command', name: 'Command' },
+      { id: 'skill', version: 2, kind: 'skill', name: 'Skill' },
+      { id: 'mcp', version: 3, kind: 'mcp', name: 'MCP' },
+    ];
+    const accepted: SendSessionMessageResult =
+      responseKind === 'run'
+        ? { run: { ...result(id).run, extensions } }
+        : {
+            queuedMessage: {
+              id: 'queued',
+              text: draft.text,
+              createdAt: 'now',
+              error: null,
+              extensions,
+            },
+          };
+    const sent: SessionMessageBody[] = [];
+    updateDraft(id, draft);
+    store.dispatch(actions.setSearchChargeLimit({ id, value: '18' }));
+    const send = async ({ body }: { body: SessionMessageBody }) => {
+      sent.push(body);
+      return accepted;
+    };
+    try {
+      await submitDraft(id, draft, send);
+      assert.deepEqual(readDraft(id), {
+        ...emptyDraft('edit'),
+        approvalMode: 'automatic',
+        model: 'selected-model',
+        effort: 'xhigh',
+        extensionSelections: [{ id: 'skill', version: 2 }],
+      });
+      updateDraft(id, (previous) => ({ ...previous, text: 'next task' }));
+      await submitDraft(id, draft, send);
+      assert.equal(sent[0]?.maxSearchChargeFen, 18);
+      assert.equal(sent[1]?.maxSearchChargeFen, 0);
+      assert.notEqual(sent[0]?.idempotencyKey, sent[1]?.idempotencyKey);
+      assert.equal(sent[1]?.model, 'selected-model');
+      assert.equal(sent[1]?.effort, 'xhigh');
+    } finally {
+      await deleteDraft(id, async () => {});
+    }
+  });
+}
+
+test('queued response waits for SaveLane and preserves newer edits and another session allowance', async (t) => {
+  const persisted = memoryStorage(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const id = 'queue-save-lane';
+  const other = 'queue-other';
+  const draft = { ...emptyDraft('edit'), text: 'queued draft', approvalMode: 'automatic' as const };
+  let finishSave: () => void = () => {};
+  let saveStarted: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    saveStarted = resolve;
+  });
+  const saving = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  t.mock.method(globalThis, 'fetch', async (input: unknown, init?: RequestInit) => {
+    if (String(input) === '/api/bootstrap') return Response.json({ csrfToken: 'fixture' });
+    assert.equal(init?.method, 'PATCH');
+    saveStarted();
+    await saving;
+    return Response.json({});
+  });
+  updateDraft(id, draft);
+  t.mock.timers.tick(500);
+  await ready;
+  automatic(other, '7');
+  store.dispatch(actions.setSearchChargeLimit({ id, value: '8' }));
+  let sent = 0;
+  try {
+    const pending = submitDraft(id, draft, async () => {
+      sent++;
+      return { queuedMessage: { id: 'queued', text: draft.text, createdAt: 'now', error: null } };
+    });
+    await Promise.resolve();
+    assert.equal(sent, 0);
+    updateDraft(id, (previous) => ({ ...previous, text: 'new draft while sending' }));
+    finishSave();
+    await pending;
+    assert.equal(sent, 1);
+    assert.equal(readDraft(id).text, 'new draft while sending');
+    assert.match(persisted.get(`atelier-draft:${id}`) ?? '', /new draft while sending/);
+    assert.equal(readDraft(id).approvalMode, 'automatic');
+    assert.equal(store.getState().workspace.searchChargeLimits[id], undefined);
+    assert.equal(store.getState().workspace.searchChargeLimits[other], '7');
+  } finally {
+    finishSave();
+    await deleteDraft(id, async () => {});
+    await deleteDraft(other, async () => {});
   }
 });
 

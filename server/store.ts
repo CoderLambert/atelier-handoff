@@ -36,7 +36,7 @@ export class Store {
     this.db = new DatabaseSync(join(directory, 'atelier.sqlite'));
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
     const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 3) throw new Error('Database schema is newer than this application.');
+    if (version > 4) throw new Error('Database schema is newer than this application.');
     if (version === 0)
       this.transaction(() => {
         for (const table of tables)
@@ -79,6 +79,24 @@ export class Store {
       END;
       PRAGMA user_version=3;
     `),
+      );
+    if (version < 4)
+      this.transaction(() =>
+        this.db.exec(`
+        CREATE TABLE pending_messages (
+          seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT NOT NULL UNIQUE,
+          session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+          request_key TEXT NOT NULL UNIQUE,
+          body_hash TEXT NOT NULL,
+          data TEXT NOT NULL CHECK(json_valid(data)),
+          withdrawn INTEGER NOT NULL DEFAULT 0,
+          paused INTEGER NOT NULL DEFAULT 0,
+          error TEXT
+        ) STRICT;
+        CREATE INDEX pending_messages_session ON pending_messages(session_id, seq) WHERE withdrawn=0;
+        PRAGMA user_version=4;
+      `),
       );
     this.events.setMaxListeners(100);
   }

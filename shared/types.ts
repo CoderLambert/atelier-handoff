@@ -245,6 +245,20 @@ export interface Run {
   extensions?: UsedExtension[];
   agent?: AgentRunInfo;
 }
+export interface QueuedSessionMessage {
+  id: string;
+  text: string;
+  createdAt: string;
+  error: string | null;
+  extensions?: Run['extensions'];
+}
+export interface SessionMessageQueue {
+  items: QueuedSessionMessage[];
+  paused: boolean;
+}
+export type SendSessionMessageResult =
+  { run: Run; queuedMessage?: never } | { queuedMessage: QueuedSessionMessage; run?: never };
+
 export interface Message {
   id: string;
   sessionId: string;

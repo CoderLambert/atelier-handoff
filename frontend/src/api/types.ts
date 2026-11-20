@@ -1,7 +1,7 @@
 /**
  * @file 定义前端工作台 API 的响应类型。
- * @implementation 组合共享领域记录，描述启动信息、会话快照及内置网关状态。
- * @updated 2026-11-20T17:28:00+08:00
+ * @implementation 组合共享领域记录，描述启动信息、含兼容性可选消息队列的会话快照及内置网关状态。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 import type {
   AppConfig,
@@ -14,6 +14,7 @@ import type {
   Run,
   RunEvent,
   Session,
+  SessionMessageQueue,
   ToolCall,
 } from '@shared/types';
 
@@ -42,6 +43,7 @@ export interface Bootstrap extends ConfigInfo {
 export interface Snapshot {
   agent?: AgentSessionInfo;
   session: Session;
+  messageQueue?: SessionMessageQueue;
   project: Project;
   messages: Message[];
   runs: Run[];

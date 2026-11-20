@@ -106,7 +106,7 @@ export interface Runner {
     skills?: RunSkill[],
     validateAgent?: () => void,
     images?: AttachmentImages,
-  ): void;
+  ): void | Promise<void>;
   stop(id: string): void;
   shutdown(): Promise<void>;
 }
@@ -126,12 +126,13 @@ export class AgentRunner implements Runner {
     skills: RunSkill[] = [],
     validateAgent?: () => void,
     images?: AttachmentImages,
-  ): void {
+  ): Promise<void> {
     const live: LiveRun = { cancellation: new AbortController(), done: Promise.resolve() };
     this.active.set(run.id, live);
     live.done = this.execute(run, input, live, mcp, skills, validateAgent, images).finally(() =>
       this.active.delete(run.id),
     );
+    return live.done;
   }
   private cancel(id: string, reason: NonNullable<LiveRun['reason']>): void {
     const live = this.active.get(id);

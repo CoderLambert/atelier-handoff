@@ -1,7 +1,7 @@
 /**
  * @file 提供聊天任务输入、上下文与附件编辑界面。
- * @implementation 根据草稿与智能体派生会话模式，传递模型和推理深度选择，校验搜索上限并编排输入、附件和发送操作。
- * @updated 2026-11-20T17:14:57+08:00
+ * @implementation 保留输入、IME 和附件提交路径，允许活跃运行中加入队列，结合队列状态呈现发送和停止当前轮动作。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import type { Draft, ReasoningEffort } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import { ExtensionPicker } from '@/features/extensions/picker';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
@@ -76,6 +77,9 @@ export function Composer({
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
   const run = snapshot.runs.find(isActive);
+  const hasQueuedMessages = Boolean(snapshot.messageQueue?.items.length);
+  const queueing = Boolean(run || hasQueuedMessages || snapshot.messageQueue?.paused);
+  const sendLabel = queueing ? '加入队列' : '发送任务';
   const {
     uploads,
     removing,
@@ -98,7 +102,6 @@ export function Composer({
   const canSend =
     !archived &&
     snapshot.project.available &&
-    !run &&
     !submitting &&
     !busy &&
     !agent?.issues.length &&
@@ -375,7 +378,7 @@ export function Composer({
               disabled={run.status === 'stopping'}
               onClick={() => onStop(run.id)}
             >
-              {run.status === 'stopping' ? '正在停止…' : '停止'}
+              {run.status === 'stopping' ? '正在停止…' : hasQueuedMessages ? '停止当前轮' : '停止'}
             </Button>
           ) : null}
           <button
@@ -402,13 +405,20 @@ export function Composer({
             onModelChange={onModelChange}
             onEffortChange={onEffortChange}
           />
-          <button type="submit" className="send-button" disabled={!canSend} aria-label="发送任务">
-            <ArrowUp size={20} aria-hidden="true" />
-          </button>
+          <Button
+            type="submit"
+            size={queueing ? 'sm' : 'icon'}
+            className={cn(!queueing && 'send-button')}
+            disabled={!canSend}
+            aria-label={sendLabel}
+            title={sendLabel}
+          >
+            {queueing ? '加入队列' : <ArrowUp size={20} aria-hidden="true" />}
+          </Button>
         </div>
       </div>
       <div className="composer-footer">
-        <span id="input-help">Enter 发送 · Shift + Enter 换行</span>
+        <span id="input-help">Enter {queueing ? '加入队列' : '发送'} · Shift + Enter 换行</span>
         <span>
           {mode === 'automatic'
             ? '全工具自动化 · 随会话保存'

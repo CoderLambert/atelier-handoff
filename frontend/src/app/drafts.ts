@@ -1,7 +1,7 @@
 /**
  * @file 管理会话草稿、运行偏好保存与任务发送。
- * @implementation 协调本地恢复、串行写入和幂等发送，保留审批模式、模型与有效推理深度，并在发送确认后清除临时搜索上限。
- * @updated 2026-11-20T17:32:12+08:00
+ * @implementation 沿用串行保存与幂等发送，在新运行或排队消息确认后保留模式、模型、深度和有效 Skill，并消费一次临时搜索上限。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
@@ -157,7 +157,7 @@ export async function submitDraft(
   clearTimeout(save.timer);
   try {
     await save.write;
-    const { run } = await send({
+    const result = await send({
       sessionId: id,
       body: { ...payload, idempotencyKey: attempt.key },
     });
@@ -169,7 +169,9 @@ export async function submitDraft(
         approvalMode,
         model: draft.model,
         effort: draft.effort,
-        extensionSelections: retainedSkillSelections(run.extensions),
+        extensionSelections: retainedSkillSelections(
+          (result.run ?? result.queuedMessage).extensions,
+        ),
       });
     save.attempt = undefined;
   } catch (error) {

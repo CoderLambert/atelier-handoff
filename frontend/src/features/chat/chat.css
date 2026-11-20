@@ -1,7 +1,7 @@
 /**
  * @file 定义聊天会话、输入区和附件交互的样式。
- * @implementation 为消息列表、输入框、文件拖入状态、附件控件和预览弹窗提供布局与交互样式。
- * @updated 2026-11-20T03:34:05+08:00
+ * @implementation 为消息、输入框、紧凑可滚动消息队列、附件和预览提供布局样式；队列支持全文展开并复用工作台颜色 token。
+ * @updated 2026-11-20T23:09:03+08:00
  */
 .chat-conversation.conversation-content {
   position: relative;
@@ -44,6 +44,69 @@
   min-width: 0;
   padding: 9px 6px max(10px, env(safe-area-inset-bottom)) 0;
   border-top: 1px solid var(--border-soft);
+}
+
+.chat-message-queue {
+  flex: none;
+  min-width: 0;
+  padding: 8px 6px 8px 0;
+  font-size: var(--text-xs);
+}
+
+.chat-message-queue-header,
+.chat-message-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-message-queue-header {
+  justify-content: space-between;
+  min-height: 28px;
+  color: var(--muted);
+}
+
+.chat-message-queue-items {
+  max-height: min(160px, 22dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.chat-message-queue-item + .chat-message-queue-item {
+  margin-top: 4px;
+}
+
+.chat-message-queue-position {
+  flex: none;
+  min-width: 1.5em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chat-message-queue-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-message-queue-copy summary {
+  display: flex;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.chat-message-queue-text,
+.chat-message-queue-error {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-message-queue-error {
+  color: var(--danger);
 }
 
 .chat-composer .context-row {

@@ -41,6 +41,8 @@
 
 - [x] 浏览器工具按操作设定时限，超时后释放占用，尽量保留当前页面。安装态验证聊天失败提示、同页恢复和任务继续执行。[超时恢复验收](../../../docs/evidence/desktop-p7-linux-x64/browser-timeout-recovery.json)
 
+- [x] 当前轮执行时可继续发送到会话队列。安装态验证 Enter 入队、撤回和依次执行，运行时验证重开后继续。[消息队列验收](../../../docs/evidence/desktop-p7-linux-x64/session-message-queue.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

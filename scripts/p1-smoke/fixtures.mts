@@ -25,6 +25,18 @@ export const answer = 'INSTALLED_SDK_LOOPBACK_COMPLETED';
 export const receiptName = 'installed-offline-receipt.md';
 export const receipt = '# Installed acceptance\nLoopback SDK fixture completed.\n';
 const toolUseId = 'toolu_installed_acceptance';
+export const queuePrompts = [
+  'Queue fixture first turn.',
+  'Queue fixture second turn.',
+  'Queue fixture third turn.',
+] as const;
+export const queueAnswers = [
+  'INSTALLED_QUEUE_FIRST',
+  'INSTALLED_QUEUE_SECOND',
+  'INSTALLED_QUEUE_THIRD',
+] as const;
+export const queueWithdrawn = 'Queue fixture withdrawn turn.';
+
 export const browserReadPrompt = 'Observe the installed native browser fixture in read-only mode.';
 export const browserEditPrompt =
   'Observe the browser again after handoff, approve one click, and save its PNG.';
@@ -399,6 +411,7 @@ export interface FixtureEvidence {
   toolResultReturned: boolean;
   pdfRequests: number;
   browserDownloadRequests: number;
+  queueRequests: string[];
   nativeBrowser: BrowserFixtureEvidence;
   automatic: AutomaticFixtureEvidence;
   errors: string[];
@@ -408,6 +421,7 @@ export interface Fixtures {
   evidence: FixtureEvidence;
   gatewayUrl: string;
   siteUrl: string;
+  releaseQueueFirst(): void;
   disconnectGateway(): Promise<void>;
   close(): Promise<void>;
 }
@@ -420,6 +434,7 @@ export async function fixtures(): Promise<Fixtures> {
     toolResultReturned: false,
     pdfRequests: 0,
     browserDownloadRequests: 0,
+    queueRequests: [],
     nativeBrowser: {
       readRequests: 0,
       editRequests: 0,
@@ -439,6 +454,7 @@ export async function fixtures(): Promise<Fixtures> {
     },
     errors: [],
   };
+  let queueFirst: ServerResponse | undefined;
   let siteUrl: string;
   const gateway = createServer((req, res) => {
     void (async () => {
@@ -480,6 +496,32 @@ export async function fixtures(): Promise<Fixtures> {
           record(value, 'message'),
         );
         const conversation = JSON.stringify(messages);
+        const latestUser = JSON.stringify(messages.findLast((item) => item.role === 'user') ?? {});
+        const currentTask = latestUser.split('用户本轮任务：').at(-1) ?? '';
+        assert.ok(!currentTask.includes(queueWithdrawn), 'Withdrawn input must not reach SDK');
+        const queueStage = queuePrompts.findIndex((text) => currentTask.includes(text));
+        const queueAnswer = queueAnswers[queueStage];
+        const queuePrompt = queuePrompts[queueStage];
+        if (queueAnswer && queuePrompt) {
+          assert.equal(
+            evidence.queueRequests.length,
+            queueStage,
+            'Queue requests must arrive in FIFO order',
+          );
+          if (queueStage > 0)
+            assert.ok(
+              conversation.includes(queueAnswers[queueStage - 1] ?? ''),
+              'Queued turn must have prior answer',
+            );
+          assert.ok(
+            queuePrompts.slice(queueStage + 1).every((prompt) => !conversation.includes(prompt)),
+            'Future messages stay out of current model history',
+          );
+          evidence.queueRequests.push(queuePrompt);
+          if (queueStage === 0) queueFirst = res;
+          else streamMessage(res, undefined, queueAnswer);
+          return;
+        }
         if (conversation.includes(automaticFollowupPrompt)) {
           assert.equal(
             request.model,
@@ -622,6 +664,13 @@ export async function fixtures(): Promise<Fixtures> {
       evidence,
       gatewayUrl: await listen(gateway),
       siteUrl,
+      releaseQueueFirst() {
+        assert.ok(
+          queueFirst && !queueFirst.writableEnded,
+          'Initial queue request is still pending',
+        );
+        streamMessage(queueFirst, undefined, queueAnswers[0]);
+      },
       async disconnectGateway() {
         await closeServer(gateway);
         evidence.healthMode = 'offline';

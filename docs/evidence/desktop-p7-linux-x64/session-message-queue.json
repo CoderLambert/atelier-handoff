@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "17138c1458dcc4fc1e226c84c9d1574ced10bba58591ef3d3ff1139a3dabd876",
+    "atelier-0.2.0-linux-x64.tar.zst": "4d25e40eb8c488872908d22fc44fb36dc9973acea7352416fe0e7727b1091f96",
+    "resourceInventorySha256": "d77af8d887167e8aeed48cbc62e0d8bccdd83ce27afa0023dac0d1b7c12cd209"
+  },
+  "runtimeTestsPassed": 108,
+  "frontendTestsPassed": 43,
+  "isolatedRuntime": {
+    "queuedOptionsAndAttachmentPreserved": true,
+    "sameSessionIdempotency": true,
+    "stoppedRunReleasesNextAfterCleanup": true,
+    "reopenPreservesPendingQueueAndDraft": true,
+    "resumeDoesNotReplayInterruptedRun": true,
+    "crossSessionWithdrawalRejected": true
+  },
+  "installedDesktop": {
+    "environment": "Linux x64 packaged Electron and real SDK with loopback model fixture",
+    "enterWhileActive": true,
+    "fifo": true,
+    "completedRuns": 3,
+    "withdrawalPreventedDispatch": true,
+    "priorAnswerInContext": true,
+    "newerDraftPreserved": true,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 130,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "databaseSchemaVersion": 4,
+    "backupQuickCheck": "ok",
+    "upgradedDatabaseQuickCheck": "ok",
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true
+  }
+}

@@ -57,6 +57,9 @@ import {
   fixtures,
   model,
   prompt,
+  queueAnswers,
+  queuePrompts,
+  queueWithdrawn,
   receipt,
   receiptName,
   samplePdf,
@@ -566,6 +569,77 @@ async function browserSettingsRestored(page: Page, native: Page) {
   );
   assert.equal(native.isClosed(), false);
   return { ...restored, nativeViewport: viewport, restoredAfterSettings: true };
+}
+
+async function messageQueueSdk(run: Launch, fixture: Fixtures, sessionId: string) {
+  evidence.phase = 'session-message-queue';
+  await save();
+  const { page } = run;
+  const input = page.getByRole('textbox', { name: '继续对话', exact: true });
+  await input.fill(queuePrompts[0]);
+  await input.press('Enter');
+  await until(
+    async () => fixture.evidence.queueRequests[0],
+    10_000,
+    'First turn is holding the model response',
+  );
+  const queue = page.getByRole('region', { name: '待处理消息', exact: true });
+  try {
+    for (const [index, prompt] of [...queuePrompts.slice(1), queueWithdrawn].entries()) {
+      await input.fill(prompt);
+      const enqueue = page.getByRole('button', { name: '加入队列', exact: true });
+      await until(
+        async () => (await enqueue.isEnabled()) || undefined,
+        5000,
+        'Composer is ready to enqueue',
+      );
+      await input.press('Enter');
+      await queue
+        .getByText(`待处理消息 · ${index + 1}`, { exact: false })
+        .waitFor({ state: 'visible' });
+    }
+    assert.deepEqual(fixture.evidence.queueRequests, [queuePrompts[0]]);
+    await queue.getByRole('button', { name: '撤回消息 3', exact: true }).click();
+    await queue.getByText(`待处理消息 · 2`, { exact: false }).waitFor({ state: 'visible' });
+    await queue.screenshot({ path: join(root, 'queued-messages.png') });
+    await input.fill('Draft typed after queue submission');
+  } finally {
+    fixture.releaseQueueFirst();
+  }
+  for (const answer of queueAnswers)
+    await page.getByText(answer, { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+  await queue.waitFor({ state: 'hidden' });
+  const completed = await until(
+    async () => {
+      const state = await api(page, `/api/sessions/${sessionId}`);
+      const runs = array(state.runs)
+        .map((item) => record(item))
+        .filter((run) => queuePrompts.some((text) => text === run.prompt));
+      const draft = record(record(state.session).draft).text;
+      if (
+        runs.length === 3 &&
+        runs.every((run) => run.status === 'completed') &&
+        draft === 'Draft typed after queue submission'
+      )
+        return runs;
+    },
+    5000,
+    'Queued runs and the newer draft persisted',
+  );
+  assert.deepEqual(fixture.evidence.queueRequests, [...queuePrompts]);
+  assert.equal(await input.inputValue(), 'Draft typed after queue submission');
+  await input.fill('');
+  evidence.checks.sessionMessageQueue = {
+    realSdk: true,
+    enterWhileActive: true,
+    fifo: true,
+    completedRuns: completed.length,
+    withdrawalPreventedDispatch: true,
+    priorAnswerInContext: true,
+    newerDraftPreserved: true,
+    paidModelCalls: 0,
+  };
+  await save();
 }
 
 async function nativeBrowserSdk(
@@ -1474,6 +1548,7 @@ async function functional(
     receiptPersisted: true,
     sdkCliObserved: true,
   };
+  await messageQueueSdk(run, fixture, sessionId);
   await nativeBrowserSdk(run, fixture, projectId, sessionId);
   await automaticToolsSdk(run, fixture, projectId);
   // Address-bar navigation gives control to the user, so test it after the Agent runs.
