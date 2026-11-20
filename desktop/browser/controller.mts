@@ -20,6 +20,7 @@ import { z } from 'zod';
 import {
   desktopBrowserChannels,
   desktopBrowserCommandSchema,
+  desktopBrowserReadDownloadSchema,
   desktopBrowserLayoutSchema,
   desktopBrowserProjectIdSchema,
   desktopBrowserStateSchema,
@@ -430,6 +431,12 @@ export function createBrowserController(host: BrowserHost) {
     }
   });
 
+  ipcMain.handle(desktopBrowserChannels.readDownload, async (event, value: unknown) => {
+    if (!trusted(event)) throw new Error('下载读取来源无效。');
+    const { projectId, downloadId } = desktopBrowserReadDownloadSchema.parse(value);
+    return downloads.read(projectId, downloadId);
+  });
+
   ipcMain.handle(desktopBrowserChannels.command, async (event, value: unknown): Promise<void> => {
     if (!trusted(event)) throw new Error('浏览器控制来源无效。');
     const request = desktopBrowserCommandSchema.parse(value);
@@ -440,6 +447,10 @@ export function createBrowserController(host: BrowserHost) {
     }
     if (request.action === 'open-download-directory') {
       await downloads.openDirectory();
+      return;
+    }
+    if (request.action === 'open-download') {
+      await downloads.openFile(projectId, request.downloadId);
       return;
     }
     if (request.action === 'cancel-download' || request.action === 'reveal-download') {

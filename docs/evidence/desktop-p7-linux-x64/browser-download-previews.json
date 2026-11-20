@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "2843694227aa3be907e7c952868a4ac686c52dd77329398c046fd753f86493cf",
+    "atelier-0.2.0-linux-x64.tar.zst": "66d09b631b6646efcfa42a1361c2bb3c1459230352a9abcfd7def61258b18be4",
+    "resourceManifestSha256": "f7b0ef27ea37eb3004913565dee6ef2a1f054cc3069b17ccce2136b931367bfb"
+  },
+  "runtimeTestsPassed": 107,
+  "frontendTestsPassed": 35,
+  "installedDesktop": {
+    "environment": "Linux x64, packaged Electron, isolated Xvfb, local BIFF2 spreadsheet and xdg-open recorder",
+    "fileVistaRenderedDownloadedWorkbook": true,
+    "originalDownloadBytesVerified": true,
+    "systemOpenerReceivedSavedPath": true,
+    "crossProjectPreviewRejected": true,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 133,
+    "sameDataRootAndBrowserProfile": true,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true
+  }
+}

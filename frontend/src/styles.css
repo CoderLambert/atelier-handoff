@@ -490,9 +490,30 @@
   flex-shrink: 0;
 }
 .react-dialog.desktop-browser-downloads {
-  width: min(640px, calc(100% - 32px));
+  width: min(680px, calc(100% - 32px));
   max-height: min(720px, calc(100dvh - 32px));
   overflow: hidden;
+}
+.desktop-browser-download-list-pane[hidden] {
+  display: none;
+}
+.desktop-browser-downloads .dialog-actions {
+  padding-top: 0;
+}
+.desktop-browser-download-actions .btn {
+  min-height: 30px;
+  padding: 4px 9px;
+}
+.react-dialog.desktop-browser-downloads-preview {
+  width: min(1120px, calc(100% - 32px));
+  height: min(820px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+.desktop-browser-download-preview {
+  background: var(--surface);
+}
+.desktop-browser-download-preview > :first-child {
+  min-height: 100%;
 }
 .desktop-browser-download-progress {
   width: 100%;

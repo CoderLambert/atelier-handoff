@@ -145,3 +145,9 @@
 - 官网链接展示中文标题，响应以编号式 URL 文件名提供附件。工作台对可匹配唯一网页标题的编号文件使用标题和原文件后缀。[决策](../../../docs/decisions/2026-11-20-browser-download-filenames.md)
 - Linux 安装态以同样的 Excel 编号链接验证中文路径、实际文件内容和同名序号。142 项回归通过，完成同目录桌面切换。[验收记录](../../../docs/evidence/desktop-p7-linux-x64/browser-download-filenames.json)
 - **开发过程 review**。先核对原站响应头和链接，再把现有附件夹具换成同样的命名结构，复用进度、落盘和同名保护断言。
+
+## 2026-11-20 · 下载列表和文件预览
+
+- 下载记录改为紧凑文件行。按项目下载标识读取完成文件，交给 FileVista 预览。电子表格使用独立 worker 读取 XLS 和 XLSX。系统打开走本地默认应用。[决策](../../../docs/decisions/2026-11-20-browser-download-previews.md)
+- Linux 安装态实际下载 BIFF2 工作簿，验证 FileVista 单元格、系统打开器收到的文件路径和跨项目读取拒绝。142 项回归通过，完成同目录桌面切换。[验收记录](../../../docs/evidence/desktop-p7-linux-x64/browser-download-previews.json)
+- **开发过程 review**。复用附件下载场景，将原来的内容替身换成可解析工作簿，继续检查进度、文件字节和同名保护，再追加预览及打开动作。

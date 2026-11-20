@@ -1,3 +1,8 @@
+/**
+ * @file 提供工作台 renderer 入口和打包静态资源。
+ * @implementation 按资源白名单读取静态文件，并为受信工作台页面设置内容安全策略。
+ * @updated 2026-11-20T20:10:00+08:00
+ */
 import { readFile, realpath } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative } from 'node:path';
 import type { ServerResponse } from 'node:http';
@@ -5,7 +10,7 @@ import { AppError } from '../shared/types.js';
 
 const sharedHeaders = {
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
 };
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

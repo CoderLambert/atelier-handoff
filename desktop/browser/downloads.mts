@@ -6,10 +6,14 @@
 import { app, shell, type DownloadItem, type Session, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { constants, lstatSync, mkdirSync, mkdtempSync } from 'node:fs';
-import { copyFile, link, lstat, rm } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { copyFile, link, lstat, open, rm } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { DesktopBrowserDownload } from '../../shared/desktop-browser.js';
+import {
+  browserDownloadPreviewMaxBytes,
+  browserDownloadPreviewMime,
+  type DesktopBrowserDownload,
+} from '../../shared/desktop-browser.js';
 
 interface Transfer {
   projectId: string;
@@ -208,6 +212,14 @@ export function createBrowserDownloads(
     return transfer;
   }
 
+  async function completedFile(projectId: string, id: string) {
+    const { entry } = lookup(projectId, id);
+    if (entry.status !== 'completed') throw new Error('下载文件尚未保存。');
+    const file = await lstat(entry.path).catch(() => undefined);
+    if (!file?.isFile()) throw new Error('下载文件已移动或删除。');
+    return { path: entry.path, file };
+  }
+
   return {
     directory,
     observe,
@@ -221,11 +233,52 @@ export function createBrowserDownloads(
       lookup(projectId, id).item?.cancel();
     },
     async reveal(projectId: string, id: string) {
-      const { entry } = lookup(projectId, id);
-      if (entry.status !== 'completed') throw new Error('下载文件尚未保存。');
-      const file = await lstat(entry.path).catch(() => undefined);
-      if (!file?.isFile()) throw new Error('下载文件已移动或删除。');
-      shell.showItemInFolder(entry.path);
+      const { path } = await completedFile(projectId, id);
+      shell.showItemInFolder(path);
+    },
+    async openFile(projectId: string, id: string) {
+      const { path, file } = await completedFile(projectId, id);
+      if (
+        (process.platform !== 'win32' && (file.mode & 0o111) !== 0) ||
+        /\.(?:exe|com|bat|cmd|desktop|appimage|msi|lnk|scr|jar|ps1)$/iu.test(path)
+      )
+        throw new Error('此文件可以在下载文件夹中查看。');
+      const error = await shell.openPath(path);
+      if (error) throw new Error('系统未能打开此文件，请在文件夹中选择应用。');
+    },
+    async read(projectId: string, id: string) {
+      const { path, file } = await completedFile(projectId, id);
+      const name = basename(path);
+      const mimeType = browserDownloadPreviewMime(name);
+      if (!mimeType) throw new Error('请选择系统应用查看此格式。');
+      if (file.size > browserDownloadPreviewMaxBytes) throw new Error('此文件超过预览大小限制。');
+      const handle = await open(
+        path,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      ).catch(() => {
+        throw new Error('下载文件已移动或删除。');
+      });
+      try {
+        const current = await handle.stat();
+        if (
+          !current.isFile() ||
+          current.dev !== file.dev ||
+          current.ino !== file.ino ||
+          current.size !== file.size
+        )
+          throw new Error('文件已发生变化，请重新打开预览。');
+        const bytes = new ArrayBuffer(current.size);
+        const buffer = new Uint8Array(bytes);
+        let offset = 0;
+        while (offset < buffer.length) {
+          const result = await handle.read(buffer, offset, buffer.length - offset, offset);
+          if (!result.bytesRead) throw new Error('文件已发生变化，请重新打开预览。');
+          offset += result.bytesRead;
+        }
+        return { name, mimeType, bytes };
+      } finally {
+        await handle.close();
+      }
     },
     async openDirectory() {
       mkdirSync(directory(), { recursive: true });

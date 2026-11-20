@@ -9,6 +9,7 @@ export const desktopBrowserProtocolVersion = 2;
 export const desktopBrowserChannels = {
   layout: 'browser:layout',
   command: 'browser:command',
+  readDownload: 'browser:read-download',
   state: 'browser:state',
 } as const;
 
@@ -59,7 +60,7 @@ export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
   }),
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
-    action: z.literal(['cancel-download', 'reveal-download']),
+    action: z.literal(['cancel-download', 'reveal-download', 'open-download']),
     downloadId: z.uuid(),
   }),
   z.strictObject({
@@ -79,6 +80,42 @@ export const desktopBrowserDownloadSchema = z.strictObject({
   error: z.string().optional(),
 });
 export type DesktopBrowserDownload = z.infer<typeof desktopBrowserDownloadSchema>;
+
+export const browserDownloadPreviewMaxBytes = 16 * 1024 * 1024;
+const browserDownloadPreviewTypes = new Map([
+  ['pdf', 'application/pdf'],
+  ['xls', 'application/vnd.ms-excel'],
+  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['gif', 'image/gif'],
+  ['webp', 'image/webp'],
+  ['avif', 'image/avif'],
+  ['txt', 'text/plain'],
+  ['log', 'text/plain'],
+  ['csv', 'text/csv'],
+  ['md', 'text/markdown'],
+  ['markdown', 'text/markdown'],
+  ['json', 'application/json'],
+]);
+export function browserDownloadPreviewMime(filename: string): string | undefined {
+  const extension = /\.([^.\/\\]+)$/u.exec(filename)?.[1];
+  return extension ? browserDownloadPreviewTypes.get(extension.toLowerCase()) : undefined;
+}
+
+export const desktopBrowserReadDownloadSchema = z.strictObject({
+  projectId: desktopBrowserProjectIdSchema,
+  downloadId: z.uuid(),
+});
+export const desktopBrowserDownloadPreviewSchema = z.strictObject({
+  name: z.string(),
+  mimeType: z.string(),
+  bytes: z
+    .instanceof(ArrayBuffer)
+    .refine((value) => value.byteLength <= browserDownloadPreviewMaxBytes),
+});
+export type DesktopBrowserDownloadPreview = z.infer<typeof desktopBrowserDownloadPreviewSchema>;
 
 export const desktopBrowserStateSchema = z.strictObject({
   projectId: desktopBrowserProjectIdSchema,
@@ -239,5 +276,6 @@ export interface DesktopBrowserBridge {
     action: DesktopBrowserAction,
     value?: string,
   ): Promise<void>;
+  readDownload(projectId: string, downloadId: string): Promise<DesktopBrowserDownloadPreview>;
   subscribe(callback: (state: DesktopBrowserState) => void): () => void;
 }

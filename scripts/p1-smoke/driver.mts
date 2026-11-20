@@ -1314,11 +1314,59 @@ async function functional(
     await dialog.getByRole('button', { name: '在文件夹中显示', exact: true }).waitFor();
     await dialog.getByRole('button', { name: '打开下载文件夹', exact: true }).waitFor();
     const saved = join(destination, `${browserDownloadLabel} (1).xls`);
-    assert.ok((await dialog.innerText()).includes(saved));
-    assert.equal(await readFile(saved, 'utf8'), browserDownloadBody);
+    assert.deepEqual(await readFile(saved), browserDownloadBody);
     assert.equal(await readFile(join(destination, browserDownloadName), 'utf8'), 'original file');
     assert.equal(native.url(), `${fixture.siteUrl}/`);
     await page.screenshot({ path: join(root, 'native-browser-download-completed.png') });
+    const previewButton = dialog.getByRole('button', { name: '预览', exact: true });
+    await previewButton.click();
+    const preview = page.getByRole('dialog', {
+      name: `${browserDownloadLabel} (1).xls`,
+      exact: true,
+    });
+    await preview
+      .getByText('Suzhou jobs', { exact: true })
+      .waitFor({ state: 'visible', timeout: 20_000 });
+    await page.screenshot({ path: join(root, 'native-browser-download-preview.png') });
+    await preview.getByRole('button', { name: '返回下载列表', exact: true }).click();
+    await dialog.getByRole('button', { name: '用系统应用打开', exact: true }).click();
+    const openLog = join(root, 'chat-link-external.txt');
+    await until(
+      async () => {
+        const contents = await readFile(openLog, 'utf8').catch(() => '');
+        return contents.split('\n').includes(saved) ? true : undefined;
+      },
+      5000,
+      'system-opener receives the downloaded file path',
+    );
+    const unauthorized = await page.evaluate(
+      async ({ project, other }) => {
+        const bridge = (window as Window & { atelierDesktop?: DesktopBrowserBridge })
+          .atelierDesktop;
+        if (!bridge) return false;
+        const id = await new Promise<string>((resolve, reject) => {
+          const unsubscribe = bridge.subscribe((state) => {
+            const file = state.downloads?.find((entry) => entry.status === 'completed');
+            if (state.projectId === project && file) {
+              unsubscribe();
+              resolve(file.id);
+            }
+          });
+          void bridge.command(project, 'state').catch((error: unknown) => {
+            unsubscribe();
+            reject(error);
+          });
+        });
+        try {
+          await bridge.readDownload(other, id);
+          return false;
+        } catch {
+          return true;
+        }
+      },
+      { project: projectId, other: randomUUID() },
+    );
+    assert.equal(unauthorized, true);
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     evidence.checks.nativeBrowserDownload = {
@@ -1329,6 +1377,9 @@ async function functional(
       readableAttachmentTitle: true,
       originalPageRetained: true,
       folderActionsVisible: true,
+      fileVistaWorkbookPreview: true,
+      systemOpenerReceivedFile: true,
+      crossProjectPreviewRejected: true,
       savedBytes: Buffer.byteLength(browserDownloadBody),
     };
     await page.getByRole('button', { name: '任务详情', exact: true }).first().click();

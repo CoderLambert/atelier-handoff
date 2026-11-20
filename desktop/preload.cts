@@ -7,6 +7,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
   desktopBrowserChannels,
   desktopBrowserCommandSchema,
+  desktopBrowserDownloadPreviewSchema,
+  desktopBrowserReadDownloadSchema,
   desktopBrowserLayoutSchema,
   desktopBrowserStateSchema,
   type DesktopBrowserBridge,
@@ -23,7 +25,7 @@ const bridge: DesktopBrowserBridge = {
       action,
       ...(action === 'select-tab' || action === 'close-tab'
         ? { tabId: value }
-        : action === 'cancel-download' || action === 'reveal-download'
+        : action === 'cancel-download' || action === 'reveal-download' || action === 'open-download'
           ? { downloadId: value }
           : action === 'navigate' || action === 'open-tab' || action === 'open-external'
             ? { url: value }
@@ -31,6 +33,14 @@ const bridge: DesktopBrowserBridge = {
     });
     const response: unknown = await ipcRenderer.invoke(desktopBrowserChannels.command, request);
     if (response !== undefined) throw new Error('浏览器返回了无效响应。');
+  },
+  async readDownload(projectId, downloadId) {
+    const request = desktopBrowserReadDownloadSchema.parse({ projectId, downloadId });
+    const response: unknown = await ipcRenderer.invoke(
+      desktopBrowserChannels.readDownload,
+      request,
+    );
+    return desktopBrowserDownloadPreviewSchema.parse(response);
   },
   subscribe(callback) {
     if (typeof callback !== 'function') throw new TypeError('浏览器状态订阅需要回调函数。');

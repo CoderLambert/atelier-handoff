@@ -43,7 +43,11 @@ export const chatLinkPath = '/browser-chat-link';
 export const browserDownloadLabel = '附件4.苏州市2026年市属事业单位公开招聘咨询电话一览表';
 export const browserDownloadName = `${browserDownloadLabel}.xls`;
 const browserDownloadPath = '/downloads/346049a64aa44dcda7e6e2ebd9cb7cad.xls';
-export const browserDownloadBody = 'job-list-fixture\n'.repeat(32_768);
+// BIFF2 workbook with a representative result row.
+export const browserDownloadBody = Buffer.from(
+  'CQAEAAIAEAAeAAgAB0dlbmVyYWxDAAQAAAAAAAQAEgAAAAAAAAAACkRlcGFydG1lbnQEABIAAAABAAAAAApBcHBsaWNhbnRzBAATAAEAAAAAAAALU3V6aG91IGpvYnMCAAkAAQABAAAAACoACgAAAA==',
+  'base64',
+);
 export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
 export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
@@ -574,8 +578,9 @@ export async function fixtures(): Promise<Fixtures> {
         'Content-Type': 'application/vnd.ms-excel',
         'Content-Length': Buffer.byteLength(browserDownloadBody),
       });
-      res.write(browserDownloadBody.slice(0, 65_536));
-      const timer = setTimeout(() => res.end(browserDownloadBody.slice(65_536)), 1800);
+      const midpoint = browserDownloadBody.length >> 1;
+      res.write(browserDownloadBody.subarray(0, midpoint));
+      const timer = setTimeout(() => res.end(browserDownloadBody.subarray(midpoint)), 1800);
       res.once('close', () => clearTimeout(timer));
       return;
     }

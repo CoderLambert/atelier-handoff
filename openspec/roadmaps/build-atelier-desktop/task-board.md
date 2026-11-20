@@ -37,6 +37,8 @@
 
 - [x] 编号式附件使用可匹配的网页标题保存。安装态核对中文文件名、原后缀和同名文件保留。[文件名验收](../../../docs/evidence/desktop-p7-linux-x64/browser-download-filenames.json)
 
+- [x] 下载列表支持 FileVista 预览、系统应用打开和保留定位入口。安装态验证真实 XLS 内容及原生打开链路。[下载预览验收](../../../docs/evidence/desktop-p7-linux-x64/browser-download-previews.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。
