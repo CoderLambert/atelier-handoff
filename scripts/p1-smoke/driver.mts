@@ -1,7 +1,7 @@
 /**
- * @file 执行已安装 Linux 应用的验收流程。
- * @implementation 驱动隔离界面与离线夹具，验证审批、自动化任务、原生视图、推理深度及内置 Shunt 的启动、配置保留和进程退出。
- * @updated 2026-11-20T17:32:12+08:00
+ * @file 执行 Linux 安装态验收。
+ * @implementation 驱动隔离界面及回环夹具，验证任务、审批、原生网页、会话链接、网关及进程生命周期。
+ * @updated 2026-11-20T17:59:46+08:00
  */
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';

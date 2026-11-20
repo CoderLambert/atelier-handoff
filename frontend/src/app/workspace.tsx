@@ -1,7 +1,7 @@
 /**
  * @file 编排工作区、会话及各功能页面。
- * @implementation 组合会话查询、操作、布局与按需加载的功能组件。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 组合会话查询、操作与布局，将桌面会话中用户选择的网页打开方式转成项目浏览器命令。
+ * @updated 2026-11-20T17:59:46+08:00
  */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
