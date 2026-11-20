@@ -1,7 +1,7 @@
 /**
  * @file 读取本机 Codex 客户端公开的可见模型目录。
- * @implementation 通过有时限的 app-server stdio 握手请求 model/list，解析显示名称并短时间复用结果。
- * @updated 2026-11-20T17:00:00+08:00
+ * @implementation 通过有时限的 app-server stdio 握手请求模型列表，解析显示名称与支持的推理深度，并短时间复用结果。
+ * @updated 2026-11-20T17:32:12+08:00
  */
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';

@@ -1,7 +1,7 @@
 /**
  * @file 监督独立的 Node 工作台运行时。
- * @implementation 启动私有 IPC、校验就绪握手，并按连接代次撤销与清理子进程。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 启动私有 IPC、校验就绪握手，向运行时传递内置网关连接信息，并按连接代次撤销与清理子进程。
+ * @updated 2026-11-20T17:32:12+08:00
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';

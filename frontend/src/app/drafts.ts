@@ -1,7 +1,7 @@
 /**
- * @file 管理会话草稿、运行模式保存与任务发送。
- * @implementation 协调本地恢复、串行写入和幂等发送，保留会话审批模式，并在发送确认后清除临时搜索上限。
- * @updated 2026-11-20T15:58:31+08:00
+ * @file 管理会话草稿、运行偏好保存与任务发送。
+ * @implementation 协调本地恢复、串行写入和幂等发送，保留审批模式、模型与有效推理深度，并在发送确认后清除临时搜索上限。
+ * @updated 2026-11-20T17:32:12+08:00
  */
 import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';

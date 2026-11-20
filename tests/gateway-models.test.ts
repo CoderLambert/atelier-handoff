@@ -1,7 +1,7 @@
 /**
- * @file 验证网关目录和会话模型选择。
- * @implementation 通过回环网关和运行器替身检查路由元数据、会话隔离、执行快照和续接。
- * @updated 2026-11-20T16:20:00+08:00
+ * @file 验证网关目录合并和会话模型选择。
+ * @implementation 通过回环网关、Codex 目录替身和运行器替身检查目录合并、路由元数据、会话隔离、执行快照和重试。
+ * @updated 2026-11-20T17:08:00+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';

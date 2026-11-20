@@ -1,7 +1,7 @@
 /**
- * @file 读取当前 Shunt 网关公开的模型路由。
- * @implementation 查询本机路由目录，向会话选择器提供去重模型和路由配置，网关不可用时仍保留工作台默认模型。
- * @updated 2026-11-20T16:20:00+08:00
+ * @file 汇集 Shunt 路由及适用的 Codex 模型目录。
+ * @implementation 校验并读取本机网关路由；存在 chatgpt-plan 路由时合并 Codex 可见模型和路由元数据，失败时保留工作台默认模型。
+ * @updated 2026-11-20T17:08:00+08:00
  */
 import { z } from 'zod';
 import type { AppConfig, GatewayModelCatalog } from '../shared/types.js';

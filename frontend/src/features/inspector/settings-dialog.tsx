@@ -1,7 +1,7 @@
 /**
- * @file 提供模型与网关设置及桌面诊断导出界面。
- * @implementation 通过设置查询 hooks 读取和保存配置，按开关展示执行限制并保留数值；桌面桥可用时导出诊断。
- * @updated 2026-11-20T15:07:56+08:00
+ * @file 提供模型、网关设置与桌面诊断导出界面。
+ * @implementation 通过设置查询与操作读取和保存配置，支持选择内置或外部网关、展示账户文件状态并发起登录，同时管理执行限制和诊断导出。
+ * @updated 2026-11-20T17:32:12+08:00
  */
 import { useRef, useState, type FormEvent } from 'react';
 import { useAppConfig } from '@/use-query/settings/use-app-config';

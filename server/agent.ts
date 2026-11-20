@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 使用本轮能力和审批策略执行 Agent SDK 任务，按用户配置应用任务上限，并保留停止与关闭协议。
- * @updated 2026-11-20T15:16:28+08:00
+ * @implementation 使用本轮能力、审批策略和执行配置运行 Agent SDK 任务，传递模型与推理深度、按网关来源选择凭据，并保留停止与关闭协议。
+ * @updated 2026-11-20T17:32:12+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';

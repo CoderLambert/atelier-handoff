@@ -1,7 +1,7 @@
 /**
  * @file 保存应用配置及任务执行限制。
- * @implementation 通过独立 mutation 提交配置，成功后更新配置快照并使启动信息失效。
- * @updated 2026-11-20T15:07:56+08:00
+ * @implementation 通过独立 mutation 提交配置，成功后更新配置快照，并使模型目录和启动信息失效。
+ * @updated 2026-11-20T17:08:00+08:00
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AppConfig } from '@shared/types';
