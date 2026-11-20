@@ -89,3 +89,9 @@
 
 - 桌面按项目直接登记原生浏览器工具，结合人工接管及逐次审批。测试项目配置了零个 MCP 扩展。真实 SDK 通过回环替身验证导航、接管和交还后重新观察、批准一次点击，以及截图作为 PNG 交付物保存。单独的 CDP 键盘夹具完成输入替换和表单提交。付费调用为 0。[验收记录](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json)
 - 开发过程 review 复用安装态夹具与现有审批系统。第一次点击虽然返回成功，网页状态没有变化。用一个隔离 WebContentsView 复现了原生输入钩子拦截 CDP 事件，修复后以点击计数和截图像素判定通过。授权与撤销竞态用临时 SQLite 测试覆盖。
+
+## 2026-11-20 · 候选构建与桌面切换
+
+- 从同一 Linux 工件装配 Windows x64 和 macOS arm64 候选 ZIP。在 Linux 核对发行输入哈希、运行时资源、PE 和 Mach-O 架构及 ZIP 完整性。两个目标系统的运行验收留待后续。[构建证据](../../../docs/evidence/desktop-platform-previews.json)
+- 用隔离项目运行旧版和新版 Linux 安装件，正常关闭旧版并确认单写者锁释放。新版使用同一个数据根，成功读回项目、会话、草稿、网关与模型设置以及项目浏览器分区数据。[切换证据](../../../docs/evidence/desktop-p7-linux-x64/same-data-upgrade.json)
+- 开发过程 review 复用已筛选的 Linux 工件与 Electron Packager，省去两套资源收集流程。在一次同目录切换用例同时验证会话、配置和浏览器分区。Windows 与 macOS 本轮各交付一份候选构建，持续开发和回归优先放在 Linux。

@@ -1,0 +1,56 @@
+{
+  "host": "Linux x64",
+  "zipIntegrityVerified": true,
+  "candidates": [
+    {
+      "target": "win32-x64",
+      "validation": "archive and executable inspection on Linux",
+      "nativeExecutionVerified": false,
+      "electron": "45.4.1",
+      "node": "24.21.0",
+      "sdk": {
+        "version": "0.3.326",
+        "cliPackage": "@anthropic-ai/claude-agent-sdk-win32-x64",
+        "cliVersion": "2.1.326"
+      },
+      "packager": "20.3.0",
+      "sharedFiles": 3991,
+      "binaries": {
+        "electron": "PE32+ executable for MS Windows 10.00 (GUI), x86-64, 15 sections",
+        "node": "PE32+ executable for MS Windows 6.00 (console), x86-64, 10 sections",
+        "cli": "PE32+ executable for MS Windows 6.00 (console), x86-64, 16 sections"
+      },
+      "archive": {
+        "name": "atelier-0.2.0-win32-x64-preview.zip",
+        "bytes": 377480869,
+        "sha256": "77bc4752edbda2be718e7444880385299d371c4181f6170fba333acabf09ce8d",
+        "path": "dist/platform-previews/win32-x64-tT9r2A/atelier-0.2.0-win32-x64-preview.zip"
+      }
+    },
+    {
+      "target": "darwin-arm64",
+      "validation": "archive and executable inspection on Linux",
+      "nativeExecutionVerified": false,
+      "electron": "45.4.1",
+      "node": "24.21.0",
+      "sdk": {
+        "version": "0.3.326",
+        "cliPackage": "@anthropic-ai/claude-agent-sdk-darwin-arm64",
+        "cliVersion": "2.1.326"
+      },
+      "packager": "20.3.0",
+      "sharedFiles": 3991,
+      "binaries": {
+        "electron": "Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>",
+        "node": "Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|WEAK_DEFINES|BINDS_TO_WEAK|PIE|HAS_TLV_DESCRIPTORS>",
+        "cli": "Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|WEAK_DEFINES|BINDS_TO_WEAK|PIE|HAS_TLV_DESCRIPTORS>"
+      },
+      "archive": {
+        "name": "atelier-0.2.0-darwin-arm64-preview.zip",
+        "bytes": 328664482,
+        "sha256": "5ea909fd37e5b5f683784f2c27d975ea332ca501b831207cf1a1f6502fc7fd4d",
+        "path": "dist/platform-previews/darwin-arm64-NMWJye/atelier-0.2.0-darwin-arm64-preview.zip"
+      }
+    }
+  ]
+}

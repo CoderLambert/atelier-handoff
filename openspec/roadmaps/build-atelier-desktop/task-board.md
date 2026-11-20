@@ -11,8 +11,10 @@
 | P5 | 运行时工具与 Agent 桌面流程 | 已验证 | [聊天审批、流式回复与上下文续接](../../../docs/evidence/desktop-p5-linux-x64/agent.json)，取消和截图见 P2/P4 |
 | P6 | 桌面文件操作 | 已验证 | 拖入附件、另存、取消及定位。[文件记录](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) |
 | P7 | Linux x64 正式发行验收 | 本地候选已验证 | [最新归档校验值与内置浏览器验收](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json) · [退出与恢复](../../../docs/evidence/desktop-p7-linux-x64/ipc-shutdown.json) · [安装态功能](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) · [Wayland](../../../docs/evidence/desktop-p7-linux-x64/wayland.json) · [第三方许可](../../../docs/evidence/desktop-p7-linux-x64/license-update.json)。对外发行等待应用及工作区组件许可证和发布授权 |
-| P8 | Windows 移植与安装验收 | 阻塞 | 已准备宿主正常退出和恢复测试入口。需 Windows 构建与运行环境。签名身份在分发阶段确认 |
-| P9 | macOS 移植与安装验收 | 阻塞 | 恢复测试入口可定位 `.app` 内运行时。需 macOS 构建与运行环境。对外分发需 Developer ID 和公证权限 |
+| P8 | Windows x64 候选构建 | 本轮构建已验证 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json)。本机运行与安装验收延后 |
+| P9 | macOS arm64 候选构建 | 本轮构建已验证 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json)。本机运行、签名与公证延后 |
+
+当前继续优先开发 Linux 功能。Windows 和 macOS 各保留一份已核验的候选 ZIP，后续验收另行安排。桌面更新沿用原数据根和浏览器 profile。[同目录切换实测](../../../docs/evidence/desktop-p7-linux-x64/same-data-upgrade.json)
 
 ## P2 · 已验证
 
