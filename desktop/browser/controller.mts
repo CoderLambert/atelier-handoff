@@ -6,6 +6,7 @@
 import {
   BrowserWindow,
   ipcMain,
+  shell,
   WebContentsView,
   type Event,
   type Input,
@@ -377,6 +378,25 @@ export function createBrowserController(host: BrowserHost) {
     const { projectId, action } = request;
     if (action === 'state') {
       state(projectId);
+      return;
+    }
+    if (request.action === 'open-external') {
+      await shell.openExternal(siteUrl(request.url));
+      return;
+    }
+    if (request.action === 'open-tab') {
+      const destination = siteUrl(request.url);
+      const opened = createTab(projectId);
+      try {
+        if (!human.has(projectId)) await takeControl(projectId);
+      } catch (error) {
+        removeTab(opened);
+        repaint(projectId);
+        throw error;
+      }
+      selected.set(projectId, opened.id);
+      repaint(projectId);
+      await tabContents(opened).loadURL(destination);
       return;
     }
     if (request.action === 'new-tab') {

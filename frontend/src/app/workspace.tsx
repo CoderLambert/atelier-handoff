@@ -456,6 +456,20 @@ export default function Workspace() {
                       key={snapshot.session.id}
                       snapshot={snapshot}
                       defaultModel={ready.data?.config.model ?? ''}
+                      onOpenLink={
+                        desktop
+                          ? async (url, destination) => {
+                              const bridge = window.atelierDesktop;
+                              if (!bridge) throw new Error('桌面浏览器当前不可用。');
+                              if (destination === 'internal') setSideTab('browser');
+                              await bridge.command(
+                                snapshot.project.id,
+                                destination === 'internal' ? 'open-tab' : 'open-external',
+                                url,
+                              );
+                            }
+                          : undefined
+                      }
                       onSent={revalidate}
                       onError={setNotice}
                       onStop={(id) =>

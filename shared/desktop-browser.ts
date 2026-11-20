@@ -50,7 +50,7 @@ export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
   }),
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
-    action: z.literal('navigate'),
+    action: z.literal(['navigate', 'open-tab', 'open-external']),
     url: desktopBrowserUrlSchema,
   }),
 ]);

@@ -12,6 +12,7 @@ import { access, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Browser, Page } from 'playwright-core';
+import type { DesktopBrowserBridge } from '../../shared/desktop-browser.js';
 import type { Store } from '../../server/store.js';
 import type { FileRecords } from '../../server/artifacts.js';
 type Chromium = typeof import('playwright-core').chromium;
@@ -48,6 +49,8 @@ import {
   browserReadAnswer,
   browserReadPrompt,
   browserTitle,
+  chatLinkLabel,
+  chatLinkPath,
   fixtures,
   model,
   prompt,
@@ -1148,6 +1151,67 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   });
   assert.equal(revoked.status, 200);
   assert.equal(browserAccess(JSON.parse(revoked.body) as unknown).enabled, false);
+  const link = thread.getByRole('link', { name: chatLinkLabel, exact: true });
+  const chooser = page.getByRole('dialog');
+  const destination = `${fixture.siteUrl}${chatLinkPath}`;
+  await link.click();
+  await chooser.getByRole('button', { name: '在外部浏览器打开', exact: true }).waitFor();
+  await page.screenshot({ path: join(root, 'chat-link-chooser.png') });
+  await page.keyboard.press('Escape');
+  await chooser.waitFor({ state: 'hidden' });
+  await until(
+    async () =>
+      (await link.evaluate((element) => document.activeElement === element)) ? true : undefined,
+    3000,
+    'focus returned to the message link',
+  );
+  await link.press('Enter');
+  await chooser.getByRole('button', { name: '在外部浏览器打开', exact: true }).click();
+  await chooser.waitFor({ state: 'hidden' });
+  const externalLog = join(root, 'chat-link-external.txt');
+  const external = await until(
+    () => readFile(externalLog, 'utf8').catch(() => undefined),
+    5000,
+    'system browser opener receives the message URL',
+  );
+  assert.equal(external.trim(), destination);
+  assert.ok(
+    !run.browser
+      .contexts()
+      .flatMap((context) => context.pages())
+      .some((target) => target.url() === destination),
+  );
+  await link.click();
+  await chooser.getByRole('button', { name: '在内置浏览器打开', exact: true }).click();
+  await chooser.waitFor({ state: 'hidden' });
+  const nativeTargets = run.browser.contexts().flatMap((context) => context.pages());
+  assert.ok(nativeTargets.some((target) => target.url() === destination));
+  assert.ok(
+    nativeTargets.some((target) => target.url() === `${fixture.siteUrl}/browser-automatic`),
+  );
+  assert.equal(
+    await page.getByRole('textbox', { name: '网页地址', exact: true }).inputValue(),
+    destination,
+  );
+  const rejected = await page.evaluate(async (id) => {
+    const bridge = (window as Window & { atelierDesktop?: DesktopBrowserBridge }).atelierDesktop;
+    if (!bridge) return false;
+    try {
+      await bridge.command(id, 'open-external', 'file:///unavailable');
+      return false;
+    } catch {
+      return true;
+    }
+  }, projectId);
+  assert.equal(rejected, true);
+  assert.equal(await readFile(externalLog, 'utf8'), external);
+  evidence.checks.chatWebLinks = {
+    explicitChoice: true,
+    keyboardAndFocus: true,
+    externalSystemOpenerReceivedUrl: true,
+    internalSeparateTab: true,
+    protocolRejected: true,
+  };
   await save();
 }
 
@@ -1506,6 +1570,11 @@ async function main(): Promise<void> {
       'Driver itself must use packaged Node in the isolated environment',
     );
     assert.equal(process.env.PATH, '/smoke/empty-path');
+    await writeFile(
+      '/smoke/empty-path/xdg-open',
+      '#!/bin/sh\nprintf \'%s\\n\' "$1" >> /smoke/chat-link-external.txt\n',
+      { mode: 0o755 },
+    );
     for (const path of [cfg.sourceProbe, '/usr/lib/node_modules/npm', '/usr/share/nodejs/npm'])
       await assert.rejects(access(path, constants.R_OK), `${path} must be unavailable`);
     for (const path of [

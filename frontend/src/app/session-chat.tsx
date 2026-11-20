@@ -15,6 +15,7 @@ import { actions, store, useWorkspace } from './store';
 export default function SessionChat({
   snapshot,
   defaultModel,
+  onOpenLink,
   onSent,
   onError,
   onTrace,
@@ -23,6 +24,7 @@ export default function SessionChat({
 }: {
   snapshot: Snapshot;
   defaultModel: string;
+  onOpenLink?: (url: string, destination: 'internal' | 'external') => Promise<void>;
   onSent: (id: string) => Promise<void>;
   onError: (message: string) => void;
   onTrace: (id: string) => void;
@@ -80,6 +82,7 @@ export default function SessionChat({
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
       defaultModel={defaultModel}
+      onOpenLink={onOpenLink}
       onModelChange={(model) => {
         if (store.getState().workspace.submitting[id]) return;
         updateDraft(

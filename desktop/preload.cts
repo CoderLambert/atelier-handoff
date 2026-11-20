@@ -23,7 +23,7 @@ const bridge: DesktopBrowserBridge = {
       action,
       ...(action === 'select-tab' || action === 'close-tab'
         ? { tabId: value }
-        : action === 'navigate'
+        : action === 'navigate' || action === 'open-tab' || action === 'open-external'
           ? { url: value }
           : {}),
     });

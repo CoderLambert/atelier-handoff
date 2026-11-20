@@ -31,6 +31,8 @@
 
 - [x] 发送区精简模型菜单，增加会话推理深度。Linux 包内置 Shunt，并沿用持久配置和账号目录。[安装态验收](../../../docs/evidence/desktop-p7-linux-x64/managed-shunt-and-effort.json)
 
+- [x] 会话网页链接提供内置新标签和系统浏览器入口。安装态验证两条路径、键盘焦点和原生标签保留。[链接验收](../../../docs/evidence/desktop-p7-linux-x64/chat-web-links.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

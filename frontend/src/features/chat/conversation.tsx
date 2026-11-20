@@ -3,7 +3,17 @@
  * @implementation 组织消息、工具、交付物和审批入口，显示运行模式并区分待审批操作。
  * @updated 2026-11-20T14:44:21+08:00
  */
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
 import type {
   Artifact,
   Attachment,
@@ -19,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { ArtifactAction } from '@/features/inspector';
 import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
 import { AttachmentPreview } from './attachment-preview';
+import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
 import { runModeLabel } from './run-mode';
 
@@ -265,11 +276,13 @@ export function Conversation({
   snapshot,
   onRetry,
   onTrace,
+  onOpenLink,
   submitting,
 }: {
   snapshot: Snapshot;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
+  onOpenLink?: ChatLinkOpener;
   submitting: boolean;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -277,6 +290,10 @@ export function Conversation({
   const nearBottom = useRef(true);
   const [unseen, setUnseen] = useState(false);
   const [permissionId, setPermissionId] = useState<string>();
+  const [webLink, setWebLink] = useState<{ url: string; trigger: HTMLAnchorElement }>();
+  const chooseWebLink = useCallback((url: string, event: MouseEvent<HTMLAnchorElement>) => {
+    setWebLink({ url, trigger: event.currentTarget });
+  }, []);
   const permission = snapshot.permissions.find((item) => item.id === permissionId);
   const hasPendingApproval = snapshot.permissions.some((item) => item.status === 'pending');
   const indexes = useMemo(
@@ -416,7 +433,11 @@ export function Conversation({
                     : null}
                   {assistant ? (
                     hasText ? (
-                      <Markdown text={message.text} streaming={run ? isActive(run) : false} />
+                      <Markdown
+                        text={message.text}
+                        streaming={run ? isActive(run) : false}
+                        onLinkClick={onOpenLink ? chooseWebLink : undefined}
+                      />
                     ) : run && isActive(run) ? null : (
                       <p className="message-placeholder">本轮没有文字回复</p>
                     )
@@ -478,6 +499,15 @@ export function Conversation({
         >
           {hasPendingApproval ? '有待审批操作 ↓' : '查看新消息 ↓'}
         </Button>
+      ) : null}
+      {webLink && onOpenLink ? (
+        <ChatWebLinkDialog
+          key={webLink.url}
+          url={webLink.url}
+          trigger={webLink.trigger}
+          onOpenLink={onOpenLink}
+          onClose={() => setWebLink(undefined)}
+        />
       ) : null}
       {permission ? (
         <Suspense fallback={<p role="status">正在打开审批…</p>}>

@@ -38,6 +38,8 @@ export const automaticPrompt =
 export const automaticAnswer = 'INSTALLED_AUTOMATIC_TOOLS_COMPLETED';
 export const automaticFollowupPrompt = 'Verify the saved automatic session mode on this follow-up.';
 export const automaticFollowupAnswer = 'INSTALLED_SESSION_AUTOMATION_PERSISTED';
+export const chatLinkLabel = '查看本地测试网页';
+export const chatLinkPath = '/browser-chat-link';
 export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
 export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
@@ -462,7 +464,12 @@ export async function fixtures(): Promise<Fixtures> {
           );
           assert.equal(record(request.output_config).effort, 'xhigh');
           assert.equal(++evidence.automatic.requests, automaticToolCount + 2);
-          streamMessage(res, undefined, automaticFollowupAnswer, alternateModel);
+          streamMessage(
+            res,
+            undefined,
+            `${automaticFollowupAnswer}\n\n[${chatLinkLabel}](${siteUrl}${chatLinkPath})`,
+            alternateModel,
+          );
           return;
         }
         assert.equal(request.model, model);

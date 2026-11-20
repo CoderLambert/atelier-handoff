@@ -5,6 +5,7 @@
  */
 import type { Draft, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
+import type { ChatLinkOpener } from './chat-web-link-dialog';
 import { Composer, type DraftChange } from './composer';
 import { Conversation } from './conversation';
 import type { ComposerMode } from './run-mode';
@@ -24,11 +25,12 @@ export interface ChatProps {
   onStop: (runId: string) => void;
   onRetry: (runId: string) => void;
   onTrace: (runId: string) => void;
+  onOpenLink?: ChatLinkOpener;
   submitting: boolean;
 }
 
 export default function Chat(props: ChatProps) {
-  const { snapshot, onRetry, onTrace, submitting } = props;
+  const { snapshot, onRetry, onTrace, onOpenLink, submitting } = props;
   return (
     <>
       <Conversation
@@ -36,6 +38,7 @@ export default function Chat(props: ChatProps) {
         snapshot={snapshot}
         onRetry={onRetry}
         onTrace={onTrace}
+        onOpenLink={onOpenLink}
         submitting={submitting}
       />
       <Composer

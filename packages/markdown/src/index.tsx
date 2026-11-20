@@ -1,4 +1,9 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+/**
+ * @file 提供可嵌入的流式 Markdown 渲染。
+ * @implementation 组合 Streamdown、格式插件及 URL 过滤，支持调用方接管网页链接的打开行为。
+ * @updated 2026-11-20T17:57:00+08:00
+ */
+import { memo, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { cjk } from '@streamdown/cjk';
 import {
   defaultRehypePlugins,
@@ -17,6 +22,7 @@ export interface MarkdownProps {
   streaming?: boolean;
   className?: string;
   renderers?: CustomRenderer[];
+  onLinkClick?: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
 const safePlugins = Object.entries(defaultRehypePlugins)
@@ -115,7 +121,35 @@ export const Markdown = memo(function Markdown({
   streaming = false,
   className,
   renderers,
+  onLinkClick,
 }: MarkdownProps) {
+  const linkComponents = useMemo<Components>(() => {
+    if (!onLinkClick) return components;
+    return {
+      ...components,
+      a: ({ href, children }) => {
+        if (!href) return <span>{children}</span>;
+        const activate = /^https?:\/\//i.test(href)
+          ? (event: MouseEvent<HTMLAnchorElement>) => {
+              if (event.defaultPrevented || event.button > 1) return;
+              event.preventDefault();
+              onLinkClick(href, event);
+            }
+          : undefined;
+        return (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={activate}
+            onAuxClick={activate}
+          >
+            {children}
+          </a>
+        );
+      },
+    };
+  }, [onLinkClick]);
   const [code, setCode] = useState<PluginConfig['code']>();
   const [math, setMath] = useState<PluginConfig['math']>();
   const needsCode = !code && /`{3,}|~{3,}/.test(text);
@@ -174,7 +208,7 @@ export const Markdown = memo(function Markdown({
         isAnimating={streaming}
         skipHtml
         rehypePlugins={safePlugins}
-        components={components}
+        components={linkComponents}
         urlTransform={urlTransform}
         controls={controls}
         translations={translations}
