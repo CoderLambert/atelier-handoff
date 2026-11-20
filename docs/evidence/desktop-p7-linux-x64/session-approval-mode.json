@@ -20,5 +20,16 @@
     "automaticModeRestoredAfterReopen": true,
     "otherSessionRetainedControlledEdit": true,
     "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "waitedForActiveTaskToEnd": true,
+    "normalShutdownMs": 129,
+    "runtimeLockReleasedBeforeLaunch": true,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "projectsPreserved": 1,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true,
+    "newWaylandWindowMapped": true
   }
 }
