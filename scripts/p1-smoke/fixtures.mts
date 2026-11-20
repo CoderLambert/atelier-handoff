@@ -1,7 +1,7 @@
 /**
  * @file 提供安装验收所需的离线测试夹具。
- * @implementation 提供回环模型、需审批的 MCP 和网页夹具，验证导航超时后继续读取页面及自动化长任务交付，并提供 PDF 和截图检查数据。
- * @updated 2026-11-20T22:16:28+08:00
+ * @implementation 提供回环模型、需审批的 MCP 和本地网页，生成队列、实时插入、文档读取及桌面功能的响应和验证数据。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';

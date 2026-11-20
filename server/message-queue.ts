@@ -1,7 +1,7 @@
 /**
- * @file 保存会话按序等待启动的消息。
- * @implementation 使用 SQLite 保留入队顺序和提交回执，提供会话快照、撤回和重启恢复所需的操作。
- * @updated 2026-11-20T22:30:00+08:00
+ * @file 管理待处理消息与实时插入状态。
+ * @implementation 使用 SQLite 保存顺序、优先级和提交回执，跟踪实时投递，并保留中断后结果待确认的消息。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';

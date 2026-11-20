@@ -1,7 +1,7 @@
 /**
- * @file 验证会话消息排队和重启恢复。
- * @implementation 用隔离 SQLite、真实 HTTP 和可控运行器检查 FIFO、幂等、撤回、草稿与附件保留及执行交接。
- * @updated 2026-11-20T22:30:00+08:00
+ * @file 验证会话队列、实时投递状态和重启恢复。
+ * @implementation 用隔离 SQLite、真实 HTTP 和可控运行器检查消息顺序、幂等、撤回、草稿与附件保留，以及投递中断后继续发送。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

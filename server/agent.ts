@@ -1,7 +1,7 @@
 /**
- * @file 编排智能体运行、工具调用与取消。
- * @implementation 使用本轮能力、审批策略和执行配置运行 Agent SDK 任务，传递模型与推理深度、按网关来源选择凭据，并保留停止与关闭协议。
- * @updated 2026-11-20T17:32:12+08:00
+ * @file 编排智能体运行、工具调用、实时消息插入与取消。
+ * @implementation 按本轮配置运行 Agent SDK，交付补充消息并核对 SDK 回执。为文档附件准备受控读取视图，结束时清理临时文件。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';

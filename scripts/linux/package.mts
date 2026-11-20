@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * @file 构建 Linux x64 应用发布包。
- * @implementation 校验构建输入与依赖，固定并核验内置 Shunt 可执行文件及许可证，组装运行时并生成便携包和 Arch 包。
- * @updated 2026-11-20T17:32:12+08:00
+ * @implementation 校验构建输入、依赖和许可证，将内置 Shunt、文档解析依赖与 PDF 文字资源打入便携包和 Arch 包。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 // Linux x64/glibc only: build the production frontend, then run with tsx.
 // Uses installed inputs only; no downloads, dependency installs, root, or git.

@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 处理配对、会话和事件，校验草稿与运行配置，解析内置网关的有效配置、提供显式登录入口并协调关闭。
- * @updated 2026-11-20T17:32:12+08:00
+ * @implementation 处理配对、会话、事件和内置网关，协调队列实时插入与优先执行，并提供文档流式上传、预览和原件下载。
+ * @updated 2026-11-21T00:28:46+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
