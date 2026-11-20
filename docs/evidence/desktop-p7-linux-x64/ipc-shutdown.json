@@ -1,0 +1,48 @@
+{
+  "platform": "linux",
+  "architecture": "x64",
+  "artifacts": {
+    "arch": {
+      "name": "atelier-0.2.0-1-x86_64.pkg.tar.zst",
+      "sha256": "c106d2d6e325082a707c1a8d1b16d64b63afeaa768f7a9093df336ddb754ab9e",
+      "bytes": 299495673
+    },
+    "portable": {
+      "name": "atelier-0.2.0-linux-x64.tar.zst",
+      "sha256": "7a5f4d3b292a694edd080d0e8abe6c583d0eb53c841cdd22c59e675139ed51fa",
+      "bytes": 299280442
+    }
+  },
+  "installationSmoke": {
+    "status": "passed",
+    "metrics": {
+      "freshStarts": 10,
+      "slowestReadyMs": 787,
+      "peakTreeRssMiB": 1156.8,
+      "slowestShutdownMs": 106,
+      "rssSamplingIntervalMs": 150,
+      "budgets": {
+        "startupMs": 5000,
+        "shutdownMs": 3000,
+        "rssMiB": 1536
+      }
+    },
+    "processOwnership": {
+      "installedExecutablesOnly": true,
+      "cleanExitCount": 11,
+      "remainingProcesses": 0
+    }
+  },
+  "recoverySmoke": {
+    "duplicateSingleWriter": true,
+    "unpairedDenied": true,
+    "realSdk": true,
+    "paidCalls": 0,
+    "crashDuringApproval": true,
+    "approvalReplayed": false,
+    "gracefulStopDuringRun": true,
+    "shutdownMs": 1039,
+    "runtimeProcessesExited": 3,
+    "recoveryDialogReply": "test substitute"
+  }
+}

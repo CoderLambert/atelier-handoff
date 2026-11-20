@@ -19,6 +19,12 @@
 3. 运行时在私有数据根持有独立 SQLite 锁定事务，跨进程关闭时由操作系统释放。继续读写 PID 文件以识别已运行的旧版本。升级时先关闭旧版。收到退出请求后停止接收新任务，取消在途 Agent 和 MCP，等服务请求完成再关闭存储。恢复在事务内打断存量活动运行并使旧审批失效，保留已知结果，并提示检查未确认的副作用。
 4. 握手与初始化限时 12 秒，窗口装载限时 8 秒。Linux 正常退出预算仍为 3 秒。超出正常期限后记录进程状态，宿主等待最多 10 秒并清理属于本次运行的 Unix 子进程组。独立 bwrap 工具有自己的父进程退出保护。Windows 子孙进程清理归 P8 实测。
 
+## P8 正常退出准备
+
+Node.js 在 Windows 上以强制终止实现 `child.kill('SIGTERM')`，运行时无法依靠该信号完成保存。桌面宿主正常退出时关闭私有 IPC。运行时已有的 `disconnect` 处理会停止接收新任务、等待在途工作并释放数据库。宿主继续等待进程退出，超时后调用现有强制清理。Windows 安装件仍需验证系统关机、正常退出和子孙进程清理。
+
+关闭私有 IPC 后，宿主以子进程的 `exit` 事件确认实际退出。启动失败时保留 `close` 兜底。Linux 上复用安装件故障恢复测试，覆盖 SDK 运行中关闭、已持久化的中断记录和单写者。在对应平台的图形会话运行 `npx tsx scripts/smoke-desktop-recovery.mts <安装后的 Electron 可执行文件>`。脚本在 Windows 查找 `resources/runtime/bin/node.exe`，在 macOS 查找 `.app/Contents/Resources/runtime/bin/node`。失败时回退这一宿主改动，沿用已验收的 P7 归档。[Node.js 子进程文档](https://nodejs.org/docs/latest-v24.x/api/child_process.html#subprocessdisconnect) · [Electron 退出事件](https://www.electronjs.org/docs/latest/api/app#event-before-quit)
+
 ## 验证与回退
 
 在隔离数据根与 profile 复测重复启动、端口冲突、强制终止、重试、待审批恢复、API 配对和普通 Web 启动。安装态重跑 SDK 服务替身以及十次进程清理。证据按测试范围写入 [执行日志](../../openspec/roadmaps/build-atelier-desktop/task-log.md)。失败时停止新进程，将 P1 安装件指向备份数据副本。P2 不升级业务数据库 schema，临时验证先使用副本，旧版不得与新版同时尝试打开同一数据根。

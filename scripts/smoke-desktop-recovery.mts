@@ -1,6 +1,6 @@
 /**
- * @file 验证 Linux 安装件的运行时监督和故障恢复。
- * @implementation 使用隔离数据、真实 SDK 与回环服务，在待审批和运行中注入退出。
+ * @file 验证桌面安装件的运行时监督和故障恢复。
+ * @implementation 按宿主平台定位随包运行时，用隔离数据和回环 SDK 验证崩溃恢复与正常退出。
  * @updated 2026-11-20T02:00+08:00
  */
 import assert from 'node:assert/strict';
@@ -17,9 +17,16 @@ import { array, record, string, until } from './p1-smoke/contracts.mjs';
 import { listen, model, streamFixtureApproval } from './p1-smoke/fixtures.mjs';
 
 const binary = process.argv[2];
-assert.ok(binary, 'Usage: tsx scripts/smoke-desktop-recovery.mts /installed/atelier');
+assert.ok(binary, 'Usage: tsx scripts/smoke-desktop-recovery.mts <installed Electron executable>');
 const executablePath = resolve(binary);
-const args = ['--ozone-platform=x11'];
+const args = process.platform === 'linux' ? ['--ozone-platform=x11'] : [];
+const executableDir = dirname(executablePath);
+const resources =
+  process.platform === 'darwin'
+    ? join(dirname(executableDir), 'Resources')
+    : join(executableDir, 'resources');
+const runtime = join(resources, 'runtime');
+const nodeBinary = join(runtime, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
 const root = await mkdtemp(join(tmpdir(), 'atelier-recovery-smoke-'));
 const data = join(root, 'data');
 let application: ElectronApplication | undefined;
@@ -79,11 +86,14 @@ async function ownerPid() {
 
 async function exited(pid: number) {
   await until(
-    async () =>
-      await access(`/proc/${pid}`).then(
-        () => undefined,
-        () => true,
-      ),
+    async () => {
+      try {
+        process.kill(pid, 0);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+        throw error;
+      }
+    },
     5000,
     `runtime exit ${pid}`,
   );
@@ -111,10 +121,9 @@ try {
   assert.deepEqual(await once(duplicate, 'exit'), [0, null]);
   assert.equal(await ownerPid(), initialPid);
   const origin = new URL(page.url()).origin;
-  const runtime = join(dirname(executablePath), 'resources/runtime');
   async function probeRuntime(dataDir: string, port: string, version: number, expected?: string) {
     const child = fork(join(runtime, 'server/main.js'), [], {
-      execPath: join(runtime, 'bin/node'),
+      execPath: nodeBinary,
       execArgv: [],
       env: { ...env, ATELIER_DESKTOP_BROWSER: '1', ATELIER_PORT: port, ATELIER_DATA_DIR: dataDir },
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],

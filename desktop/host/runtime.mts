@@ -87,7 +87,10 @@ export class RuntimeSupervisor {
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
-    const exited = new Promise<void>((resolve) => child.once('close', () => resolve()));
+    const exited = new Promise<void>((resolve) => {
+      child.once('exit', () => resolve());
+      child.once('close', () => resolve());
+    });
     const launch: Launch = { child, exited, ready: false, retired: false };
     this.current = launch;
     const hello: DesktopHostHello = {
@@ -105,7 +108,7 @@ export class RuntimeSupervisor {
           failed = true;
           if (launch.ready) {
             launch.ready = false;
-            this.onLost(reason);
+            if (!launch.retired) this.onLost(reason);
           } else reject(new Error(reason));
         };
         const timeout = setTimeout(() => lost('工作台服务启动超时。'), desktopHostDeadlines.ready);
@@ -161,9 +164,8 @@ export class RuntimeSupervisor {
     const { child } = launch;
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
-      // Ask Node to drain before terminating the entire Unix process group.
-      if (child.pid !== undefined && child.exitCode === null && child.signalCode === null)
-        child.kill('SIGTERM');
+      // Node handles IPC disconnect as a graceful shutdown on every platform.
+      if (child.connected) child.disconnect();
       await Promise.race([
         launch.exited,
         new Promise<void>((resolve) => {
