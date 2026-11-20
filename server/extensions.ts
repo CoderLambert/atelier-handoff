@@ -139,7 +139,7 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
       ['permissions', 'permissionMode', 'dangerouslySkipPermissions', 'trust', 'trusted'].some(
         (key) => Object.hasOwn(metadata, key),
       )) ||
-    /(?:^|\s)!`/m.test(text) ||
+    (skillPackage ? /!`/ : /(?:^|\s)!`/m).test(text) ||
     unsupportedReference ||
     metadata['allowed-tools'] !== undefined
   ) {

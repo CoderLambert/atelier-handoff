@@ -221,6 +221,7 @@ test('package-aware inspection accepts existing support references without broad
     'Read `${CLAUDE_SKILL_DIR}/../outside`.',
     'Read `${CLAUDE_SKILL_DIR}/missing.md`.',
     'Prepare !`./scripts/generate`',
+    'prefix!`./scripts/generate`',
     ...[
       'hooks: {}',
       'mcpServers: {}',
