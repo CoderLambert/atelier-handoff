@@ -27,6 +27,20 @@
     "quickCheck": "ok",
     "foreignKeyFailures": 0
   },
+  "desktopSwitch": {
+    "preUpgradeBackupVerified": true,
+    "oldDesktopClosedNormally": true,
+    "runtimeLockReleasedBeforeLaunch": true,
+    "normalShutdownMs": 128,
+    "newWindowMapped": true,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "destinationVersion": 6,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsPreserved": true,
+    "quickCheck": "ok",
+    "foreignKeyFailures": 0
+  },
   "benchmark": {
     "node": "v24.21.0",
     "scope": "warm snapshot record reads, same SQLite connection, excludes HTTP and agent/queue enrichment",
