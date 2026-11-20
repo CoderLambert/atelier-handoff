@@ -1,7 +1,7 @@
 /**
- * @file 连接会话聊天界面与草稿操作。
- * @implementation 按会话协调输入模式、单次自动审批、发送及运行操作。
- * @updated 2026-11-20T14:44:21+08:00
+ * @file 连接会话聊天界面、运行模式与草稿操作。
+ * @implementation 按会话协调模式保存、临时搜索上限与任务发送，限制只读智能体的可选模式。
+ * @updated 2026-11-20T15:58:31+08:00
  */
 import { useCallback, useMemo } from 'react';
 import type { Draft } from '@shared/types';

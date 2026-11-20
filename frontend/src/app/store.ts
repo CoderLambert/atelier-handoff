@@ -1,7 +1,7 @@
 /**
  * @file 管理工作区界面与会话交互状态。
- * @implementation 使用 Redux 保存导航、草稿、提交状态和各会话的临时自动审批选择。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 使用 Redux 保存导航、会话草稿、提交状态和各会话的临时搜索费用上限。
+ * @updated 2026-11-20T15:58:31+08:00
  */
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
