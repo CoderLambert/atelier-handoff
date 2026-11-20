@@ -56,9 +56,11 @@ export default function PermissionDialog({
             {operation ? '操作审批' : '文件差异与审批'}
           </DialogTitle>
           <DialogDescription>
-            {permission.kind === 'browser'
-              ? '核对本次浏览器操作的完整内容。允许仅对本次操作生效，读取的网页内容可能发送给模型。'
-              : '核对操作内容后，决定是否允许本次操作。'}
+            {permission.decisionSource === 'automatic'
+              ? '本次操作由本轮全工具自动化模式自动批准。可在此查看操作内容与处理记录。'
+              : permission.kind === 'browser'
+                ? '核对本次浏览器操作的完整内容。允许仅对本次操作生效，读取的网页内容可能发送给模型。'
+                : '核对操作内容后，决定是否允许本次操作。'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5 sm:p-6">
@@ -74,6 +76,8 @@ export default function PermissionDialog({
             <p className="break-all font-mono text-sm font-medium">{permission.path}</p>
           ) : null}
           <dl className="grid gap-3 text-sm sm:grid-cols-[5rem_1fr]">
+            <dt className="text-muted-foreground">审批来源</dt>
+            <dd>{permission.decisionSource === 'automatic' ? '自动批准' : '手动审批'}</dd>
             <dt className="text-muted-foreground">操作原因</dt>
             <dd className="whitespace-pre-wrap break-words">{permission.reason || '未提供'}</dd>
             {permission.status === 'pending' ? (

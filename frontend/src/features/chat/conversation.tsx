@@ -15,6 +15,7 @@ import { ArtifactAction } from '@/features/inspector';
 import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
 import { AttachmentPreview } from './attachment-preview';
 import { Markdown } from './markdown';
+import { runModeLabel } from './run-mode';
 
 const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
 
@@ -391,6 +392,7 @@ export function Conversation({
                   <div className="message-meta">
                     <strong>{assistant ? 'atelier' : '你'}</strong>
                     <time dateTime={message.createdAt}>{date(message.createdAt)}</time>
+                    {!assistant && run ? <span>{runModeLabel(run)}</span> : null}
                   </div>
                   {assistant && run && isActive(run) ? (
                     <RunProgress run={run} tools={tools} events={events} hasText={hasText} />
@@ -398,7 +400,8 @@ export function Conversation({
                   {assistant && runFooterOwners.get(message.runId) === message.id
                     ? indexes.permissions
                         .get(message.runId)
-                        ?.map((item) => (
+                        ?.filter((item) => item.decisionSource !== 'automatic')
+                        .map((item) => (
                           <ChatApproval
                             key={item.id}
                             permission={item}

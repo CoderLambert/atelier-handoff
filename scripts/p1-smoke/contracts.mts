@@ -1,7 +1,7 @@
 /**
  * @file 定义 Linux 安装验收的数据契约和通用工具。
- * @implementation 提供配置与证据类型、输入校验、脱敏和限时轮询。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 提供安装配置、原生浏览器与自动化证据类型，以及输入校验、脱敏和限时轮询。
+ * @updated 2026-11-20T14:25:31+08:00
  */
 import assert from 'node:assert/strict';
 import { desktopBrowserAccessStateSchema } from '../../shared/desktop-browser.js';
@@ -16,6 +16,15 @@ export interface BrowserFixtureEvidence {
   refreshedRef: string | null;
   clickResultReturned: boolean;
   screenshotArtifactId: string | null;
+}
+
+export interface AutomaticFixtureEvidence {
+  requests: number;
+  calls: { name: string; input: Record<string, unknown> }[];
+  clickResultReturned: boolean;
+  writeResultReturned: boolean;
+  mcpResultReturned: boolean;
+  mcpCalls: number;
 }
 
 export function browserSnapshot(value: unknown): {

@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "platform": "Linux x64 (Omarchy)",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "8fec2f62a9fae84723727af0900d3dc9c24e5e2456c476a4b10524acf2d15a6e",
+    "atelier-0.2.0-linux-x64.tar.zst": "79ed89aa8d31c38669cd19c2d1896c57db05a0165ff49a81c40d28b96732dc17"
+  },
+  "regression": {
+    "checkAndProductionBuild": "passed",
+    "runtimeTestsPassed": 105,
+    "frontendTestsPassed": 35,
+    "failed": 0
+  },
+  "installedLayout": {
+    "display": "Dedicated Xvfb in a private PID, mount and network namespace",
+    "sourceAndDevToolsMounted": false,
+    "resourcesVerified": 4080,
+    "resourceManifestSha256": "421e2b9969f440fc36a851d02bc6b2589cfc380c545ce3603022dff444d8cd4d",
+    "coldStarts": 10,
+    "maxStartupMs": 762,
+    "peakRssMiB": 1362.4,
+    "maxShutdownMs": 111,
+    "remainingProcesses": 0,
+    "offlineHistoryReopened": true,
+    "pdfPreviewPassed": true,
+    "sdk": "Packaged Node and real Agent SDK CLI, loopback SSE model replacement",
+    "manualRun": {
+      "headerRows": 2,
+      "headerCssPx": 80,
+      "viewportRestoredAfterSettings": true,
+      "approvedClicks": 1,
+      "png": { "width": 633, "height": 794, "bluePixels": 23800 }
+    },
+    "automaticRun": {
+      "startedThroughComposer": true,
+      "sdkRequests": 7,
+      "succeededTools": 6,
+      "webpageClicks": 1,
+      "fileWrittenAndVerified": true,
+      "localMcpCalls": 1,
+      "automaticApprovalKinds": ["browser", "write", "mcp"],
+      "pendingApprovalEvents": 0,
+      "approvalCards": 0,
+      "composerAndSavedDraftReturnToReadonly": true
+    }
+  },
+  "nativeWayland": {
+    "scope": "Previous candidate with identical browser UI. Final candidate fixes server-side draft reset.",
+    "archPackageSha256": "a34175bb266f752214871f9eee68ea6c55c9f5868f3b2c4254cd470ad21b9",
+    "chromiumSandbox": true,
+    "x11Display": false,
+    "sameViewRestoredAfterSettings": true,
+    "windowSamples": [
+      { "width": 1280, "height": 800, "zoom": 1, "headerCssPx": 80, "pageDipHeight": 634 },
+      { "width": 1440, "height": 900, "zoom": 1, "headerCssPx": 80, "pageDipHeight": 734 },
+      { "width": 1440, "height": 900, "zoom": 1.25, "headerCssPx": 80, "pageDipHeight": 700 }
+    ]
+  },
+  "liveDesktopSwitch": {
+    "normalShutdownMs": 104,
+    "oldRuntimeReleasedOwnerLock": true,
+    "newWaylandWindowMapped": true,
+    "sameDataRootAndRendererOrigin": true,
+    "sameBrowserProfile": true,
+    "projectBrowserPartitionDirectoriesPreserved": 1,
+    "persistedRecordsMatched": true,
+    "projects": 1,
+    "sessions": 14,
+    "nonEmptyDrafts": 2,
+    "settingsMatched": true
+  },
+  "knownLimit": "Run browser click workflows with the browser panel open. In an earlier run a detached native view reported a successful click without changing the page.",
+  "paidModelCalls": 0,
+  "paidSearchCalls": 0
+}

@@ -3,11 +3,11 @@
  * @implementation 按概览、变更和事件组织会话快照，展示运行与审批状态，并按需加载审批和设置对话框。
  * @updated 2026-11-20T12:10:16+08:00
  */
-import { lazy, Suspense, useId, useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/client';
+import { lazy, Suspense, useId, useState } from 'react';
+import { useRunActions } from './hooks/use-run-actions';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { runModeLabel } from '@/features/chat/run-mode';
 import { activeStatuses, type Permission, type Run } from '@shared/types';
 import { ArtifactAction } from './artifact-action';
 import {
@@ -149,7 +149,7 @@ function InspectorSession({
                 ))
             ) : (
               <EmptyState title="暂无操作记录" icon="shield">
-                文件修改与命令操作会在这里逐次确认。
+                工具操作的审批与自动批准记录会显示在这里。
               </EmptyState>
             )}
           </div>
@@ -170,7 +170,10 @@ function InspectorSession({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block text-[11px]">
-                            {eventNames[event.type] ?? event.type}
+                            {event.type === 'permission.resolved' &&
+                            event.payload.decisionSource === 'automatic'
+                              ? '自动批准操作'
+                              : (eventNames[event.type] ?? event.type)}
                           </span>
                           <time
                             dateTime={event.at}
@@ -228,9 +231,7 @@ function InspectorSession({
                 <>
                   <div className="flex items-center justify-between gap-2">
                     <StatusBadge status={run.status} />
-                    <span className="text-[10px] text-muted-foreground">
-                      {run.mode === 'edit' ? '受控修改' : '只读'}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground">{runModeLabel(run)}</span>
                   </div>
                   <p className="mt-3 line-clamp-3 text-xs leading-6 text-muted-foreground">
                     {run.prompt}
@@ -405,6 +406,7 @@ function PermissionCard({ permission, onOpen }: { permission: Permission; onOpen
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[10px] font-medium text-muted-foreground">
           {permissionOperation(permission)}
+          {permission.decisionSource === 'automatic' ? ' · 自动批准' : ''}
         </span>
         <StatusBadge status={permission.status} />
       </div>
@@ -427,23 +429,7 @@ function PermissionCard({ permission, onOpen }: { permission: Permission; onOpen
   );
 }
 function RunActions({ run, snapshot }: { run: Run; snapshot: Snapshot }) {
-  const retryKey = useRef<string | null>(null);
-  const client = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: (action: 'stop' | 'retry') => {
-      if (action === 'retry' && !retryKey.current) retryKey.current = crypto.randomUUID();
-      return api<{ run: Run }>(`/api/runs/${encodeURIComponent(run.id)}/${action}`, {
-        method: 'POST',
-        body: action === 'retry' ? { idempotencyKey: retryKey.current } : {},
-      });
-    },
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['snapshot', run.sessionId] });
-      void client.invalidateQueries({ queryKey: ['bootstrap'] });
-      void client.invalidateQueries({ queryKey: ['runs'] });
-      void client.invalidateQueries({ queryKey: ['trace', run.id] });
-    },
-  });
+  const mutation = useRunActions(run);
   const active = activeStatuses.includes(run.status);
   const canRetry = ['failed', 'stopped', 'interrupted'].includes(run.status);
   if (!active && !canRetry) return null;

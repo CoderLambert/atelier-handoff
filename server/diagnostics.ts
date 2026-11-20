@@ -29,7 +29,7 @@ const eventFields: Record<string, readonly string[]> = {
   'tool.finished': ['toolCallId', 'status'],
   'tool.blocked': ['toolCallId', 'tool', 'code'],
   'permission.requested': ['permissionId'],
-  'permission.resolved': ['permissionId', 'status'],
+  'permission.resolved': ['permissionId', 'status', 'decisionSource'],
 };
 
 function label(value: unknown): string | null {
@@ -91,6 +91,7 @@ export function buildRunDiagnostics(
         : {}),
       status: run.status,
       mode: run.mode,
+      ...(run.approvalMode ? { approvalMode: run.approvalMode } : {}),
       createdAt: run.createdAt,
       startedAt: run.startedAt,
       endedAt: run.endedAt,

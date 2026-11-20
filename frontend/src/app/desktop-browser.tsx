@@ -5,9 +5,17 @@
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useDesktopBrowserAccess } from '@/use-query/browser/use-desktop-browser-access';
 import { useUpdateDesktopBrowserAccess } from '@/use-query/browser/use-update-desktop-browser-access';
-import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, Settings, X } from 'lucide-react';
 
 import type {
   DesktopBrowserAction as BrowserAction,
@@ -56,6 +64,31 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
   const transferring = state?.transferring || pending === 'take' || pending === 'release';
   const disabled = !state || Boolean(pending) || transferring;
   const address = activeTab ? (addresses[activeTab.id] ?? state?.url ?? '') : '';
+  const statusError = error || (access.error || accessError)?.message;
+  const status = statusError
+    ? statusError
+    : transferring
+      ? '正在交接控制权…'
+      : !state
+        ? '正在连接浏览器…'
+        : state.control
+          ? 'Agent 已暂停'
+          : access.isPending
+            ? '正在读取授权…'
+            : !agentAvailable
+              ? '浏览器工具不可用'
+              : !agentEnabled
+                ? 'Agent 浏览器已停用'
+                : state.tabs.length === 0
+                  ? '点击 + 新建标签'
+                  : differentAgentTab
+                    ? 'Agent 在其他标签'
+                    : state.busy
+                      ? 'Agent 正在操作'
+                      : agentTab
+                        ? 'Agent 工作标签'
+                        : '等待 Agent';
+  const showAgentTarget = differentAgentTab && !state?.control && !transferring && !statusError;
 
   useEffect(() => {
     selectedTab.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -129,57 +162,6 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
 
   return (
     <section className="desktop-browser" aria-label="桌面浏览器" aria-busy={Boolean(transferring)}>
-      <div className="desktop-browser-status">
-        <p role="status">
-          {access.isPending
-            ? '正在读取 Agent 浏览器授权…'
-            : access.isError
-              ? '无法确认 Agent 浏览器授权状态。'
-              : !agentAvailable
-                ? `内置浏览器工具当前不可用。${agentEnabled ? '本项目授权仍为启用，可停用。' : ''}`
-                : agentEnabled
-                  ? '本项目已启用 Agent 浏览器，点击、输入需要逐次审批。'
-                  : '本项目已停用 Agent 浏览器，Agent 无法读取或操作网页。'}
-        </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          aria-label="允许 Agent 使用内置浏览器"
-          aria-pressed={agentEnabled}
-          aria-describedby={accessDescriptionId}
-          disabled={
-            !access.data || access.isError || accessPending || (!agentAvailable && !agentEnabled)
-          }
-          onClick={() => {
-            if (!access.data || accessPending) return;
-            updateAccess.mutate({
-              projectId,
-              enabled: !access.data.enabled,
-              revision: access.data.revision,
-            });
-          }}
-        >
-          {accessPending ? '正在保存…' : agentEnabled ? '停用 Agent 浏览器' : '启用 Agent 浏览器'}
-        </Button>
-      </div>
-      <div className="desktop-browser-status">
-        <p id={accessDescriptionId}>
-          启用后，具备浏览器能力的 Agent
-          可以读取网页和截图。点击、输入需要逐次审批。网页内容可能发送给模型。 人工接管期间暂停
-          Agent 的网页观察与操作；交还控制不会启用项目授权。
-        </p>
-      </div>
-      {access.isError || accessError ? (
-        <div className="desktop-browser-status" role="alert">
-          <p>{(access.error || accessError)?.message}</p>
-          {access.isError ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => void access.refetch()}>
-              重试浏览器授权状态
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
       <div className="desktop-browser-tabbar">
         <div className="desktop-browser-tabs" role="group" aria-label="网页标签">
           {state?.tabs.map((tab) => {
@@ -213,6 +195,7 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
                   type="button"
                   size="icon-sm"
                   variant="ghost"
+                  className="desktop-browser-icon"
                   aria-label={`关闭标签：${label}`}
                   title={`关闭标签：${label}`}
                   disabled={disabled || state.busy}
@@ -227,16 +210,132 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
         <Button
           ref={newTab}
           type="button"
-          size="sm"
+          size="icon-sm"
           variant="ghost"
-          className="desktop-browser-new-tab"
+          className="desktop-browser-icon"
           aria-label="新建标签页"
+          title="新建标签页"
           disabled={disabled}
           onClick={() => void command('new-tab')}
         >
           <Plus size={16} data-icon="inline-start" />
-          新标签
         </Button>
+        <div
+          className="desktop-browser-status"
+          role={statusError ? 'alert' : 'status'}
+          title={status}
+        >
+          {showAgentTarget ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-label="查看 Agent 标签"
+              title={`Agent 工作标签：${agentTab.title || agentTab.url || '新标签页'}`}
+              disabled={disabled}
+              onClick={() => void command('select-tab', agentTab.id)}
+            >
+              <span className="truncate">{status}</span>
+            </Button>
+          ) : (
+            <span className="truncate">{status}</span>
+          )}
+        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="desktop-browser-icon"
+              aria-label="浏览器设置"
+              title="浏览器设置"
+            >
+              <Settings size={16} data-icon="inline-start" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="desktop-browser-settings">
+            <DialogHeader>
+              <DialogTitle>浏览器设置</DialogTitle>
+              <DialogDescription>管理当前项目的 Agent 浏览器授权。</DialogDescription>
+            </DialogHeader>
+            <section className="desktop-browser-settings-section" aria-label="项目浏览器授权">
+              <h3>项目授权</h3>
+              <p role="status">
+                {access.isPending
+                  ? '正在读取 Agent 浏览器授权…'
+                  : access.isError
+                    ? '无法确认 Agent 浏览器授权状态。'
+                    : !agentAvailable
+                      ? `内置浏览器工具当前不可用。${agentEnabled ? '本项目授权仍为启用，可停用。' : ''}`
+                      : agentEnabled
+                        ? '本项目已启用 Agent 浏览器。'
+                        : '本项目已停用 Agent 浏览器，Agent 无法读取或操作网页。'}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                aria-label="允许 Agent 使用内置浏览器"
+                aria-pressed={agentEnabled}
+                aria-describedby={accessDescriptionId}
+                disabled={
+                  !access.data ||
+                  access.isError ||
+                  accessPending ||
+                  (!agentAvailable && !agentEnabled)
+                }
+                onClick={() => {
+                  if (!access.data || accessPending) return;
+                  updateAccess.mutate({
+                    projectId,
+                    enabled: !access.data.enabled,
+                    revision: access.data.revision,
+                  });
+                }}
+              >
+                {accessPending
+                  ? '正在保存…'
+                  : agentEnabled
+                    ? '停用 Agent 浏览器'
+                    : '启用 Agent 浏览器'}
+              </Button>
+              {access.isError || accessError ? (
+                <div className="desktop-browser-settings-error" role="alert">
+                  <p>{(access.error || accessError)?.message}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={access.isFetching || accessPending}
+                    onClick={() => {
+                      updateAccess.reset();
+                      void access.refetch();
+                    }}
+                  >
+                    重试浏览器授权状态
+                  </Button>
+                </div>
+              ) : null}
+            </section>
+            <section
+              className="desktop-browser-settings-section"
+              id={accessDescriptionId}
+              aria-label="浏览器使用说明"
+            >
+              <h3>使用说明</h3>
+              <p>
+                启用后，具备浏览器能力的 Agent
+                可以读取网页和截图。点击、输入需要逐次审批，网页内容可能发送给模型。
+              </p>
+              <p>
+                人工接管期间暂停 Agent 的网页观察与操作。交还控制后，Agent
+                从当前标签重新观察；交还控制不会启用项目授权。
+              </p>
+              <p>标签上的机器人图标标记 Agent 的工作标签，可与当前查看的标签不同。</p>
+            </section>
+          </DialogContent>
+        </Dialog>
       </div>
       <form
         className="desktop-browser-toolbar"
@@ -251,31 +350,34 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
           type="button"
           size="icon-sm"
           variant="ghost"
+          className="desktop-browser-icon"
           aria-label="后退"
           disabled={!state?.control || disabled || !activeTab}
           onClick={() => void command('back')}
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={16} data-icon="inline-start" />
         </Button>
         <Button
           type="button"
           size="icon-sm"
           variant="ghost"
+          className="desktop-browser-icon"
           aria-label="前进"
           disabled={!state?.control || disabled || !activeTab}
           onClick={() => void command('forward')}
         >
-          <ArrowRight size={16} />
+          <ArrowRight size={16} data-icon="inline-start" />
         </Button>
         <Button
           type="button"
           size="icon-sm"
           variant="ghost"
+          className="desktop-browser-icon"
           aria-label="刷新网页"
           disabled={!state?.control || disabled || !activeTab}
           onClick={() => void command('reload')}
         >
-          <RotateCw size={15} />
+          <RotateCw size={15} data-icon="inline-start" />
         </Button>
         <input
           aria-label="网页地址"
@@ -293,66 +395,21 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
           type="button"
           size="sm"
           variant={state?.control ? 'default' : 'outline'}
+          className="desktop-browser-control"
+          aria-label={
+            state?.control ? (differentAgentTab ? '交还当前标签' : '交还控制') : '人工接管'
+          }
+          title={
+            state?.control
+              ? '交还控制后，Agent 将从当前标签重新观察'
+              : '人工接管并暂停 Agent 网页操作'
+          }
           disabled={disabled || (state?.control && state.busy)}
           onClick={() => void command(state?.control ? 'release' : 'take')}
         >
-          {transferring
-            ? '交接中…'
-            : state?.control
-              ? differentAgentTab
-                ? '交还当前标签'
-                : '交还控制'
-              : '人工接管'}
+          {transferring ? '交接中…' : state?.control ? '交还' : '人工接管'}
         </Button>
       </form>
-      <div className="desktop-browser-status" role="status">
-        {transferring ? (
-          <p>正在交接浏览器控制权，请稍候…</p>
-        ) : !state ? (
-          <p>正在连接浏览器…</p>
-        ) : state.tabs.length === 0 ? (
-          <p>暂无网页标签。点击「新标签」打开网页。</p>
-        ) : state.control ? (
-          <p>
-            人工接管中，Agent 已暂停网页操作。
-            {differentAgentTab
-              ? `原工作标签为「${agentTab.title || agentTab.url || '新标签页'}」。`
-              : ''}
-            {access.isError || !access.data
-              ? '交还仅结束人工接管；请先确认项目浏览器授权状态。'
-              : !agentEnabled
-                ? '交还仅结束人工接管；项目浏览器工具仍停用。'
-                : !agentAvailable
-                  ? '交还仅结束人工接管；内置浏览器工具当前不可用。'
-                  : '交还后，Agent 可以读取当前标签和截图，点击、输入仍需逐次审批。'}
-          </p>
-        ) : differentAgentTab ? (
-          <>
-            <p>
-              Agent 工作标签为「{agentTab.title || agentTab.url || '新标签页'}」，当前显示其他标签。
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={disabled}
-              onClick={() => void command('select-tab', agentTab.id)}
-            >
-              查看 Agent 标签
-            </Button>
-          </>
-        ) : (
-          <p>
-            {agentTab ? 'Agent 工作标签与当前标签相同。' : ''}
-            需要操作网页时，点击「人工接管」。
-          </p>
-        )}
-      </div>
-      {error ? (
-        <p className="desktop-browser-status" role="alert">
-          {error}
-        </p>
-      ) : null}
       <div className="desktop-browser-slot" ref={slot} aria-label={state?.title || '网页区域'} />
     </section>
   );

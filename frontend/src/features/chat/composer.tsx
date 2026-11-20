@@ -13,6 +13,12 @@ import { ExtensionPicker } from '@/features/extensions/picker';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { isActive } from './conversation';
+import {
+  parseSearchChargeLimit,
+  runModeLabel,
+  type AutomaticApprovalSelection,
+  type ComposerMode,
+} from './run-mode';
 
 import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
 
@@ -22,6 +28,9 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 export function Composer({
   snapshot,
   draft,
+  automaticApproval,
+  onModeChange,
+  onSearchChargeChange,
   onDraftChange,
   onSend,
   onStop,
@@ -29,6 +38,9 @@ export function Composer({
 }: {
   snapshot: Snapshot;
   draft: Draft;
+  automaticApproval?: AutomaticApprovalSelection;
+  onModeChange: (mode: ComposerMode) => void;
+  onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
   onSend: () => Promise<void>;
   onStop: (runId: string) => void;
@@ -43,6 +55,16 @@ export function Composer({
   const [error, setError] = useState('');
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
+  const mode: ComposerMode =
+    agent?.mode === 'readonly' ? 'readonly' : automaticApproval ? 'automatic' : draft.mode;
+  let searchChargeError = '';
+  if (mode === 'automatic') {
+    try {
+      parseSearchChargeLimit(automaticApproval?.maxSearchChargeFen ?? '0');
+    } catch (failure) {
+      searchChargeError = errorText(failure);
+    }
+  }
   const contextAllowed = !agent || agent.capabilities.includes('context');
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
@@ -73,6 +95,7 @@ export function Composer({
     !submitting &&
     !busy &&
     !agent?.issues.length &&
+    !searchChargeError &&
     Boolean(draft.text.trim());
   const attachments = new Map(
     snapshot.attachments.map((attachment) => [attachment.id, attachment]),
@@ -212,22 +235,65 @@ export function Composer({
         >
           <Plus size={14} aria-hidden="true" /> 上下文
         </button>
-        <button
-          type="button"
-          className="composer-policy mode-toggle"
-          disabled={archived || submitting || agent?.mode === 'readonly'}
-          aria-pressed={draft.mode === 'edit'}
-          title="受控修改模式中的每次写入操作仍需审批"
-          onClick={() =>
-            onDraftChange((previous) => ({
-              ...previous,
-              mode: previous.mode === 'edit' ? 'readonly' : 'edit',
-            }))
-          }
-        >
-          {draft.mode === 'edit' ? '模式：受控修改（逐次审批）' : '模式：只读'}
-        </button>
+        <label className="composer-policy mode-toggle">
+          <span className="sr-only">运行模式</span>
+          <select
+            aria-label="运行模式"
+            aria-describedby="composer-mode-help"
+            value={mode}
+            disabled={archived || submitting}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (next === 'readonly' || next === 'edit' || next === 'automatic')
+                onModeChange(next);
+            }}
+          >
+            <option value="readonly">只读</option>
+            <option value="edit" disabled={agent?.mode === 'readonly'}>
+              受控修改
+            </option>
+            <option value="automatic" disabled={agent?.mode === 'readonly'}>
+              全工具自动化
+            </option>
+          </select>
+        </label>
       </div>
+      {mode === 'automatic' ? (
+        <div className="mb-3 flex flex-col gap-2 text-xs text-muted-foreground">
+          <p id="composer-mode-help">
+            本轮自动批准所有可用工具操作，仅本次发送生效。内置浏览器仍需项目授权，人工接管时暂停。
+          </p>
+          <label
+            className="flex flex-wrap items-center gap-2"
+            data-invalid={Boolean(searchChargeError)}
+          >
+            付费搜索单次上限（分）
+            <input
+              type="number"
+              min={0}
+              max={100000}
+              step={1}
+              value={automaticApproval?.maxSearchChargeFen ?? '0'}
+              disabled={archived || submitting}
+              aria-invalid={Boolean(searchChargeError)}
+              aria-describedby="composer-search-charge-help chat-composer-error"
+              className="h-8 w-28 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              onChange={(event) => onSearchChargeChange(event.target.value)}
+            />
+          </label>
+          <p id="composer-search-charge-help">
+            仅限制已知付费搜索的单次请求，不是总费用上限；留空按 0 分处理。
+          </p>
+        </div>
+      ) : (
+        <p id="composer-mode-help" className="sr-only">
+          {agent?.mode === 'readonly'
+            ? '当前智能体仅支持只读。'
+            : mode === 'edit'
+              ? '需要审批的工具操作逐次确认。'
+              : '只读讨论。'}
+        </p>
+      )}
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
           {agent.issues.join('；')}。
@@ -303,9 +369,10 @@ export function Composer({
           <ExtensionPicker
             projectId={archived ? undefined : snapshot.project.id}
             agent={agent}
-            draft={draft}
+            draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
             onChange={(next: Draft) => {
-              if (!archived && !submitting) onDraftChange(next);
+              if (!archived && !submitting)
+                onDraftChange(mode === 'automatic' ? { ...next, mode: draft.mode } : next);
             }}
             inputRef={inputRef}
             onSubmit={() => void submit()}
@@ -331,6 +398,7 @@ export function Composer({
                         } as Record<string, string>
                       )[run.status]
                     : ''}
+            {run ? ` · ${runModeLabel(run)}` : ''}
           </span>
           {run ? (
             <Button
@@ -370,11 +438,16 @@ export function Composer({
       <div className="composer-footer">
         <span>Shift + Enter 换行</span>
         <span>
-          {draft.mode === 'edit' ? '受控修改 · 每次操作逐次审批' : '只读 · 先讨论，再决定'}
+          {mode === 'automatic'
+            ? '全工具自动化 · 仅本轮'
+            : mode === 'edit'
+              ? '受控修改 · 每次操作逐次审批'
+              : '只读 · 先讨论，再决定'}
         </span>
       </div>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
-        {error ||
+        {searchChargeError ||
+          error ||
           (archived
             ? '会话已归档，无法发送或修改草稿。'
             : !snapshot.project.available

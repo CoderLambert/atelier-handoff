@@ -2,8 +2,10 @@ import { useCallback, useMemo } from 'react';
 import type { Draft } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import Chat from '@/features/chat';
+import type { ComposerMode } from '@/features/chat/run-mode';
+import { useSendSessionMessage } from '@/use-query/sessions/use-send-session-message';
 import { readDraft, submitDraft, updateDraft } from './drafts';
-import { useWorkspace } from './store';
+import { actions, store, useWorkspace } from './store';
 
 export default function SessionChat({
   snapshot,
@@ -22,7 +24,9 @@ export default function SessionChat({
 }) {
   const { id, draft: serverDraft } = snapshot.session;
   const savedDraft = useWorkspace((state) => state.workspace.drafts[id]);
+  const automaticApproval = useWorkspace((state) => state.workspace.automaticApprovals[id]);
   const submitting = useWorkspace((state) => state.workspace.submitting[id] === true);
+  const message = useSendSessionMessage();
   const fallback = useMemo(() => readDraft(id, serverDraft), [id, serverDraft]);
   const changeDraft = useCallback(
     (next: Draft | ((previous: Draft) => Draft)) => {
@@ -30,18 +34,41 @@ export default function SessionChat({
     },
     [id, serverDraft],
   );
+  function changeMode(mode: ComposerMode) {
+    if (store.getState().workspace.submitting[id]) return;
+    if (snapshot.agent?.mode === 'readonly' && mode !== 'readonly') return;
+    store.dispatch(
+      actions.setAutomaticApproval({
+        id,
+        selection: mode === 'automatic' ? { maxSearchChargeFen: '0' } : undefined,
+      }),
+    );
+    if (mode !== 'automatic') changeDraft((previous) => ({ ...previous, mode }));
+  }
   async function send() {
     try {
-      await submitDraft(id, serverDraft);
+      await submitDraft(id, serverDraft, message.mutateAsync, snapshot.agent?.mode === 'readonly');
+    } catch (error) {
+      onError(`发送未确认，草稿和运行模式已保留。${(error as Error).message}`);
+      return;
+    }
+    try {
       await onSent(id);
     } catch (error) {
-      onError(`发送未确认，草稿已保留。${(error as Error).message}`);
+      onError(`任务已发送，刷新会话失败。${(error as Error).message}`);
     }
   }
   return (
     <Chat
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
+      automaticApproval={automaticApproval}
+      onModeChange={changeMode}
+      onSearchChargeChange={(maxSearchChargeFen) => {
+        if (store.getState().workspace.submitting[id] || snapshot.agent?.mode === 'readonly')
+          return;
+        store.dispatch(actions.setAutomaticApproval({ id, selection: { maxSearchChargeFen } }));
+      }}
       onDraftChange={changeDraft}
       onSend={send}
       onStop={onStop}

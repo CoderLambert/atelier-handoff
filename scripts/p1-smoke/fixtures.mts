@@ -1,10 +1,12 @@
 /**
  * @file 提供安装验收所需的离线测试夹具。
- * @implementation 提供回环模型接口和网页夹具，生成 PDF 并检查截图中的像素。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 提供回环模型、需审批的 MCP 和网页夹具，分别记录手动与自动化调用，生成 PDF 并检查截图像素。
+ * @updated 2026-11-20T14:25:31+08:00
  */
 import assert from 'node:assert/strict';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { inflateSync } from 'node:zlib';
 import {
   array,
@@ -12,6 +14,7 @@ import {
   errorText,
   record,
   string,
+  type AutomaticFixtureEvidence,
   type BrowserFixtureEvidence,
 } from './contracts.mjs';
 
@@ -29,6 +32,22 @@ export const browserEditAnswer = 'INSTALLED_NATIVE_BROWSER_COMPLETED';
 export const browserTitle = 'Installed Agent browser fixture';
 export const browserClickLabel = 'Apply native browser fixture';
 export const browserManualValue = 'installed-browser-manual-handoff';
+export const automaticPrompt =
+  'Complete the isolated automatic fixture: click the native page, write its local receipt, and call the local approval MCP.';
+export const automaticAnswer = 'INSTALLED_AUTOMATIC_TOOLS_COMPLETED';
+export const automaticReceiptName = 'installed-automatic-receipt.txt';
+export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
+export const automaticMcpName = 'installed-auto-fixture';
+export const automaticMcpTool = 'fixture_approval';
+const automaticMcpResult = 'INSTALLED_AUTOMATIC_MCP_EFFECT';
+const automaticToolIds = {
+  navigate: 'toolu_installed_auto_navigate',
+  snapshot: 'toolu_installed_auto_snapshot',
+  click: 'toolu_installed_auto_click',
+  confirmation: 'toolu_installed_auto_confirmation',
+  write: 'toolu_installed_auto_write',
+  mcp: 'toolu_installed_auto_mcp',
+} as const;
 const browserToolIds = {
   navigate: 'toolu_installed_browser_navigate',
   initialSnapshot: 'toolu_installed_browser_initial_snapshot',
@@ -129,6 +148,98 @@ function browserMessage(
   assert.ok(id, 'Screenshot tool result must identify its saved PNG artifact');
   evidence.screenshotArtifactId = id;
   streamMessage(res, undefined, browserEditAnswer);
+}
+
+function automaticMessage(
+  res: ServerResponse,
+  request: Record<string, unknown>,
+  messages: Record<string, unknown>[],
+  evidence: AutomaticFixtureEvidence,
+  siteUrl: string,
+): void {
+  const tools = array(request.tools, 'automatic SDK tools').map((value) => record(value));
+  const external = tools.filter(
+    (tool) =>
+      string(tool.name).startsWith('mcp__atelier__external_') &&
+      string(tool.description).includes(`${automaticMcpName}/${automaticMcpTool}`),
+  );
+  assert.equal(external.length, 1, 'The granted local approval MCP must reach the SDK');
+  for (const name of ['browser_navigate', 'browser_snapshot', 'browser_click', 'write_file'])
+    assert.ok(tools.some((tool) => tool.name === `mcp__atelier__${name}`));
+  const url = `${siteUrl}/browser-automatic`;
+  const step = ++evidence.requests;
+  assert.ok(step <= 7, 'Expected six automatic tools followed by one final reply');
+  const invoke = (id: string, name: string, input: Record<string, unknown>) => {
+    evidence.calls.push({ name, input });
+    streamMessage(res, { id, name, input });
+  };
+  if (step === 1)
+    return invoke(automaticToolIds.navigate, 'mcp__atelier__browser_navigate', { url });
+  if (step === 2) {
+    assert.ok(toolResultText(messages, automaticToolIds.navigate).includes(url));
+    return invoke(automaticToolIds.snapshot, 'mcp__atelier__browser_snapshot', {});
+  }
+  if (step === 3) {
+    const { ref } = snapshotButton(messages, automaticToolIds.snapshot, url);
+    return invoke(automaticToolIds.click, 'mcp__atelier__browser_click', { ref });
+  }
+  if (step === 4) {
+    assert.ok(toolResultText(messages, automaticToolIds.click).length > 0);
+    evidence.clickResultReturned = true;
+    return invoke(automaticToolIds.confirmation, 'mcp__atelier__browser_snapshot', {});
+  }
+  if (step === 5) {
+    const { snapshot } = snapshotButton(messages, automaticToolIds.confirmation, url);
+    assert.ok(JSON.stringify(snapshot).includes('Browser action completed'));
+    return invoke(automaticToolIds.write, 'mcp__atelier__write_file', {
+      path: automaticReceiptName,
+      content: automaticReceipt,
+      reason: 'Isolated installed automatic smoke receipt',
+    });
+  }
+  if (step === 6) {
+    const written = record(JSON.parse(toolResultText(messages, automaticToolIds.write)) as unknown);
+    assert.equal(written.path, automaticReceiptName);
+    assert.equal(written.applied, true);
+    evidence.writeResultReturned = true;
+    return invoke(automaticToolIds.mcp, string(external[0]?.name), { arguments: {} });
+  }
+  assert.ok(toolResultText(messages, automaticToolIds.mcp).includes(automaticMcpResult));
+  assert.equal(evidence.mcpCalls, 1, 'Exactly one call must execute on the local MCP server');
+  evidence.mcpResultReturned = true;
+  streamMessage(res, undefined, automaticAnswer);
+}
+
+async function approvalMcp(
+  req: IncomingMessage,
+  res: ServerResponse,
+  evidence: FixtureEvidence,
+): Promise<void> {
+  const server = new McpServer({ name: automaticMcpName, version: '1.0.0' });
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  server.registerTool(
+    automaticMcpTool,
+    { description: 'Record an isolated installed smoke invocation; project approval is required.' },
+    async () => {
+      evidence.automatic.mcpCalls++;
+      return { content: [{ type: 'text', text: automaticMcpResult }] };
+    },
+  );
+  res.once('close', () => {
+    void server.close().catch((error: unknown) => evidence.errors.push(errorText(error)));
+  });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    evidence.errors.push(errorText(error));
+    if (!res.headersSent) res.writeHead(500);
+    res.end();
+    await server.close();
+  }
 }
 
 export function samplePdf(): string {
@@ -252,6 +363,7 @@ export interface FixtureEvidence {
   toolResultReturned: boolean;
   pdfRequests: number;
   nativeBrowser: BrowserFixtureEvidence;
+  automatic: AutomaticFixtureEvidence;
   errors: string[];
 }
 
@@ -278,6 +390,14 @@ export async function fixtures(): Promise<Fixtures> {
       refreshedRef: null,
       clickResultReturned: false,
       screenshotArtifactId: null,
+    },
+    automatic: {
+      requests: 0,
+      calls: [],
+      clickResultReturned: false,
+      writeResultReturned: false,
+      mcpResultReturned: false,
+      mcpCalls: 0,
     },
     errors: [],
   };
@@ -314,6 +434,10 @@ export async function fixtures(): Promise<Fixtures> {
           record(value, 'message'),
         );
         const conversation = JSON.stringify(messages);
+        if (conversation.includes(automaticPrompt)) {
+          automaticMessage(res, request, messages, evidence.automatic, siteUrl);
+          return;
+        }
         if (conversation.includes(browserReadPrompt) || conversation.includes(browserEditPrompt)) {
           browserMessage(
             res,
@@ -387,6 +511,12 @@ export async function fixtures(): Promise<Fixtures> {
     })();
   });
   const site = createServer((req, res) => {
+    if (req.url === '/mcp') {
+      void approvalMcp(req, res, evidence).catch((error: unknown) =>
+        evidence.errors.push(errorText(error)),
+      );
+      return;
+    }
     if (req.url === '/sample.pdf') {
       evidence.pdfRequests++;
       res.writeHead(200, { 'Content-Type': 'application/pdf' });
@@ -394,7 +524,7 @@ export async function fixtures(): Promise<Fixtures> {
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    if (req.url === '/browser') {
+    if (req.url === '/browser' || req.url === '/browser-automatic') {
       res.end(`<!doctype html><html><head><title>${browserTitle}</title></head>
 <body data-agent-clicks="0" style="background:#e6f4eb;font:20px sans-serif;padding:24px">
 <h1>${browserTitle}</h1>

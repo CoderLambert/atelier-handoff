@@ -216,6 +216,8 @@ export interface Usage {
   complete: boolean;
 }
 export interface Run {
+  approvalMode?: 'automatic';
+  maxSearchChargeFen?: number;
   browserRevision?: string;
   id: string;
   sessionId: string;
@@ -277,6 +279,7 @@ export interface Permission {
   expiresAt: string;
   reason: string;
   resolutionReason?: string;
+  decisionSource?: 'automatic';
 }
 export interface Artifact {
   id: string;

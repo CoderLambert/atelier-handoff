@@ -27,6 +27,7 @@ export const permissionSchema = z.object({
   expiresAt: z.string(),
   reason: z.string(),
   resolutionReason: z.string().optional(),
+  decisionSource: z.literal('automatic').optional(),
 }) satisfies z.ZodType<Permission>;
 
 export const permissionQuery = (identity: PermissionIdentity) =>

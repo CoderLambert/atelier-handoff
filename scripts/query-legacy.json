@@ -1,8 +1,4 @@
 {
-  "app/drafts.ts": [
-    "api:2f4280d227d35892",
-    "api:bdd06c5d89645dd0"
-  ],
   "app/sidebar.tsx": [
     "api:33693fda3e062523",
     "api:614b39a568648b46",
@@ -33,20 +29,14 @@
     "useMutation:a63f6a786de3ffa3",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/agents/editor.tsx": [
-    "useQuery:9e95a63e814bddee",
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
+  "features/agents/editor.tsx": ["useQuery:9e95a63e814bddee", "useQueryClient:88aaac3e2e5480e1"],
   "features/agents/index.tsx": [
     "api:b081466c077ecee7",
     "useMutation:c32dbc9bc2b54124",
     "useQuery:9e95a63e814bddee",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/chat/attachment-preview.tsx": [
-    "api:08011cb86c008786",
-    "useQuery:3c9750885bfd75f2"
-  ],
+  "features/chat/attachment-preview.tsx": ["api:08011cb86c008786", "useQuery:3c9750885bfd75f2"],
   "features/chat/composer.tsx": [
     "api:029df6236a8a67ef",
     "api:9d7636391f56b26b",
@@ -66,16 +56,9 @@
     "useQueryClient:88aaac3e2e5480e1",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/extensions/editor.tsx": [
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
-  "features/extensions/picker.tsx": [
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
-  "features/extensions/public-import.tsx": [
-    "api:0a8940875a8e9b75",
-    "useQuery:1f7825fddcbdfa88"
-  ],
+  "features/extensions/editor.tsx": ["useQueryClient:88aaac3e2e5480e1"],
+  "features/extensions/picker.tsx": ["useQueryClient:88aaac3e2e5480e1"],
+  "features/extensions/public-import.tsx": ["api:0a8940875a8e9b75", "useQuery:1f7825fddcbdfa88"],
   "features/extensions/skillhub-market.tsx": [
     "api:160d6c5696fd9022",
     "api:aa5c6fbeeea280a0",
@@ -83,26 +66,12 @@
     "useQuery:e615fc1cb6fa2337",
     "useQuery:f8c0c5cb5a40d270"
   ],
-  "features/inspector/artifact-dialog.tsx": [
-    "useResource:0a2f7bbc229e6c68"
-  ],
-  "features/inspector/collections.tsx": [
-    "useResource:057341a686a6713d",
-    "useResource:86cfb5e5753234f1"
-  ],
-  "features/inspector/index.tsx": [
-    "api:fedf8e13c029816e",
-    "useMutation:5c6dda648a613d9b",
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
+  "features/inspector/artifact-dialog.tsx": ["useResource:0a2f7bbc229e6c68"],
   "features/inspector/permission-dialog.tsx": [
     "api:2dd9882cbc4f4ee1",
     "api:6536fe7af65a3ac7",
     "api:8656db5451e30e5a",
     "useQueryClient:88aaac3e2e5480e1"
-  ],
-  "features/inspector/run-trace.tsx": [
-    "useResource:787da3e9b5207b88"
   ],
   "features/inspector/settings-dialog.tsx": [
     "api:2e1fa1dfd2d98a6b",
@@ -111,11 +80,6 @@
     "useQuery:01df7a584cbf7563",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/inspector/shared.tsx": [
-    "api:47592d2f13a15e5f",
-    "useQuery:46291be0b4468207"
-  ],
-  "features/inspector/tool-output-dialog.tsx": [
-    "useResource:b99057a06073ad6d"
-  ]
+  "features/inspector/shared.tsx": ["api:47592d2f13a15e5f", "useQuery:46291be0b4468207"],
+  "features/inspector/tool-output-dialog.tsx": ["useResource:b99057a06073ad6d"]
 }

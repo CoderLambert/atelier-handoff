@@ -1,5 +1,10 @@
-import { retainedSkillSelections, type Draft, type Run } from '@shared/types';
-import { api } from '@/api/client';
+import { retainedSkillSelections, type Draft } from '@shared/types';
+import { parseSearchChargeLimit } from '@/features/chat/run-mode';
+import type {
+  SendSessionMessage,
+  SessionMessageBody,
+} from '@/use-query/sessions/use-send-session-message';
+import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
 import { actions, store } from './store';
 
 type DraftUpdate = Draft | ((previous: Draft) => Draft);
@@ -65,11 +70,25 @@ function localDraft(id: string): Partial<Draft> {
     return {};
   }
 }
+function persistedDraft(draft: Draft): Draft {
+  return {
+    text: draft.text,
+    contextPaths: draft.contextPaths,
+    attachmentIds: draft.attachmentIds,
+    extensionSelections: draft.extensionSelections,
+    mode: draft.mode === 'edit' ? 'edit' : 'readonly',
+  };
+}
 export function readDraft(id: string, server?: Draft): Draft {
-  return store.getState().workspace.drafts[id] ?? { ...emptyDraft(), ...server, ...localDraft(id) };
+  return (
+    store.getState().workspace.drafts[id] ??
+    persistedDraft({ ...emptyDraft(), ...server, ...localDraft(id) })
+  );
 }
 export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
-  const draft = typeof update === 'function' ? update(readDraft(id, server)) : update;
+  const draft = persistedDraft(
+    typeof update === 'function' ? update(readDraft(id, server)) : update,
+  );
   const save = lane(id);
   const sequence = ++save.sequence;
   store.dispatch(actions.setDraft({ id, draft }));
@@ -79,7 +98,7 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
     save.write = (save.write ?? Promise.resolve()).then(async () => {
       if (sequence !== save.sequence) return;
       try {
-        await api(`/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', body: { draft } });
+        await updateSessionDraft({ sessionId: id, draft });
         if (sequence === save.sequence) storage.remove(key(id));
       } catch {
         /* Keep the local draft for recovery. */
@@ -88,26 +107,47 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
   }, 500);
 }
 
-export async function submitDraft(id: string, server: Draft) {
+export async function submitDraft(
+  id: string,
+  server: Draft,
+  send: SendSessionMessage,
+  readonlyProfile = false,
+) {
   if (store.getState().workspace.submitting[id]) return;
   const save = lane(id);
   const draft = readDraft(id, server);
-  const fingerprint = JSON.stringify(draft);
+  const draftFingerprint = JSON.stringify(draft);
+  const selection = store.getState().workspace.automaticApprovals[id];
+  const automatic = readonlyProfile ? undefined : selection;
+  const payload: Omit<SessionMessageBody, 'idempotencyKey'> = {
+    ...draft,
+    mode: readonlyProfile ? 'readonly' : automatic ? 'edit' : draft.mode,
+    ...(automatic
+      ? {
+          approvalMode: 'automatic',
+          maxSearchChargeFen: parseSearchChargeLimit(automatic.maxSearchChargeFen),
+        }
+      : {}),
+  };
+  const fingerprint = JSON.stringify(payload);
   if (save.attempt?.fingerprint !== fingerprint)
     save.attempt = { fingerprint, key: crypto.randomUUID() };
   const attempt = save.attempt;
   store.dispatch(actions.setSubmitting({ id, pending: true }));
   clearTimeout(save.timer);
   save.sequence++;
-  await save.write;
   try {
-    const { run } = await api<{ run: Run }>(`/api/sessions/${encodeURIComponent(id)}/messages`, {
-      method: 'POST',
-      body: { ...draft, idempotencyKey: attempt.key },
+    await save.write;
+    const { run } = await send({
+      sessionId: id,
+      body: { ...payload, idempotencyKey: attempt.key },
     });
-    if (JSON.stringify(readDraft(id, server)) === fingerprint)
+    if (store.getState().workspace.automaticApprovals[id] === selection)
+      store.dispatch(actions.setAutomaticApproval({ id }));
+    // Approval options belong to the request, not the editable draft comparison.
+    if (JSON.stringify(readDraft(id, server)) === draftFingerprint)
       updateDraft(id, {
-        ...emptyDraft(draft.mode),
+        ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
         extensionSelections: retainedSkillSelections(run.extensions),
       });
     save.attempt = undefined;

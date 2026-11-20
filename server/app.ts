@@ -54,6 +54,8 @@ import {
 const inputSchema = z.object({
   text: z.string().trim().min(1).max(32000),
   mode: z.enum(['readonly', 'edit']).default('readonly'),
+  approvalMode: z.literal('automatic').optional(),
+  maxSearchChargeFen: z.int().min(0).max(100_000).optional(),
   contextPaths: z.array(z.string().max(1000)).max(30).default([]),
   attachmentIds: z.array(z.string().uuid()).max(20).default([]),
   extensionSelections: extensionSelections.default([]),
@@ -265,6 +267,10 @@ export async function createApp(options: {
         throw new AppError('IDEMPOTENCY_CONFLICT', '同一请求编号不能用于不同内容。', 409);
       return store.get('runs', previous.run_id as string);
     }
+    if (request.approvalMode === 'automatic' && (request.mode !== 'edit' || retryOf))
+      throw new AppError('AUTOMATION_MODE_INVALID', '全工具自动化需要本轮受控修改权限。', 400);
+    if (request.maxSearchChargeFen !== undefined && request.approvalMode !== 'automatic')
+      throw new AppError('AUTOMATION_BUDGET_INVALID', '费用上限适用于本轮全工具自动化。', 400);
     if (session.status !== 'active')
       throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
     const project = store.get('projects', session.projectId);
@@ -339,6 +345,10 @@ export async function createApp(options: {
       projectId: project.id,
       prompt: request.text,
       mode: request.mode,
+      ...(request.approvalMode ? { approvalMode: request.approvalMode } : {}),
+      ...(request.maxSearchChargeFen === undefined
+        ? {}
+        : { maxSearchChargeFen: request.maxSearchChargeFen }),
       status: 'queued',
       createdAt: now(),
       startedAt: null,
@@ -436,7 +446,7 @@ export async function createApp(options: {
         updatedAt: now(),
         draft: {
           ...emptyDraft(),
-          mode: request.mode,
+          mode: run.approvalMode === 'automatic' ? latest.draft.mode : request.mode,
           extensionSelections: retryOf
             ? latest.draft.extensionSelections
             : retainedSkillSelections(run.extensions),
@@ -448,7 +458,10 @@ export async function createApp(options: {
       return null;
     });
     if (raced) return raced;
-    store.event(run.id, sessionId, 'run.created', { status: 'queued' });
+    store.event(run.id, sessionId, 'run.created', {
+      status: 'queued',
+      ...(run.approvalMode ? { approvalMode: run.approvalMode } : {}),
+    });
     if (run.extensions)
       store.event(run.id, sessionId, 'extensions.selected', { items: run.extensions });
     if (run.agent) store.event(run.id, sessionId, 'agent.bound', { ...run.agent });

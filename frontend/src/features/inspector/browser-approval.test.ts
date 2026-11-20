@@ -90,28 +90,42 @@ function renderReview(live: Permission, detail = live, preview = detail) {
   }
 }
 
-test('desktop browser opt-in is separate from human handoff and discloses page data use', () => {
-  const html = renderBrowser(access);
-  assert.equal((html.match(/aria-label="允许 Agent 使用内置浏览器"/g) ?? []).length, 1);
-  assert.match(html, /aria-pressed="false"/);
-  assert.match(html, /启用 Agent 浏览器/);
-  assert.match(html, /网页内容可能发送给模型/);
-  assert.match(html, /点击、输入需要逐次审批/);
-  assert.match(html, /交还仅结束人工接管；项目浏览器工具仍停用/);
-  assert.doesNotMatch(html, /交还后 Agent 将继续当前标签/);
+test('desktop browser keeps project opt-in behind settings and separate from human handoff', () => {
+  for (const settings of [access, { ...access, enabled: true, revision }]) {
+    const html = renderBrowser(settings);
+    const trigger = html.match(/<button[^>]*aria-label="浏览器设置"[^>]*>/)?.[0];
+    assert.ok(trigger);
+    assert.match(trigger, /aria-haspopup="dialog"/);
+    assert.match(trigger, /aria-expanded="false"/);
+    assert.doesNotMatch(trigger, /\sdisabled(?:=|\s|>)/);
+    assert.match(html, /aria-label="交还控制"/);
+    assert.match(html, /Agent 已暂停/);
+    assert.equal((html.match(/role="status"/g) ?? []).length, 1);
+    // The closed Radix portal is absent from SSR; disclosure and opt-in live in that dialog.
+    assert.doesNotMatch(html, /aria-label="允许 Agent 使用内置浏览器"/);
+    assert.doesNotMatch(html, /网页内容可能发送给模型|点击、输入需要逐次审批/);
+    assert.doesNotMatch(html, /交还后 Agent 将继续当前标签/);
+  }
 });
 
-test('desktop browser distinguishes loading, enabled, unavailable and disabled authorization', () => {
-  assert.match(renderBrowser(undefined), /正在读取 Agent 浏览器授权/);
-  assert.match(renderBrowser({ ...access, enabled: true, revision }), /停用 Agent 浏览器/);
-  assert.match(
-    renderBrowser({ ...access, available: false, enabled: true, revision }),
-    /本项目授权仍为启用，可停用/,
-  );
-  assert.match(
-    renderBrowser({ ...access, available: false }),
-    /aria-label="允许 Agent 使用内置浏览器"[^>]*disabled/,
-  );
+test('desktop browser shows one contextual authorization status without blocking human takeover', () => {
+  const cases: [DesktopBrowserAccessState | undefined, RegExp][] = [
+    [undefined, /正在读取授权…/],
+    [{ ...access, enabled: true, revision }, /Agent 工作标签/],
+    [{ ...access, available: false, enabled: true, revision }, /浏览器工具不可用/],
+    [{ ...access, available: false }, /浏览器工具不可用/],
+    [access, /Agent 浏览器已停用/],
+  ];
+  for (const [settings, status] of cases) {
+    const html = renderBrowser(settings, false);
+    assert.match(html, status);
+    assert.equal((html.match(/role="status"/g) ?? []).length, 1);
+    const takeover = html.match(/<button[^>]*aria-label="人工接管"[^>]*>/)?.[0];
+    assert.ok(takeover);
+    assert.doesNotMatch(takeover, /\sdisabled(?:=|\s|>)/);
+    assert.match(html, /aria-label="浏览器设置"/);
+    assert.doesNotMatch(html, /aria-label="允许 Agent 使用内置浏览器"/);
+  }
 });
 
 test('browser approvals use operation presentation and require matching, unexpired content', () => {

@@ -1,7 +1,7 @@
 /**
  * @file 执行已安装 Linux 应用的验收流程。
- * @implementation 驱动界面与离线夹具，检查功能、进程和资源并记录证据。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 驱动界面与离线夹具，保留逐次审批并验证本轮自动化、原生视图、进程和安装态资源。
+ * @updated 2026-11-20T14:25:31+08:00
  */
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';
@@ -31,6 +31,12 @@ import {
 } from './contracts.mjs';
 import {
   answer,
+  automaticAnswer,
+  automaticMcpName,
+  automaticMcpTool,
+  automaticPrompt,
+  automaticReceipt,
+  automaticReceiptName,
   bluePixels,
   browserEditAnswer,
   browserEditPrompt,
@@ -453,6 +459,98 @@ async function settings(page: Page, offline: boolean): Promise<void> {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+async function compactBrowserHeader(page: Page) {
+  const browser = page.getByRole('region', { name: '桌面浏览器', exact: true });
+  const tabbar = browser.locator('.desktop-browser-tabbar');
+  const toolbar = browser.locator('.desktop-browser-toolbar');
+  for (const name of ['新建标签页', '浏览器设置'])
+    assert.equal(await tabbar.getByRole('button', { name, exact: true }).count(), 1);
+  assert.equal(await tabbar.getByRole('group', { name: '网页标签', exact: true }).count(), 1);
+  for (const name of ['后退', '前进', '刷新网页', '人工接管'])
+    assert.equal(await toolbar.getByRole('button', { name, exact: true }).count(), 1);
+  assert.equal(await toolbar.getByRole('textbox', { name: '网页地址', exact: true }).count(), 1);
+  assert.equal(
+    await browser.getByRole('button', { name: '允许 Agent 使用内置浏览器', exact: true }).count(),
+    0,
+    'Project authorization belongs in the closed settings dialog',
+  );
+  const bounds = await browser.evaluate((element) => {
+    const box = (selector: string) => {
+      const target = element.querySelector(selector);
+      if (!target) throw new Error(`Missing browser header element ${selector}`);
+      const rect = target.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom };
+    };
+    return {
+      tabbar: box('.desktop-browser-tabbar'),
+      toolbar: box('.desktop-browser-toolbar'),
+      slot: box('.desktop-browser-slot'),
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+  assert.ok(bounds.tabbar.height > 0 && bounds.toolbar.height > 0 && bounds.slot.height > 0);
+  assert.ok(Math.abs(bounds.toolbar.y - bounds.tabbar.bottom) <= 1, 'Header rows must be adjacent');
+  assert.ok(Math.abs(bounds.slot.y - bounds.toolbar.bottom) <= 1, 'No third browser header row');
+  return { rows: 2, height: bounds.slot.y - bounds.tabbar.y, ...bounds };
+}
+
+async function browserSettingsRestored(page: Page, native: Page) {
+  const before = await compactBrowserHeader(page);
+  await page.getByRole('button', { name: '浏览器设置', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '浏览器设置', exact: true });
+  await dialog.waitFor({ state: 'visible' });
+  try {
+    // Change the renderer slot while the modal hides the native view. Its new
+    // viewport can match this slot only after the host processes restored layout.
+    await page.setViewportSize({
+      width: before.viewport.width - 24,
+      height: before.viewport.height - 24,
+    });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    const resized = await compactBrowserHeader(page);
+    assert.ok(
+      Math.abs(resized.slot.width - before.slot.width) > 2 ||
+        Math.abs(resized.slot.height - before.slot.height) > 2,
+      'Modal probe must change the native view layout',
+    );
+    await until(
+      async () => {
+        const viewport = await native.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+        return Math.abs(viewport.width - resized.slot.width) <= 2 &&
+          Math.abs(viewport.height - resized.slot.height) <= 2
+          ? viewport
+          : undefined;
+      },
+      5000,
+      'native view restored with the resized slot after browser settings closes',
+    );
+    await native
+      .getByRole('heading', { name: browserTitle, exact: true })
+      .waitFor({ state: 'visible' });
+  } finally {
+    if (await dialog.isVisible()) {
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+    }
+    await page.setViewportSize(before.viewport);
+  }
+  const restored = await compactBrowserHeader(page);
+  const viewport = await until(
+    async () => {
+      const value = await native.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      return Math.abs(value.width - restored.slot.width) <= 2 &&
+        Math.abs(value.height - restored.slot.height) <= 2
+        ? value
+        : undefined;
+    },
+    5000,
+    'native viewport matches the restored browser slot',
+  );
+  assert.equal(native.isClosed(), false);
+  return { ...restored, nativeViewport: viewport, restoredAfterSettings: true };
+}
+
 async function nativeBrowserSdk(
   run: Launch,
   fixture: Fixtures,
@@ -473,7 +571,12 @@ async function nativeBrowserSdk(
   );
   const token = string((await api(page, '/api/bootstrap')).csrfToken);
   await page.getByRole('button', { name: '浏览器', exact: true }).click();
-  const enable = page.getByRole('button', { name: '允许 Agent 使用内置浏览器', exact: true });
+  await page.getByRole('button', { name: '浏览器设置', exact: true }).click();
+  const browserSettings = page.getByRole('dialog', { name: '浏览器设置', exact: true });
+  const enable = browserSettings.getByRole('button', {
+    name: '允许 Agent 使用内置浏览器',
+    exact: true,
+  });
   assert.equal(await enable.getAttribute('aria-pressed'), 'false');
   const [enabledResponse] = await Promise.all([
     page.waitForResponse(
@@ -494,8 +597,10 @@ async function nativeBrowserSdk(
   await until(
     async () => ((await enable.getAttribute('aria-pressed')) === 'true' ? true : undefined),
     5000,
-    'browser enable button reflects project authorization',
+    'browser settings switch reflects project authorization',
   );
+  await page.keyboard.press('Escape');
+  await browserSettings.waitFor({ state: 'hidden' });
   assert.deepEqual(browserAccess(await api(page, route)), enabled);
   const unchanged = await appFetch(page, route, {
     method: 'PATCH',
@@ -573,6 +678,7 @@ async function nativeBrowserSdk(
     .getByRole('heading', { name: browserTitle, exact: true })
     .waitFor({ state: 'visible' });
   assert.equal(await native.locator('body').getAttribute('data-agent-clicks'), '0');
+  const header = await browserSettingsRestored(page, native);
 
   await page.getByRole('button', { name: '人工接管', exact: true }).click();
   await page.getByRole('button', { name: '交还控制', exact: true }).waitFor({ state: 'visible' });
@@ -695,6 +801,7 @@ async function nativeBrowserSdk(
     readonlyRun: readRunId,
     editRun: editRunId,
     separateNativeTarget: true,
+    header,
     manualTakeoverAndRelease: true,
     reobservedAfterHandoff: true,
     approvals: 1,
@@ -704,6 +811,280 @@ async function nativeBrowserSdk(
     ...browserEvidence,
   };
   await page.getByRole('button', { name: '任务详情', exact: true }).first().click();
+  await save();
+}
+
+async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: string): Promise<void> {
+  evidence.phase = 'automatic-tools-sdk';
+  await save();
+  const { page, directory } = run;
+  const token = string((await api(page, '/api/bootstrap')).csrfToken);
+  const route = `/api/projects/${projectId}/desktop-browser`;
+  const initial = browserAccess(await api(page, route));
+  assert.equal(
+    initial.enabled,
+    false,
+    'Manual browser verification must finish by revoking access',
+  );
+  const enable = await appFetch(page, route, {
+    method: 'PATCH',
+    body: { enabled: true, revision: initial.revision },
+    token,
+  });
+  assert.equal(enable.status, 200);
+  const enabled = browserAccess(JSON.parse(enable.body) as unknown);
+  assert.equal(enabled.enabled, true);
+  const extensionRoute = `/api/projects/${projectId}/extensions`;
+  const created = await appFetch(page, extensionRoute, {
+    method: 'POST',
+    body: {
+      kind: 'mcp',
+      name: automaticMcpName,
+      enabled: true,
+      autoUseInChat: true,
+      transport: { type: 'http', url: `${fixture.siteUrl}/mcp` },
+    },
+    token,
+  });
+  assert.equal(created.status, 201);
+  const extensionId = string(record(record(JSON.parse(created.body) as unknown).item).id);
+  const discovery = await appFetch(page, `${extensionRoute}/${extensionId}/test`, {
+    method: 'POST',
+    body: {},
+    token,
+  });
+  assert.equal(discovery.status, 200);
+  const discovered = record(JSON.parse(discovery.body) as unknown);
+  assert.equal(discovered.status, 'connected', 'Installed runtime must discover the loopback MCP');
+  const extension = record(discovered.item);
+  assert.deepEqual(extension.allowedTools, [], 'MCP discovery must not grant tools implicitly');
+  assert.ok(array(extension.tools).some((value) => record(value).name === automaticMcpTool));
+  // ProjectExtensions accepts grants only after the tool has been discovered.
+  const grant = await appFetch(page, `${extensionRoute}/${extensionId}`, {
+    method: 'PATCH',
+    body: {
+      version: extension.version,
+      allowedTools: [{ name: automaticMcpTool, access: 'approval' }],
+    },
+    token,
+  });
+  assert.equal(grant.status, 200);
+  const granted = record(record(JSON.parse(grant.body) as unknown).item);
+  assert.deepEqual(granted.allowedTools, [{ name: automaticMcpTool, access: 'approval' }]);
+  assert.equal(granted.enabled, true);
+  assert.equal(granted.autoUseInChat, true);
+
+  const [newSession] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/sessions',
+    ),
+    page.getByRole('button', { name: '新建会话', exact: true }).click(),
+  ]);
+  assert.equal(newSession.status(), 201);
+  const session = record(record((await newSession.json()) as unknown).session);
+  const sessionId = string(session.id);
+  assert.equal(session.projectId, projectId);
+  const sessionRoute = `/api/sessions/${sessionId}`;
+  const thread = page.locator(`.message-thread[data-session-id="${sessionId}"]`);
+  await thread.waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: '浏览器', exact: true }).click();
+  await page.getByRole('button', { name: '人工接管', exact: true }).waitFor({ state: 'visible' });
+  const mode = page.getByRole('combobox', { name: '运行模式', exact: true });
+  assert.equal(await mode.inputValue(), 'readonly');
+  const file = join(directory, 'project', automaticReceiptName);
+  assert.equal((await lstat(join(directory, 'project'))).isSymbolicLink(), false);
+  assert.equal(automaticReceiptName.includes('/'), false, 'Receipt stays in the isolated project');
+  await assert.rejects(access(file), { code: 'ENOENT' });
+  await mode.selectOption({ label: '全工具自动化' });
+  assert.equal(await mode.inputValue(), 'automatic');
+  await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(automaticPrompt);
+  const chat = await thread.evaluateHandle((element) => {
+    const selectors =
+      '.chat-approval, .tool-card, .chat-tool-call, [data-tool-call-id], [data-tool-id]';
+    const violations: string[] = [];
+    const inspect = (node: Node) => {
+      if (!(node instanceof Element)) return;
+      if (node.matches(selectors)) violations.push(node.className || node.tagName);
+      for (const child of node.querySelectorAll(selectors))
+        violations.push(child.className || child.tagName);
+    };
+    inspect(element);
+    const observer = new MutationObserver((records) => {
+      for (const mutation of records) {
+        inspect(mutation.target);
+        for (const node of mutation.addedNodes) inspect(node);
+      }
+    });
+    observer.observe(element, { childList: true, subtree: true, attributes: true });
+    return { observer, violations };
+  });
+  try {
+    const [sent] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          new URL(response.url()).pathname === `${sessionRoute}/messages`,
+      ),
+      page.getByRole('button', { name: '发送任务', exact: true }).click(),
+    ]);
+    assert.equal(sent.status(), 202);
+    const submitted = record(sent.request().postDataJSON() as unknown);
+    assert.equal(submitted.text, automaticPrompt);
+    assert.equal(submitted.mode, 'edit');
+    assert.equal(submitted.approvalMode, 'automatic');
+    const accepted = record(record((await sent.json()) as unknown).run);
+    const runId = string(accepted.id);
+    assert.equal(accepted.sessionId, sessionId);
+    assert.equal(accepted.mode, 'edit');
+    assert.equal(accepted.approvalMode, 'automatic');
+    assert.equal(accepted.browserRevision, enabled.revision);
+    const state = await until(
+      async () => {
+        assert.deepEqual(
+          fixture.evidence.errors,
+          [],
+          'Loopback automatic fixture must accept SDK requests',
+        );
+        const state = await api(page, sessionRoute);
+        const runs = array(state.runs).map((value) => record(value));
+        assert.equal(runs.length, 1, 'Automatic mode must start exactly one isolated run');
+        const current = record(runs[0]);
+        assert.equal(current.id, runId);
+        assert.equal(current.mode, 'edit');
+        assert.equal(current.approvalMode, 'automatic');
+        assert.notEqual(
+          current.status,
+          'awaiting_permission',
+          'Automatic tools cannot pause for approval',
+        );
+        for (const value of array(state.permissions))
+          assert.notEqual(
+            record(value).status,
+            'pending',
+            'Automatic permissions cannot be pending',
+          );
+        const requested = array(state.events).filter(
+          (value) => record(value).type === 'permission.requested',
+        );
+        assert.equal(requested.length, 0, 'No transient approval request may be emitted');
+        if (['failed', 'stopped', 'interrupted'].includes(string(current.status)))
+          throw new Error(
+            `Automatic SDK run ${string(current.status)}: ${JSON.stringify(current.error)}`,
+          );
+        return current.status === 'completed' ? state : undefined;
+      },
+      60_000,
+      'automatic browser, file and MCP real packaged SDK round trip',
+    );
+    await thread.getByText(automaticAnswer, { exact: true }).waitFor({ state: 'visible' });
+    assert.equal(
+      await mode.inputValue(),
+      'readonly',
+      'Automatic selection is consumed after confirmed send',
+    );
+    assert.equal(record(record(state.session).draft).mode, 'readonly');
+    assert.equal(await thread.locator('.chat-approval').count(), 0);
+    assert.equal(await thread.locator('.assistant-message').count(), 1);
+    assert.equal(await thread.locator('.user-message').count(), 1);
+    const violations = await chat.evaluate(({ observer, violations }) => {
+      observer.disconnect();
+      return violations;
+    });
+    assert.deepEqual(violations, [], 'No approval or per-tool cards may appear in automatic chat');
+    const permissions = array(state.permissions).map((value) => record(value));
+    assert.equal(
+      permissions.length,
+      3,
+      'Browser click, file write and approval MCP each leave an audit record',
+    );
+    assert.deepEqual(permissions.map((permission) => permission.kind).sort(), [
+      'browser',
+      'mcp',
+      'write',
+    ]);
+    for (const permission of permissions) {
+      assert.equal(permission.runId, runId);
+      assert.equal(permission.sessionId, sessionId);
+      assert.equal(permission.status, 'allowed');
+      assert.equal(permission.decisionSource, 'automatic');
+    }
+    const writePermission = permissions.find((permission) => permission.kind === 'write');
+    assert.equal(writePermission?.path, automaticReceiptName);
+    assert.equal(writePermission?.before, null);
+    assert.equal(writePermission?.after, automaticReceipt);
+    const tools = array(state.tools).map((value) => record(value));
+    assert.equal(tools.length, 6);
+    assert.ok(tools.every((tool) => tool.runId === runId && tool.status === 'succeeded'));
+    for (const permission of permissions)
+      assert.ok(
+        tools.some(
+          (tool) => tool.id === permission.toolCallId && tool.permissionId === permission.id,
+        ),
+      );
+    assert.equal((await lstat(file)).isFile(), true);
+    assert.equal(await readFile(file, 'utf8'), automaticReceipt);
+    const native = run.browser
+      .contexts()
+      .flatMap((context) => context.pages())
+      .find((candidate) => candidate.url() === `${fixture.siteUrl}/browser-automatic`);
+    assert.ok(
+      native && native !== page,
+      'Automatic browser action must reach a distinct native target',
+    );
+    assert.equal(await native.locator('body').getAttribute('data-agent-clicks'), '1');
+    await native
+      .getByText('Browser action completed', { exact: true })
+      .waitFor({ state: 'visible' });
+    assert.equal(fixture.evidence.automatic.requests, 7);
+    assert.equal(fixture.evidence.automatic.clickResultReturned, true);
+    assert.equal(fixture.evidence.automatic.writeResultReturned, true);
+    assert.equal(fixture.evidence.automatic.mcpResultReturned, true);
+    assert.equal(fixture.evidence.automatic.mcpCalls, 1);
+    assert.equal(record(state.session).sdkMode, 'edit');
+    assert.ok(string(record(state.session).sdkSessionId));
+    await page.screenshot({
+      path: join(root, 'automatic-tools-completed.png'),
+      mask: [page.locator('.history-meta')],
+    });
+    evidence.checks.automaticToolsSdk = {
+      realSdk: true,
+      transport: 'loopback SSE replacement',
+      paidModelCalls: 0,
+      sessionId,
+      runId,
+      composerOption: '全工具自动化',
+      mode: accepted.mode,
+      approvalMode: accepted.approvalMode,
+      selectionConsumed: true,
+      pendingApprovals: 0,
+      chatCardsObserved: violations.length,
+      permissions: permissions.map(({ id, kind, status, decisionSource }) => ({
+        id,
+        kind,
+        status,
+        decisionSource,
+      })),
+      file: {
+        path: automaticReceiptName,
+        bytes: Buffer.byteLength(automaticReceipt),
+        verified: true,
+      },
+      clickCount: 1,
+      ...fixture.evidence.automatic,
+    };
+  } finally {
+    await chat.evaluate(({ observer }) => observer.disconnect()).catch(() => {});
+    await chat.dispose();
+  }
+  const revoked = await appFetch(page, route, {
+    method: 'PATCH',
+    body: { enabled: false, revision: enabled.revision },
+    token,
+  });
+  assert.equal(revoked.status, 200);
+  assert.equal(browserAccess(JSON.parse(revoked.body) as unknown).enabled, false);
   await save();
 }
 
@@ -744,7 +1125,7 @@ async function functional(
         run.browser
           .contexts()
           .flatMap((context) => context.pages())
-          .find((candidate) => candidate.url().startsWith(fixture.siteUrl)),
+          .find((candidate) => candidate.url() === `${fixture.siteUrl}/`),
       10_000,
       'native WebContentsView HTML target',
     );
@@ -767,7 +1148,7 @@ async function functional(
   // The ordinary renderer bootstraps gateway status when opening settings.
   await settings(page, false);
   // Edit mode ensures command absence is actually caused by missing bwrap.
-  await page.getByRole('button', { name: '模式：只读', exact: true }).click();
+  await page.getByRole('combobox', { name: '运行模式', exact: true }).selectOption('edit');
   await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(prompt);
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   const snapshot = await until(
@@ -832,6 +1213,8 @@ async function functional(
     sdkCliObserved: true,
   };
   await nativeBrowserSdk(run, fixture, projectId, sessionId);
+  await automaticToolsSdk(run, fixture, projectId);
+  // Address-bar navigation gives control to the user, so test it after the Agent runs.
   await nativeBrowser();
   return { projectId, sessionId, runId, artifactId };
 }
@@ -995,6 +1378,20 @@ async function reopen(
     fixture.evidence.nativeBrowser.editRequests,
     5,
     'Offline reopen must make no browser edit request',
+  );
+  assert.equal(
+    fixture.evidence.automatic.requests,
+    7,
+    'Offline reopen must make no automatic model request',
+  );
+  assert.equal(
+    fixture.evidence.automatic.mcpCalls,
+    1,
+    'Offline reopen must not replay the approval MCP effect',
+  );
+  assert.equal(
+    await readFile(join(run.directory, 'project', automaticReceiptName), 'utf8'),
+    automaticReceipt,
   );
   await run.page.screenshot({
     path: join(root, 'offline-reopened.png'),

@@ -17,6 +17,24 @@ export interface RequestedOperation {
   after?: string | null;
   reason: string;
 }
+async function fileBaselineIssue(
+  permission: Permission,
+  root: string,
+): Promise<string | undefined> {
+  if (!permission.path) return undefined;
+  try {
+    if ((await readProjectText(root, permission.path)) !== permission.before)
+      return '文件内容已变化，旧差异没有应用。请重新生成修改。';
+  } catch (error) {
+    if (!(
+      error instanceof AppError &&
+      error.code === 'FILE_UNAVAILABLE' &&
+      permission.before === null
+    ))
+      return '文件访问状态已变化，请重新生成修改。';
+  }
+}
+
 export class PermissionService {
   private readonly pending = new Map<
     string,
@@ -59,6 +77,30 @@ export class PermissionService {
       expiresAt: new Date(Date.now() + this.ttlMs).toISOString(),
       reason: operation.reason,
     };
+    if (current.approvalMode === 'automatic' && current.mode === 'edit' && !current.retryOf) {
+      const staleReason = permission.path ? await fileBaselineIssue(permission, root) : undefined;
+      signal.throwIfAborted();
+      const latest = this.store.get('runs', run.id);
+      if (!activeStatuses.includes(latest.status) || latest.status === 'stopping')
+        throw new AppError('RUN_STOPPED', '运行已停止。', 409);
+      const resolved = this.store.transaction(() => {
+        const saved = this.store.put('permissions', {
+          ...permission,
+          decisionSource: 'automatic',
+          status: staleReason ? 'denied' : 'allowed',
+          resolutionReason: staleReason ?? '本轮已开启全工具自动化。',
+        });
+        this.store.update('tools', operation.toolCallId, { permissionId: saved.id });
+        return saved;
+      });
+      this.store.event(run.id, run.sessionId, 'permission.resolved', {
+        permissionId: resolved.id,
+        status: resolved.status,
+        decisionSource: 'automatic',
+      });
+      if (staleReason) throw new AppError('OPERATION_CHANGED', staleReason, 409);
+      return resolved;
+    }
     this.store.put('permissions', permission);
     this.store.update('tools', operation.toolCallId, {
       status: 'awaiting_permission',
@@ -143,22 +185,10 @@ export class PermissionService {
       this.finish(id, 'expired');
       throw new AppError('PERMISSION_EXPIRED', '审批已过期。', 409);
     }
-    let staleReason: string | undefined;
-    if (decision === 'allow' && permission.path) {
-      try {
-        if ((await readProjectText(pending.root, permission.path)) !== permission.before) {
-          staleReason = '文件内容已变化，旧差异没有应用。请重新生成修改。';
-        }
-      } catch (error) {
-        if (!(
-          error instanceof AppError &&
-          error.code === 'FILE_UNAVAILABLE' &&
-          permission.before === null
-        )) {
-          staleReason = '文件访问状态已变化，请重新生成修改。';
-        }
-      }
-    }
+    const staleReason =
+      decision === 'allow' && permission.path
+        ? await fileBaselineIssue(permission, pending.root)
+        : undefined;
     // File checks yield to stop and competing decisions: re-check after every await.
     const latest = this.store.get('permissions', id);
     if (

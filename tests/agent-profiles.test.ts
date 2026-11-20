@@ -162,6 +162,10 @@ test('project agents bind immutable revisions and combine only authorized Skill 
       'AGENT_MODE_DENIED',
     );
     assert.equal(
+      (await api(messages, 'POST', send({ mode: 'edit', approvalMode: 'automatic' }), 403)).error.code,
+      'AGENT_MODE_DENIED',
+    );
+    assert.equal(
       (
         await api(
           messages,

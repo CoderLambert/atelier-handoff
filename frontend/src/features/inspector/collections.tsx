@@ -1,7 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import type { Page } from '@/api/types';
-import type { Artifact, Project, Run } from '@shared/types';
+import type { Project, Run } from '@shared/types';
+import { useRuns } from '@/use-query/runs/use-runs';
+import { useArtifacts } from '@/use-query/artifacts/use-artifacts';
+import { runModeLabel } from '@/features/chat/run-mode';
 import { ArtifactAction } from './artifact-action';
 import {
   EmptyState,
@@ -12,7 +14,7 @@ import {
   fieldClass,
   formatDate,
   statusLabel,
-  useResource,
+  errorMessage,
 } from './shared';
 
 export type CollectionsProps = {
@@ -51,20 +53,15 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
     offset: 0,
   });
   const [sessionInput, setSessionInput] = useState(sessionId ?? '');
-  const query = new URLSearchParams({
-    limit: String(filters.limit),
-    offset: String(filters.offset),
-  });
-  if (filters.projectId) query.set('projectId', filters.projectId);
-  if (filters.sessionId) query.set('sessionId', filters.sessionId);
-  if (view === 'runs' && filters.status) query.set('status', filters.status);
-  const path = `/api/${view}?${query}`;
-  const runPage = useResource<Page<Run>>(view === 'runs' ? path : null, ['runs', filters]);
-  const artifactPage = useResource<Page<Artifact>>(view === 'artifacts' ? path : null, [
-    'artifacts',
-    filters,
-  ]);
-  const resource = view === 'runs' ? runPage : artifactPage;
+  const runPage = useRuns(view === 'runs' ? filters : undefined);
+  const artifactPage = useArtifacts(view === 'artifacts' ? filters : undefined);
+  const page = view === 'runs' ? runPage : artifactPage;
+  const resource = {
+    data: page.data,
+    loading: page.isFetching,
+    error: page.error ? errorMessage(page.error) : undefined,
+    reload: () => void page.refetch(),
+  };
   const projectNames = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects],
@@ -243,7 +240,7 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
                 <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
                   <span>{projectNames.get(run.projectId) ?? '项目不可用'}</span>
                   <time dateTime={run.createdAt}>{formatDate(run.createdAt)}</time>
-                  <span>{run.mode === 'edit' ? '受控修改' : '只读'}</span>
+                  <span>{runModeLabel(run)}</span>
                 </span>
               </span>
               <StatusBadge status={run.status} />

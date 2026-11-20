@@ -461,6 +461,150 @@ test('repeated stop and shutdown preserve the first cancellation and finalize on
     }
   }));
 
+test('automatic approval resolves all operation kinds without waiting and still checks the file baseline and cancellation', async () =>
+  fixture(async (base, project) => {
+    const store = new Store(join(base, 'data'));
+    const service = new PermissionService(store);
+    const run = store.put('runs', { ...runData(), approvalMode: 'automatic' });
+    const request = (
+      operation: Omit<Parameters<PermissionService['request']>[2], 'toolCallId'>,
+      signal: AbortSignal,
+    ) => {
+      const tool = store.put('tools', {
+        id: randomUUID(),
+        runId: run.id,
+        sessionId: run.sessionId,
+        name: operation.kind,
+        inputSummary: '',
+        output: '',
+        status: 'running',
+        startedAt: now(),
+        endedAt: null,
+      });
+      return service.request(run, project, { ...operation, toolCallId: tool.id }, signal);
+    };
+    try {
+      const signal = new AbortController().signal;
+      for (const kind of ['command', 'mcp', 'browser'] as const) {
+        const decision = await request({ kind, command: 'fixture', reason: 'test' }, signal);
+        assert.equal(decision.status, 'allowed');
+        assert.equal(decision.decisionSource, 'automatic');
+      }
+      for (const kind of ['write', 'edit', 'delete'] as const) {
+        const decision = await request(
+          {
+            kind,
+            path: 'note.txt',
+            before: 'ORIGINAL\n',
+            after: kind === 'delete' ? null : 'new',
+            reason: 'test',
+          },
+          signal,
+        );
+        assert.equal(decision.status, 'allowed');
+        assert.equal(decision.decisionSource, 'automatic');
+      }
+      await assert.rejects(
+        request(
+          { kind: 'edit', path: 'note.txt', before: 'STALE', after: 'new', reason: 'test' },
+          signal,
+        ),
+        { code: 'OPERATION_CHANGED' },
+      );
+      const controller = new AbortController();
+      const pending = request(
+        { kind: 'delete', path: 'note.txt', before: 'ORIGINAL\n', reason: 'test' },
+        controller.signal,
+      );
+      controller.abort();
+      await assert.rejects(pending, { name: 'AbortError' });
+      assert.equal(store.get('runs', run.id).status, 'running');
+      assert.equal(
+        store.list('permissions').filter(({ status }) => status === 'allowed').length,
+        6,
+      );
+      assert.equal(store.list('permissions').filter(({ status }) => status === 'denied').length, 1);
+      const { events } = store.runHistory(run.id);
+      assert.equal(events.length, 7);
+      assert.ok(
+        events.every(
+          (event) =>
+            event.type === 'permission.resolved' && event.payload.decisionSource === 'automatic',
+        ),
+      );
+    } finally {
+      service.cancelRun(run.id);
+      store.close();
+    }
+  }));
+
+test('automation is explicit for one edit run, participates in idempotency, and does not survive retry', async () =>
+  fixture(async (base, project) => {
+    const app = await createApp({
+      root: source,
+      data: join(base, 'data'),
+      runnerFactory: (store) => ({
+        start(run) {
+          store.update('runs', run.id, { status: 'stopped', endedAt: now() });
+        },
+        stop() {},
+        async shutdown() {},
+      }),
+    });
+    try {
+      await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+      const address = app.server.address();
+      assert.ok(address && typeof address === 'object');
+      const url = `http://127.0.0.1:${address.port}`;
+      const boot = await fetch(url + '/api/bootstrap').then((res) => res.json());
+      const post = async (path: string, body: unknown, expected: number) => {
+        const res = await fetch(url + path, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-atelier-token': boot.csrfToken },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        assert.equal(res.status, expected, JSON.stringify(data));
+        return data;
+      };
+      const { project: bound } = await post('/api/projects', { path: project }, 201);
+      const { session } = await post('/api/sessions', { projectId: bound.id }, 201);
+      const route = `/api/sessions/${session.id}/messages`;
+      const message = {
+        text: 'fixture',
+        mode: 'edit',
+        approvalMode: 'automatic',
+        maxSearchChargeFen: 500,
+        idempotencyKey: randomUUID(),
+      };
+      const { run } = await post(route, message, 202);
+      assert.equal(run.approvalMode, 'automatic');
+      assert.equal(run.maxSearchChargeFen, 500);
+      assert.equal(app.store.get('sessions', session.id).draft.mode, 'readonly');
+      assert.equal((await post(route, message, 202)).run.id, run.id);
+      assert.equal(
+        (await post(route, { ...message, maxSearchChargeFen: 501 }, 409)).error.code,
+        'IDEMPOTENCY_CONFLICT',
+      );
+      assert.equal(
+        (await post(route, { ...message, mode: 'readonly', idempotencyKey: randomUUID() }, 400))
+          .error.code,
+        'AUTOMATION_MODE_INVALID',
+      );
+      const { run: retry } = await post(
+        `/api/runs/${run.id}/retry`,
+        { idempotencyKey: randomUUID() },
+        202,
+      );
+      assert.equal(retry.mode, 'readonly');
+      assert.equal(retry.approvalMode, undefined);
+      assert.equal(retry.maxSearchChargeFen, undefined);
+      assert.equal(app.store.get('sessions', session.id).draft.mode, 'readonly');
+    } finally {
+      await app.close();
+    }
+  }));
+
 test('permission expiry during the file baseline check prevents approval', async () =>
   fixture(async (base, project) => {
     const store = new Store(join(base, 'data'));

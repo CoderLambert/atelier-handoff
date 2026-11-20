@@ -1,5 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useRunTrace } from '@/use-query/runs/use-run-trace';
+import { runModeLabel } from '@/features/chat/run-mode';
 import type { Snapshot } from '@/api/types';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
 import {
@@ -13,13 +15,12 @@ import {
   fieldClass,
   formatDate,
   formatDuration,
+  errorMessage,
   preClass,
-  useResource,
 } from './shared';
 
 const ToolOutputDialog = lazy(() => import('./tool-output-dialog'));
 const EVENT_PAGE_SIZE = 50;
-type TraceResponse = { events: RunEvent[]; eventCount: number };
 export type RunTraceProps = { snapshot: Snapshot; runId?: string; onSelect: (id: string) => void };
 
 export function RunTrace({ snapshot, runId, onSelect }: RunTraceProps) {
@@ -46,10 +47,8 @@ function TraceDetail({
   const [eventFilter, setEventFilter] = useState('');
   const [eventOffset, setEventOffset] = useState(0);
   const [outputTool, setOutputTool] = useState<ToolCall>();
-  const trace = useResource<TraceResponse>(`/api/runs/${encodeURIComponent(run.id)}/trace`, [
-    'trace',
-    run.id,
-  ]);
+  const trace = useRunTrace(run.id);
+  const permissions = snapshot.permissions.filter((permission) => permission.runId === run.id);
   const tools = useMemo(
     () => snapshot.tools.filter((tool) => tool.runId === run.id),
     [snapshot.tools, run.id],
@@ -84,7 +83,17 @@ function TraceDetail({
     ['网关', gateway],
     ['智能体', run.agent ? `${run.agent.name} · v${run.agent.version}` : null],
     ['可用内置能力', run.agent?.capabilities.join('、')],
-    ['权限模式', run.mode === 'edit' ? '受控修改 · 逐次审批' : '只读'],
+    ['权限模式', runModeLabel(run)],
+    [
+      '付费搜索单次上限',
+      run.approvalMode === 'automatic'
+        ? `${run.maxSearchChargeFen ?? 0} 分（仅已知付费搜索）`
+        : null,
+    ],
+    [
+      '自动批准记录',
+      permissions.filter((permission) => permission.decisionSource === 'automatic').length,
+    ],
     ['SDK CLI', init?.version],
     ['开始时间', formatDate(run.startedAt)],
     ['结束时间', formatDate(run.endedAt)],
@@ -204,7 +213,15 @@ function TraceDetail({
         {tools.length ? (
           <div className="space-y-2">
             {tools.map((tool) => (
-              <ToolDetail key={tool.id} tool={tool} onOutput={() => setOutputTool(tool)} />
+              <ToolDetail
+                key={tool.id}
+                tool={tool}
+                automaticallyApproved={permissions.some(
+                  (permission) =>
+                    permission.toolCallId === tool.id && permission.decisionSource === 'automatic',
+                )}
+                onOutput={() => setOutputTool(tool)}
+              />
             ))}
           </div>
         ) : (
@@ -257,16 +274,18 @@ function TraceDetail({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={trace.loading}
-              onClick={trace.reload}
+              disabled={trace.isFetching}
+              onClick={() => void trace.refetch()}
               aria-label="刷新执行轨迹"
             >
               <Icon name="refresh" />
             </Button>
           </div>
         </div>
-        {trace.error ? <ErrorNotice message={trace.error} onRetry={trace.reload} /> : null}
-        {trace.loading && !trace.data ? <Loading>正在获取完整执行轨迹…</Loading> : null}
+        {trace.error ? (
+          <ErrorNotice message={errorMessage(trace.error)} onRetry={() => void trace.refetch()} />
+        ) : null}
+        {trace.isFetching && !trace.data ? <Loading>正在获取完整执行轨迹…</Loading> : null}
         <p className="mb-3 text-xs leading-5 text-muted-foreground">
           {trace.data ? `共 ${trace.data.eventCount} 条原始事件。` : ''}已折叠文本增量，最多展示最近
           600 条诊断事件。
@@ -281,7 +300,12 @@ function TraceDetail({
                       aria-hidden="true"
                       className="size-1.5 shrink-0 rounded-full bg-primary/50"
                     />
-                    <span className="truncate">{eventNames[event.type] ?? event.type}</span>
+                    <span className="truncate">
+                      {event.type === 'permission.resolved' &&
+                      event.payload.decisionSource === 'automatic'
+                        ? '自动批准操作'
+                        : (eventNames[event.type] ?? event.type)}
+                    </span>
                   </span>
                   <time dateTime={event.at} className="shrink-0 text-[10px] text-muted-foreground">
                     {formatDate(event.at)}
@@ -344,13 +368,24 @@ function TraceDetail({
     </section>
   );
 }
-function ToolDetail({ tool, onOutput }: { tool: ToolCall; onOutput: () => void }) {
+function ToolDetail({
+  tool,
+  automaticallyApproved,
+  onOutput,
+}: {
+  tool: ToolCall;
+  automaticallyApproved: boolean;
+  onOutput: () => void;
+}) {
   return (
     <details className="rounded-xl border border-border bg-card/40">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30">
         <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
           <Icon name="activity" className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{tool.name.replace(/^mcp__atelier__/, '')}</span>
+          {automaticallyApproved ? (
+            <span className="shrink-0 text-muted-foreground">自动批准</span>
+          ) : null}
         </span>
         <StatusBadge status={tool.status} />
       </summary>

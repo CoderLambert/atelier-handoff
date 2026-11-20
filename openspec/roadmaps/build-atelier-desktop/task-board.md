@@ -20,6 +20,12 @@
 
 桌面更新沿用原数据根和浏览器 profile。[同目录切换实测](../../../docs/evidence/desktop-p7-linux-x64/same-data-upgrade.json)
 
+## Linux 桌面体验迭代 · 已验证
+
+- [x] 浏览器面板缩为两行，共 80 CSS px。授权和说明移入浏览器设置。验证原生视图在弹窗关闭后恢复。
+- [x] 输入区支持本轮全工具自动化。安装态验证网页点击、项目文件写入和本地 MCP 的实际效果及自动审批轨迹。
+- [x] 正常退出旧实例，使用同一数据目录和网页 profile 开启新版，核对项目、会话、草稿和设置。[本轮验收](../../../docs/evidence/desktop-p7-linux-x64/task-automation.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。
