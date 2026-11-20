@@ -1,7 +1,7 @@
 /**
- * @file 展示文件差异或精确工具操作并提供单次审批入口。
- * @implementation 从审批复核 hook 消费已核对的内容和提交状态，浏览器操作以完整文本呈现。
- * @updated 2026-11-20T11:51:19+08:00
+ * @file 展示工具操作内容与审批记录。
+ * @implementation 消费审批复核状态，完整呈现操作或文件差异，并区分手动审批与自动批准来源。
+ * @updated 2026-11-20T14:44:21+08:00
  */
 import { Button } from '@/components/ui/button';
 import {

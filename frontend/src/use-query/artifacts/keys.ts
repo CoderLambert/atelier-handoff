@@ -1,7 +1,7 @@
 /**
- * @file 定义交付物内容、已保存副本和文件操作的查询键。
- * @implementation 以交付物 ID 区分内容查询、原生保存状态及文件操作 mutation。
- * @updated 2026-11-20T03:34:05+08:00
+ * @file 定义交付物列表、内容和文件操作的查询键。
+ * @implementation 使用筛选条件区分列表，以交付物 ID 区分内容、已保存副本和文件操作。
+ * @updated 2026-11-20T14:44:21+08:00
  */
 export interface ArtifactListFilters {
   projectId: string;

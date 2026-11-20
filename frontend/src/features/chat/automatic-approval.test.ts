@@ -1,3 +1,8 @@
+/**
+ * @file 验证聊天任务的单次自动审批行为。
+ * @implementation 使用存储和发送替身检查幂等、草稿保护、会话隔离、只读限制及审批来源解析。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
 import type { Draft, Run } from '@shared/types';

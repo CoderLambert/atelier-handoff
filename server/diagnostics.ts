@@ -1,3 +1,8 @@
+/**
+ * @file 构建脱敏的运行诊断数据。
+ * @implementation 依白名单汇总运行配置、用量、工具和审批来源，隐藏敏感字段。
+ * @updated 2026-11-20T15:16:28+08:00
+ */
 import { now, type Run, type RunEvent, type ToolCall } from '../shared/types.js';
 
 const eventFields: Record<string, readonly string[]> = {

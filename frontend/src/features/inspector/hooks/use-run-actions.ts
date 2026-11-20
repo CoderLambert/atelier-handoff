@@ -1,3 +1,8 @@
+/**
+ * @file 编排运行停止与重试操作。
+ * @implementation 合并两个 mutation 的状态，并为重试保留幂等键、防止重复提交。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { useRef } from 'react';
 import type { Run } from '@shared/types';
 import { useStopRun } from '@/use-query/runs/use-stop-run';

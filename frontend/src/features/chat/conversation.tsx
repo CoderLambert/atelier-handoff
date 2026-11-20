@@ -1,3 +1,8 @@
+/**
+ * @file 展示会话消息与运行中的操作。
+ * @implementation 组织消息、工具、交付物和审批入口，显示运行模式并区分待审批操作。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   Artifact,

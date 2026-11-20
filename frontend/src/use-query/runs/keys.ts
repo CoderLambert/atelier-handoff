@@ -1,3 +1,8 @@
+/**
+ * @file 定义运行列表、轨迹和操作的查询键。
+ * @implementation 使用筛选条件或运行 ID 区分列表、轨迹、停止和重试。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 export interface RunListFilters {
   projectId: string;
   sessionId: string;

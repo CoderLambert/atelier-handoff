@@ -1,3 +1,8 @@
+/**
+ * @file 管理会话草稿保存与任务发送。
+ * @implementation 协调本地恢复、延迟写入和幂等发送，将自动审批选项限定于本次请求。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
 import type {

@@ -1,3 +1,8 @@
+/**
+ * @file 提供运行停止操作。
+ * @implementation 发送停止请求，并在成功后使会话、运行列表和轨迹缓存失效。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Run } from '@shared/types';
 import { api } from '@/api/client';

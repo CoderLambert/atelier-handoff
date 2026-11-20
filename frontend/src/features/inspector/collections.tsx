@@ -1,3 +1,8 @@
+/**
+ * @file 展示和筛选运行及交付物列表。
+ * @implementation 按项目、会话和状态查询分页数据，展示运行模式并提供打开操作。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { useMemo, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Project, Run } from '@shared/types';

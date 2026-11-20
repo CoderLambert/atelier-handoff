@@ -1,3 +1,8 @@
+/**
+ * @file 组合会话消息和任务输入界面。
+ * @implementation 将会话快照、草稿、自动审批选择及运行操作传给消息区和输入区。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import type { Draft } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Composer, type DraftChange } from './composer';

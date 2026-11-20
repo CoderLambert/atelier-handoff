@@ -1,3 +1,8 @@
+/**
+ * @file 定义聊天输入的运行模式与显示文案。
+ * @implementation 解析付费搜索单次上限，并根据运行记录区分只读、逐次审批和全工具自动化。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import type { Run } from '@shared/types';
 
 export type ComposerMode = 'readonly' | 'edit' | 'automatic';

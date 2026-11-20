@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 初始化并升级数据库，提供记录、配置与事件读写，在重启时标记中断运行及失效审批。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 提供记录、配置和事件读写，解释旧版执行上限，并在重启时标记中断运行和失效审批。
+ * @updated 2026-11-20T15:16:28+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';

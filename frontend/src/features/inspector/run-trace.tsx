@@ -1,3 +1,8 @@
+/**
+ * @file 展示单次运行的执行轨迹。
+ * @implementation 合并快照和轨迹事件，展示工具、运行模式、自动批准记录及付费搜索上限。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useRunTrace } from '@/use-query/runs/use-run-trace';

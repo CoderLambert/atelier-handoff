@@ -1,3 +1,8 @@
+/**
+ * @file 查询交付物分页列表。
+ * @implementation 按项目、会话和分页条件构造可取消查询，未提供筛选条件时跳过请求。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { queryOptions, skipToken, useQuery } from '@tanstack/react-query';
 import type { Artifact } from '@shared/types';
 import { api } from '@/api/client';

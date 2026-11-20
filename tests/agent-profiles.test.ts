@@ -1,3 +1,8 @@
+/**
+ * @file 验证项目智能体配置与能力授权。
+ * @implementation 使用隔离目录、HTTP 和运行器替身检查配置版本、Skill／MCP 授权及只读约束。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';

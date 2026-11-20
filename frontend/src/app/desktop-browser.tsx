@@ -1,7 +1,7 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 组合项目工具授权查询与人工控制，订阅宿主状态并同步网页视图位置和可见性。
- * @updated 2026-11-20T11:57:56+08:00
+ * @implementation 以标签栏和工具栏两行组织操作，结合项目授权与人工控制同步原生网页视图。
+ * @updated 2026-11-20T14:44:21+08:00
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';

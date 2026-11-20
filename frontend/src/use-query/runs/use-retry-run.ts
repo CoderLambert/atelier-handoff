@@ -1,3 +1,8 @@
+/**
+ * @file 提供运行重试操作。
+ * @implementation 发送带幂等键的重试请求，成功后使会话、运行列表和轨迹缓存失效。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Run } from '@shared/types';
 import { api } from '@/api/client';

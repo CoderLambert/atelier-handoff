@@ -1,3 +1,8 @@
+/**
+ * @file 查询运行分页列表。
+ * @implementation 按项目、会话、状态和分页条件构造可取消查询。
+ * @updated 2026-11-20T14:44:21+08:00
+ */
 import { queryOptions, skipToken, useQuery } from '@tanstack/react-query';
 import type { Run } from '@shared/types';
 import { api } from '@/api/client';
