@@ -1,10 +1,10 @@
 /**
- * @file 为会话选择网关模型或跟随工作台默认值。
- * @implementation 在按需加载的 shadcn Select 中展示真实模型名称、ID 与路由信息，通过独立 Dialog 确认手动 ID。
- * @updated 2026-11-20T17:01:30+08:00
+ * @file 为会话选择网关模型和推理深度。
+ * @implementation 复用按需目录查询，在紧凑 Select 中展示模型名称与可选深度，锁定路由固定档位并通过 Dialog 确认手动 ID。
+ * @updated 2026-11-20T17:14:57+08:00
  */
 import { useId, useRef, useState } from 'react';
-import type { GatewayModelCatalog } from '@shared/types';
+import { reasoningEfforts, type ReasoningEffort } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,37 +32,61 @@ const manualValue = 'manual-entry';
 const retryValue = 'retry-catalog';
 const modelValue = (id: string) => `model:${id}`;
 
-function routeDetails(model: GatewayModelCatalog['models'][number]) {
-  return [
-    model.provider ? `供应方：${model.provider}` : '',
-    model.effort ? `推理深度 ${model.effort}` : '',
-    model.serviceTier ? `服务档位 ${model.serviceTier}` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
+const effortLabels: Record<ReasoningEffort, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  xhigh: '很高',
+  max: '最高',
+};
 
 export function ModelPicker({
   model,
+  effort,
   defaultModel,
   disabled,
   onModelChange,
+  onEffortChange,
 }: {
   model?: string;
+  effort?: ReasoningEffort;
   defaultModel: string;
   disabled: boolean;
   onModelChange: (model?: string) => void;
+  onEffortChange: (effort?: ReasoningEffort) => void;
 }) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [effortOpen, setEffortOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualInput, setManualInput] = useState('');
-  const catalog = useGatewayModels(open && !disabled);
+  const catalog = useGatewayModels((open || effortOpen) && !disabled);
   const workspaceDefault = catalog.data?.defaultModel ?? defaultModel;
   const models = catalog.data?.models ?? [];
   const currentModel = model ?? workspaceDefault;
   const currentRoute = models.find((entry) => entry.id === currentModel);
+  const fixedEffort = currentRoute?.effort;
+  const selectedEffort =
+    fixedEffort === undefined ? effort : reasoningEfforts.find((level) => level === fixedEffort);
+  const supportedEfforts = reasoningEfforts.filter(
+    (level) => !currentRoute?.supportedEfforts || currentRoute.supportedEfforts.includes(level),
+  );
+  const effortDisabled = disabled || fixedEffort !== undefined;
+  const unsupportedEffort = effort !== undefined && !supportedEfforts.includes(effort);
+  const effortLabel = selectedEffort
+    ? effortLabels[selectedEffort]
+    : fixedEffort !== undefined
+      ? '固定'
+      : '默认';
+  const effortTitle =
+    fixedEffort !== undefined
+      ? `网关路由已固定推理深度为 ${fixedEffort}，无法在会话中更改。`
+      : unsupportedEffort
+        ? '当前模型不支持已保存的推理深度，请选择默认或可用档位。'
+        : !supportedEfforts.length
+          ? '此模型不支持调整推理深度，使用默认设置。'
+          : '推理深度随当前会话保存；默认由模型或网关决定。';
   const manualId = manualInput.trim();
   const manualValid = manualId.length <= 200 && /^\S+$/u.test(manualId);
   const manualError = manualId && !manualValid ? '模型 ID 最多 200 个字符，不能包含空白。' : '';
@@ -100,7 +124,7 @@ export function ModelPicker({
         <SelectTrigger
           ref={triggerRef}
           size="sm"
-          className="max-w-64"
+          className="min-w-0 max-w-48 [&_[data-slot=select-value]]:min-w-0"
           aria-label="选择模型"
           title={`模型 · ${currentModel}${model === undefined ? ' · 跟随工作台默认' : ''}`}
         >
@@ -113,25 +137,28 @@ export function ModelPicker({
           side="top"
           align="end"
           sideOffset={4}
-          className="w-96 max-w-[calc(100vw-32px)]"
+          className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-72 max-w-[calc(100vw-32px)]"
           onCloseAutoFocus={(event) => {
             if (manualOpen) event.preventDefault();
           }}
         >
           <SelectGroup>
-            <SelectLabel>模型 · 键入名称快速定位</SelectLabel>
-            <SelectItem value={defaultValue} textValue={`跟随工作台默认 ${workspaceDefault}`}>
-              <span className="flex min-w-0 flex-col gap-0.5 whitespace-normal wrap-anywhere">
-                <span>跟随工作台默认</span>
-                <span className="text-xs text-muted-foreground">{workspaceDefault}</span>
-              </span>
+            <SelectLabel>模型</SelectLabel>
+            <SelectItem
+              value={defaultValue}
+              textValue={`跟随默认 ${workspaceDefault}`}
+              title={`跟随工作台默认 · ${workspaceDefault}`}
+            >
+              跟随默认
             </SelectItem>
             {model !== undefined && !models.some((entry) => entry.id === model) ? (
-              <SelectItem value={modelValue(model)} textValue={model}>
-                <span className="flex min-w-0 flex-col gap-0.5 whitespace-normal wrap-anywhere">
-                  <span>{model}</span>
-                  <span className="text-xs text-muted-foreground">当前指定 · 未在列表中</span>
-                </span>
+              <SelectItem
+                value={modelValue(model)}
+                textValue={model}
+                title={model}
+                className="[&>span:last-child]:min-w-0"
+              >
+                <span className="truncate">{model}</span>
               </SelectItem>
             ) : null}
             {models.map((entry) => (
@@ -139,19 +166,10 @@ export function ModelPicker({
                 key={entry.id}
                 value={modelValue(entry.id)}
                 textValue={[entry.displayName, entry.id].filter(Boolean).join(' ')}
+                title={entry.id}
+                className="[&>span:last-child]:min-w-0"
               >
-                <span className="flex min-w-0 flex-col gap-0.5 whitespace-normal wrap-anywhere">
-                  <span>
-                    {entry.displayName || entry.id}
-                    {entry.id === workspaceDefault ? ' · 工作台默认' : ''}
-                  </span>
-                  {entry.displayName && entry.displayName !== entry.id ? (
-                    <span className="text-xs text-muted-foreground">{entry.id}</span>
-                  ) : null}
-                  {routeDetails(entry) ? (
-                    <span className="text-xs text-muted-foreground">{routeDetails(entry)}</span>
-                  ) : null}
-                </span>
+                <span className="truncate">{entry.displayName || entry.id}</span>
               </SelectItem>
             ))}
           </SelectGroup>
@@ -182,11 +200,50 @@ export function ModelPicker({
               </SelectItem>
             ) : null}
             <SelectItem value={manualValue} textValue="手动输入模型 ID">
-              手动输入模型 ID…
+              手动输入 ID…
             </SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>
+      <Select
+        value={fixedEffort ?? effort ?? defaultValue}
+        open={effortOpen && !effortDisabled}
+        onOpenChange={setEffortOpen}
+        disabled={effortDisabled}
+        onValueChange={(value) => {
+          if (effortDisabled) return;
+          if (value === defaultValue) onEffortChange();
+          else {
+            const level = supportedEfforts.find((entry) => entry === value);
+            if (level) onEffortChange(level);
+          }
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          className="shrink-0"
+          aria-label="选择推理深度"
+          aria-describedby={`${id}-effort-help`}
+          aria-invalid={fixedEffort === undefined && unsupportedEffort}
+          title={effortTitle}
+        >
+          <SelectValue>深度 · {effortLabel}</SelectValue>
+        </SelectTrigger>
+        <SelectContent position="popper" side="top" align="end" sideOffset={4}>
+          <SelectGroup>
+            <SelectLabel>推理深度</SelectLabel>
+            <SelectItem value={defaultValue}>默认</SelectItem>
+            {supportedEfforts.map((level) => (
+              <SelectItem key={level} value={level}>
+                {effortLabels[level]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      <span id={`${id}-effort-help`} className="sr-only">
+        {effortTitle}
+      </span>
       <Dialog open={manualOpen && !disabled} onOpenChange={setManualOpen}>
         <DialogContent
           onCloseAutoFocus={(event) => {

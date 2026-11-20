@@ -120,3 +120,10 @@
 - 发送键旁的 shadcn Select 保存会话选定的模型。模型目录合并工作台默认值、Shunt 路由和本机 Codex 可见模型。在本机配置合并后得到 10 项。[决策](../../../docs/decisions/2026-11-20-session-model-picker.md)
 - Linux 安装态选择第二个模型并核对真实 SDK 发给回环网关的请求，随后离线重开会话确认选项恢复。142 项回归通过，正式实例完成同目录切换。[验收记录](../../../docs/evidence/desktop-p7-linux-x64/session-model-picker.json)
 - **开发过程 review**。复用会话模式的连续发送场景核对模型 ID。首轮仅用显式路由导致两项，用户确认需要补全目录后使用 `model/list`。将目录查询、协议兼容验证与无费用的安装态 SDK 检查各保留一次。
+
+## 2026-11-20 · 内置 Shunt 与会话推理深度
+
+- Linux 安装包附带固定版本的 Shunt。正常启动时使用独立的回环端口和工作台目录中的 Shunt 配置。原有账户目录可复用。设置提供首次 ChatGPT 登录和外部网关选择。[决策](../../../docs/decisions/2026-11-20-managed-shunt.md)
+- 模型菜单收为单行列表。发送区支持选择并保存会话推理深度。真实 SDK 的回环请求收到所选 `xhigh`，重开后恢复该选择。[推理设置](../../../docs/decisions/2026-11-20-session-reasoning-effort.md)
+- 最终 Linux 安装态验证无账号启动、拒绝匿名请求及同目录配置持久。正式实例复用已有账号目录，确认本地网关可达。142 项项目测试和 7 项独立登录进程检查通过。[验收记录](../../../docs/evidence/desktop-p7-linux-x64/managed-shunt-and-effort.json)
+- **开发过程 review**。先用 SDK 回环探针验证别名的 effort 参数，再纳入既有安装态用例。复用安装态启动器检查内置与外部网关。首轮实机截图发现发送键换行，移走重复键盘提示后，用同排位置断言复验。

@@ -13,6 +13,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   realpath,
@@ -26,7 +27,7 @@ import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { builtinModules } from 'node:module';
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { delimiter, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
@@ -39,6 +40,34 @@ const ELECTRON_VERSION = '45.4.1';
 const NODE_VERSION = '24.21.0';
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
+// Audited Cargo install: shunt-gateway 0.64.0, x86_64-unknown-linux-gnu.
+// This version has no --version flag; the binary hash pins its identity.
+const SHUNT = {
+  name: 'shunt-gateway',
+  version: '0.64.0',
+  path: 'resources/shunt/shunt',
+  sha256: '4436580d9bdc93f14304ca794f20e52fd4fcdef03d017cfefec583c53bbe532b',
+  platform: 'linux',
+  arch: 'x64',
+  license: 'MIT OR Apache-2.0',
+  attribution: 'Copyright (c) 2026 Passion Factory',
+  source: {
+    repository: 'https://github.com/pleaseai/shunt',
+    tag: 'v0.64.0',
+    commit: 'ace707b1075ec6bc522f8a1c21904f227ae440c2',
+  },
+};
+// Byte-for-byte copies from that pinned source, kept alongside npm supplements.
+const SHUNT_LICENSES = [
+  {
+    name: 'LICENSE-MIT',
+    sha256: '00911484ad05ce7ea922b07e44b44c4076a75f1a3832fa2f56628783ded56c9b',
+  },
+  {
+    name: 'LICENSE-APACHE',
+    sha256: 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
+  },
+];
 const DEFAULT_EPOCH = 1795132800; // 2026-11-20T00:00:00Z
 const epochText = process.env.SOURCE_DATE_EPOCH ?? String(DEFAULT_EPOCH);
 const epoch = Number(epochText);
@@ -260,6 +289,54 @@ async function inputText(path: string, use = 'metadata'): Promise<string> {
 }
 async function manifest(path: string): Promise<Manifest> {
   return manifestSchema.parse(parseJson(await inputText(join(path, 'package.json'))));
+}
+async function shuntInput(): Promise<string> {
+  const explicit = process.env.ATELIER_BUILD_SHUNT;
+  const candidates = explicit
+    ? [resolve(explicit)]
+    : [
+        ...(environment.PATH ?? '')
+          .split(delimiter)
+          .filter(Boolean)
+          .map((directory) => resolve(directory, 'shunt')),
+        join(homedir(), '.cargo/bin/shunt'),
+      ];
+  let binary: string | undefined;
+  for (const candidate of candidates) {
+    if (!(await exists(candidate))) continue;
+    const path = await realpath(candidate);
+    const info = await stat(path);
+    if (!info.isFile() || !(info.mode & 0o111)) continue;
+    binary = path;
+    break;
+  }
+  if (!binary)
+    throw new Error(
+      `Missing Shunt ${SHUNT.version} Linux x64 executable; set ATELIER_BUILD_SHUNT to the pinned binary, or install it on PATH or in ~/.cargo/bin/shunt.`,
+    );
+  const sha256 = await rememberInput(binary, 'shunt-identity');
+  if (sha256 !== SHUNT.sha256)
+    throw new Error(
+      `Shunt ${SHUNT.version} SHA-256 mismatch at ${binary}: expected ${SHUNT.sha256}, got ${sha256}. Set ATELIER_BUILD_SHUNT to the pinned Linux x64 binary.`,
+    );
+  const handle = await open(binary, 'r');
+  try {
+    const header = Buffer.alloc(20);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    if (
+      bytesRead !== header.length ||
+      !header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) ||
+      header[4] !== 2 || // ELF64
+      header[5] !== 1 || // Little endian
+      ![0, 3].includes(header[7] ?? -1) || // System V or Linux ABI
+      ![2, 3].includes(header.readUInt16LE(16)) || // Executable or PIE
+      header.readUInt16LE(18) !== 62 // AMD x86-64
+    )
+      throw new Error(`Shunt must be a Linux x64 ELF executable: ${binary}`);
+  } finally {
+    await handle.close();
+  }
+  return binary;
 }
 async function put(path: string, data: string, mode = 0o644): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -536,6 +613,7 @@ async function packageRelease(work: string): Promise<string[]> {
         `Missing build input ${path}; finish desktop sources and run npm run build first.`,
       );
 
+  const shunt = await shuntInput();
   const releasePackages = await closure(runtimeRoots, lock);
   const sdk = requirePackage(releasePackages, '@anthropic-ai/claude-agent-sdk');
   const cli = requirePackage(releasePackages, nativeCli);
@@ -597,6 +675,18 @@ async function packageRelease(work: string): Promise<string[]> {
   });
   await copy(node, join(runtime, 'bin/node'), 0o755);
   await copy(nodeLicense, join(stage, 'resources/licenses/node-LICENSE'));
+  // Copy only the pinned executable and legal texts, never gateway config or data.
+  await copy(shunt, join(stage, SHUNT.path), 0o755);
+  const shuntLicenseTexts: LicenseText[] = [];
+  for (const text of SHUNT_LICENSES) {
+    const source = join(root, 'docs/licenses', `shunt-${SHUNT.version}-${text.name}.txt`);
+    if ((await rememberInput(source, 'shunt-license')) !== text.sha256)
+      throw new Error(`Shunt ${SHUNT.version} ${text.name} does not match its pinned source.`);
+    const destination = `resources/licenses/shunt/${text.name}`;
+    await copy(source, join(stage, destination), 0o644);
+    shuntLicenseTexts.push({ path: destination, sha256: text.sha256 });
+  }
+  const shuntRelease = { ...SHUNT, texts: shuntLicenseTexts };
   for (const name of await files(join(root, 'dist/client'))) {
     if (
       name.split('/').some((part) => part.startsWith('.')) ||
@@ -705,6 +795,7 @@ async function packageRelease(work: string): Promise<string[]> {
       path: 'resources/licenses/node-LICENSE',
       sha256: NODE_LICENSE_SHA256,
     },
+    shunt: shuntRelease,
     packages: licenseInventory,
   });
   await copy(join(root, 'scripts/linux/atelier.desktop'), join(stage, 'atelier.desktop'));
@@ -725,6 +816,7 @@ async function packageRelease(work: string): Promise<string[]> {
       sha256: await hash(join(runtime, 'bin/node')),
       licenseSha256: NODE_LICENSE_SHA256,
     },
+    shunt: shuntRelease,
     sdk: {
       version: sdk.manifest.version,
       cliPackage: nativeCli,
@@ -782,6 +874,9 @@ async function packageRelease(work: string): Promise<string[]> {
       sha256: await hash(path),
     });
   }
+  const stagedShunt = inventory.find((item) => item.path === SHUNT.path);
+  if (stagedShunt?.sha256 !== SHUNT.sha256 || stagedShunt.mode !== '755')
+    throw new Error('Staged Shunt checksum or executable mode does not match the release pin.');
   const resourceInventory = {
     schemaVersion: 1,
     sourceDateEpoch: epoch,
@@ -877,6 +972,7 @@ async function packageRelease(work: string): Promise<string[]> {
     'atelier/resources/runtime/dist/client/index.html',
     'atelier/resources/runtime/dist/client/vendor/pdfjs/pdf.worker.min.mjs',
     'atelier/resources/licenses/inventory.json',
+    ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map((path) => `atelier/${path}`),
     'atelier/resources/input-inventory.json',
     `atelier/resources/runtime/node_modules/${nativeCli}/claude`,
   ])
@@ -884,6 +980,9 @@ async function packageRelease(work: string): Promise<string[]> {
   for (const path of [
     '.PKGINFO',
     'opt/atelier/atelier',
+    ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map(
+      (path) => `opt/atelier/${path}`,
+    ),
     'usr/bin/atelier',
     'usr/share/applications/atelier.desktop',
   ])
@@ -936,6 +1035,7 @@ async function packageRelease(work: string): Promise<string[]> {
       sqlite: true,
       runtimeImports: true,
       sdkCli: cliOutput,
+      shunt: { version: SHUNT.version, sha256: stagedShunt.sha256, mode: stagedShunt.mode },
     },
     missingLicenseTexts: licenseInventory
       .filter((item) => item.missingLicenseText)

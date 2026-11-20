@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "a5e98c36e1d6f1a31a30fcf8f82fb4e03221e33a83b46ab310f8875e1f175ed6",
+    "atelier-0.2.0-linux-x64.tar.zst": "04837cb48713ca2ac890627c719036874bf20a62e84770483180b98428c6efce",
+    "resourceManifestSha256": "c1d02afe01b4997097cbdad3c690608e9853afe2795cc26b4975ed55417c5b8b"
+  },
+  "shunt": {
+    "version": "0.64.0",
+    "linuxBinarySha256": "4436580d9bdc93f14304ca794f20e52fd4fcdef03d017cfefec583c53bbe532b",
+    "bundledProcessObserved": true,
+    "firstStartWithoutAccount": true,
+    "loginControlVisible": true,
+    "anonymousClientRejected": true,
+    "configAndModelPreservedAcrossReopen": true,
+    "loopbackReadyAfterReopen": true,
+    "normalShutdown": true
+  },
+  "effort": {
+    "compactToolbarAndSingleLineOptions": true,
+    "selectedThroughComposer": "xhigh",
+    "observedSdkRequestEffort": "xhigh",
+    "storedRunEffort": "xhigh",
+    "sessionEffortRestoredAfterReopen": true
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 129,
+    "sameDataAndBrowserProfile": true,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true,
+    "bundledShuntHealthy": true,
+    "authenticatedLocalModelCatalog": true,
+    "existingShuntAccountDirectoryReused": true
+  },
+  "runtimeTestsPassed": 107,
+  "frontendTestsPassed": 35,
+  "isolatedLoginProcessChecksPassed": 7,
+  "realOAuthFlowRun": false,
+  "paidModelCalls": 0
+}

@@ -33,6 +33,7 @@ import { commandsAvailable } from './commands.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { gatewayModelId, gatewayModels } from './gateway-models.js';
+import { ManagedGatewayLogin } from './managed-gateway-login.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
 import { McpSessions, testMcp } from './extension-mcp.js';
@@ -44,6 +45,7 @@ import {
   activeStatuses,
   emptyDraft,
   retainedSkillSelections,
+  reasoningEfforts,
   now,
   type Extension,
   type Run,
@@ -56,6 +58,7 @@ const inputSchema = z.object({
   text: z.string().trim().min(1).max(32000),
   mode: z.enum(['readonly', 'edit']).default('readonly'),
   model: gatewayModelId.optional(),
+  effort: z.enum(reasoningEfforts).optional(),
   approvalMode: z.literal('automatic').optional(),
   maxSearchChargeFen: z.int().min(0).max(100_000).optional(),
   contextPaths: z.array(z.string().max(1000)).max(30).default([]),
@@ -68,6 +71,7 @@ const draftSchema = z
     text: z.string().max(32000),
     mode: z.enum(['readonly', 'edit']),
     model: gatewayModelId.optional(),
+    effort: z.enum(reasoningEfforts).optional(),
     approvalMode: z.literal('automatic').optional(),
     contextPaths: z.array(z.string().max(1000)).max(30),
     attachmentIds: z.array(z.string().uuid()).max(20),
@@ -76,6 +80,7 @@ const draftSchema = z
   .refine((draft) => !draft.approvalMode || draft.mode === 'edit', '自动化草稿须允许修改。');
 const configSchema = z.object({
   gateway: z.string().url().optional(),
+  managedGateway: z.boolean().optional(),
   model: z.string().min(1).max(200).optional(),
   limitExecution: z.boolean().optional(),
   maxTurns: z.number().int().min(1).max(100).optional(),
@@ -180,6 +185,18 @@ export async function createApp(options: {
     new AgentRunner(store, permissions, files, mcpSessions, browserAccess);
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
+  const gatewayLogin = new ManagedGatewayLogin();
+  const managedOrigin = process.env.ATELIER_MANAGED_GATEWAY;
+  const effectiveConfig = () => {
+    const saved = store.config();
+    const useManaged =
+      managedOrigin &&
+      (saved.managedGateway ??
+        /^http:\/\/(?:127\.0\.0\.1|localhost):3001\/?$/u.test(saved.gateway));
+    return useManaged
+      ? { ...saved, gateway: managedOrigin, managedGateway: true }
+      : { ...saved, managedGateway: managedOrigin ? false : undefined };
+  };
   const deletingSessions = new Set<string>();
   const uploadingSessions = new Set<string>();
   let directoryPicker: AbortController | undefined;
@@ -197,11 +214,15 @@ export async function createApp(options: {
     }
   };
   const configInfo = async () => {
-    const config = store.config();
+    const config = effectiveConfig();
+    const [status, gateway] = await Promise.all([connection(config), gatewayLogin.status()]);
     return {
       config,
       capabilities: { commands: commandsAvailable() },
-      connection: await connection(config),
+      connection: status,
+      ...(gateway
+        ? { managedGateway: { ...gateway, externalGateway: store.config().gateway } }
+        : {}),
     };
   };
   const projects = async () =>
@@ -311,11 +332,11 @@ export async function createApp(options: {
       ? `智能体 ${revision.config.name} 的任务说明（受本轮工具与权限约束）：\n${revision.config.instructions}\n\n`
       : '';
     const resolvedInput = profilePrompt + (bundle?.prompt ?? request.text);
-    const defaults = store.config();
-    const model = retryOf
-      ? store.get('runs', retryOf).config.model
-      : (request.model ?? session.draft.model ?? defaults.model);
-    const selectedConfig = { ...defaults, model };
+    const defaults = effectiveConfig();
+    const priorConfig = retryOf ? store.get('runs', retryOf).config : undefined;
+    const model = priorConfig?.model ?? request.model ?? session.draft.model ?? defaults.model;
+    const effort = priorConfig ? priorConfig.effort : request.effort;
+    const selectedConfig = { ...defaults, model, effort };
     if (!options.runnerFactory && !(await connection(selectedConfig)).available)
       throw new AppError(
         'SDK_UNAVAILABLE',
@@ -463,6 +484,7 @@ export async function createApp(options: {
               : request.mode,
           ...(latest.draft.approvalMode ? { approvalMode: latest.draft.approvalMode } : {}),
           ...(latest.draft.model ? { model: latest.draft.model } : {}),
+          ...(latest.draft.effort ? { effort: latest.draft.effort } : {}),
           extensionSelections: retryOf
             ? latest.draft.extensionSelections
             : retainedSkillSelections(run.extensions),
@@ -584,10 +606,18 @@ export async function createApp(options: {
         return;
       }
       if (url.pathname === '/api/models' && method === 'GET')
-        return json(res, await gatewayModels(store.config()));
+        return json(res, await gatewayModels(effectiveConfig()));
+      if (url.pathname === '/api/config/gateway-login' && method === 'POST') {
+        if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
+        await gatewayLogin.login();
+        return json(res, await configInfo());
+      }
       if (parts[0] === 'api' && parts[1] === 'config') {
         if (method === 'PATCH') {
           const changes = configSchema.parse(await body(req));
+          if (changes.managedGateway && !managedOrigin)
+            throw new AppError('MANAGED_GATEWAY_UNAVAILABLE', '内置 Shunt 当前不可用。', 409);
+          if (changes.managedGateway && changes.gateway === managedOrigin) delete changes.gateway;
           if (changes.gateway) {
             const gateway = new URL(changes.gateway);
             if (
@@ -1296,7 +1326,7 @@ export async function createApp(options: {
         directoryPicker?.abort();
         const networkClosed = new Promise<void>((resolve) => server.close(() => resolve()));
         try {
-          await runner.shutdown();
+          await Promise.all([runner.shutdown(), gatewayLogin.dispose()]);
         } finally {
           for (const stream of streams) stream.end();
           await Promise.allSettled(requests);

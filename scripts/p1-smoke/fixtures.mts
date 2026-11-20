@@ -429,7 +429,7 @@ export async function fixtures(): Promise<Fixtures> {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
             JSON.stringify({
-              data: [{ model: alternateModel, provider: 'fixture', effort: 'high' }],
+              data: [{ model: alternateModel, provider: 'fixture' }],
             }),
           );
           return;
@@ -460,6 +460,7 @@ export async function fixtures(): Promise<Fixtures> {
             alternateModel,
             'The next SDK request uses the selected model',
           );
+          assert.equal(record(request.output_config).effort, 'xhigh');
           assert.equal(++evidence.automatic.requests, automaticToolCount + 2);
           streamMessage(res, undefined, automaticFollowupAnswer, alternateModel);
           return;

@@ -7,4 +7,5 @@ export const settingsKeys = {
   config: ['config'] as const,
   models: ['models'] as const,
   updateConfig: ['config', 'update'] as const,
+  gatewayLogin: ['config', 'gateway-login'] as const,
 };

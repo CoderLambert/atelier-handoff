@@ -29,6 +29,8 @@
 - [x] 运行模式改用 shadcn Select 并随会话保存。安装态验证连续发送、隔离选择和重开后恢复。[会话模式验收](../../../docs/evidence/desktop-p7-linux-x64/session-approval-mode.json)
 - [x] 发送区支持直接选择会话模型。合并 Shunt 路由与本机 Codex 目录，安装态核对切换后的模型请求和重开恢复。[模型选择验收](../../../docs/evidence/desktop-p7-linux-x64/session-model-picker.json)
 
+- [x] 发送区精简模型菜单，增加会话推理深度。Linux 包内置 Shunt，并沿用持久配置和账号目录。[安装态验收](../../../docs/evidence/desktop-p7-linux-x64/managed-shunt-and-effort.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

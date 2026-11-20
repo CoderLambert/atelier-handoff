@@ -82,7 +82,20 @@ export default function SessionChat({
       defaultModel={defaultModel}
       onModelChange={(model) => {
         if (store.getState().workspace.submitting[id]) return;
-        updateDraft(id, (previous) => ({ ...previous, model }), serverDraft, true);
+        updateDraft(
+          id,
+          (previous) => ({
+            ...previous,
+            model,
+            effort: previous.model === model ? previous.effort : undefined,
+          }),
+          serverDraft,
+          true,
+        );
+      }}
+      onEffortChange={(effort) => {
+        if (store.getState().workspace.submitting[id]) return;
+        updateDraft(id, (previous) => ({ ...previous, effort }), serverDraft, true);
       }}
       searchChargeLimit={searchChargeLimit}
       onModeChange={changeMode}

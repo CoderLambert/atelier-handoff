@@ -1,9 +1,9 @@
 /**
  * @file 组合会话消息和任务输入界面。
- * @implementation 将会话快照、持久草稿、临时搜索上限及运行操作传给消息区和输入区。
- * @updated 2026-11-20T15:49:33+08:00
+ * @implementation 将会话快照、持久草稿、模型与推理深度选择、临时搜索上限及运行操作传给消息区和输入区。
+ * @updated 2026-11-20T17:14:57+08:00
  */
-import type { Draft } from '@shared/types';
+import type { Draft, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Composer, type DraftChange } from './composer';
 import { Conversation } from './conversation';
@@ -16,6 +16,7 @@ export interface ChatProps {
   searchChargeLimit?: string;
   defaultModel: string;
   onModelChange: (model?: string) => void;
+  onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -44,6 +45,7 @@ export default function Chat(props: ChatProps) {
         searchChargeLimit={props.searchChargeLimit}
         defaultModel={props.defaultModel}
         onModelChange={props.onModelChange}
+        onEffortChange={props.onEffortChange}
         onModeChange={props.onModeChange}
         onSearchChargeChange={props.onSearchChargeChange}
         onDraftChange={props.onDraftChange}

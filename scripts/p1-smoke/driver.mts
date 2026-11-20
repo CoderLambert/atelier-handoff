@@ -163,8 +163,9 @@ async function launch(
   fixture: Fixtures,
   index: number,
   reopen: boolean,
+  managed = false,
 ): Promise<Launch> {
-  const directory = join(root, `run-${reopen ? 1 : index}`);
+  const directory = join(root, managed ? 'managed-shunt' : `run-${reopen ? 1 : index}`);
   // A previous process's CDP file must never reconnect this launch to an old port.
   await rm(join(directory, 'profile/DevToolsActivePort'), { force: true });
   for (const name of [
@@ -180,7 +181,13 @@ async function launch(
     await mkdir(join(directory, name), { recursive: true, mode: 0o700 });
   const metric: LaunchEvidence = {
     index,
-    kind: reopen ? 'offline-reopen' : 'fresh',
+    kind: managed
+      ? reopen
+        ? 'managed-reopen'
+        : 'managed-fresh'
+      : reopen
+        ? 'offline-reopen'
+        : 'fresh',
     readyMs: null,
     peakRssMiB: 0,
     samples: 0,
@@ -217,7 +224,7 @@ async function launch(
         DISPLAY: ':99',
         ATELIER_DATA_DIR: join(directory, 'data'),
         ATELIER_PORT: '0',
-        ATELIER_GATEWAY: fixture.gatewayUrl,
+        ...(managed ? {} : { ATELIER_GATEWAY: fixture.gatewayUrl }),
         ATELIER_MODEL: model,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -384,7 +391,7 @@ async function launch(
         append(Buffer.from(`\nRenderer ${message.type()}: ${message.text()}\n`));
     });
     const initialProjectDialog = page.getByRole('dialog', { name: '绑定项目目录', exact: true });
-    if (!reopen) {
+    if (!reopen || managed) {
       await initialProjectDialog.waitFor({
         state: 'visible',
         timeout: Math.max(1, cfg.startupMs - (performance.now() - started)),
@@ -404,8 +411,8 @@ async function launch(
     );
     assert.equal(
       record(bootstrap.connection).available,
-      false,
-      'Fresh/offline gateway status must be visible',
+      managed,
+      'Gateway status must match the isolated launch mode',
     );
     if (!reopen) {
       assert.equal(array(bootstrap.projects).length, 0, 'Fresh start must have no project');
@@ -1050,6 +1057,14 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.ok(string(record(state.session).sdkSessionId));
     assert.equal(record(accepted.config).model, model);
     const modelButton = page.getByRole('combobox', { name: '选择模型', exact: true });
+    const modelBounds = await modelButton.boundingBox();
+    const sendBounds = await page
+      .getByRole('button', { name: '发送任务', exact: true })
+      .boundingBox();
+    assert.ok(
+      modelBounds && sendBounds && Math.abs(modelBounds.y - sendBounds.y) < 6,
+      'Model picker and send button share the compact toolbar',
+    );
     await modelButton.click();
     const models = page.getByRole('listbox');
     const modelOption = models.getByRole('option', { name: /sdk-offline-alternate/ });
@@ -1060,6 +1075,10 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     await modelButton
       .getByText(`模型 · ${alternateModel}`, { exact: true })
       .waitFor({ state: 'visible' });
+    const effortButton = page.getByRole('combobox', { name: '选择推理深度', exact: true });
+    await effortButton.click();
+    await page.getByRole('option', { name: '很高', exact: true }).click();
+    await effortButton.getByText('深度 · 很高', { exact: true }).waitFor({ state: 'visible' });
     await page
       .getByRole('textbox', { name: '继续对话', exact: true })
       .fill(automaticFollowupPrompt);
@@ -1076,6 +1095,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.equal(followupRun.approvalMode, 'automatic');
     assert.equal(followupRun.maxSearchChargeFen, 0);
     assert.equal(record(followupRun.config).model, alternateModel);
+    assert.equal(record(followupRun.config).effort, 'xhigh');
     await thread.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
     await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
     assert.equal(fixture.evidence.automatic.requests, automaticToolCount + 2);
@@ -1100,6 +1120,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       followupApprovalMode: followupRun.approvalMode,
       initialModel: model,
       followupModel: alternateModel,
+      followupEffort: 'xhigh',
       pendingApprovals: 0,
       chatCardsObserved: violations.length,
       permissions: permissions.map(({ id, kind, status, decisionSource }) => ({
@@ -1417,6 +1438,7 @@ async function reopen(
   const automaticSession = record(automaticState.session);
   assert.equal(record(automaticSession.draft).approvalMode, 'automatic');
   assert.equal(record(automaticSession.draft).model, alternateModel);
+  assert.equal(record(automaticSession.draft).effort, 'xhigh');
   await run.page
     .getByRole('button')
     .filter({
@@ -1581,6 +1603,69 @@ async function main(): Promise<void> {
       await active.stop();
       active = undefined;
     }
+    evidence.phase = 'managed-shunt';
+    await save();
+    const verifyGateway = async (run: Launch) => {
+      const { config, managedGateway } = await api(run.page, '/api/config');
+      const origin = string(record(config).gateway);
+      const catalog = await api(run.page, '/api/models');
+      const metadata = record(managedGateway);
+      assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/u);
+      assert.equal(record(config).managedGateway, true);
+      assert.equal(metadata.accountPresent, false);
+      assert.equal(metadata.externalGateway, 'http://127.0.0.1:3001');
+      assert.equal(catalog.routesAvailable, true);
+      assert.ok(array(catalog.models).some((entry) => record(entry).provider === 'chatgpt-plan'));
+      assert.equal((await fetch(origin + '/v1/models')).status, 401);
+      await run.sample();
+      assert.ok(
+        run.metric.processes.some(
+          (proc) => proc.executable === '/opt/atelier/resources/shunt/shunt',
+        ),
+      );
+      return { config, origin, configPath: string(metadata.configPath) };
+    };
+    active = await launch(cfg, chromium, fixture, freshStarts + 2, false, true);
+    const firstGateway = await verifyGateway(active);
+    await active.page.getByRole('button', { name: '模型与网关设置', exact: true }).click();
+    const gatewaySettings = active.page.getByRole('dialog', {
+      name: '模型与网关设置',
+      exact: true,
+    });
+    await gatewaySettings
+      .getByRole('button', { name: '登录 ChatGPT', exact: true })
+      .waitFor({ state: 'visible' });
+    await gatewaySettings.getByText('尚无账户文件', { exact: false }).waitFor({ state: 'visible' });
+    await active.page.screenshot({ path: join(root, 'managed-shunt-settings.png') });
+    await active.page.keyboard.press('Escape');
+    await gatewaySettings.waitFor({ state: 'hidden' });
+    const localConfig = await readFile(firstGateway.configPath, 'utf8');
+    const marked = localConfig + '\n# installation smoke persistence marker\n';
+    await writeFile(firstGateway.configPath, marked);
+    const csrf = string((await api(active.page, '/api/bootstrap')).csrfToken);
+    const savedModel = 'persistent-gateway-fixture';
+    const changed = await appFetch(active.page, '/api/config', {
+      method: 'PATCH',
+      token: csrf,
+      body: { managedGateway: true, gateway: firstGateway.origin, model: savedModel },
+    });
+    assert.equal(changed.status, 200);
+    await active.stop();
+    active = await launch(cfg, chromium, fixture, freshStarts + 3, true, true);
+    const reopenedGateway = await verifyGateway(active);
+    assert.equal(reopenedGateway.configPath, firstGateway.configPath);
+    assert.equal(await readFile(reopenedGateway.configPath, 'utf8'), marked);
+    assert.equal(record(reopenedGateway.config).model, savedModel);
+    await active.stop();
+    active = undefined;
+    evidence.checks.managedShunt = {
+      bundledProcess: true,
+      firstStartWithoutAccount: true,
+      anonymousInferenceEndpointRejected: true,
+      configAndModelPreservedAcrossReopen: true,
+      ephemeralLoopbackReadyAfterReopen: true,
+      cleanShutdown: true,
+    };
     assert.equal(evidence.launches.filter((item) => item.kind === 'fresh').length, freshStarts);
     assert.ok(
       evidence.launches.every(

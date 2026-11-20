@@ -6,7 +6,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { z } from 'zod';
-import type { GatewayModelCatalog } from '../shared/types.js';
+import { reasoningEfforts, type GatewayModelCatalog } from '../shared/types.js';
 
 type Models = GatewayModelCatalog['models'];
 const listedModels = z.object({
@@ -15,6 +15,7 @@ const listedModels = z.object({
       model: z.string().max(200).regex(/^\S+$/u),
       displayName: z.string().min(1).max(200),
       hidden: z.boolean().optional(),
+      supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string() })).optional(),
     }),
   ),
 });
@@ -61,6 +62,13 @@ function fetchCodexModelCatalog(): Promise<Models> {
               .map((entry) => ({
                 id: entry.model,
                 displayName: entry.displayName,
+                supportedEfforts: entry.supportedReasoningEfforts
+                  ? reasoningEfforts.filter((level) =>
+                      entry.supportedReasoningEfforts?.some(
+                        (value) => value.reasoningEffort === level,
+                      ),
+                    )
+                  : undefined,
                 provider: 'chatgpt-plan',
               })),
           );

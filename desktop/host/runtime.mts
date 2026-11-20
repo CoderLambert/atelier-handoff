@@ -6,6 +6,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { delimiter, join } from 'node:path';
+import type { ManagedShuntConnection } from './managed-shunt.mjs';
 import {
   desktopHostDeadlines,
   desktopHostReplySchema,
@@ -62,7 +63,7 @@ export class RuntimeSupervisor {
     return this.current?.child === child && this.current.ready && !this.current.retired;
   }
 
-  async start(): Promise<{ origin: string; pairing: string }> {
+  async start(gateway?: ManagedShuntConnection): Promise<{ origin: string; pairing: string }> {
     if (this.current) throw new Error('工作台服务尚未停止。');
     const { root, packaged, dataDir } = this.options;
     const nodeBin = join(root, 'bin');
@@ -71,6 +72,15 @@ export class RuntimeSupervisor {
       ATELIER_DESKTOP_BROWSER: '1',
       ATELIER_DATA_DIR: dataDir,
       ATELIER_PORT: process.env.ATELIER_PORT ?? '0',
+      ...(gateway
+        ? {
+            ATELIER_MANAGED_GATEWAY: gateway.origin,
+            ATELIER_MANAGED_GATEWAY_TOKEN: gateway.token,
+            ATELIER_SHUNT_BINARY: gateway.binary,
+            ATELIER_SHUNT_CONFIG: gateway.configPath,
+            SHUNT_CHATGPT_PLAN_ACCOUNTS_DIR: gateway.accountsDirectory,
+          }
+        : {}),
     };
     if (packaged) {
       env.PATH = [nodeBin, process.env.PATH].filter(Boolean).join(delimiter);

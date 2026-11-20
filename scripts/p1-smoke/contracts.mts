@@ -72,7 +72,7 @@ export interface ProcessSample {
 
 export interface LaunchEvidence {
   index: number;
-  kind: 'fresh' | 'offline-reopen';
+  kind: 'fresh' | 'offline-reopen' | 'managed-fresh' | 'managed-reopen';
   readyMs: number | null;
   peakRssMiB: number;
   samples: number;

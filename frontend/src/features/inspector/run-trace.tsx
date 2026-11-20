@@ -85,6 +85,7 @@ function TraceDetail({
   }
   const facts: [string, unknown][] = [
     ['模型', init?.model ?? run.config.model],
+    ['请求推理深度', run.config.effort],
     ['网关', gateway],
     ['智能体', run.agent ? `${run.agent.name} · v${run.agent.version}` : null],
     ['可用内置能力', run.agent?.capabilities.join('、')],

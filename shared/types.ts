@@ -179,6 +179,9 @@ export interface AgentSessionInfo extends AgentRunInfo {
   issues: string[];
 }
 
+export const reasoningEfforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ReasoningEffort = (typeof reasoningEfforts)[number];
+
 export interface Draft {
   text: string;
   contextPaths: string[];
@@ -186,6 +189,7 @@ export interface Draft {
   mode: Mode;
   approvalMode?: 'automatic';
   model?: string;
+  effort?: ReasoningEffort;
   extensionSelections?: ExtensionSelection[];
 }
 export interface Session {
@@ -327,6 +331,7 @@ export interface GatewayModelCatalog {
   models: Array<{
     id: string;
     displayName?: string;
+    supportedEfforts?: ReasoningEffort[];
     provider?: string;
     effort?: string;
     serviceTier?: string;
@@ -334,7 +339,9 @@ export interface GatewayModelCatalog {
 }
 export interface AppConfig {
   gateway: string;
+  managedGateway?: boolean;
   model: string;
+  effort?: ReasoningEffort;
   limitExecution?: boolean;
   maxTurns: number;
   timeoutMs: number;

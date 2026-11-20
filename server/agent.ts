@@ -207,6 +207,7 @@ export class AgentRunner implements Runner {
     const configKey = fingerprint(
       JSON.stringify({
         model: run.config.model,
+        effort: run.config.effort,
         gateway: run.config.gateway,
         ...(run.agent ? { agent: run.agent, capabilityPolicy: 1 } : {}),
         ...(run.extensions ? { extensions: run.extensions } : {}),
@@ -1213,7 +1214,10 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         if (process.env[key]) env[key] = process.env[key];
       Object.assign(env, {
         ANTHROPIC_BASE_URL: run.config.gateway,
-        ANTHROPIC_AUTH_TOKEN: process.env.ATELIER_GATEWAY_TOKEN || 'local-placeholder',
+        ANTHROPIC_AUTH_TOKEN:
+          (run.config.managedGateway && run.config.gateway === process.env.ATELIER_MANAGED_GATEWAY
+            ? process.env.ATELIER_MANAGED_GATEWAY_TOKEN
+            : process.env.ATELIER_GATEWAY_TOKEN) || 'local-placeholder',
         ANTHROPIC_API_KEY: '',
         ANTHROPIC_MODEL: run.config.model,
         ANTHROPIC_DEFAULT_OPUS_MODEL: run.config.model,
@@ -1225,6 +1229,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
         CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
         CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: 'false',
+        ...(run.config.effort ? { CLAUDE_CODE_ALWAYS_ENABLE_EFFORT: '1' } : {}),
         MCP_TOOL_TIMEOUT: '180000',
       });
       this.store.update('runs', run.id, { status: 'running', startedAt: now() });
@@ -1234,6 +1239,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         options: {
           cwd: project.path,
           model: run.config.model,
+          ...(run.config.effort ? { effort: run.config.effort } : {}),
           tools: [
             ...(allowed('read') ? ['Read'] : []),
             ...(allowed('plan') ? ['TodoWrite'] : []),

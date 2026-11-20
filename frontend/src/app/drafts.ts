@@ -3,7 +3,7 @@
  * @implementation 协调本地恢复、串行写入和幂等发送，保留会话审批模式，并在发送确认后清除临时搜索上限。
  * @updated 2026-11-20T15:58:31+08:00
  */
-import { retainedSkillSelections, type Draft } from '@shared/types';
+import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
 import type {
   SendSessionMessage,
@@ -83,6 +83,7 @@ function persistedDraft(draft: Draft): Draft {
     extensionSelections: draft.extensionSelections,
     mode: draft.mode === 'edit' ? 'edit' : 'readonly',
     ...(typeof draft.model === 'string' && draft.model ? { model: draft.model } : {}),
+    ...(draft.effort && reasoningEfforts.includes(draft.effort) ? { effort: draft.effort } : {}),
     ...(draft.mode === 'edit' && draft.approvalMode === 'automatic'
       ? { approvalMode: draft.approvalMode }
       : {}),
@@ -97,7 +98,9 @@ export function readDraft(id: string, server?: Draft): Draft {
     ...server,
     ...local,
     // A complete local draft can explicitly clear either saved preference.
-    ...(local.mode ? { approvalMode: local.approvalMode, model: local.model } : {}),
+    ...(local.mode
+      ? { approvalMode: local.approvalMode, model: local.model, effort: local.effort }
+      : {}),
   });
 }
 export function updateDraft(id: string, update: DraftUpdate, server?: Draft, immediate = false) {
@@ -165,6 +168,7 @@ export async function submitDraft(
         ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
         approvalMode,
         model: draft.model,
+        effort: draft.effort,
         extensionSelections: retainedSkillSelections(run.extensions),
       });
     save.attempt = undefined;

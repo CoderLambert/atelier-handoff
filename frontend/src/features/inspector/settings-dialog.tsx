@@ -6,6 +6,15 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useAppConfig } from '@/use-query/settings/use-app-config';
 import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
+import { useGatewayLogin } from '@/use-query/settings/use-gateway-login';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import '@/desktop-files';
 import type { ConfigInfo } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -94,7 +103,10 @@ function SettingsForm({
   initial: ConfigInfo;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [gateway, setGateway] = useState(initial.config.gateway);
+  const [gateway, setGateway] = useState(
+    initial.managedGateway?.externalGateway ?? initial.config.gateway,
+  );
+  const [managedGateway, setManagedGateway] = useState(initial.config.managedGateway !== false);
   const [model, setModel] = useState(initial.config.model);
   const [limitExecution, setLimitExecution] = useState(initial.config.limitExecution ?? false);
   const [maxTurns, setMaxTurns] = useState(String(initial.config.maxTurns));
@@ -103,30 +115,36 @@ function SettingsForm({
   const [saved, setSaved] = useState<ConfigInfo>();
   const lock = useRef(false);
   const mutation = useUpdateAppConfig();
+  const login = useGatewayLogin();
+  const bundled = initial.managedGateway;
+  const usingBundled = Boolean(bundled && managedGateway);
+  const busy = mutation.isPending || login.isPending;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (lock.current) return;
     setValidation(undefined);
     setSaved(undefined);
-    let url: URL;
-    try {
-      url = new URL(gateway.trim());
-    } catch {
-      setValidation('请输入有效的本机网关 URL。');
-      return;
-    }
-    if (
-      !['http:', 'https:'].includes(url.protocol) ||
-      !['localhost', '127.0.0.1'].includes(url.hostname) ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    ) {
-      setValidation(
-        '网关须为 http 或 https 的 localhost / 127.0.0.1 地址，不能包含凭据、查询参数或片段。',
-      );
-      return;
+    if (!usingBundled) {
+      let url: URL;
+      try {
+        url = new URL(gateway.trim());
+      } catch {
+        setValidation('请输入有效的本机网关 URL。');
+        return;
+      }
+      if (
+        !['http:', 'https:'].includes(url.protocol) ||
+        !['localhost', '127.0.0.1'].includes(url.hostname) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        setValidation(
+          '网关须为 http 或 https 的 localhost / 127.0.0.1 地址，不能包含凭据、查询参数或片段。',
+        );
+        return;
+      }
     }
     const turns = Number(maxTurns);
     const timeout = Number(timeoutMs);
@@ -148,7 +166,9 @@ function SettingsForm({
     try {
       const data = await mutation.mutateAsync({
         gateway: gateway.trim().replace(/\/$/, ''),
+        ...(bundled ? { managedGateway } : {}),
         model: model.trim(),
+        effort: initial.config.effort,
         limitExecution,
         maxTurns: validTurns ? turns : initial.config.maxTurns,
         timeoutMs: validTimeout ? timeout : initial.config.timeoutMs,
@@ -160,6 +180,19 @@ function SettingsForm({
       lock.current = false;
     }
   }
+  async function signIn() {
+    if (lock.current) return;
+    lock.current = true;
+    setSaved(undefined);
+    mutation.reset();
+    try {
+      await login.mutateAsync();
+    } catch {
+      /* The mutation exposes a sanitized server error below. */
+    } finally {
+      lock.current = false;
+    }
+  }
   const connection = saved?.connection ?? initial.connection;
   const change = () => {
     setSaved(undefined);
@@ -167,7 +200,7 @@ function SettingsForm({
     mutation.reset();
   };
   return (
-    <form onSubmit={(event) => void submit(event)} className="space-y-5">
+    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-5">
       <div
         role="status"
         className={`rounded-xl border p-3.5 text-xs leading-6 ${connection.available ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-800 dark:text-emerald-200' : 'border-amber-500/20 bg-amber-500/5 text-amber-800 dark:text-amber-200'}`}
@@ -178,29 +211,79 @@ function SettingsForm({
         </p>
         <p className="mt-1">{connection.message}</p>
       </div>
-      <label className="grid gap-2 text-xs font-medium">
-        网关地址
-        <input
-          autoComplete="url"
-          type="url"
-          required
-          disabled={mutation.isPending}
-          className={fieldClass}
-          value={gateway}
-          onChange={(event) => {
-            change();
-            setGateway(event.target.value);
-          }}
-          placeholder="http://127.0.0.1:3001"
-        />
-        <span className="text-[11px] font-normal text-muted-foreground">使用本机 Shunt 地址。</span>
-      </label>
+      {bundled ? (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="gateway-source" className="text-xs font-medium">
+            网关
+          </label>
+          <Select
+            value={managedGateway ? 'bundled' : 'external'}
+            disabled={busy}
+            onValueChange={(value) => {
+              change();
+              setManagedGateway(value === 'bundled');
+            }}
+          >
+            <SelectTrigger id="gateway-source" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="bundled">内置 Shunt</SelectItem>
+                <SelectItem value="external">外部网关</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+      {usingBundled && bundled ? (
+        <div className="flex flex-col gap-3 text-xs">
+          <p role="status">
+            {bundled.accountPresent ? '已发现账户文件' : '尚无账户文件'}
+            <span className="text-muted-foreground"> · 登录是否有效以实际使用为准。</span>
+          </p>
+          <div className="flex flex-col gap-1 text-muted-foreground">
+            <span>配置文件</span>
+            <code className="break-all text-[11px]">{bundled.configPath}</code>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" disabled={busy} onClick={() => void signIn()}>
+              {login.isPending ? '正在等待登录…' : '登录 ChatGPT'}
+            </Button>
+            <p className="text-[11px] leading-6 text-muted-foreground" role="status">
+              {login.isPending
+                ? '请在系统浏览器完成登录，最长等待 5 分钟。'
+                : login.isSuccess
+                  ? '登录命令已完成，账户文件状态已刷新。'
+                  : '将在系统浏览器打开登录页。'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <label className="grid gap-2 text-xs font-medium">
+          网关地址
+          <input
+            autoComplete="url"
+            type="url"
+            required
+            disabled={busy}
+            className={fieldClass}
+            value={gateway}
+            onChange={(event) => {
+              change();
+              setGateway(event.target.value);
+            }}
+            placeholder="http://127.0.0.1:3001"
+          />
+          <span className="text-[11px] font-normal text-muted-foreground">使用本机网关地址。</span>
+        </label>
+      )}
       <label className="grid gap-2 text-xs font-medium">
         模型
         <input
           required
           maxLength={200}
-          disabled={mutation.isPending}
+          disabled={busy}
           className={fieldClass}
           value={model}
           onChange={(event) => {
@@ -217,7 +300,7 @@ function SettingsForm({
           <input
             type="checkbox"
             checked={limitExecution}
-            disabled={mutation.isPending}
+            disabled={busy}
             aria-describedby="execution-limit-help"
             onChange={(event) => {
               change();
@@ -240,7 +323,7 @@ function SettingsForm({
               min={1}
               max={100}
               step={1}
-              disabled={mutation.isPending}
+              disabled={busy}
               className={fieldClass}
               value={maxTurns}
               onChange={(event) => {
@@ -258,7 +341,7 @@ function SettingsForm({
               min={10000}
               max={1800000}
               step={1}
-              disabled={mutation.isPending}
+              disabled={busy}
               className={fieldClass}
               value={timeoutMs}
               onChange={(event) => {
@@ -276,6 +359,7 @@ function SettingsForm({
       </p>
       {validation ? <ErrorNotice message={validation} /> : null}
       {mutation.error ? <ErrorNotice message={errorMessage(mutation.error)} /> : null}
+      {login.error ? <ErrorNotice message={errorMessage(login.error)} /> : null}
       {saved ? (
         <p
           role="status"
@@ -289,7 +373,7 @@ function SettingsForm({
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           {saved ? '完成' : '取消'}
         </Button>
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" disabled={busy}>
           {mutation.isPending ? '正在保存并检测…' : '保存设置'}
         </Button>
       </DialogFooter>

@@ -5,12 +5,13 @@
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { importWorkspace } from './host/migration.mjs';
 import { createNativeFileActions } from './host/files.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { RuntimeSupervisor } from './host/runtime.mjs';
+import { ManagedShunt, type ManagedShuntConnection } from './host/managed-shunt.mjs';
 import {
   bindPairing,
   createWindow,
@@ -100,6 +101,14 @@ async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<v
 }
 
 const lifecycle = new AbortController();
+const shuntBinary = join(process.resourcesPath, 'shunt', 'shunt');
+const managedShunt =
+  app.isPackaged &&
+  process.platform === 'linux' &&
+  !process.env.ATELIER_GATEWAY &&
+  existsSync(shuntBinary)
+    ? new ManagedShunt(shuntBinary, dataDir)
+    : undefined;
 let unbindPairing: (() => void) | undefined;
 let recovery: Promise<void> | undefined;
 let quitting = false;
@@ -125,7 +134,14 @@ function clearRuntimeWindow(): void {
 
 async function start(): Promise<void> {
   if (stopping) return;
-  const connection = await supervisor.start();
+  let gateway: ManagedShuntConnection | undefined;
+  try {
+    gateway = await managedShunt?.start(lifecycle.signal);
+  } catch {
+    if (!stopping) console.error('内置 Shunt 启动失败。');
+  }
+  if (stopping) return;
+  const connection = await supervisor.start(gateway);
   if (stopping) return;
   runtimeConnection = connection;
   origin = connection.origin;
@@ -231,8 +247,11 @@ app.on('before-quit', (event) => {
   stopping = true;
   lifecycle.abort();
   clearRuntimeWindow();
-  void supervisor.stop().finally(() => {
-    quitting = true;
-    app.quit();
-  });
+  void supervisor
+    .stop()
+    .finally(() => managedShunt?.stop())
+    .finally(() => {
+      quitting = true;
+      app.quit();
+    });
 });

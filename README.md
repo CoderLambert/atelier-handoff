@@ -6,13 +6,13 @@
 
 ## 桌面版
 
-Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运行 `sudo pacman -U ./dist/linux/atelier-0.2.0-1-x86_64.pkg.tar.zst`，然后从应用菜单打开 atelier。便携版可用 `tar -xf dist/linux/atelier-0.2.0-linux-x64.tar.zst -C <空目录>` 解包，从该目录运行 `./atelier/atelier`。包内含 Electron、Node 24.21.0、SQLite、SDK CLI 和静态资源，模型请求使用本机 Shunt。
+Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运行 `sudo pacman -U ./dist/linux/atelier-0.2.0-1-x86_64.pkg.tar.zst`，然后从应用菜单打开 atelier。便携版可用 `tar -xf dist/linux/atelier-0.2.0-linux-x64.tar.zst -C <空目录>` 解包，从该目录运行 `./atelier/atelier`。包内含 Electron、Node 24.21.0、SQLite、SDK CLI、Shunt 0.64.0 和静态资源。当前本地候选面向 Arch/Omarchy，Shunt 需要 glibc 2.39 或更新版本。
 
 发行版的数据默认写入 `$XDG_DATA_HOME/atelier`（默认 `~/.local/share/atelier`），浏览器 profile 位于该目录下的 `desktop-profile`。可通过绝对路径 `ATELIER_DATA_DIR` 选择其他数据根。同一数据根使用单写者锁。
 
 迁入旧版数据时先退出旧工作台，启动 `atelier --import-data` 并选择包含 `atelier.sqlite` 的目录。若默认位置已经有工作区，使用 `ATELIER_DATA_DIR=/新工作区的绝对路径 atelier --import-data`。目标目录在迁入时创建。向导显示回退副本位置，项目、会话、附件和交付物记录随数据库迁入。网页使用新 profile，打开网站后可重新登录。
 
-构建机安装包依赖 `makepkg`、`pacman`、`bsdtar`、`tar`、`zstd` 以及固定版本 Node 的可执行文件和许可证。在项目根执行 `ATELIER_BUILD_NODE=/绝对路径/node-v24.21.0/bin/node npm run package:linux`。`dist/linux/SHA256SUMS` 提供资源清单与工件校验，`release.json` 记录运行时版本。安装态验收入口为 `npm run smoke:linux -- --help`。
+构建机安装包依赖 `makepkg`、`pacman`、`bsdtar`、`tar`、`zstd` 以及固定版本 Node 和 Shunt 的可执行文件。在项目根执行 `ATELIER_BUILD_NODE=/绝对路径/node-v24.21.0/bin/node ATELIER_BUILD_SHUNT=/绝对路径/shunt npm run package:linux`。`dist/linux/SHA256SUMS` 提供资源清单与工件校验，`release.json` 记录运行时版本。安装态验收入口为 `npm run smoke:linux -- --help`。
 
 开发版从项目根运行 `npm run desktop`。先读[项目协作规则](AGENTS.md)。[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)和[发行选型记录](docs/decisions/2026-11-20-linux-release.md)说明当前阶段的交付范围。
 
@@ -31,7 +31,7 @@ npm start
 
 开发时在两个终端分别运行 `npm run dev:server` 和 `npm run dev`，打开 **http://127.0.0.1:5173** 使用前端热更新。Vite 将 `/api` 代理到 `ATELIER_PORT`，默认为 `4317`。服务重启会中断未完成的运行，并保留历史。
 
-应用默认连接 `http://127.0.0.1:3001` 的 Shunt。该网关已在本机配置；如果没有运行，可在现有 `/home/lambert/Projects/claude-code-demo` 项目中执行 `npm run gateway`。已经运行时无需重复启动。登录由 Shunt 的本机浏览器流程完成，工作台不会读取或复制其 OAuth 凭据。
+Linux 安装版默认随窗口启动内置 Shunt。首次授权可在「模型与网关设置」点击「登录 ChatGPT」，通过系统浏览器完成。已有 Shunt 账号目录会被复用；新安装使用工作台数据目录下的 `shunt/accounts`。`shunt/shunt.toml` 和账号目录选择会在重开及更新后保留。也可在设置中切换到外部网关。开发版默认连接 `http://127.0.0.1:3001`，安装版可使用 `ATELIER_GATEWAY` 指定外部网关。
 
 首次进入页面，点击「选择文件夹…」打开系统目录选择框，选好后点击「绑定项目」。系统选择框需要服务从安装了 Zenity 的 Linux 桌面会话启动。也可手动输入绝对路径。新会话默认只读。切换到受控修改后，每次文件修改、删除和命令仍需单独审批。
 
@@ -67,7 +67,7 @@ npm start
 
 输入区的「运行模式」随当前会话保存。选择「全工具自动化」后，该会话发送的任务会自动审批已获授权的文件、沙箱命令、Skill、MCP 和浏览器操作，审批决定可从执行轨迹查看。新会话默认只读。「全网搜索 Skill」的单次费用上限只用于下一次发送，默认 0 分。
 
-点击发送键旁的模型名称可直接选择模型。目录包含本机 Shunt 路由；检测到 ChatGPT Plan 路由时，也会读取本机 Codex 的可见模型。支持跟随工作台默认值或手动输入完整模型 ID。选择随会话保存并用于后续发送。路由配置的推理深度和服务档位会显示在列表中。
+点击发送键旁的模型名称可直接选择模型。目录包含 Shunt 路由；检测到 ChatGPT Plan 路由时，也会读取本机 Codex 的可见模型。支持跟随工作台默认值或手动输入完整模型 ID。旁边的「深度」选择器用于设置推理档位。两项选择随会话保存并用于后续发送，切换模型时恢复默认深度。Shunt 路由固定深度时，界面会显示该档位。
 
 MCP 页支持 Streamable HTTP 和 stdio。导入 MCP 配置后可核对地址、启动参数及凭据环境变量，再测试连接、选择允许的工具并启用。输入 `#` 选取本轮要用的工具。需审批的工具可在「受控修改」模式中使用。
 

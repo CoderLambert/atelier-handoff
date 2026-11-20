@@ -1,3 +1,8 @@
+/**
+ * @file 定义前端工作台 API 的响应类型。
+ * @implementation 组合共享领域记录，描述启动信息、会话快照及内置网关状态。
+ * @updated 2026-11-20T17:28:00+08:00
+ */
 import type {
   AppConfig,
   AgentSessionInfo,
@@ -22,6 +27,7 @@ export interface ConfigInfo {
   config: AppConfig;
   capabilities: { commands: boolean };
   connection: { available: boolean; message: string };
+  managedGateway?: { configPath: string; accountPresent: boolean; externalGateway: string };
 }
 
 export interface Bootstrap extends ConfigInfo {

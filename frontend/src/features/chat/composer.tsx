@@ -1,11 +1,11 @@
 /**
  * @file 提供聊天任务输入、上下文与附件编辑界面。
- * @implementation 根据草稿与智能体派生会话模式，校验下次发送的搜索上限并编排输入、附件和发送操作。
- * @updated 2026-11-20T15:49:33+08:00
+ * @implementation 根据草稿与智能体派生会话模式，传递模型和推理深度选择，校验搜索上限并编排输入、附件和发送操作。
+ * @updated 2026-11-20T17:14:57+08:00
  */
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
-import type { Draft } from '@shared/types';
+import type { Draft, ReasoningEffort } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ export function Composer({
   searchChargeLimit = '0',
   defaultModel,
   onModelChange,
+  onEffortChange,
   onModeChange,
   onSearchChargeChange,
   onDraftChange,
@@ -40,6 +41,7 @@ export function Composer({
   searchChargeLimit?: string;
   defaultModel: string;
   onModelChange: (model?: string) => void;
+  onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -343,7 +345,7 @@ export function Composer({
             onSubmit={() => void submit()}
           />
         </fieldset>
-        <div className="composer-toolbar">
+        <div className="composer-toolbar justify-end">
           <span className="composer-run-status" role="status">
             {dragging
               ? dropAllowed
@@ -394,20 +396,19 @@ export function Composer({
           </button>
           <ModelPicker
             model={draft.model}
+            effort={draft.effort}
             defaultModel={defaultModel}
             disabled={archived || submitting}
             onModelChange={onModelChange}
+            onEffortChange={onEffortChange}
           />
-          <span className="send-hint" id="input-help">
-            Enter 发送
-          </span>
           <button type="submit" className="send-button" disabled={!canSend} aria-label="发送任务">
             <ArrowUp size={20} aria-hidden="true" />
           </button>
         </div>
       </div>
       <div className="composer-footer">
-        <span>Shift + Enter 换行</span>
+        <span id="input-help">Enter 发送 · Shift + Enter 换行</span>
         <span>
           {mode === 'automatic'
             ? '全工具自动化 · 随会话保存'
