@@ -1,0 +1,69 @@
+{
+  "server/app.ts": [
+    "sql:393e3c663c10648d",
+    "sql:44da5fd643e2f268",
+    "sql:e51af2f4c608536d",
+    "sql:ef24a99151f3c23d"
+  ],
+  "server/data-migration.ts": [
+    "driver:09fdf6ba9fb1abd0",
+    "sql:387fd27c84bea8f2",
+    "sql:a3c147b985bf1a6e"
+  ],
+  "server/data-owner.ts": [
+    "driver:09fdf6ba9fb1abd0",
+    "sql:60cb3ba8a74ea4d7"
+  ],
+  "server/message-queue.ts": [
+    "sql:1c66a4a85e5ae7b6",
+    "sql:44da5fd643e2f268",
+    "sql:46481f6bca39901d",
+    "sql:6078cb8c3eb30de6",
+    "sql:6080525ba77b0026",
+    "sql:6fa562160584a224",
+    "sql:771ca54d3a12f8cc",
+    "sql:7902975f7e822d73",
+    "sql:7ccd8cd46879f504",
+    "sql:7e50dc70964a1c60",
+    "sql:af51cfc9f5abe8d9",
+    "sql:b1ec4d20fa8f4bff",
+    "sql:b964d024abbefc06",
+    "sql:c432ee3b0f4d8cef",
+    "sql:c5a6822d46d0b27d",
+    "sql:d464bd310bd60513",
+    "sql:dc9b6dc50e65e587",
+    "sql:eea4ee772a3a6e55"
+  ],
+  "server/skill-tool-bindings.ts": [
+    "sql:36600144174613b3",
+    "sql:68f9f7631fcc07dd",
+    "sql:c90979c0d08aa986"
+  ],
+  "server/store.ts": [
+    "driver:09fdf6ba9fb1abd0",
+    "sql:0480da62edf0b442",
+    "sql:11cae514e17e8032",
+    "sql:27848d3d48e2217b",
+    "sql:294061417fd5af77",
+    "sql:32942146ce40175c",
+    "sql:36298931fad180d7",
+    "sql:3bc40a49d855e0a3",
+    "sql:52e9e50c1e64c8be",
+    "sql:60d3a3820233a8d4",
+    "sql:74f5a9793dc5b180",
+    "sql:77f35582677a347a",
+    "sql:7829b6f98ddf6371",
+    "sql:79c845deaba6357e",
+    "sql:93c0eaf31a9cf05b",
+    "sql:9c75f193a4fe8fbe",
+    "sql:a3c147b985bf1a6e",
+    "sql:b05142d7ad92500e",
+    "sql:ca65a39f03817b95",
+    "sql:cec5ac31f4a5aa5e",
+    "sql:e5ef7a46fbf348c3",
+    "sql:e838e77d1c28bf1b",
+    "sql:eefcb623aafd09f1",
+    "sql:f80f2f3297b6edfd",
+    "sql:fa01a76cb02fcde6"
+  ]
+}

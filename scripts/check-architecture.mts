@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
 import { checkImportBoundaries } from './check-import-boundaries.mjs';
+import { checkDatabaseBoundaries } from './check-database-boundaries.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const rules = {
@@ -24,6 +25,12 @@ const rules = {
     'desktop/preload.cts',
     'scripts/linux/package.mts',
     'scripts/smoke-linux.mts',
+  ],
+  database: [
+    'server/store.ts',
+    'server/modules/sessions/get-session-snapshot.ts',
+    'server/db/schema/sessions.ts',
+    'server/db/migrations/0001.sql',
   ],
   api: ['server/app.ts', 'shared/types.ts', 'frontend/src/api/client.ts'],
   state: ['frontend/src/app/drafts.ts', 'frontend/src/app/store.ts', 'server/store.ts'],
@@ -81,8 +88,8 @@ for (const dir of sourceDirs) {
     }
   }
 }
-const importErrors = await checkImportBoundaries(root);
-assert.equal(importErrors.length, 0, importErrors.join('\n'));
+const errors = [...(await checkImportBoundaries(root)), ...(await checkDatabaseBoundaries(root))];
+assert.equal(errors.length, 0, errors.join('\n'));
 console.log(
-  'Architecture rules: six path scopes, TypeScript source boundaries and P2 import boundaries checked.',
+  `Checked ${Object.keys(rules).length} rule scopes, source and import boundaries, and database access sites.`,
 );

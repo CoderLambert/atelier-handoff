@@ -14,6 +14,7 @@
 | 控件、表单、弹窗、业务组件、响应式和无障碍交互 | [组件 UI](.claude/rules/component-ui.md) 和 [shadcn 官方 Skill](.claude/skills/shadcn/SKILL.md)（[固定来源](https://github.com/shadcn-ui/ui/tree/f50887ae68d0fdcbfbe86b57be08af94a4c88a68/skills/shadcn)） |
 | Electron main、preload、原生网页、IPC、发行与安装态验收 | [桌面端](.claude/rules/desktop.md) 和 [Electron Skill](.claude/skills/atelier-electron/SKILL.md) |
 | API、SDK、运行时、序列化契约、前端 API 客户端 | [API](.claude/rules/api.md) |
+| SQLite、ORM、查询、事务、迁移及数据访问边界 | [数据库规则](.claude/rules/database.md) 和 [ORM 架构决策](docs/decisions/2026-11-21-orm-architecture.md) |
 | 应用状态、会话、草稿、查询、SSE、取消与恢复 | [状态管理](.claude/rules/state.md) |
 | 用户功能、工具与权限、前端 feature、可复用包 | [功能模块](.claude/rules/features.md) |
 
