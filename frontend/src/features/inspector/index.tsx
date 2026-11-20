@@ -1,3 +1,8 @@
+/**
+ * @file 展示会话工作详情并提供审批入口。
+ * @implementation 按概览、变更和事件组织会话快照，展示运行与审批状态，并按需加载审批和设置对话框。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';

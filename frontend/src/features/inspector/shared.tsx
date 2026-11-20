@@ -1,3 +1,8 @@
+/**
+ * @file 提供工作详情界面的共享组件和格式化工具。
+ * @implementation 统一资源查询、状态与事件展示、操作审批分类、图标及常用界面样式。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { useCallback, type ReactNode } from 'react';
 import { useQuery, type QueryKey } from '@tanstack/react-query';
 import { api } from '@/api/client';

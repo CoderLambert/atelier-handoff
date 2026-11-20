@@ -1,3 +1,8 @@
+/**
+ * @file 提供智能体配置的前端数据操作和依赖检查。
+ * @implementation 管理项目智能体查询与变更，定义能力说明和初始配置，并检查及刷新扩展依赖版本。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentCapability, AgentCard, AgentConfig, Extension } from '@shared/types';
 import { api } from '@/api/client';

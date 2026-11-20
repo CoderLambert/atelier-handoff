@@ -1,3 +1,8 @@
+/**
+ * @file 管理文件和工具操作的逐次审批。
+ * @implementation 记录审批内容与版本，处理允许、拒绝、超时和取消，并在批准文件操作前复核内容是否变化。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { randomUUID } from 'node:crypto';
 import { AppError, activeStatuses, now, type Permission, type Run } from '../shared/types.js';
 import { Store } from './store.js';

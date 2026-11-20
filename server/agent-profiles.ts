@@ -1,3 +1,8 @@
+/**
+ * @file 管理项目智能体配置及其版本。
+ * @implementation 校验并保存配置和依赖快照，管理版本及归档，并在运行前检查扩展变化和旧版浏览器依赖。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {

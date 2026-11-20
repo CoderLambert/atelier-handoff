@@ -1,3 +1,8 @@
+/**
+ * @file 管理项目扩展配置及运行时选择。
+ * @implementation 校验和保存扩展，解析 Skill 与 MCP 选择及工具授权，并识别桌面端不可用的旧版浏览器扩展。
+ * @updated 2026-11-20T12:10:16+08:00
+ */
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, posix } from 'node:path';
 import { parseDocument } from 'yaml';
