@@ -1,8 +1,12 @@
 # atelier 桌面开发任务看板
 
-按 [路线图](roadmap.md) 的验收标准逐阶段推进。实施取舍见 [整体设计](design.md)，命令、工件、结果和回退记录见 [执行日志](task-log.md)。状态在对应工件通过验收后更新。
+实施取舍见 [整体设计](design.md)，命令、工件、结果和回退记录见 [执行日志](task-log.md)。完整路线见 [路线图](roadmap.md)。
 
-| 阶段 | 交付目标 | 状态 | 验收与依赖 |
+## 本轮交付 · 已完成
+
+本轮范围为 Linux 功能与本地安装态验收、Windows x64 和 macOS arm64 各一轮候选构建。后续功能开发优先 Linux。
+
+| 阶段 | 交付目标 | 状态 | 验收记录 |
 |---|---|---|---|
 | P1 | Linux x64 安装样包 | 已验证 | [Arch 与便携包验收](../../../docs/evidence/desktop-p1-linux-x64/acceptance.json) |
 | P2 | 宿主、运行时监督与恢复 | 已验证 | [安装态进程清理](../../../docs/evidence/desktop-p2-linux-x64/installed.json) 和 [故障恢复](../../../docs/evidence/desktop-p2-linux-x64/recovery.json) |
@@ -10,11 +14,17 @@
 | P4 | 原生浏览器与人工接管 | 已验证 | [标签与接管](../../../docs/evidence/desktop-p4-linux-x64/tabs.json) · [内置工具与安装态审批点击](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json) |
 | P5 | 运行时工具与 Agent 桌面流程 | 已验证 | [聊天审批、流式回复与上下文续接](../../../docs/evidence/desktop-p5-linux-x64/agent.json)，取消和截图见 P2/P4 |
 | P6 | 桌面文件操作 | 已验证 | 拖入附件、另存、取消及定位。[文件记录](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) |
-| P7 | Linux x64 正式发行验收 | 本地候选已验证 | [最新归档校验值与内置浏览器验收](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json) · [退出与恢复](../../../docs/evidence/desktop-p7-linux-x64/ipc-shutdown.json) · [安装态功能](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) · [Wayland](../../../docs/evidence/desktop-p7-linux-x64/wayland.json) · [第三方许可](../../../docs/evidence/desktop-p7-linux-x64/license-update.json)。对外发行等待应用及工作区组件许可证和发布授权 |
-| P8 | Windows x64 候选构建 | 本轮构建已验证 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json)。本机运行与安装验收延后 |
-| P9 | macOS arm64 候选构建 | 本轮构建已验证 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json)。本机运行、签名与公证延后 |
+| P7 | Linux x64 本地候选与安装态验收 | 已验证 | [最新归档校验值与内置浏览器验收](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json) · [退出与恢复](../../../docs/evidence/desktop-p7-linux-x64/ipc-shutdown.json) · [安装态功能](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) · [Wayland](../../../docs/evidence/desktop-p7-linux-x64/wayland.json) · [第三方许可](../../../docs/evidence/desktop-p7-linux-x64/license-update.json) |
+| P8 | Windows x64 候选构建 | 已验证归档及架构 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json) |
+| P9 | macOS arm64 候选构建 | 已验证归档及架构 | [ZIP 校验和目标架构](../../../docs/evidence/desktop-platform-previews.json) |
 
-当前继续优先开发 Linux 功能。Windows 和 macOS 各保留一份已核验的候选 ZIP，后续验收另行安排。桌面更新沿用原数据根和浏览器 profile。[同目录切换实测](../../../docs/evidence/desktop-p7-linux-x64/same-data-upgrade.json)
+桌面更新沿用原数据根和浏览器 profile。[同目录切换实测](../../../docs/evidence/desktop-p7-linux-x64/same-data-upgrade.json)
+
+## 另行安排的发布与平台验收
+
+- Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。
+- Windows 本机运行、安装与升级验收，待对应系统环境。
+- macOS 本机运行与安装验收，待对应系统环境。正式分发的签名与公证随发布安排。
 
 ## P2 · 已验证
 

@@ -16,7 +16,7 @@
 | P8 Windows 移植 | Windows 安装/卸载、升级与原生输入可验收，沙箱能力有平台实现或明确不可用状态 | Linux 首发后取得 Windows 真机、签名方案、文件与命令隔离选型 |
 | P9 macOS 移植 | macOS 安装、签名/公证、钥匙串权限、原生菜单和退出行为可验收 | Linux 首发后取得 macOS 构建/测试机、签名权限与平台能力评估 |
 
-P1 → P2 → P3 → P4 → P5 → P6 → P7 是 Linux 首版的实施顺序。当前继续优先开发 Linux 功能。P8 和 P9 各完成一轮候选构建，本机安装和签名验收延后。每阶段使用 `implement-build-atelier-desktop-pN` 作为变更名。这里详写 P1、P2，因为安装件选择会直接决定进程监督和 IPC 的可行设计。
+P1 → P2 → P3 → P4 → P5 → P6 → P7 是 Linux 首版的实施顺序。本轮完成 Linux 功能与本地安装态验收，P8 和 P9 各完成一轮候选构建。后续优先开发 Linux 功能。对外发布和 Windows、macOS 本机验收另行安排，见 [任务看板](task-board.md)。每阶段使用 `implement-build-atelier-desktop-pN` 作为变更名。这里详写 P1、P2，因为安装件选择会直接决定进程监督和 IPC 的可行设计。
 
 ## P1 · 可运行的 Linux 发行样包
 
