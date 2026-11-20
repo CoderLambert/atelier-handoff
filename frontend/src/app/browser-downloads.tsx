@@ -1,7 +1,7 @@
 /**
- * @file 提供原生浏览器下载入口、进度与保存位置列表。
- * @implementation 消费项目下载快照，使用 Dialog 展示记录，通过类型化桥接请求取消或定位，并播报完成和失败。
- * @updated 2026-11-20T18:19:08+08:00
+ * @file 提供项目浏览器下载列表和文件操作入口。
+ * @implementation 在 Dialog 中呈现进度和保存位置，通过类型化桥接读取预览、用系统应用打开或定位文件，并管理反馈与焦点。
+ * @updated 2026-11-20T20:17:41+08:00
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, Check, CircleAlert, Download, File, FolderOpen } from 'lucide-react';
