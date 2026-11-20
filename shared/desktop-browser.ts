@@ -41,7 +41,16 @@ export const desktopBrowserLayoutSchema = z.strictObject({
 export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
-    action: z.literal(['state', 'take', 'release', 'reload', 'back', 'forward', 'new-tab']),
+    action: z.literal([
+      'state',
+      'take',
+      'release',
+      'reload',
+      'back',
+      'forward',
+      'new-tab',
+      'open-download-directory',
+    ]),
   }),
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
@@ -50,10 +59,26 @@ export const desktopBrowserCommandSchema = z.discriminatedUnion('action', [
   }),
   z.strictObject({
     projectId: desktopBrowserProjectIdSchema,
+    action: z.literal(['cancel-download', 'reveal-download']),
+    downloadId: z.uuid(),
+  }),
+  z.strictObject({
+    projectId: desktopBrowserProjectIdSchema,
     action: z.literal(['navigate', 'open-tab', 'open-external']),
     url: desktopBrowserUrlSchema,
   }),
 ]);
+
+export const desktopBrowserDownloadSchema = z.strictObject({
+  id: z.uuid(),
+  filename: z.string(),
+  path: z.string(),
+  receivedBytes: z.number().nonnegative(),
+  totalBytes: z.number().nonnegative(),
+  status: z.enum(['progressing', 'completed', 'cancelled', 'interrupted']),
+  error: z.string().optional(),
+});
+export type DesktopBrowserDownload = z.infer<typeof desktopBrowserDownloadSchema>;
 
 export const desktopBrowserStateSchema = z.strictObject({
   projectId: desktopBrowserProjectIdSchema,
@@ -65,6 +90,8 @@ export const desktopBrowserStateSchema = z.strictObject({
   title: z.string(),
   control: z.boolean(),
   busy: z.boolean(),
+  downloads: z.array(desktopBrowserDownloadSchema).optional(),
+  downloadDirectory: z.string().optional(),
 });
 
 export const desktopBrowserAccessUpdateSchema = z.strictObject({

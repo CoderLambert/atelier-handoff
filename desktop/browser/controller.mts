@@ -27,6 +27,7 @@ import {
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
 } from '../../shared/desktop-browser.js';
+import { createBrowserDownloads } from './downloads.mjs';
 
 interface BrowserHost {
   getWindow(): BrowserWindow | undefined;
@@ -60,6 +61,16 @@ export function createBrowserController(host: BrowserHost) {
   const current = (projectId: string) => tabs.get(selected.get(projectId) ?? '');
   const tabs = new Map<string, BrowserTab>();
   const contentsOwners = new WeakMap<WebContents, BrowserTab>();
+  const downloads = createBrowserDownloads(state, (contents, url) => {
+    const tab = contentsOwners.get(contents);
+    if (!tab || !ownsTab(tab) || !human.has(tab.projectId)) return undefined;
+    try {
+      siteUrl(url);
+      return tab.projectId;
+    } catch {
+      return undefined;
+    }
+  });
 
   const accessibilityTreeSchema = z.object({
     nodes: z.array(
@@ -152,6 +163,8 @@ export function createBrowserController(host: BrowserHost) {
       title: contents?.getTitle() || '',
       control: human.has(projectId),
       busy: projectTabs(projectId).some((entry) => entry.busy),
+      downloads: downloads.list(projectId),
+      downloadDirectory: downloads.directory(),
     });
     window.webContents.send(desktopBrowserChannels.state, payload);
   }
@@ -193,7 +206,31 @@ export function createBrowserController(host: BrowserHost) {
     contentsOwners.set(wc, tab);
     wc.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     wc.session.setPermissionCheckHandler(() => false);
-    wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+    downloads.observe(wc.session);
+    wc.setWindowOpenHandler((details) => {
+      if (
+        visible === tab &&
+        ownsTab(tab) &&
+        human.has(projectId) &&
+        current(projectId) === tab &&
+        !details.postBody &&
+        !details.features &&
+        ['default', 'foreground-tab', 'background-tab'].includes(details.disposition)
+      ) {
+        // Keep the initiating view alive while Chromium handles an attachment response.
+        queueMicrotask(() => {
+          try {
+            const destination = siteUrl(details.url);
+            void tabContents(tab)
+              .loadURL(destination, { httpReferrer: details.referrer })
+              .catch(() => state(projectId, tab));
+          } catch {
+            state(projectId, tab);
+          }
+        });
+      }
+      return { action: 'deny' };
+    });
     wc.on('will-attach-webview', (event) => event.preventDefault());
     wc.on('before-input-event', (event, input) => {
       if (ownsTab(tab)) {
@@ -378,6 +415,15 @@ export function createBrowserController(host: BrowserHost) {
     const { projectId, action } = request;
     if (action === 'state') {
       state(projectId);
+      return;
+    }
+    if (request.action === 'open-download-directory') {
+      await downloads.openDirectory();
+      return;
+    }
+    if (request.action === 'cancel-download' || request.action === 'reveal-download') {
+      if (request.action === 'cancel-download') downloads.cancel(projectId, request.downloadId);
+      else await downloads.reveal(projectId, request.downloadId);
       return;
     }
     if (request.action === 'open-external') {
@@ -626,6 +672,7 @@ export function createBrowserController(host: BrowserHost) {
   }
 
   function reset(): void {
+    downloads.reset();
     publishedLayout = undefined;
     hideVisible();
     for (const tab of tabs.values()) removeTab(tab);

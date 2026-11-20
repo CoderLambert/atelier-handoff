@@ -45,6 +45,9 @@ import {
   bluePixels,
   browserEditAnswer,
   browserEditPrompt,
+  browserDownloadBody,
+  browserDownloadLabel,
+  browserDownloadName,
   browserManualValue,
   browserReadAnswer,
   browserReadPrompt,
@@ -1267,6 +1270,66 @@ async function functional(
     );
     await native.screenshot({ path: join(root, 'native-html.png') });
     evidence.checks.nativeHtml = { separateTarget: true, inputVerified: true };
+    evidence.phase = 'native-browser-download';
+    await save();
+    const trigger = page.getByRole('button', { name: '浏览器下载', exact: true });
+    const dialog = page.getByRole('dialog', { name: '下载', exact: true });
+    await trigger.click();
+    const destination = await dialog
+      .getByRole('region', { name: '下载保存位置' })
+      .locator('p')
+      .innerText();
+    const isolatedHome = join(directory, 'home');
+    assert.ok(
+      destination === isolatedHome || destination.startsWith(`${isolatedHome}/`),
+      'Save folder stays in the isolated profile home',
+    );
+    await mkdir(destination, { recursive: true });
+    await writeFile(join(destination, browserDownloadName), 'original file');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    await native.getByRole('link', { name: browserDownloadLabel, exact: true }).click();
+    await until(
+      async () => (fixture.evidence.browserDownloadRequests === 1 ? true : undefined),
+      5000,
+      'attachment link reaches the local HTTP server',
+    );
+    await trigger.click();
+    const progress = dialog.getByRole('progressbar');
+    await progress.waitFor({ state: 'visible', timeout: 10_000 });
+    assert.equal(
+      Number(await progress.getAttribute('max')),
+      Buffer.byteLength(browserDownloadBody),
+    );
+    await page.screenshot({ path: join(root, 'native-browser-download-progress.png') });
+    await dialog
+      .getByText('下载完成', { exact: true })
+      .waitFor({ state: 'visible', timeout: 10_000 });
+    await dialog.getByRole('button', { name: '在文件夹中显示', exact: true }).waitFor();
+    await dialog.getByRole('button', { name: '打开下载文件夹', exact: true }).waitFor();
+    const saved = join(destination, 'installed-job-list (1).xls');
+    assert.ok((await dialog.innerText()).includes(saved));
+    assert.equal(await readFile(saved, 'utf8'), browserDownloadBody);
+    assert.equal(await readFile(join(destination, browserDownloadName), 'utf8'), 'original file');
+    assert.equal(native.url(), `${fixture.siteUrl}/`);
+    await page.screenshot({ path: join(root, 'native-browser-download-completed.png') });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    evidence.checks.nativeBrowserDownload = {
+      targetBlank: true,
+      progressVisible: true,
+      systemDownloadsPath: true,
+      duplicatePreserved: true,
+      originalPageRetained: true,
+      folderActionsVisible: true,
+      savedBytes: Buffer.byteLength(browserDownloadBody),
+    };
     await page.getByRole('button', { name: '任务详情', exact: true }).first().click();
   }
   evidence.phase = 'packaged-sdk';

@@ -23,9 +23,11 @@ const bridge: DesktopBrowserBridge = {
       action,
       ...(action === 'select-tab' || action === 'close-tab'
         ? { tabId: value }
-        : action === 'navigate' || action === 'open-tab' || action === 'open-external'
-          ? { url: value }
-          : {}),
+        : action === 'cancel-download' || action === 'reveal-download'
+          ? { downloadId: value }
+          : action === 'navigate' || action === 'open-tab' || action === 'open-external'
+            ? { url: value }
+            : {}),
     });
     const response: unknown = await ipcRenderer.invoke(desktopBrowserChannels.command, request);
     if (response !== undefined) throw new Error('浏览器返回了无效响应。');

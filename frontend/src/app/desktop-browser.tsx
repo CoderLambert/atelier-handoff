@@ -1,7 +1,7 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 以标签栏和工具栏两行组织操作，结合项目授权与人工控制同步原生网页视图。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 以两行组织标签、下载和浏览操作，结合项目授权、人工控制与 Dialog 遮挡同步原生网页视图。
+ * @updated 2026-11-20T18:19:08+08:00
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import {
 import { useDesktopBrowserAccess } from '@/use-query/browser/use-desktop-browser-access';
 import { useUpdateDesktopBrowserAccess } from '@/use-query/browser/use-update-desktop-browser-access';
 import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, Settings, X } from 'lucide-react';
+
+import { BrowserDownloads } from './browser-downloads';
 
 import type {
   DesktopBrowserAction as BrowserAction,
@@ -241,6 +243,7 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
             <span className="truncate">{status}</span>
           )}
         </div>
+        <BrowserDownloads key={projectId} projectId={projectId} state={state} bridge={bridge} />
         <Dialog>
           <DialogTrigger asChild>
             <Button

@@ -40,6 +40,9 @@ export const automaticFollowupPrompt = 'Verify the saved automatic session mode 
 export const automaticFollowupAnswer = 'INSTALLED_SESSION_AUTOMATION_PERSISTED';
 export const chatLinkLabel = '查看本地测试网页';
 export const chatLinkPath = '/browser-chat-link';
+export const browserDownloadName = 'installed-job-list.xls';
+export const browserDownloadLabel = '下载职位表';
+export const browserDownloadBody = 'job-list-fixture\n'.repeat(32_768);
 export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
 export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
@@ -376,6 +379,7 @@ export interface FixtureEvidence {
   requests: number;
   toolResultReturned: boolean;
   pdfRequests: number;
+  browserDownloadRequests: number;
   nativeBrowser: BrowserFixtureEvidence;
   automatic: AutomaticFixtureEvidence;
   errors: string[];
@@ -396,6 +400,7 @@ export async function fixtures(): Promise<Fixtures> {
     requests: 0,
     toolResultReturned: false,
     pdfRequests: 0,
+    browserDownloadRequests: 0,
     nativeBrowser: {
       readRequests: 0,
       editRequests: 0,
@@ -562,7 +567,18 @@ export async function fixtures(): Promise<Fixtures> {
       res.end(samplePdf());
       return;
     }
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    if (req.url === `/downloads/${browserDownloadName}`) {
+      evidence.browserDownloadRequests++;
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.ms-excel',
+        'Content-Length': Buffer.byteLength(browserDownloadBody),
+      });
+      res.write(browserDownloadBody.slice(0, 65_536));
+      const timer = setTimeout(() => res.end(browserDownloadBody.slice(65_536)), 1800);
+      res.once('close', () => clearTimeout(timer));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     if (req.url === '/browser' || req.url === '/browser-automatic') {
       res.end(`<!doctype html><html><head><title>${browserTitle}</title></head>
 <body data-agent-clicks="0" style="background:#e6f4eb;font:20px sans-serif;padding:24px">
@@ -575,7 +591,7 @@ export async function fixtures(): Promise<Fixtures> {
       return;
     }
     res.end(
-      '<!doctype html><html><head><title>Installed native fixture</title></head><body style="background:#e6f4eb;font:24px sans-serif;padding:32px"><h1>Installed native fixture</h1><label>Fixture input <input autofocus></label></body></html>',
+      `<!doctype html><html><head><title>Installed native fixture</title></head><body style="background:#e6f4eb;font:24px sans-serif;padding:32px"><h1>Installed native fixture</h1><label>Fixture input <input autofocus></label><p><a href="/downloads/${browserDownloadName}" target="_blank">${browserDownloadLabel}</a></p></body></html>`,
     );
   });
   try {

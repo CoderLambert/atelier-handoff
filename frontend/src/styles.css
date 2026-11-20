@@ -1,7 +1,7 @@
 /**
  * @file 定义工作台及桌面浏览器的界面样式。
- * @implementation 引入 Tailwind 和工作台基础样式，定义主题变量、工作区布局及浏览器标签、工具栏和响应式样式。
- * @updated 2026-11-20T03:13:21+08:00
+ * @implementation 引入 Tailwind 和工作台基础样式，定义主题变量、工作区布局及浏览器工具栏、下载弹窗和响应式样式。
+ * @updated 2026-11-20T18:19:08+08:00
  */
 @import 'tailwindcss/theme.css' layer(theme);
 @import './styles/atelier.css';
@@ -485,6 +485,32 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+}
+.desktop-browser-download-trigger {
+  flex-shrink: 0;
+}
+.react-dialog.desktop-browser-downloads {
+  width: min(640px, calc(100% - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+.desktop-browser-download-progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--border-soft);
+  accent-color: var(--accent);
+}
+.desktop-browser-download-progress::-webkit-progress-bar {
+  background: var(--border-soft);
+}
+.desktop-browser-download-progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.desktop-browser-download-progress::-moz-progress-bar {
+  background: var(--accent);
 }
 .desktop-browser-slot {
   flex: 1;
