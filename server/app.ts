@@ -32,6 +32,7 @@ import {
 import { commandsAvailable } from './commands.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
+import { gatewayModelId, gatewayModels } from './gateway-models.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
 import { McpSessions, testMcp } from './extension-mcp.js';
@@ -54,6 +55,7 @@ import {
 const inputSchema = z.object({
   text: z.string().trim().min(1).max(32000),
   mode: z.enum(['readonly', 'edit']).default('readonly'),
+  model: gatewayModelId.optional(),
   approvalMode: z.literal('automatic').optional(),
   maxSearchChargeFen: z.int().min(0).max(100_000).optional(),
   contextPaths: z.array(z.string().max(1000)).max(30).default([]),
@@ -65,6 +67,7 @@ const draftSchema = z
   .object({
     text: z.string().max(32000),
     mode: z.enum(['readonly', 'edit']),
+    model: gatewayModelId.optional(),
     approvalMode: z.literal('automatic').optional(),
     contextPaths: z.array(z.string().max(1000)).max(30),
     attachmentIds: z.array(z.string().uuid()).max(20),
@@ -308,7 +311,11 @@ export async function createApp(options: {
       ? `智能体 ${revision.config.name} 的任务说明（受本轮工具与权限约束）：\n${revision.config.instructions}\n\n`
       : '';
     const resolvedInput = profilePrompt + (bundle?.prompt ?? request.text);
-    const selectedConfig = store.config();
+    const defaults = store.config();
+    const model = retryOf
+      ? store.get('runs', retryOf).config.model
+      : (request.model ?? session.draft.model ?? defaults.model);
+    const selectedConfig = { ...defaults, model };
     if (!options.runnerFactory && !(await connection(selectedConfig)).available)
       throw new AppError(
         'SDK_UNAVAILABLE',
@@ -455,6 +462,7 @@ export async function createApp(options: {
               ? latest.draft.mode
               : request.mode,
           ...(latest.draft.approvalMode ? { approvalMode: latest.draft.approvalMode } : {}),
+          ...(latest.draft.model ? { model: latest.draft.model } : {}),
           extensionSelections: retryOf
             ? latest.draft.extensionSelections
             : retainedSkillSelections(run.extensions),
@@ -575,6 +583,8 @@ export async function createApp(options: {
         });
         return;
       }
+      if (url.pathname === '/api/models' && method === 'GET')
+        return json(res, await gatewayModels(store.config()));
       if (parts[0] === 'api' && parts[1] === 'config') {
         if (method === 'PATCH') {
           const changes = configSchema.parse(await body(req));

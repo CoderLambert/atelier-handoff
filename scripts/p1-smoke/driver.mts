@@ -30,6 +30,7 @@ import {
   type ProcessSample,
 } from './contracts.mjs';
 import {
+  alternateModel,
   answer,
   automaticAnswer,
   automaticFollowupAnswer,
@@ -1047,7 +1048,21 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.equal(fixture.evidence.automatic.mcpCalls, 1);
     assert.equal(record(state.session).sdkMode, 'edit');
     assert.ok(string(record(state.session).sdkSessionId));
-    await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(automaticFollowupPrompt);
+    assert.equal(record(accepted.config).model, model);
+    const modelButton = page.getByRole('combobox', { name: '选择模型', exact: true });
+    await modelButton.click();
+    const models = page.getByRole('listbox');
+    const modelOption = models.getByRole('option', { name: /sdk-offline-alternate/ });
+    await modelOption.waitFor({ state: 'visible' });
+    await page.screenshot({ path: join(root, 'session-model-picker.png') });
+    await modelOption.click();
+    await models.waitFor({ state: 'hidden' });
+    await modelButton
+      .getByText(`模型 · ${alternateModel}`, { exact: true })
+      .waitFor({ state: 'visible' });
+    await page
+      .getByRole('textbox', { name: '继续对话', exact: true })
+      .fill(automaticFollowupPrompt);
     const [followup] = await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -1060,6 +1075,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     const followupRun = record(record((await followup.json()) as unknown).run);
     assert.equal(followupRun.approvalMode, 'automatic');
     assert.equal(followupRun.maxSearchChargeFen, 0);
+    assert.equal(record(followupRun.config).model, alternateModel);
     await thread.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
     await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
     assert.equal(fixture.evidence.automatic.requests, automaticToolCount + 2);
@@ -1082,6 +1098,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       approvalMode: accepted.approvalMode,
       sessionSelectionPreserved: true,
       followupApprovalMode: followupRun.approvalMode,
+      initialModel: model,
+      followupModel: alternateModel,
       pendingApprovals: 0,
       chatCardsObserved: violations.length,
       permissions: permissions.map(({ id, kind, status, decisionSource }) => ({
@@ -1398,6 +1416,7 @@ async function reopen(
   const automaticState = await api(run.page, `/api/sessions/${automaticId}`);
   const automaticSession = record(automaticState.session);
   assert.equal(record(automaticSession.draft).approvalMode, 'automatic');
+  assert.equal(record(automaticSession.draft).model, alternateModel);
   await run.page
     .getByRole('button')
     .filter({
@@ -1406,6 +1425,10 @@ async function reopen(
     .click();
   await run.page.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
   await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
+  await run.page
+    .getByRole('combobox', { name: '选择模型', exact: true })
+    .getByText(`模型 · ${alternateModel}`, { exact: true })
+    .waitFor({ state: 'visible' });
   await settings(run.page, true);
   assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no receipt model request');
   assert.equal(

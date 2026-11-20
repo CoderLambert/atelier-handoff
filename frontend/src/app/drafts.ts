@@ -82,6 +82,7 @@ function persistedDraft(draft: Draft): Draft {
     attachmentIds: draft.attachmentIds,
     extensionSelections: draft.extensionSelections,
     mode: draft.mode === 'edit' ? 'edit' : 'readonly',
+    ...(typeof draft.model === 'string' && draft.model ? { model: draft.model } : {}),
     ...(draft.mode === 'edit' && draft.approvalMode === 'automatic'
       ? { approvalMode: draft.approvalMode }
       : {}),
@@ -95,8 +96,8 @@ export function readDraft(id: string, server?: Draft): Draft {
     ...emptyDraft(),
     ...server,
     ...local,
-    // Both fields describe the local mode, including an explicit return to manual approval.
-    ...(local.mode ? { approvalMode: local.approvalMode } : {}),
+    // A complete local draft can explicitly clear either saved preference.
+    ...(local.mode ? { approvalMode: local.approvalMode, model: local.model } : {}),
   });
 }
 export function updateDraft(id: string, update: DraftUpdate, server?: Draft, immediate = false) {
@@ -128,6 +129,7 @@ export async function submitDraft(
   server: Draft,
   send: SendSessionMessage,
   readonlyProfile = false,
+  defaultModel?: string,
 ) {
   if (store.getState().workspace.submitting[id]) return;
   const save = lane(id);
@@ -138,8 +140,11 @@ export async function submitDraft(
   const payload: Omit<SessionMessageBody, 'idempotencyKey'> = {
     ...draft,
     mode: readonlyProfile ? 'readonly' : draft.mode,
+    model: draft.model ?? defaultModel,
     approvalMode,
-    ...(approvalMode ? { maxSearchChargeFen: parseSearchChargeLimit(searchChargeLimit ?? '0') } : {}),
+    ...(approvalMode
+      ? { maxSearchChargeFen: parseSearchChargeLimit(searchChargeLimit ?? '0') }
+      : {}),
   };
   const fingerprint = JSON.stringify(payload);
   if (save.attempt?.fingerprint !== fingerprint)
@@ -159,6 +164,7 @@ export async function submitDraft(
       updateDraft(id, {
         ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
         approvalMode,
+        model: draft.model,
         extensionSelections: retainedSkillSelections(run.extensions),
       });
     save.attempt = undefined;

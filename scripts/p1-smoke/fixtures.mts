@@ -19,6 +19,7 @@ import {
 } from './contracts.mjs';
 
 export const model = 'sdk-offline-fixture';
+export const alternateModel = 'sdk-offline-alternate';
 export const prompt = 'Complete the installed acceptance fixture and save its offline receipt.';
 export const answer = 'INSTALLED_SDK_LOOPBACK_COMPLETED';
 export const receiptName = 'installed-offline-receipt.md';
@@ -279,6 +280,7 @@ function streamMessage(
   res: ServerResponse,
   tool?: { id: string; name: string; input: Record<string, unknown> },
   text = answer,
+  responseModel = model,
 ): void {
   const invokeTool = tool !== undefined;
   const sequence = ++messageSequence;
@@ -295,7 +297,7 @@ function streamMessage(
         id: `msg_installed_${sequence}`,
         type: 'message',
         role: 'assistant',
-        model,
+        model: responseModel,
         content: [],
         stop_reason: null,
         stop_sequence: null,
@@ -423,6 +425,15 @@ export async function fixtures(): Promise<Fixtures> {
           res.end('{}');
           return;
         }
+        if (req.method === 'GET' && path === '/routes') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              data: [{ model: alternateModel, provider: 'fixture', effort: 'high' }],
+            }),
+          );
+          return;
+        }
         assert.equal(req.method, 'POST');
         assert.equal(path, '/v1/messages');
         assert.equal(evidence.healthMode, 'online');
@@ -438,17 +449,22 @@ export async function fixtures(): Promise<Fixtures> {
           JSON.parse(Buffer.concat(chunks).toString()) as unknown,
           'model request',
         );
-        assert.equal(request.model, model);
         assert.equal(request.stream, true);
         const messages = array(request.messages, 'messages').map((value) =>
           record(value, 'message'),
         );
         const conversation = JSON.stringify(messages);
         if (conversation.includes(automaticFollowupPrompt)) {
+          assert.equal(
+            request.model,
+            alternateModel,
+            'The next SDK request uses the selected model',
+          );
           assert.equal(++evidence.automatic.requests, automaticToolCount + 2);
-          streamMessage(res, undefined, automaticFollowupAnswer);
+          streamMessage(res, undefined, automaticFollowupAnswer, alternateModel);
           return;
         }
+        assert.equal(request.model, model);
         if (conversation.includes(automaticPrompt)) {
           automaticMessage(res, request, messages, evidence.automatic, siteUrl);
           return;

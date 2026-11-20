@@ -14,6 +14,7 @@ import { actions, store, useWorkspace } from './store';
 
 export default function SessionChat({
   snapshot,
+  defaultModel,
   onSent,
   onError,
   onTrace,
@@ -21,6 +22,7 @@ export default function SessionChat({
   onRetry,
 }: {
   snapshot: Snapshot;
+  defaultModel: string;
   onSent: (id: string) => Promise<void>;
   onError: (message: string) => void;
   onTrace: (id: string) => void;
@@ -56,7 +58,13 @@ export default function SessionChat({
   }
   async function send() {
     try {
-      await submitDraft(id, serverDraft, message.mutateAsync, snapshot.agent?.mode === 'readonly');
+      await submitDraft(
+        id,
+        serverDraft,
+        message.mutateAsync,
+        snapshot.agent?.mode === 'readonly',
+        defaultModel || undefined,
+      );
     } catch (error) {
       onError(`发送未确认，草稿和运行模式已保留。${(error as Error).message}`);
       return;
@@ -71,6 +79,11 @@ export default function SessionChat({
     <Chat
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
+      defaultModel={defaultModel}
+      onModelChange={(model) => {
+        if (store.getState().workspace.submitting[id]) return;
+        updateDraft(id, (previous) => ({ ...previous, model }), serverDraft, true);
+      }}
       searchChargeLimit={searchChargeLimit}
       onModeChange={changeMode}
       onSearchChargeChange={(value) => {

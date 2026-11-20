@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archiveSha256": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "8926413eae44b10bf7251608ab2a29fc6c121e06087c35b8ada8900a78b8bf96",
+    "atelier-0.2.0-linux-x64.tar.zst": "b5cef7d7048fa6fefca3a62f89d467a9bb19db70d1fa44f6970d83b807cfcb9f"
+  },
+  "resourceManifestSha256": "d807ccf1f27fdee3bef876d733fbd4688f92b468da3ded62eb8e737c4d80bfdd",
+  "runtimeTestsPassed": 107,
+  "frontendTestsPassed": 35,
+  "installedDesktop": {
+    "environment": "Linux x64, isolated Xvfb, bundled SDK with loopback model transport",
+    "routeCatalogDisplayed": true,
+    "shadcnDropdownSelectedModel": true,
+    "actualFirstRequestModel": "sdk-offline-fixture",
+    "actualFollowupRequestModel": "sdk-offline-alternate",
+    "modelSelectionRestoredAfterReopen": true,
+    "paidModelCalls": 0,
+    "screenshot": "session-model-picker.png"
+  },
+  "localShuntDiscovery": {
+    "endpoint": "/routes",
+    "configuredModel": "gpt-6.1-sol",
+    "workbenchDefaultModel": "gpt-6.2-sol",
+    "codexModelListVisibleCount": 10,
+    "mergedPackagedCatalogCount": 10,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 131,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "projectsPreserved": 1,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true
+  }
+}

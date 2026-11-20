@@ -455,6 +455,7 @@ export default function Workspace() {
                     <SessionChat
                       key={snapshot.session.id}
                       snapshot={snapshot}
+                      defaultModel={ready.data?.config.model ?? ''}
                       onSent={revalidate}
                       onError={setNotice}
                       onStop={(id) =>

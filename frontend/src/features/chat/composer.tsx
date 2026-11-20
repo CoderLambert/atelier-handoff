@@ -14,6 +14,7 @@ import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { isActive } from './conversation';
 import { ComposerModeSelector } from './mode-selector';
+import { ModelPicker } from './model-picker';
 import { parseSearchChargeLimit, runModeLabel, type ComposerMode } from './run-mode';
 
 import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
@@ -25,6 +26,8 @@ export function Composer({
   snapshot,
   draft,
   searchChargeLimit = '0',
+  defaultModel,
+  onModelChange,
   onModeChange,
   onSearchChargeChange,
   onDraftChange,
@@ -35,6 +38,8 @@ export function Composer({
   snapshot: Snapshot;
   draft: Draft;
   searchChargeLimit?: string;
+  defaultModel: string;
+  onModelChange: (model?: string) => void;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -387,6 +392,12 @@ export function Composer({
           >
             <Paperclip size={18} aria-hidden="true" />
           </button>
+          <ModelPicker
+            model={draft.model}
+            defaultModel={defaultModel}
+            disabled={archived || submitting}
+            onModelChange={onModelChange}
+          />
           <span className="send-hint" id="input-help">
             Enter 发送
           </span>

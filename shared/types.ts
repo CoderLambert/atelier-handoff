@@ -185,6 +185,7 @@ export interface Draft {
   attachmentIds: string[];
   mode: Mode;
   approvalMode?: 'automatic';
+  model?: string;
   extensionSelections?: ExtensionSelection[];
 }
 export interface Session {
@@ -319,6 +320,17 @@ export interface RunEvent {
   type: string;
   at: string;
   payload: Record<string, unknown>;
+}
+export interface GatewayModelCatalog {
+  defaultModel: string;
+  routesAvailable: boolean;
+  models: Array<{
+    id: string;
+    displayName?: string;
+    provider?: string;
+    effort?: string;
+    serviceTier?: string;
+  }>;
 }
 export interface AppConfig {
   gateway: string;

@@ -27,6 +27,7 @@
 - [x] 正常退出旧实例，使用同一数据目录和网页 profile 开启新版，核对项目、会话、草稿和设置。[本轮验收](../../../docs/evidence/desktop-p7-linux-x64/task-automation.json)
 - [x] 默认支持长任务，执行上限可在设置中开启。安装态验证超过 16 轮后生成结论并完成同目录切换。[长任务验收](../../../docs/evidence/desktop-p7-linux-x64/long-tasks.json)
 - [x] 运行模式改用 shadcn Select 并随会话保存。安装态验证连续发送、隔离选择和重开后恢复。[会话模式验收](../../../docs/evidence/desktop-p7-linux-x64/session-approval-mode.json)
+- [x] 发送区支持直接选择会话模型。合并 Shunt 路由与本机 Codex 目录，安装态核对切换后的模型请求和重开恢复。[模型选择验收](../../../docs/evidence/desktop-p7-linux-x64/session-model-picker.json)
 
 ## 另行安排的发布与平台验收
 

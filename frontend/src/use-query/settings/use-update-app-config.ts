@@ -18,6 +18,7 @@ export function useUpdateAppConfig() {
       api<ConfigInfo>('/api/config', { method: 'PATCH', body: config }),
     onSuccess: (data) => {
       client.setQueryData(settingsKeys.config, data);
+      void client.invalidateQueries({ queryKey: settingsKeys.models });
       void client.invalidateQueries({ queryKey: ['bootstrap'] });
     },
   });

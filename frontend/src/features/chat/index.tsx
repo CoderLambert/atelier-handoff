@@ -14,6 +14,8 @@ export interface ChatProps {
   snapshot: Snapshot;
   draft: Draft;
   searchChargeLimit?: string;
+  defaultModel: string;
+  onModelChange: (model?: string) => void;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -40,6 +42,8 @@ export default function Chat(props: ChatProps) {
         snapshot={snapshot}
         draft={props.draft}
         searchChargeLimit={props.searchChargeLimit}
+        defaultModel={props.defaultModel}
+        onModelChange={props.onModelChange}
         onModeChange={props.onModeChange}
         onSearchChargeChange={props.onSearchChargeChange}
         onDraftChange={props.onDraftChange}
