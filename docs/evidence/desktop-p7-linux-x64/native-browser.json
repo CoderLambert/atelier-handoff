@@ -1,0 +1,100 @@
+{
+  "artifacts": {
+    "arch": {
+      "name": "atelier-0.2.0-1-x86_64.pkg.tar.zst",
+      "sha256": "6a818ce59b3d2f7174d5871fd0379a7ce86077956abec8b83c0bcc6e37ef10e1",
+      "bytes": 299541108
+    },
+    "portable": {
+      "name": "atelier-0.2.0-linux-x64.tar.zst",
+      "bytes": 299293954,
+      "sha256": "53339fd4b073bad69c6c5b223c5f9853092f3e57915ad3c8d2031b2a7a2e8008"
+    }
+  },
+  "nativeBrowserSdk": {
+    "realSdk": true,
+    "transport": "loopback SSE replacement",
+    "paidModelCalls": 0,
+    "noConfiguredMcp": true,
+    "uiEnable": true,
+    "staleRevisionRejected": true,
+    "revoked": true,
+    "readonlyRun": "8d1d16d5-e03c-4cad-8191-63c351572928",
+    "editRun": "1842e7c0-c4da-42cf-96ec-61b1685dd5aa",
+    "separateNativeTarget": true,
+    "manualTakeoverAndRelease": true,
+    "reobservedAfterHandoff": true,
+    "approvals": 1,
+    "clickCount": 1,
+    "artifactId": "cdce3532-b163-4b99-93ca-ebdc0879b306",
+    "png": {
+      "bytes": 31059,
+      "width": 633,
+      "height": 597,
+      "blue": 23800
+    },
+    "readRequests": 3,
+    "editRequests": 5,
+    "calls": [
+      {
+        "name": "mcp__atelier__browser_navigate",
+        "input": {
+          "url": "http://127.0.0.1:37919/browser"
+        }
+      },
+      {
+        "name": "mcp__atelier__browser_snapshot",
+        "input": {}
+      },
+      {
+        "name": "mcp__atelier__browser_snapshot",
+        "input": {}
+      },
+      {
+        "name": "mcp__atelier__browser_click",
+        "input": {
+          "ref": "r2-1"
+        }
+      },
+      {
+        "name": "mcp__atelier__browser_snapshot",
+        "input": {}
+      },
+      {
+        "name": "mcp__atelier__browser_take_screenshot",
+        "input": {}
+      }
+    ],
+    "initialRef": "r1-1",
+    "refreshedRef": "r2-1",
+    "clickResultReturned": true,
+    "screenshotArtifactId": "cdce3532-b163-4b99-93ca-ebdc0879b306"
+  },
+  "keyboardProbe": {
+    "platform": "Linux X11 packaged Electron",
+    "scope": "isolated local form over CDP",
+    "replacedExistingText": true,
+    "formSubmitted": true
+  },
+  "installationSmoke": {
+    "status": "passed",
+    "metrics": {
+      "freshStarts": 10,
+      "slowestReadyMs": 778,
+      "peakTreeRssMiB": 1428,
+      "slowestShutdownMs": 106,
+      "rssSamplingIntervalMs": 150,
+      "budgets": {
+        "startupMs": 5000,
+        "shutdownMs": 3000,
+        "rssMiB": 1536
+      }
+    },
+    "processOwnership": {
+      "installedExecutablesOnly": true,
+      "cleanExitCount": 11,
+      "remainingProcesses": 0
+    }
+  },
+  "paidModelCalls": 0
+}

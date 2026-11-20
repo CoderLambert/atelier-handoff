@@ -15,6 +15,7 @@ export type RunStatus =
 export type Mode = 'readonly' | 'edit';
 export const activeStatuses: RunStatus[] = ['queued', 'running', 'awaiting_permission', 'stopping'];
 export interface Project {
+  desktopBrowser?: { enabled: boolean; revision: string };
   id: string;
   name: string;
   path: string;
@@ -111,6 +112,7 @@ export const agentCapabilities = [
   'attachments',
   'plan',
   'artifact',
+  'browser',
   'write',
   'command',
 ] as const;
@@ -214,6 +216,7 @@ export interface Usage {
   complete: boolean;
 }
 export interface Run {
+  browserRevision?: string;
   id: string;
   sessionId: string;
   projectId: string;
@@ -261,7 +264,7 @@ export interface Permission {
   runId: string;
   sessionId: string;
   toolCallId: string;
-  kind: 'write' | 'edit' | 'delete' | 'command' | 'mcp';
+  kind: 'write' | 'edit' | 'delete' | 'command' | 'mcp' | 'browser';
   path: string | null;
   command: string | null;
   before: string | null;

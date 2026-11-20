@@ -11,7 +11,12 @@ export const actionLinkClass =
 export const preClass =
   'max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/40 p-4 font-mono text-xs leading-6 [tab-size:2]';
 
+export function isOperationPermission(permission: Permission) {
+  return ['command', 'mcp', 'browser'].includes(permission.kind);
+}
+
 export function permissionOperation(permission: Permission) {
+  if (permission.kind === 'browser') return '操作内置浏览器';
   if (permission.kind === 'command') return '运行命令';
   if (permission.kind === 'mcp') return '调用 MCP 工具';
   if (permission.kind === 'delete') return '删除文件';

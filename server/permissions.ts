@@ -44,7 +44,7 @@ export class PermissionService {
       before,
       after,
       diff:
-        operation.kind === 'command' || operation.kind === 'mcp'
+        operation.kind === 'command' || operation.kind === 'mcp' || operation.kind === 'browser'
           ? operation.command!
           : textDiff(operation.path!, before, after),
       baseFingerprint: before === null ? null : fingerprint(before),

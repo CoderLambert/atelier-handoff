@@ -40,8 +40,11 @@ import {
 } from './files.js';
 import { commandsAvailable, runCommand } from './commands.js';
 import { readRunUsage } from './usage.js';
-import { callMcp, McpSessions } from './extension-mcp.js';
+import { callMcp, isLegacyDesktopPlaywright, McpSessions } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
+import { desktopBrowserArgs, type DesktopBrowserToolName } from '../shared/desktop-browser.js';
+import { callDesktopBrowser } from './desktop-browser.js';
+import type { DesktopBrowserAccess } from './desktop-browser-access.js';
 import { mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
 import { executeSkillPackage, readSkillResource, supportsSearch } from './skill-package-runtime.js';
 import { lookupWeather, weatherLocation } from './weather.js';
@@ -114,6 +117,7 @@ export class AgentRunner implements Runner {
     private readonly permissions: PermissionService,
     private readonly files: FileRecords,
     private readonly mcpSessions = new McpSessions(),
+    private readonly browserAccess?: DesktopBrowserAccess,
   ) {}
   start(
     run: Run,
@@ -202,6 +206,7 @@ export class AgentRunner implements Runner {
         gateway: run.config.gateway,
         ...(run.agent ? { agent: run.agent, capabilityPolicy: 1 } : {}),
         ...(run.extensions ? { extensions: run.extensions } : {}),
+        ...(run.browserRevision ? { browserRevision: run.browserRevision } : {}),
         ...(skillRefs.length ? { skills: skillRefs } : {}),
         ...(weatherEnabled ? { weatherLookup: true } : {}),
         ...(skillBindings.length ? { skillBindings } : {}),
@@ -540,6 +545,89 @@ export class AgentRunner implements Runner {
           return (await this.files.publishScreenshot(run, data)).id;
         }
       : undefined;
+    const browserAccess = this.browserAccess;
+    const browserRevision = run.browserRevision;
+    if (browserAccess && browserRevision && allowed('browser') && !run.retryOf) {
+      const registerBrowser = <S extends z.ZodRawShape>(
+        name: DesktopBrowserToolName,
+        description: string,
+        shape: S,
+        approval = false,
+      ) => {
+        mcpTools.push(
+          custom(name, description, shape, async (args, toolCallId) => {
+            const input = desktopBrowserArgs[name].parse(args);
+            const operationSignal = AbortSignal.any([
+              signal,
+              browserAccess.signal(project.id, browserRevision),
+            ]);
+            const recheck = () => {
+              verifyCurrent();
+              operationSignal.throwIfAborted();
+              browserAccess.verify(project.id, browserRevision);
+            };
+            recheck();
+            if (approval) {
+              await this.permissions.request(
+                run,
+                project.path,
+                {
+                  toolCallId,
+                  kind: 'browser',
+                  command: `${name}\n${JSON.stringify(input, null, 2)}`,
+                  reason: '在项目当前的 Agent 浏览器标签页执行此操作。',
+                },
+                operationSignal,
+              );
+            }
+            recheck();
+            const result = await callDesktopBrowser(
+              project.id,
+              run.id,
+              name,
+              input,
+              operationSignal,
+            );
+            recheck();
+            if (result.png && publishScreenshot) {
+              const artifactId = await publishScreenshot(result.png);
+              return `已保存当前网页截图到交付物（ID ${artifactId}）。`;
+            }
+            return result.text ?? '浏览器操作已完成。';
+          }),
+        );
+      };
+      registerBrowser(
+        'browser_navigate',
+        'Open an HTTP or HTTPS URL in the native desktop browser tab.',
+        desktopBrowserArgs.browser_navigate.shape,
+      );
+      registerBrowser(
+        'browser_snapshot',
+        'Read the native browser page title, URL and visible accessibility elements. Use the returned refs in click or type calls.',
+        desktopBrowserArgs.browser_snapshot.shape,
+      );
+      if (publishScreenshot)
+        registerBrowser(
+          'browser_take_screenshot',
+          'Save a PNG screenshot of the native browser page to the current session artifacts.',
+          desktopBrowserArgs.browser_take_screenshot.shape,
+        );
+      if (run.mode === 'edit') {
+        registerBrowser(
+          'browser_click',
+          'Click a ref from the latest native browser snapshot. Requires approval.',
+          desktopBrowserArgs.browser_click.shape,
+          true,
+        );
+        registerBrowser(
+          'browser_type',
+          'Enter text in a ref from the latest native browser snapshot. Requires approval. Ask the user to enter credentials manually.',
+          desktopBrowserArgs.browser_type.shape,
+          true,
+        );
+      }
+    }
     const bindingGuidance: string[] = [];
     const bindingUnavailable = () =>
       new AppError('SKILL_TOOL_UNAVAILABLE', 'Skill 工具未授权、已变更或当前运行模式不可用。', 403);
@@ -633,6 +721,7 @@ export class AgentRunner implements Runner {
           const service = this.store.get('extensions', binding.extensionId);
           if (
             service.kind !== 'mcp' ||
+            isLegacyDesktopPlaywright(service) ||
             !service.enabled ||
             service.projectId !== project.id ||
             (run.agent &&
@@ -697,7 +786,6 @@ export class AgentRunner implements Runner {
                 recheck,
                 this.mcpSessions,
                 publishScreenshot,
-                run.id,
               );
             },
           ),
@@ -1004,7 +1092,6 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   recheck,
                   this.mcpSessions,
                   publishScreenshot,
-                  run.id,
                 );
                 signal.throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {

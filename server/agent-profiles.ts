@@ -419,6 +419,10 @@ export class AgentProfiles {
         issues.push(`MCP ${reference.id} 已移除或不属于当前项目。`);
         continue;
       }
+      if (this.extensions.isLegacyBrowserUnavailable(item)) {
+        issues.push('桌面端已改用原生浏览器，请移除 Playwright 依赖并在新版本启用浏览器能力。');
+        continue;
+      }
       if (!item.enabled || item.version !== reference.version)
         issues.push(`MCP ${item.name} 已停用或更新，请重新选择。`);
       const tools: AgentDependencies['mcp'][number]['tools'] = [];

@@ -11,7 +11,6 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { AppError, type DiscoveredTool } from '../shared/types.js';
 import type { EnabledMcp } from './extensions.js';
 import { launchPreviewBrowser, readBrowserFrame } from './browser-preview.js';
-import { callDesktopBrowser } from './desktop-browser.js';
 
 export const MCP_CONNECT_TIMEOUT = 8_000;
 const MCP_CALL_TIMEOUT = 30_000;
@@ -256,12 +255,18 @@ async function discover(client: Client, signal: AbortSignal): Promise<Discovered
   return [...tools.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export function isLegacyDesktopPlaywright(server: EnabledMcp): boolean {
+  return server.provider === 'playwright-browser' && process.env.ATELIER_DESKTOP_BROWSER === '1';
+}
+
 export async function testMcp(
   server: EnabledMcp,
   cwd: string,
   signal: AbortSignal,
 ): Promise<Pick<EnabledMcp, 'status' | 'statusMessage' | 'tools'>> {
   try {
+    if (isLegacyDesktopPlaywright(server))
+      throw new AppError('LEGACY_BROWSER_UNAVAILABLE', '请使用桌面内置浏览器工具。', 409);
     const tools = await useClient(server, cwd, signal, async (client, secrets) => {
       const definitions = await discover(client, signal);
       // Remote tool metadata is displayable data. Never echo configured secret values.
@@ -295,44 +300,11 @@ export async function callMcp(
   beforeCall?: () => void,
   sessions?: McpSessions,
   publishScreenshot?: (data: string) => Promise<string>,
-  runId?: string,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
-  if (
-    server.provider === 'playwright-browser' &&
-    process.env.ATELIER_DESKTOP_BROWSER === '1' &&
-    name.startsWith('browser_')
-  ) {
-    if (!runId) throw new AppError('DESKTOP_BROWSER_FAILED', '桌面浏览器需要有效的运行标识。', 409);
-    if (
-      ![
-        'browser_navigate',
-        'browser_snapshot',
-        'browser_take_screenshot',
-        'browser_click',
-        'browser_type',
-      ].includes(name)
-    )
-      throw new AppError('DESKTOP_BROWSER_UNSUPPORTED', '该工具尚未接入桌面浏览器。', 409);
-    signal.throwIfAborted();
-    beforeCall?.();
-    const result = await callDesktopBrowser(
-      server.projectId,
-      runId,
-      name,
-      args,
-      signal,
-      server.browserOrigins,
-    );
-    signal.throwIfAborted();
-    if (result.png && publishScreenshot) {
-      beforeCall?.();
-      const artifactId = await publishScreenshot(result.png);
-      return `已保存网页截图到本轮交付物（ID ${artifactId}）。`;
-    }
-    return (result.text ?? '浏览器操作已执行。').slice(0, 32000);
-  }
+  if (isLegacyDesktopPlaywright(server))
+    throw new AppError('LEGACY_BROWSER_UNAVAILABLE', '请使用桌面内置浏览器工具。', 409);
   const work = async (client: Client, secrets: string[]) => {
     const discovered = await discover(client, signal);
     const current = discovered.find((tool) => tool.name === name);

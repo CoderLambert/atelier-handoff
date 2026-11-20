@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/client';
+/**
+ * @file 展示文件差异或精确工具操作并提供单次审批入口。
+ * @implementation 从审批复核 hook 消费已核对的内容和提交状态，浏览器操作以完整文本呈现。
+ * @updated 2026-11-20T11:51:19+08:00
+ */
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,19 +13,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Permission } from '@shared/types';
-import { DiffView, type PermissionDiff } from './diff-view';
+import { DiffView } from './diff-view';
+import { usePermissionReview } from './hooks/use-permission-review';
 import {
   ErrorNotice,
   Icon,
   Loading,
   StatusBadge,
-  errorMessage,
   formatDate,
+  isOperationPermission,
   permissionOperation,
   preClass,
 } from './shared';
 
-type Review = { permission: Permission; preview: PermissionDiff };
 export default function PermissionDialog({
   permission: live,
   onOpenChange,
@@ -31,112 +33,35 @@ export default function PermissionDialog({
   permission: Permission;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [review, setReview] = useState<Review>();
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string>();
-  const [decisionError, setDecisionError] = useState<string>();
-  const [busy, setBusy] = useState<'allow' | 'deny' | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const [now, setNow] = useState(Date.now);
-  const mutationLock = useRef(false);
-  const client = useQueryClient();
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setLoadError(undefined);
-    Promise.all([
-      api<{ permission: Permission }>(`/api/permissions/${encodeURIComponent(live.id)}`, {
-        signal: controller.signal,
-      }),
-      api<PermissionDiff>(`/api/permissions/${encodeURIComponent(live.id)}/diff`, {
-        signal: controller.signal,
-      }),
-    ])
-      .then(([detail, preview]) => {
-        if (controller.signal.aborted) return;
-        if (detail.permission.version !== preview.version)
-          throw new Error('审批内容已变化，请重新加载后核对差异。');
-        setReview({ permission: detail.permission, preview });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setReview(undefined);
-          setLoadError(errorMessage(error));
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [live.id, live.version, live.status, attempt]);
-
-  const permission = live.status !== 'pending' ? live : (review?.permission ?? live);
-  const expiresAt = permission.expiresAt;
-  useEffect(() => {
-    setNow(Date.now());
-    const delay = Date.parse(expiresAt) - Date.now();
-    if (!Number.isFinite(delay) || delay <= 0) return;
-    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(delay + 50, 2147483647));
-    return () => window.clearTimeout(timer);
-  }, [expiresAt]);
-  const expired = Number.isFinite(Date.parse(expiresAt)) && now >= Date.parse(expiresAt);
-  const versionMatches = review?.preview.version === live.version;
-  const canDecide = Boolean(
-    review &&
-    versionMatches &&
-    !loading &&
-    !loadError &&
-    permission.status === 'pending' &&
-    !expired &&
-    !busy,
-  );
-  async function decide(decision: 'allow' | 'deny') {
-    if (!canDecide || !review || mutationLock.current) return;
-    mutationLock.current = true;
-    setBusy(decision);
-    setDecisionError(undefined);
-    try {
-      const result = await api<{ permission: Permission }>(
-        `/api/permissions/${encodeURIComponent(permission.id)}/decision`,
-        {
-          method: 'POST',
-          body: { decision, version: review.preview.version },
-        },
-      );
-      if (mounted.current)
-        setReview((current) => (current ? { ...current, permission: result.permission } : current));
-    } catch (error) {
-      if (mounted.current) {
-        setDecisionError(errorMessage(error));
-        setAttempt((value) => value + 1);
-      }
-    } finally {
-      mutationLock.current = false;
-      if (mounted.current) setBusy(null);
-      void client.invalidateQueries({ queryKey: ['snapshot', permission.sessionId] });
-      void client.invalidateQueries({ queryKey: ['runs'] });
-      void client.invalidateQueries({ queryKey: ['trace', permission.runId] });
-    }
-  }
-  const command = permission.kind === 'command' || permission.kind === 'mcp';
+  const {
+    review,
+    permission,
+    loading,
+    loadError,
+    decisionError,
+    busy,
+    expired,
+    versionMatches,
+    canDecide,
+    reload,
+    decide,
+  } = usePermissionReview(live);
+  const operation = isOperationPermission(permission);
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-5 sm:px-6">
           <DialogTitle className="flex items-center gap-2">
             <Icon name="shield" />
-            {command ? '操作审批' : '文件差异与审批'}
+            {operation ? '操作审批' : '文件差异与审批'}
           </DialogTitle>
-          <DialogDescription>核对操作内容后，决定是否允许本次操作。</DialogDescription>
+          <DialogDescription>
+            {permission.kind === 'browser'
+              ? '核对本次浏览器操作的完整内容。允许仅对本次操作生效，读取的网页内容可能发送给模型。'
+              : '核对操作内容后，决定是否允许本次操作。'}
+          </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
+        <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
               {permissionOperation(permission)}
@@ -165,13 +90,14 @@ export default function PermissionDialog({
             ) : null}
           </dl>
           {loading ? <Loading>正在获取最新审批内容…</Loading> : null}
-          {loadError ? (
-            <ErrorNotice message={loadError} onRetry={() => setAttempt((value) => value + 1)} />
-          ) : null}
+          {loadError ? <ErrorNotice message={loadError} onRetry={reload} /> : null}
           {decisionError ? <ErrorNotice message={decisionError} /> : null}
           {!loading && review ? (
-            command ? (
-              <pre className={preClass} aria-label="待审批操作">
+            operation ? (
+              <pre
+                className={preClass}
+                aria-label={permission.kind === 'browser' ? '待审批浏览器操作' : '待审批操作'}
+              >
                 {permission.command || review.preview.diff || '未提供操作内容'}
               </pre>
             ) : (
@@ -184,10 +110,7 @@ export default function PermissionDialog({
             </p>
           ) : null}
           {review && !versionMatches ? (
-            <ErrorNotice
-              message="审批版本已变化，请重新加载后再决定。"
-              onRetry={() => setAttempt((value) => value + 1)}
-            />
+            <ErrorNotice message="审批版本已变化，请重新加载后再决定。" onRetry={reload} />
           ) : null}
         </div>
         <DialogFooter className="shrink-0 border-t border-border bg-muted/20 px-5 py-4 sm:px-6">

@@ -74,6 +74,10 @@ export const capabilityLabels: Record<AgentCapability, { label: string; descript
   artifact: { label: '生成交付物', description: '生成可查看和下载的结果' },
   write: { label: '修改文件', description: '经确认后修改项目文件' },
   command: { label: '执行命令', description: '经确认后执行项目命令' },
+  browser: {
+    label: '内置浏览器',
+    description: '项目启用后可读取网页和截图，点击、输入需逐次审批；网页内容可能发送给模型',
+  },
 };
 export const capabilityOptions = Object.keys(capabilityLabels) as AgentCapability[];
 export const needsEdit = (capability: AgentCapability) =>

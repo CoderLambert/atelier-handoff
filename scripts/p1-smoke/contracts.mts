@@ -4,6 +4,41 @@
  * @updated 2026-11-20T02:00+08:00
  */
 import assert from 'node:assert/strict';
+import { desktopBrowserAccessStateSchema } from '../../shared/desktop-browser.js';
+
+export const browserAccess = (value: unknown) => desktopBrowserAccessStateSchema.parse(value);
+
+export interface BrowserFixtureEvidence {
+  readRequests: number;
+  editRequests: number;
+  calls: { name: string; input: Record<string, unknown> }[];
+  initialRef: string | null;
+  refreshedRef: string | null;
+  clickResultReturned: boolean;
+  screenshotArtifactId: string | null;
+}
+
+export function browserSnapshot(value: unknown): {
+  url: string;
+  title: string;
+  elements: { ref?: string; role: string; name: string }[];
+} {
+  const input = record(value, 'native browser snapshot');
+  return {
+    url: string(input.url, 'snapshot URL'),
+    title: string(input.title, 'snapshot title'),
+    elements: array(input.elements, 'snapshot elements').map((value) => {
+      const element = record(value, 'snapshot element');
+      const ref = element.ref === undefined ? undefined : string(element.ref, 'element ref');
+      if (ref !== undefined) assert.match(ref, /^r[1-9]\d*-[1-9]\d*$/);
+      return {
+        ...(ref === undefined ? {} : { ref }),
+        role: string(element.role, 'element role'),
+        name: string(element.name, 'element name'),
+      };
+    }),
+  };
+}
 
 export interface DriverConfig {
   app: string;

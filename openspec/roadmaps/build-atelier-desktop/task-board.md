@@ -7,7 +7,7 @@
 | P1 | Linux x64 安装样包 | 已验证 | [Arch 与便携包验收](../../../docs/evidence/desktop-p1-linux-x64/acceptance.json) |
 | P2 | 宿主、运行时监督与恢复 | 已验证 | [安装态进程清理](../../../docs/evidence/desktop-p2-linux-x64/installed.json) 和 [故障恢复](../../../docs/evidence/desktop-p2-linux-x64/recovery.json) |
 | P3 | 旧数据迁入与备份恢复 | 已验证 | P1 数据、迁入向导回调和回退副本。[最终验证记录](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) |
-| P4 | 原生浏览器与人工接管 | 已验证 | 隔离网页、两标签、后台截图和慢导航交接。[验证记录](../../../docs/evidence/desktop-p4-linux-x64/tabs.json) |
+| P4 | 原生浏览器与人工接管 | 已验证 | [标签与接管](../../../docs/evidence/desktop-p4-linux-x64/tabs.json) · [内置工具与安装态审批点击](../../../docs/evidence/desktop-p7-linux-x64/native-browser.json) |
 | P5 | 运行时工具与 Agent 桌面流程 | 已验证 | [聊天审批、流式回复与上下文续接](../../../docs/evidence/desktop-p5-linux-x64/agent.json)，取消和截图见 P2/P4 |
 | P6 | 桌面文件操作 | 已验证 | 拖入附件、另存、取消及定位。[文件记录](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) |
 | P7 | Linux x64 正式发行验收 | 本地候选已验证 | [最新归档与退出复验](../../../docs/evidence/desktop-p7-linux-x64/ipc-shutdown.json) · [安装态功能](../../../docs/evidence/desktop-p7-linux-x64/workflows.json) · [Wayland](../../../docs/evidence/desktop-p7-linux-x64/wayland.json) · [第三方许可](../../../docs/evidence/desktop-p7-linux-x64/license-update.json)。对外发行等待应用及工作区组件许可证和发布授权 |

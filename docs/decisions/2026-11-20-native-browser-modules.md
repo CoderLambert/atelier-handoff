@@ -1,6 +1,14 @@
 # P4 原生浏览器的控制与提供方
 
-状态为提案。以 [桌面整体设计](../../openspec/roadmaps/build-atelier-desktop/design.md#决策-3--控制权网页状态与审批有单一归属) 为准。
+以 [桌面整体设计](../../openspec/roadmaps/build-atelier-desktop/design.md#决策-3--控制权网页状态与审批有单一归属) 为准。
+
+## 后续决策 · 桌面内置工具登记
+
+试用工作区可以操作原生网页。项目的 MCP 配置为空，SDK 未收到浏览器工具。Electron 已能在现有 `webContents` 上用 CDP 操作目标。Agent SDK 支持在应用内登记工具。复用这两个入口和现有权限服务，桌面即可独立提供浏览器工具。[Electron debugger](https://www.electronjs.org/docs/latest/api/debugger) · [Agent SDK 自定义工具](https://code.claude.com/docs/en/agent-sdk/custom-tools)
+
+运行时保存项目授权版本。用户为项目启用后，普通桌面对话自动取得导航、读取和截图。绑定智能体还需要在自己的版本授权浏览器能力。点击与输入需要受控修改和逐次审批。撤销使旧授权版本过期，并取消使用该授权的在途浏览器调用。Electron 维护人工接管和目标标签。截图仍由运行时发布为交付物。
+
+旧 Playwright 记录保留供 Web 和旧版本使用。桌面跳过旧自动选择，针对过期的显式选择给出移除并启用内置浏览器的提示。安装件验收使用隔离项目和本地模型替身。回退可启动此前验证的包，原配置未迁移。
 
 当前浏览器操作、工作台窗口和 IPC 装配共用桌面入口。每个项目只有一个网页视图，工具适配层通过 Playwright CLI 路径和工具名前缀决定原生路由。这个识别规则增加了修改工具配置和切换 Web 入口时的耦合。
 

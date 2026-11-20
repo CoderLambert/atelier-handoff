@@ -8,8 +8,10 @@ import {
   ipcMain,
   WebContentsView,
   type Event,
+  type Input,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
+  type MouseInputEvent,
   type WebContents,
 } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
@@ -41,6 +43,8 @@ export function createBrowserController(host: BrowserHost) {
     refs: Map<string, { id: number; editable: boolean }>;
     operation?: { id: string; abort: AbortController; done: Promise<void> };
     allowedOrigins?: string[];
+    expectedKey?: (input: Input) => boolean;
+    expectedMouse?: (input: MouseInputEvent) => boolean;
   }
 
   let visible: BrowserTab | undefined;
@@ -190,13 +194,25 @@ export function createBrowserController(host: BrowserHost) {
     wc.session.setPermissionCheckHandler(() => false);
     wc.setWindowOpenHandler(() => ({ action: 'deny' }));
     wc.on('will-attach-webview', (event) => event.preventDefault());
-    wc.on('before-input-event', (event) => {
-      if (!ownsTab(tab) || !human.has(projectId) || current(projectId) !== tab)
-        event.preventDefault();
+    wc.on('before-input-event', (event, input) => {
+      if (ownsTab(tab)) {
+        if (human.has(projectId) && current(projectId) === tab) return;
+        if (tab.expectedKey?.(input)) {
+          tab.expectedKey = undefined;
+          return;
+        }
+      }
+      event.preventDefault();
     });
-    wc.on('before-mouse-event', (event) => {
-      if (!ownsTab(tab) || !human.has(projectId) || current(projectId) !== tab)
-        event.preventDefault();
+    wc.on('before-mouse-event', (event, input) => {
+      if (ownsTab(tab)) {
+        if (human.has(projectId) && current(projectId) === tab) return;
+        if (tab.expectedMouse?.(input)) {
+          tab.expectedMouse = undefined;
+          return;
+        }
+      }
+      event.preventDefault();
     });
     const guard = (event: Event, url: string) => {
       try {
@@ -498,38 +514,43 @@ export function createBrowserController(host: BrowserHost) {
       }
       const target = tab.refs.get(request.args.target ?? request.args.ref ?? '');
       if (!target) throw new Error('该页面引用已失效，请重新读取页面。');
+      // Electron's before-input hooks also receive CDP events. Permit a single
+      // matching event while the controller sends each approved input command.
+      const sendKey = async (
+        type: 'rawKeyDown' | 'keyDown' | 'keyUp',
+        key: string,
+        code: string,
+        windowsVirtualKeyCode: number,
+        modifiers = 0,
+        text?: string,
+      ) => {
+        tab.expectedKey = (event) =>
+          event.type === (type === 'keyUp' ? 'keyUp' : 'keyDown') &&
+          event.key === key &&
+          event.code === code &&
+          event.control === (modifiers === 2);
+        try {
+          await send('Input.dispatchKeyEvent', {
+            type,
+            key,
+            code,
+            windowsVirtualKeyCode,
+            modifiers,
+            text,
+          });
+        } finally {
+          tab.expectedKey = undefined;
+        }
+      };
       if (request.name === 'browser_type') {
         if (!target.editable) throw new Error('请输入有效的文本。');
         await send('DOM.focus', { backendNodeId: target.id });
-        await send('Input.dispatchKeyEvent', {
-          type: 'rawKeyDown',
-          key: 'a',
-          code: 'KeyA',
-          windowsVirtualKeyCode: 65,
-          modifiers: 2,
-        });
-        await send('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          key: 'a',
-          code: 'KeyA',
-          windowsVirtualKeyCode: 65,
-          modifiers: 2,
-        });
+        await sendKey('rawKeyDown', 'a', 'KeyA', 65, 2);
+        await sendKey('keyUp', 'a', 'KeyA', 65, 2);
         await send('Input.insertText', { text: request.args.text });
         if (request.args.submit) {
-          await send('Input.dispatchKeyEvent', {
-            type: 'keyDown',
-            key: 'Enter',
-            code: 'Enter',
-            windowsVirtualKeyCode: 13,
-            text: '\r',
-          });
-          await send('Input.dispatchKeyEvent', {
-            type: 'keyUp',
-            key: 'Enter',
-            code: 'Enter',
-            windowsVirtualKeyCode: 13,
-          });
+          await sendKey('keyDown', 'Enter', 'Enter', 13, 0, '\r');
+          await sendKey('keyUp', 'Enter', 'Enter', 13);
         }
       } else {
         await send('DOM.scrollIntoViewIfNeeded', { backendNodeId: target.id });
@@ -537,14 +558,30 @@ export function createBrowserController(host: BrowserHost) {
           await send('DOM.getBoxModel', { backendNodeId: target.id }),
         );
         const [x1, y1, , , x3, y3] = model.content;
-        const point = {
-          x: (x1 + x3) / 2,
-          y: (y1 + y3) / 2,
-          button: 'left',
-          clickCount: request.args.doubleClick ? 2 : 1,
-        };
-        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point });
-        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point });
+        const x = (x1 + x3) / 2;
+        const y = (y1 + y3) / 2;
+        const clicks = request.args.doubleClick ? 2 : 1;
+        for (let clickCount = 1; clickCount <= clicks; clickCount++) {
+          for (const type of ['mousePressed', 'mouseReleased'] as const) {
+            tab.expectedMouse = (event) =>
+              event.type === (type === 'mousePressed' ? 'mouseDown' : 'mouseUp') &&
+              event.button === 'left' &&
+              Math.abs(event.x - x) < 1 &&
+              Math.abs(event.y - y) < 1;
+            try {
+              await send('Input.dispatchMouseEvent', {
+                type,
+                x,
+                y,
+                button: 'left',
+                clickCount,
+                buttons: type === 'mousePressed' ? 1 : 0,
+              });
+            } finally {
+              tab.expectedMouse = undefined;
+            }
+          }
+        }
       }
       tabContents(tab);
       tab.refs.clear();

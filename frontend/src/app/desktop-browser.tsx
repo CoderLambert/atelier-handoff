@@ -1,10 +1,12 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 订阅浏览器状态、发送操作并同步视图位置和可见性。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 组合项目工具授权查询与人工控制，订阅宿主状态并同步网页视图位置和可见性。
+ * @updated 2026-11-20T11:57:56+08:00
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useDesktopBrowserAccess } from '@/use-query/browser/use-desktop-browser-access';
+import { useUpdateDesktopBrowserAccess } from '@/use-query/browser/use-update-desktop-browser-access';
 import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, X } from 'lucide-react';
 
 import type {
@@ -41,6 +43,13 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
   const [error, setError] = useState('');
   const [pending, setPending] = useState<BrowserAction | null>(null);
   const bridge = window.atelierDesktop!;
+  const access = useDesktopBrowserAccess(projectId);
+  const updateAccess = useUpdateDesktopBrowserAccess();
+  const accessDescriptionId = useId();
+  const accessPending = updateAccess.isPending && updateAccess.variables?.projectId === projectId;
+  const accessError = updateAccess.variables?.projectId === projectId ? updateAccess.error : null;
+  const agentEnabled = access.data?.enabled === true;
+  const agentAvailable = access.data?.available === true && !access.isError;
   const activeTab = state?.tabs.find((tab) => tab.id === state.activeTabId);
   const agentTab = state?.tabs.find((tab) => tab.id === state.agentTabId);
   const differentAgentTab = agentTab && agentTab.id !== state?.activeTabId;
@@ -120,6 +129,57 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
 
   return (
     <section className="desktop-browser" aria-label="桌面浏览器" aria-busy={Boolean(transferring)}>
+      <div className="desktop-browser-status">
+        <p role="status">
+          {access.isPending
+            ? '正在读取 Agent 浏览器授权…'
+            : access.isError
+              ? '无法确认 Agent 浏览器授权状态。'
+              : !agentAvailable
+                ? `内置浏览器工具当前不可用。${agentEnabled ? '本项目授权仍为启用，可停用。' : ''}`
+                : agentEnabled
+                  ? '本项目已启用 Agent 浏览器，点击、输入需要逐次审批。'
+                  : '本项目已停用 Agent 浏览器，Agent 无法读取或操作网页。'}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          aria-label="允许 Agent 使用内置浏览器"
+          aria-pressed={agentEnabled}
+          aria-describedby={accessDescriptionId}
+          disabled={
+            !access.data || access.isError || accessPending || (!agentAvailable && !agentEnabled)
+          }
+          onClick={() => {
+            if (!access.data || accessPending) return;
+            updateAccess.mutate({
+              projectId,
+              enabled: !access.data.enabled,
+              revision: access.data.revision,
+            });
+          }}
+        >
+          {accessPending ? '正在保存…' : agentEnabled ? '停用 Agent 浏览器' : '启用 Agent 浏览器'}
+        </Button>
+      </div>
+      <div className="desktop-browser-status">
+        <p id={accessDescriptionId}>
+          启用后，具备浏览器能力的 Agent
+          可以读取网页和截图。点击、输入需要逐次审批。网页内容可能发送给模型。 人工接管期间暂停
+          Agent 的网页观察与操作；交还控制不会启用项目授权。
+        </p>
+      </div>
+      {access.isError || accessError ? (
+        <div className="desktop-browser-status" role="alert">
+          <p>{(access.error || accessError)?.message}</p>
+          {access.isError ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => void access.refetch()}>
+              重试浏览器授权状态
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="desktop-browser-tabbar">
         <div className="desktop-browser-tabs" role="group" aria-label="网页标签">
           {state?.tabs.map((tab) => {
@@ -258,12 +318,18 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
             {differentAgentTab
               ? `原工作标签为「${agentTab.title || agentTab.url || '新标签页'}」。`
               : ''}
-            交还后 Agent 将继续当前标签。
+            {access.isError || !access.data
+              ? '交还仅结束人工接管；请先确认项目浏览器授权状态。'
+              : !agentEnabled
+                ? '交还仅结束人工接管；项目浏览器工具仍停用。'
+                : !agentAvailable
+                  ? '交还仅结束人工接管；内置浏览器工具当前不可用。'
+                  : '交还后，Agent 可以读取当前标签和截图，点击、输入仍需逐次审批。'}
           </p>
         ) : differentAgentTab ? (
           <>
             <p>
-              Agent 正在使用「{agentTab.title || agentTab.url || '新标签页'}」，当前显示其他标签。
+              Agent 工作标签为「{agentTab.title || agentTab.url || '新标签页'}」，当前显示其他标签。
             </p>
             <Button
               type="button"

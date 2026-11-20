@@ -6,6 +6,7 @@
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ import type { FileRecords } from '../../server/artifacts.js';
 type Chromium = typeof import('playwright-core').chromium;
 import {
   array,
+  browserAccess,
   config,
   errorText,
   record,
@@ -30,6 +32,12 @@ import {
 import {
   answer,
   bluePixels,
+  browserEditAnswer,
+  browserEditPrompt,
+  browserManualValue,
+  browserReadAnswer,
+  browserReadPrompt,
+  browserTitle,
   fixtures,
   model,
   prompt,
@@ -51,11 +59,27 @@ const evidence: AcceptanceEvidence = {
 };
 const redactLog = (text: string): string => redact(text).replace(/\b[a-f0-9]{64}\b/gi, '<hex-64>');
 
-async function appFetch(page: Page, path: string): Promise<{ status: number; body: string }> {
-  return page.evaluate(async (path) => {
-    const response = await fetch(path, { signal: AbortSignal.timeout(5000) });
-    return { status: response.status, body: await response.text() };
-  }, path);
+async function appFetch(
+  page: Page,
+  path: string,
+  mutation?: { method: 'POST' | 'PATCH'; body: Record<string, unknown>; token: string },
+): Promise<{ status: number; body: string }> {
+  return page.evaluate(
+    async ({ path, mutation }) => {
+      const response = await fetch(path, {
+        signal: AbortSignal.timeout(5000),
+        ...(mutation
+          ? {
+              method: mutation.method,
+              headers: { 'Content-Type': 'application/json', 'x-atelier-token': mutation.token },
+              body: JSON.stringify(mutation.body),
+            }
+          : {}),
+      });
+      return { status: response.status, body: await response.text() };
+    },
+    { path, mutation },
+  );
 }
 
 async function api(page: Page, path: string): Promise<Record<string, unknown>> {
@@ -429,6 +453,260 @@ async function settings(page: Page, offline: boolean): Promise<void> {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+async function nativeBrowserSdk(
+  run: Launch,
+  fixture: Fixtures,
+  projectId: string,
+  sessionId: string,
+): Promise<void> {
+  evidence.phase = 'native-browser-sdk';
+  await save();
+  const { page } = run;
+  const route = `/api/projects/${projectId}/desktop-browser`;
+  const initial = browserAccess(await api(page, route));
+  assert.deepEqual(initial, { available: true, enabled: false, revision: null });
+  const extensions = await api(page, `/api/projects/${projectId}/extensions`);
+  assert.equal(
+    array(extensions.items).filter((item) => record(item).kind === 'mcp').length,
+    0,
+    'Native browser case must start without a configured MCP server',
+  );
+  const token = string((await api(page, '/api/bootstrap')).csrfToken);
+  await page.getByRole('button', { name: '浏览器', exact: true }).click();
+  const enable = page.getByRole('button', { name: '允许 Agent 使用内置浏览器', exact: true });
+  assert.equal(await enable.getAttribute('aria-pressed'), 'false');
+  const [enabledResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' && new URL(response.url()).pathname === route,
+    ),
+    enable.click(),
+  ]);
+  assert.equal(enabledResponse.status(), 200);
+  assert.deepEqual(enabledResponse.request().postDataJSON() as unknown, {
+    enabled: true,
+    revision: initial.revision,
+  });
+  const enabled = browserAccess((await enabledResponse.json()) as unknown);
+  assert.equal(enabled.available, true);
+  assert.equal(enabled.enabled, true);
+  assert.ok(enabled.revision, 'Enabling must issue a project authorization revision');
+  await until(
+    async () => ((await enable.getAttribute('aria-pressed')) === 'true' ? true : undefined),
+    5000,
+    'browser enable button reflects project authorization',
+  );
+  assert.deepEqual(browserAccess(await api(page, route)), enabled);
+  const unchanged = await appFetch(page, route, {
+    method: 'PATCH',
+    body: { enabled: true, revision: enabled.revision },
+    token,
+  });
+  assert.equal(unchanged.status, 200);
+  assert.deepEqual(browserAccess(JSON.parse(unchanged.body) as unknown), enabled);
+  const stale = await appFetch(page, route, {
+    method: 'PATCH',
+    body: { enabled: false, revision: initial.revision },
+    token,
+  });
+  assert.equal(stale.status, 409, 'A stale revision cannot revoke a newer authorization');
+  assert.equal(
+    record(record(JSON.parse(stale.body) as unknown).error).code,
+    'BROWSER_ACCESS_CHANGED',
+  );
+  assert.deepEqual(browserAccess(await api(page, route)), enabled);
+
+  const sessionRoute = `/api/sessions/${sessionId}`;
+  const submit = async (text: string, mode: 'readonly' | 'edit') => {
+    const response = await appFetch(page, sessionRoute + '/messages', {
+      method: 'POST',
+      body: { text, mode, idempotencyKey: randomUUID() },
+      token,
+    });
+    assert.equal(response.status, 202, `Start native browser ${mode} run`);
+    return string(record(record(JSON.parse(response.body) as unknown).run).id);
+  };
+  const snapshot = async (runId: string) => {
+    assert.deepEqual(
+      fixture.evidence.errors,
+      [],
+      'Loopback browser fixture must accept SDK requests',
+    );
+    const state = await api(page, sessionRoute);
+    const current = array(state.runs)
+      .map((value) => record(value))
+      .find((item) => item.id === runId);
+    assert.ok(current, 'Native browser run must be persisted');
+    if (['failed', 'stopped', 'interrupted'].includes(string(current.status)))
+      throw new Error(
+        `Native browser run ${string(current.status)}: ${JSON.stringify(current.error)}`,
+      );
+    return { state, current };
+  };
+  const complete = (runId: string) =>
+    until(
+      async () => {
+        const { state, current } = await snapshot(runId);
+        return current.status === 'completed' ? state : undefined;
+      },
+      60_000,
+      'real packaged SDK native browser round trip',
+    );
+  const readRunId = await submit(browserReadPrompt, 'readonly');
+  const readState = await complete(readRunId);
+  assert.equal(
+    array(readState.permissions).filter((value) => record(value).runId === readRunId).length,
+    0,
+  );
+  await page.getByText(browserReadAnswer, { exact: true }).waitFor({ state: 'visible' });
+  const native = await until(
+    async () =>
+      run.browser
+        .contexts()
+        .flatMap((context) => context.pages())
+        .find((candidate) => candidate.url() === `${fixture.siteUrl}/browser`),
+    10_000,
+    'SDK-created native browser Chromium target',
+  );
+  assert.notEqual(native, page, 'SDK browser must use a distinct WebContentsView target');
+  await native
+    .getByRole('heading', { name: browserTitle, exact: true })
+    .waitFor({ state: 'visible' });
+  assert.equal(await native.locator('body').getAttribute('data-agent-clicks'), '0');
+
+  await page.getByRole('button', { name: '人工接管', exact: true }).click();
+  await page.getByRole('button', { name: '交还控制', exact: true }).waitFor({ state: 'visible' });
+  await native.getByLabel('Browser handoff input', { exact: true }).fill(browserManualValue);
+  assert.equal(
+    await native.getByLabel('Browser handoff input', { exact: true }).inputValue(),
+    browserManualValue,
+  );
+  await page.getByRole('button', { name: '交还控制', exact: true }).click();
+  await page.getByRole('button', { name: '人工接管', exact: true }).waitFor({ state: 'visible' });
+
+  const editRunId = await submit(browserEditPrompt, 'edit');
+  const permission = await until(
+    async () => {
+      const { state, current } = await snapshot(editRunId);
+      const pending = array(state.permissions)
+        .map((value) => record(value))
+        .find((item) => item.runId === editRunId && item.status === 'pending');
+      if (!pending)
+        assert.notEqual(current.status, 'completed', 'Browser click must wait for approval');
+      return pending;
+    },
+    60_000,
+    'one native browser click approval',
+  );
+  assert.equal(permission.kind, 'browser');
+  const [operation, ...input] = string(permission.command).split('\n');
+  assert.equal(operation, 'browser_click');
+  assert.deepEqual(JSON.parse(input.join('\n')) as unknown, {
+    ref: fixture.evidence.nativeBrowser.refreshedRef,
+  });
+  assert.equal(
+    await native.locator('body').getAttribute('data-agent-clicks'),
+    '0',
+    'Click must not run before approval',
+  );
+  assert.equal(
+    fixture.evidence.nativeBrowser.editRequests,
+    2,
+    'SDK must pause at the browser approval',
+  );
+  const decision = await appFetch(page, `/api/permissions/${string(permission.id)}/decision`, {
+    method: 'POST',
+    body: { decision: 'allow', version: permission.version },
+    token,
+  });
+  assert.equal(decision.status, 200, 'Paired renderer plus CSRF must allow the browser approval');
+  assert.equal(record(record(JSON.parse(decision.body) as unknown).permission).status, 'allowed');
+  const editState = await complete(editRunId);
+  await page.getByText(browserEditAnswer, { exact: true }).waitFor({ state: 'visible' });
+  const permissions = array(editState.permissions)
+    .map((value) => record(value))
+    .filter((item) => item.runId === editRunId);
+  assert.equal(permissions.length, 1, 'Read tools must not create additional approvals');
+  assert.equal(permissions[0]?.status, 'allowed');
+  assert.equal(native.url(), `${fixture.siteUrl}/browser`);
+  assert.equal(
+    await native.locator('body').getAttribute('data-agent-clicks'),
+    '1',
+    'Exactly one approved SDK click must reach the native target',
+  );
+  await native.getByText('Browser action completed', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(
+    await native.getByLabel('Browser handoff input', { exact: true }).inputValue(),
+    browserManualValue,
+  );
+  const browserEvidence = fixture.evidence.nativeBrowser;
+  assert.equal(browserEvidence.readRequests, 3);
+  assert.equal(browserEvidence.editRequests, 5);
+  assert.equal(browserEvidence.clickResultReturned, true);
+  assert.ok(browserEvidence.screenshotArtifactId);
+  const artifacts = array(editState.artifacts)
+    .map((value) => record(value))
+    .filter((item) => item.runId === editRunId);
+  assert.equal(artifacts.length, 1, 'Screenshot must publish exactly one artifact');
+  const artifact = record(artifacts[0], 'native screenshot artifact');
+  assert.equal(artifact.id, browserEvidence.screenshotArtifactId);
+  assert.equal(artifact.projectId, projectId);
+  assert.equal(artifact.sessionId, sessionId);
+  assert.equal(artifact.mime, 'image/png');
+  assert.equal(artifact.availability, 'available');
+  const download = await page.evaluate(
+    async (path) => {
+      const response = await fetch(path, { signal: AbortSignal.timeout(5000) });
+      return {
+        status: response.status,
+        bytes: Array.from(new Uint8Array(await response.arrayBuffer())),
+      };
+    },
+    `/api/artifacts/${string(artifact.id)}/download`,
+  );
+  assert.equal(download.status, 200);
+  const png = Buffer.from(download.bytes);
+  assert.equal(png.length, artifact.size);
+  const pixels = bluePixels(png);
+  assert.ok(
+    pixels.blue > 1000,
+    'PNG artifact must show the live page changed by the approved click',
+  );
+  await writeFile(join(root, 'native-browser-artifact.png'), png, { mode: 0o600 });
+  const revokedResponse = await appFetch(page, route, {
+    method: 'PATCH',
+    body: { enabled: false, revision: enabled.revision },
+    token,
+  });
+  assert.equal(revokedResponse.status, 200);
+  const revoked = browserAccess(JSON.parse(revokedResponse.body) as unknown);
+  assert.equal(revoked.enabled, false);
+  assert.ok(revoked.revision);
+  assert.notEqual(revoked.revision, enabled.revision);
+  assert.deepEqual(browserAccess(await api(page, route)), revoked);
+  evidence.checks.nativeBrowserSdk = {
+    realSdk: true,
+    transport: 'loopback SSE replacement',
+    paidModelCalls: 0,
+    noConfiguredMcp: true,
+    uiEnable: true,
+    staleRevisionRejected: true,
+    revoked: true,
+    readonlyRun: readRunId,
+    editRun: editRunId,
+    separateNativeTarget: true,
+    manualTakeoverAndRelease: true,
+    reobservedAfterHandoff: true,
+    approvals: 1,
+    clickCount: 1,
+    artifactId: artifact.id,
+    png: { bytes: png.length, ...pixels },
+    ...browserEvidence,
+  };
+  await page.getByRole('button', { name: '任务详情', exact: true }).first().click();
+  await save();
+}
+
 async function functional(
   run: Launch,
   fixture: Fixtures,
@@ -553,6 +831,7 @@ async function functional(
     receiptPersisted: true,
     sdkCliObserved: true,
   };
+  await nativeBrowserSdk(run, fixture, projectId, sessionId);
   await nativeBrowser();
   return { projectId, sessionId, runId, artifactId };
 }
@@ -706,7 +985,17 @@ async function reopen(
     .click();
   await run.page.getByText(answer, { exact: true }).waitFor({ state: 'visible' });
   await settings(run.page, true);
-  assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no model request');
+  assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no receipt model request');
+  assert.equal(
+    fixture.evidence.nativeBrowser.readRequests,
+    3,
+    'Offline reopen must make no browser read request',
+  );
+  assert.equal(
+    fixture.evidence.nativeBrowser.editRequests,
+    5,
+    'Offline reopen must make no browser edit request',
+  );
   await run.page.screenshot({
     path: join(root, 'offline-reopened.png'),
     mask: [run.page.locator('.history-meta')],

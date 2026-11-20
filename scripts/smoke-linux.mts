@@ -395,7 +395,7 @@ async function main(): Promise<void> {
       platform: 'node',
       target: 'node24',
       format: 'esm',
-      packages: 'external',
+      packages: 'bundle',
       logLevel: 'silent',
     });
     report.testResource = {

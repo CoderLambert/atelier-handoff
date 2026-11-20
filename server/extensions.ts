@@ -175,7 +175,14 @@ function browserProvider(
 }
 
 export class ProjectExtensions {
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private readonly desktop = false,
+  ) {}
+
+  isLegacyBrowserUnavailable(item: Extension): boolean {
+    return this.desktop && item.kind === 'mcp' && item.provider === 'playwright-browser';
+  }
 
   assignLegacyProviders(): void {
     this.store.transaction(() => {
@@ -432,6 +439,7 @@ export class ProjectExtensions {
       for (const item of catalog) {
         if (
           item.kind !== 'mcp' ||
+          this.isLegacyBrowserUnavailable(item) ||
           !item.enabled ||
           !item.autoUseInChat ||
           item.status !== 'connected' ||
@@ -469,6 +477,12 @@ export class ProjectExtensions {
         used.push(reference);
         continue;
       }
+      if (this.isLegacyBrowserUnavailable(item))
+        throw new AppError(
+          'LEGACY_BROWSER_UNAVAILABLE',
+          '请移除本轮的 Playwright 选择，然后在右侧浏览器面板启用 Agent 控制。',
+          409,
+        );
       const allowed = item.allowedTools.filter(
         (tool) =>
           (selection.tools === undefined || selection.tools.includes(tool.name)) &&

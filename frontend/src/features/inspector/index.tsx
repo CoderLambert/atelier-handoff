@@ -15,6 +15,7 @@ import {
   errorMessage,
   eventNames,
   formatDate,
+  isOperationPermission,
   permissionOperation,
   preClass,
 } from './shared';
@@ -412,7 +413,7 @@ function PermissionCard({ permission, onOpen }: { permission: Permission; onOpen
       >
         {pending
           ? '查看详情与审批'
-          : permission.kind === 'command' || permission.kind === 'mcp'
+          : isOperationPermission(permission)
             ? '查看操作记录'
             : '查看文件差异'}
         <Icon name="arrow" className="size-3" />

@@ -6,7 +6,14 @@
 import assert from 'node:assert/strict';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { inflateSync } from 'node:zlib';
-import { array, errorText, record } from './contracts.mjs';
+import {
+  array,
+  browserSnapshot,
+  errorText,
+  record,
+  string,
+  type BrowserFixtureEvidence,
+} from './contracts.mjs';
 
 export const model = 'sdk-offline-fixture';
 export const prompt = 'Complete the installed acceptance fixture and save its offline receipt.';
@@ -14,6 +21,115 @@ export const answer = 'INSTALLED_SDK_LOOPBACK_COMPLETED';
 export const receiptName = 'installed-offline-receipt.md';
 export const receipt = '# Installed acceptance\nLoopback SDK fixture completed.\n';
 const toolUseId = 'toolu_installed_acceptance';
+export const browserReadPrompt = 'Observe the installed native browser fixture in read-only mode.';
+export const browserEditPrompt =
+  'Observe the browser again after handoff, approve one click, and save its PNG.';
+export const browserReadAnswer = 'INSTALLED_NATIVE_BROWSER_OBSERVED';
+export const browserEditAnswer = 'INSTALLED_NATIVE_BROWSER_COMPLETED';
+export const browserTitle = 'Installed Agent browser fixture';
+export const browserClickLabel = 'Apply native browser fixture';
+export const browserManualValue = 'installed-browser-manual-handoff';
+const browserToolIds = {
+  navigate: 'toolu_installed_browser_navigate',
+  initialSnapshot: 'toolu_installed_browser_initial_snapshot',
+  refreshedSnapshot: 'toolu_installed_browser_refreshed_snapshot',
+  click: 'toolu_installed_browser_click',
+  confirmation: 'toolu_installed_browser_confirmation',
+  screenshot: 'toolu_installed_browser_screenshot',
+} as const;
+
+function toolResultText(messages: Record<string, unknown>[], id: string): string {
+  const result = messages
+    .flatMap((message) => (Array.isArray(message.content) ? (message.content as unknown[]) : []))
+    .map((value) => record(value, 'content block'))
+    .find((block) => block.type === 'tool_result' && block.tool_use_id === id);
+  assert.ok(result && !result.is_error, `Real SDK must return successful tool result ${id}`);
+  if (typeof result.content === 'string') return result.content;
+  return array(result.content, 'tool result content')
+    .map((value) => {
+      const block = record(value, 'tool result block');
+      assert.equal(
+        block.type,
+        'text',
+        'Native browser results must be text, without inline images',
+      );
+      return string(block.text);
+    })
+    .join('\n');
+}
+
+function snapshotButton(messages: Record<string, unknown>[], id: string, url: string) {
+  const snapshot = browserSnapshot(JSON.parse(toolResultText(messages, id)) as unknown);
+  assert.equal(snapshot.url, url);
+  assert.equal(snapshot.title, browserTitle);
+  const button = snapshot.elements.find(
+    (element) => element.role === 'button' && element.name === browserClickLabel,
+  );
+  assert.ok(button?.ref, 'Browser snapshot must contain a real clickable ref');
+  return { snapshot, ref: button.ref };
+}
+
+function browserMessage(
+  res: ServerResponse,
+  request: Record<string, unknown>,
+  messages: Record<string, unknown>[],
+  evidence: BrowserFixtureEvidence,
+  siteUrl: string,
+  edit: boolean,
+): void {
+  const tools = array(request.tools, 'SDK tools').map((value) => string(record(value).name));
+  for (const name of ['browser_navigate', 'browser_snapshot', 'browser_take_screenshot'])
+    assert.ok(
+      tools.includes(`mcp__atelier__${name}`),
+      `Native read tool ${name} must be advertised`,
+    );
+  for (const name of ['browser_click', 'browser_type'])
+    assert.equal(tools.includes(`mcp__atelier__${name}`), edit, `${name} is edit mode only`);
+  const url = `${siteUrl}/browser`;
+  const step = edit ? ++evidence.editRequests : ++evidence.readRequests;
+  assert.ok(step <= (edit ? 5 : 3), 'Unexpected native browser model request');
+  const invoke = (id: string, name: string, input: Record<string, unknown>) => {
+    const fullName = `mcp__atelier__${name}`;
+    evidence.calls.push({ name: fullName, input });
+    streamMessage(res, { id, name: fullName, input });
+  };
+  if (!edit) {
+    if (step === 1) return invoke(browserToolIds.navigate, 'browser_navigate', { url });
+    if (step === 2) {
+      assert.ok(toolResultText(messages, browserToolIds.navigate).includes(url));
+      return invoke(browserToolIds.initialSnapshot, 'browser_snapshot', {});
+    }
+    evidence.initialRef = snapshotButton(messages, browserToolIds.initialSnapshot, url).ref;
+    streamMessage(res, undefined, browserReadAnswer);
+    return;
+  }
+  if (step === 1) return invoke(browserToolIds.refreshedSnapshot, 'browser_snapshot', {});
+  if (step === 2) {
+    const { snapshot, ref } = snapshotButton(messages, browserToolIds.refreshedSnapshot, url);
+    assert.ok(
+      JSON.stringify(snapshot).includes(browserManualValue),
+      'New observation must include the human handoff change',
+    );
+    assert.notEqual(ref, evidence.initialRef, 'Handoff must invalidate the original element refs');
+    evidence.refreshedRef = ref;
+    return invoke(browserToolIds.click, 'browser_click', { ref });
+  }
+  if (step === 3) {
+    assert.ok(toolResultText(messages, browserToolIds.click).length > 0);
+    evidence.clickResultReturned = true;
+    return invoke(browserToolIds.confirmation, 'browser_snapshot', {});
+  }
+  if (step === 4) {
+    const { snapshot } = snapshotButton(messages, browserToolIds.confirmation, url);
+    assert.ok(JSON.stringify(snapshot).includes('Browser action completed'));
+    return invoke(browserToolIds.screenshot, 'browser_take_screenshot', {});
+  }
+  const result = toolResultText(messages, browserToolIds.screenshot);
+  const id = /\b[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}\b/i.exec(result)?.[0];
+  assert.ok(id, 'Screenshot tool result must identify its saved PNG artifact');
+  evidence.screenshotArtifactId = id;
+  streamMessage(res, undefined, browserEditAnswer);
+}
 
 export function samplePdf(): string {
   const stream = '0 0 1 rg 40 40 170 140 re f';
@@ -36,14 +152,15 @@ export function samplePdf(): string {
   );
 }
 
+let messageSequence = 0;
+
 function streamMessage(
   res: ServerResponse,
-  invokeTool: boolean,
-  tool: { name: string; input: Record<string, string> } = {
-    name: 'mcp__atelier__publish_artifact',
-    input: { name: receiptName, content: receipt },
-  },
+  tool?: { id: string; name: string; input: Record<string, unknown> },
+  text = answer,
 ): void {
+  const invokeTool = tool !== undefined;
+  const sequence = ++messageSequence;
   const usage = {
     input_tokens: 12,
     output_tokens: 8,
@@ -54,7 +171,7 @@ function streamMessage(
     {
       type: 'message_start',
       message: {
-        id: `msg_installed_${invokeTool ? 'tool' : 'answer'}`,
+        id: `msg_installed_${sequence}`,
         type: 'message',
         role: 'assistant',
         model,
@@ -68,7 +185,7 @@ function streamMessage(
       type: 'content_block_start',
       index: 0,
       content_block: invokeTool
-        ? { type: 'tool_use', id: toolUseId, name: tool.name, input: {} }
+        ? { type: 'tool_use', id: tool.id, name: tool.name, input: {} }
         : { type: 'text', text: '' },
     },
     {
@@ -79,7 +196,7 @@ function streamMessage(
             type: 'input_json_delta',
             partial_json: JSON.stringify(tool.input),
           }
-        : { type: 'text_delta', text: answer },
+        : { type: 'text_delta', text },
     },
     { type: 'content_block_stop', index: 0 },
     {
@@ -92,14 +209,15 @@ function streamMessage(
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'request-id': `req_installed_${invokeTool ? 'tool' : 'answer'}`,
+    'request-id': `req_installed_${sequence}`,
   });
   for (const event of events) res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
   res.end();
 }
 
 export function streamFixtureApproval(res: ServerResponse): void {
-  streamMessage(res, true, {
+  streamMessage(res, {
+    id: toolUseId,
     name: 'mcp__atelier__write_file',
     input: {
       path: 'approval-fixture.txt',
@@ -133,6 +251,7 @@ export interface FixtureEvidence {
   requests: number;
   toolResultReturned: boolean;
   pdfRequests: number;
+  nativeBrowser: BrowserFixtureEvidence;
   errors: string[];
 }
 
@@ -151,8 +270,18 @@ export async function fixtures(): Promise<Fixtures> {
     requests: 0,
     toolResultReturned: false,
     pdfRequests: 0,
+    nativeBrowser: {
+      readRequests: 0,
+      editRequests: 0,
+      calls: [],
+      initialRef: null,
+      refreshedRef: null,
+      clickResultReturned: false,
+      screenshotArtifactId: null,
+    },
     errors: [],
   };
+  let siteUrl: string;
   const gateway = createServer((req, res) => {
     void (async () => {
       try {
@@ -184,7 +313,19 @@ export async function fixtures(): Promise<Fixtures> {
         const messages = array(request.messages, 'messages').map((value) =>
           record(value, 'message'),
         );
-        assert.ok(JSON.stringify(messages).includes(prompt), 'Task must reach packaged CLI');
+        const conversation = JSON.stringify(messages);
+        if (conversation.includes(browserReadPrompt) || conversation.includes(browserEditPrompt)) {
+          browserMessage(
+            res,
+            request,
+            messages,
+            evidence.nativeBrowser,
+            siteUrl,
+            conversation.includes(browserEditPrompt),
+          );
+          return;
+        }
+        assert.ok(conversation.includes(prompt), 'Task must reach packaged CLI');
         evidence.requests++;
         assert.ok(evidence.requests <= 2, 'Expected tool call followed by final reply only');
         if (evidence.requests === 1) {
@@ -196,6 +337,10 @@ export async function fixtures(): Promise<Fixtures> {
           assert.ok(
             !tools.some((tool) => tool.name === 'mcp__atelier__run_command'),
             'Unavailable command tool must not be advertised',
+          );
+          assert.ok(
+            !tools.some((tool) => String(tool.name).startsWith('mcp__atelier__browser_')),
+            'A fresh project must not expose native browser tools before project authorization',
           );
         } else {
           const blocks = messages
@@ -216,7 +361,16 @@ export async function fixtures(): Promise<Fixtures> {
           );
           evidence.toolResultReturned = true;
         }
-        streamMessage(res, evidence.requests === 1);
+        streamMessage(
+          res,
+          evidence.requests === 1
+            ? {
+                id: toolUseId,
+                name: 'mcp__atelier__publish_artifact',
+                input: { name: receiptName, content: receipt },
+              }
+            : undefined,
+        );
       } catch (error) {
         evidence.errors.push(errorText(error));
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -240,15 +394,27 @@ export async function fixtures(): Promise<Fixtures> {
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
+    if (req.url === '/browser') {
+      res.end(`<!doctype html><html><head><title>${browserTitle}</title></head>
+<body data-agent-clicks="0" style="background:#e6f4eb;font:20px sans-serif;padding:24px">
+<h1>${browserTitle}</h1>
+<label>Browser handoff input <input oninput="document.getElementById('handoff').textContent='Human input: '+this.value"></label>
+<p id="handoff">Awaiting human handoff</p>
+<button onclick="document.body.dataset.agentClicks=String(Number(document.body.dataset.agentClicks)+1);document.getElementById('result').textContent='Browser action completed';document.getElementById('paint').style.background='#0000ff'">${browserClickLabel}</button>
+<p id="result">Browser action pending</p><div id="paint" style="width:170px;height:140px"></div>
+</body></html>`);
+      return;
+    }
     res.end(
       '<!doctype html><html><head><title>Installed native fixture</title></head><body style="background:#e6f4eb;font:24px sans-serif;padding:32px"><h1>Installed native fixture</h1><label>Fixture input <input autofocus></label></body></html>',
     );
   });
   try {
+    siteUrl = await listen(site);
     return {
       evidence,
       gatewayUrl: await listen(gateway),
-      siteUrl: await listen(site),
+      siteUrl,
       async disconnectGateway() {
         await closeServer(gateway);
         evidence.healthMode = 'offline';

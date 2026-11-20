@@ -6,6 +6,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { desktopPairingHeader } from '../shared/desktop-host.js';
+import { desktopBrowserAccessUpdateSchema } from '../shared/desktop-browser.js';
+import { desktopBrowserEnabled } from './desktop-browser.js';
+import { DesktopBrowserAccess } from './desktop-browser-access.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, lstat, rm } from 'node:fs/promises';
@@ -155,13 +158,17 @@ export async function createApp(options: {
   store.recover();
   const permissions = new PermissionService(store, options.permissionTtlMs);
   const files = new FileRecords(store);
-  const extensions = new ProjectExtensions(store);
+  const browserAccess = new DesktopBrowserAccess(
+    store,
+    () => Boolean(options.desktopPairing) && desktopBrowserEnabled(),
+  );
+  const extensions = new ProjectExtensions(store, Boolean(options.desktopPairing));
   extensions.assignLegacyProviders();
   const agents = new AgentProfiles(store, extensions);
   const mcpSessions = new McpSessions();
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
-    new AgentRunner(store, permissions, files, mcpSessions);
+    new AgentRunner(store, permissions, files, mcpSessions, browserAccess);
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const deletingSessions = new Set<string>();
@@ -409,6 +416,11 @@ export async function createApp(options: {
             : catalog,
           bundle.used,
         );
+      }
+      if (!retryOf && (!capabilities || capabilities.includes('browser'))) {
+        const policy = browserAccess.read(project.id);
+        if (policy.available && policy.enabled && policy.revision)
+          run.browserRevision = policy.revision;
       }
       store.put('runs', run);
       store.put('messages', {
@@ -787,6 +799,13 @@ export async function createApp(options: {
             });
           store.event('project-' + project.id, '', 'project.bound', { projectId: project.id });
           return json(res, { project }, existing ? 200 : 201);
+        }
+        if (parts.length === 4 && parts[2] && parts[3] === 'desktop-browser') {
+          if (method === 'GET') return json(res, browserAccess.read(parts[2]));
+          if (method === 'PATCH') {
+            const input = desktopBrowserAccessUpdateSchema.parse(await body(req));
+            return json(res, browserAccess.update(parts[2], input));
+          }
         }
         if (parts.length === 4 && method === 'GET') {
           const project = store.get('projects', parts[2]!);

@@ -67,6 +67,16 @@ export const desktopBrowserStateSchema = z.strictObject({
   busy: z.boolean(),
 });
 
+export const desktopBrowserAccessUpdateSchema = z.strictObject({
+  enabled: z.boolean(),
+  revision: z.uuid().nullable(),
+});
+export const desktopBrowserAccessStateSchema = desktopBrowserAccessUpdateSchema.extend({
+  available: z.boolean(),
+});
+export type DesktopBrowserAccessUpdate = z.infer<typeof desktopBrowserAccessUpdateSchema>;
+export type DesktopBrowserAccessState = z.infer<typeof desktopBrowserAccessStateSchema>;
+
 const callHeader = {
   type: z.literal('desktop-browser-call'),
   protocolVersion: z.literal(desktopBrowserProtocolVersion),
@@ -94,48 +104,57 @@ const targetSchema = z.strictObject({
 const hasTarget = (value: z.infer<typeof targetSchema>) =>
   Boolean(value.target || value.ref) && (!value.target || !value.ref || value.target === value.ref);
 
+export const desktopBrowserArgs = {
+  browser_navigate: z.strictObject({ url: desktopBrowserUrlSchema }),
+  browser_snapshot: z.strictObject({}),
+  browser_take_screenshot: z.strictObject({
+    type: z.literal('png').optional(),
+    filename: z.string().max(512).optional(),
+    fullPage: z.literal(false).optional(),
+  }),
+  browser_click: z
+    .strictObject({
+      ...targetSchema.shape,
+      doubleClick: z.boolean().optional(),
+      button: z.literal('left').optional(),
+    })
+    .refine(hasTarget, '请提供当前页面的有效引用。'),
+  browser_type: z
+    .strictObject({
+      ...targetSchema.shape,
+      text: z.string().max(4_000),
+      submit: z.boolean().optional(),
+      slowly: z.literal(false).optional(),
+    })
+    .refine(hasTarget, '请提供当前页面的有效引用。'),
+};
+export type DesktopBrowserToolName = keyof typeof desktopBrowserArgs;
+
 export const desktopBrowserCallSchema = z.discriminatedUnion('name', [
   z.strictObject({
     ...callHeader,
     name: z.literal('browser_navigate'),
-    args: z.strictObject({ url: desktopBrowserUrlSchema }),
+    args: desktopBrowserArgs.browser_navigate,
   }),
   z.strictObject({
     ...callHeader,
     name: z.literal('browser_snapshot'),
-    args: z.strictObject({}),
+    args: desktopBrowserArgs.browser_snapshot,
   }),
   z.strictObject({
     ...callHeader,
     name: z.literal('browser_take_screenshot'),
-    args: z.strictObject({
-      type: z.literal('png').optional(),
-      filename: z.string().max(512).optional(),
-      fullPage: z.literal(false).optional(),
-    }),
+    args: desktopBrowserArgs.browser_take_screenshot,
   }),
   z.strictObject({
     ...callHeader,
     name: z.literal('browser_click'),
-    args: z
-      .strictObject({
-        ...targetSchema.shape,
-        doubleClick: z.boolean().optional(),
-        button: z.literal('left').optional(),
-      })
-      .refine(hasTarget, '请提供当前页面的有效引用。'),
+    args: desktopBrowserArgs.browser_click,
   }),
   z.strictObject({
     ...callHeader,
     name: z.literal('browser_type'),
-    args: z
-      .strictObject({
-        ...targetSchema.shape,
-        text: z.string().max(4_000),
-        submit: z.boolean().optional(),
-        slowly: z.literal(false).optional(),
-      })
-      .refine(hasTarget, '请提供当前页面的有效引用。'),
+    args: desktopBrowserArgs.browser_type,
   }),
 ]);
 
