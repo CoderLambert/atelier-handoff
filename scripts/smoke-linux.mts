@@ -205,6 +205,48 @@ async function verifyResources(
     ),
     'Acceptance driver must not be distributed',
   );
+  const nativeBinding = 'resources/runtime/node_modules/better-sqlite3/prebuilds/linux-x64.node';
+  const migration = 'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql';
+  assert.deepEqual(
+    [...seen].filter(
+      (name) =>
+        name.startsWith('resources/runtime/node_modules/better-sqlite3/') && name.endsWith('.node'),
+    ),
+    [nativeBinding],
+    'SQLite must ship exactly the Linux x64 native prebuild',
+  );
+  assert.ok(seen.has(migration), 'Session snapshot migration must be distributed');
+  const release = record(
+    JSON.parse(await readFile(join(install, 'resources/release.json'), 'utf8')) as unknown,
+  );
+  const sqlite = record(release.sqlite);
+  const binding = record(sqlite.nativeBinding);
+  assert.equal(binding.path, nativeBinding);
+  assert.equal(binding.sha256, await hashFile(join(install, nativeBinding)));
+  assert.deepEqual(array(sqlite.migrations), [
+    { path: migration, sha256: await hashFile(join(install, migration)) },
+  ]);
+  const runtimePackage = record(
+    JSON.parse(await readFile(join(install, 'resources/runtime/package.json'), 'utf8')) as unknown,
+  );
+  const runtimeDependencies = record(runtimePackage.dependencies);
+  for (const [key, name, version] of [
+    ['driver', 'better-sqlite3', '13.2.0'],
+    ['orm', 'drizzle-orm', '0.45.4'],
+  ]) {
+    assert.ok(key && name && version);
+    assert.deepEqual(record(sqlite[key]), { name, version });
+    assert.equal(runtimeDependencies[name], version);
+    const installedPackage = record(
+      JSON.parse(
+        await readFile(
+          join(install, 'resources/runtime/node_modules', name, 'package.json'),
+          'utf8',
+        ),
+      ) as unknown,
+    );
+    assert.equal(installedPackage.version, version);
+  }
   return {
     verified: true,
     files: entries.length,
@@ -213,6 +255,7 @@ async function verifyResources(
     modesVerified: true,
     complete: true,
     testDriverDistributed: false,
+    sqlite: { ...sqlite, manifestsVerified: true, exclusiveNativePrebuild: true },
   };
 }
 

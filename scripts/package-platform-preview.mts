@@ -29,6 +29,9 @@ const linux = join(root, 'dist/linux/atelier');
 const electronVersion = '45.4.1';
 const nodeVersion = '24.21.0';
 const packagerVersion = '20.3.0';
+const sqlitePackage = 'node_modules/better-sqlite3';
+const linuxSqliteBinding = `resources/runtime/${sqlitePackage}/prebuilds/linux-x64.node`;
+const migrationPath = 'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql';
 const targets = {
   'win32-x64': {
     platform: 'win32',
@@ -41,6 +44,7 @@ const targets = {
     electronSha: '2ba6223afa9121f42831fefe92c434334907540165294fc56697449d12e7cfe9',
     nodeSha: '158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541',
     binaryFormat: /PE32\+.*x86-64/,
+    sqliteFormat: /PE32\+.*\(DLL\).*x86-64/,
   },
   'darwin-arm64': {
     platform: 'darwin',
@@ -53,6 +57,7 @@ const targets = {
     electronSha: 'd080c3b05a01bd16137f2c12ab9ebf083c577757fe846844ba325bafa8e8bdf4',
     nodeSha: 'bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057',
     binaryFormat: /^Mach-O 64-bit (?=.*\barm64\b)(?=.*\bexecutable\b)/,
+    sqliteFormat: /^Mach-O 64-bit (?=.*\barm64\b)(?=.*\bbundle\b)/,
   },
 } as const;
 
@@ -118,6 +123,7 @@ const manifest = z
   .parse(await readJson(join(packagerRoot, 'package.json')));
 const release = z
   .object({
+    name: z.string(),
     version: z.string().regex(/^\d+\.\d+\.\d+$/),
     electron: z.object({ version: z.literal(electronVersion) }),
     node: z.object({ version: z.literal(nodeVersion) }),
@@ -126,6 +132,21 @@ const release = z
       cliPackage: z.literal('@anthropic-ai/claude-agent-sdk-linux-x64'),
       cliVersion: z.string(),
     }),
+    sqlite: z.object({
+      orm: z.object({ name: z.literal('drizzle-orm'), version: z.literal('0.45.4') }),
+      driver: z.object({ name: z.literal('better-sqlite3'), version: z.literal('13.2.0') }),
+      nativeBinding: z.object({ path: z.literal(linuxSqliteBinding), sha256: marker }),
+      migrations: z.array(z.object({ path: z.literal(migrationPath), sha256: marker })).length(1),
+    }),
+    runtimeDependencyRoots: z.array(z.string()),
+    runtimeDependencies: z.array(
+      z.object({
+        path: z.string(),
+        name: z.string(),
+        version: z.string(),
+        files: z.array(z.string()),
+      }),
+    ),
   })
   .parse(await readJson(join(linux, 'resources/release.json')));
 const lock = z
@@ -137,6 +158,24 @@ const lock = z
   })
   .parse(await readJson(join(root, 'package-lock.json')));
 const cliPackage = `@anthropic-ai/claude-agent-sdk-${targetName}`;
+for (const pkg of [release.sqlite.orm, release.sqlite.driver]) {
+  assert.equal(lock.packages[`node_modules/${pkg.name}`]?.version, pkg.version);
+  const dependency = release.runtimeDependencies.find(
+    (item) => item.path === `node_modules/${pkg.name}`,
+  );
+  assert.equal(dependency?.name, pkg.name);
+  assert.equal(dependency?.version, pkg.version);
+}
+const sqliteDependency = release.runtimeDependencies.find((item) => item.path === sqlitePackage);
+assert.ok(sqliteDependency);
+assert.deepEqual(
+  sqliteDependency.files.filter((path) => path.endsWith('.node')),
+  ['prebuilds/linux-x64.node'],
+);
+const installedSqlite = z
+  .object({ name: z.literal('better-sqlite3'), version: z.literal('13.2.0') })
+  .parse(await readJson(join(root, sqlitePackage, 'package.json')));
+assert.equal(installedSqlite.version, release.sqlite.driver.version);
 const lockedCli = lock.packages[`node_modules/${cliPackage}`];
 assert.equal(lockedCli?.version, release.sdk.version);
 const cliIntegrity = lockedCli?.integrity;
@@ -162,6 +201,7 @@ for (const resource of inventory.files) {
   if (!/^resources\/(app|runtime|licenses)\//.test(resource.path)) continue;
   if (
     resource.path.includes(nativeRoot) ||
+    resource.path === linuxSqliteBinding ||
     resource.path.startsWith('resources/runtime/bin/') ||
     ['resources/licenses/node-LICENSE', 'resources/licenses/inventory.json'].includes(resource.path)
   )
@@ -190,6 +230,33 @@ for (const resource of inventory.files) {
   sharedFiles++;
 }
 assert.ok(sharedFiles > 100);
+for (const migration of release.sqlite.migrations)
+  assert.equal(
+    await hash(join(inputs, migration.path.slice('resources/'.length))),
+    migration.sha256,
+  );
+const sqliteBinding = `prebuilds/${targetName}.node`;
+const sqliteSource = join(root, sqlitePackage, sqliteBinding);
+const sqliteDestination = join(inputs, 'runtime', sqlitePackage, sqliteBinding);
+const sqliteSha256 = await hash(sqliteSource);
+assert.equal(await hash(join(linux, linuxSqliteBinding)), release.sqlite.nativeBinding.sha256);
+assert.equal(
+  await hash(join(root, sqlitePackage, 'package.json')),
+  await hash(join(inputs, 'runtime', sqlitePackage, 'package.json')),
+  'Target prebuild must come from the same driver package manifest',
+);
+await mkdir(dirname(sqliteDestination), { recursive: true });
+await copyFile(sqliteSource, sqliteDestination);
+await chmod(sqliteDestination, 0o644);
+assert.equal(await hash(sqliteDestination), sqliteSha256);
+assert.deepEqual(await readdir(dirname(sqliteDestination)), [`${targetName}.node`]);
+const sqliteRelease = {
+  ...release.sqlite,
+  nativeBinding: {
+    path: `resources/runtime/${sqlitePackage}/${sqliteBinding}`,
+    sha256: sqliteSha256,
+  },
+};
 const nativeCliPath = join(inputs, 'runtime', 'node_modules', cliPackage);
 for (const member of ['package.json', 'README.md', 'LICENSE.md', target.cli]) {
   await extract(
@@ -222,11 +289,30 @@ const licenseSchema = z.object({
   application: z.unknown(),
   electron: z.unknown(),
   node: z.object({ sha256: marker }).loose(),
-  packages: z.array(z.object({ name: z.string() }).loose()),
+  packages: z.array(
+    z
+      .object({
+        name: z.string(),
+        version: z.string(),
+        shippedAsRuntimePackage: z.boolean(),
+        missingLicenseText: z.boolean(),
+        texts: z.array(z.object({ path: z.string(), sha256: marker, source: z.url().optional() })),
+      })
+      .loose(),
+  ),
 });
 const notices = licenseSchema.parse(
   await readJson(join(linux, 'resources/licenses/inventory.json')),
 );
+for (const pkg of [release.sqlite.orm, release.sqlite.driver]) {
+  const entry = notices.packages.find((item) => item.name === pkg.name);
+  assert.equal(entry?.version, pkg.version);
+  assert.equal(entry?.shippedAsRuntimePackage, true);
+  assert.equal(entry?.missingLicenseText, false);
+  assert.ok(entry && entry.texts.length > 0);
+  for (const text of entry.texts)
+    assert.equal(await hash(join(inputs, text.path.slice('resources/'.length))), text.sha256);
+}
 const licenses = [];
 for (const member of ['README.md', 'LICENSE.md']) {
   const path = `resources/licenses/node_modules/${cliPackage}/${member}`;
@@ -293,13 +379,78 @@ const binaries = {
     join(resources, 'runtime/node_modules', cliPackage, target.cli),
     target.binaryFormat,
   ),
+  sqlite: await verifyBinary(
+    join(resources, 'runtime', sqlitePackage, sqliteBinding),
+    target.sqliteFormat,
+  ),
 };
+assert.equal(await hash(join(resources, 'runtime', sqlitePackage, sqliteBinding)), sqliteSha256);
+assert.deepEqual(await readdir(join(resources, 'runtime', sqlitePackage, 'prebuilds')), [
+  `${targetName}.node`,
+]);
+const runtimeDependencies = release.runtimeDependencies.map((item) => {
+  if (item.path === sqlitePackage)
+    return {
+      ...item,
+      files: item.files
+        .filter((path) => !path.endsWith('.node'))
+        .concat(sqliteBinding)
+        .sort(),
+    };
+  if (item.name === nativeRoot)
+    return {
+      ...item,
+      path: `node_modules/${cliPackage}`,
+      name: cliPackage,
+      files: ['package.json', 'README.md', 'LICENSE.md', target.cli].sort(),
+    };
+  return item;
+});
+for (const item of runtimeDependencies)
+  for (const path of item.files)
+    assert.ok(
+      (await stat(join(resources, 'runtime', item.path, path))).isFile(),
+      `${item.path}/${path}`,
+    );
+for (const migration of sqliteRelease.migrations)
+  assert.equal(
+    await hash(join(resources, migration.path.slice('resources/'.length))),
+    migration.sha256,
+  );
+await writeFile(
+  join(resources, 'release.json'),
+  JSON.stringify(
+    {
+      schemaVersion: 1,
+      name: release.name,
+      version: release.version,
+      platform: target.platform,
+      arch: target.arch,
+      packaging: 'Electron Packager platform preview',
+      electron: { version: electronVersion, sha256: await hash(launcher) },
+      node: {
+        version: nodeVersion,
+        sha256: await hash(join(resources, 'runtime/bin', target.binary)),
+        licenseSha256: await hash(nodeLicense),
+      },
+      sdk: { ...release.sdk, cliPackage },
+      sqlite: sqliteRelease,
+      runtimeDependencyRoots: release.runtimeDependencyRoots,
+      runtimeDependencies,
+    },
+    null,
+    2,
+  ) + '\n',
+);
 for (const name of [
   'app/main.mjs',
   'app/preload.cjs',
   'runtime/server/main.js',
   'runtime/dist/client/index.html',
   'licenses/inventory.json',
+  'release.json',
+  migrationPath.slice('resources/'.length),
+  `runtime/${sqlitePackage}/${sqliteBinding}`,
 ])
   assert.ok((await stat(join(resources, name))).isFile(), name);
 if (target.platform === 'darwin')
@@ -320,7 +471,8 @@ const evidence = {
   nativeExecutionVerified: false,
   electron: electronVersion,
   node: nodeVersion,
-  sdk: release.sdk,
+  sdk: { ...release.sdk, cliPackage },
+  sqlite: sqliteRelease,
   targetCli: cliPackage,
   packager: manifest.version,
   sharedFiles,

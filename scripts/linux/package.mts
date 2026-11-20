@@ -38,6 +38,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const output = join(root, 'dist/linux');
 const ELECTRON_VERSION = '45.4.1';
 const NODE_VERSION = '24.21.0';
+const ORM_VERSION = '0.45.4';
+// npm omits the Apache text; upstream tag 0.45.4 resolves to this commit.
+const ORM_LICENSE = {
+  sha256: 'c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4',
+  source:
+    'https://raw.githubusercontent.com/drizzle-team/drizzle-orm/eab8bedbb65d5429c54e612ddbd88aa23091d398/LICENSE',
+};
+const SQLITE_DRIVER_VERSION = '13.2.0';
+const SQLITE_NATIVE_BINDING = 'prebuilds/linux-x64.node';
+const RUNTIME_MIGRATIONS = ['server/db/migrations/0006-session-snapshot-indexes.sql'];
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
 // Audited Cargo install: shunt-gateway 0.64.0, x86_64-unknown-linux-gnu.
@@ -86,7 +96,9 @@ const runtimeRoots = [
   '@anthropic-ai/claude-agent-sdk',
   '@anthropic-ai/sdk',
   '@modelcontextprotocol/sdk',
+  'better-sqlite3',
   'diff',
+  'drizzle-orm',
   'mammoth',
   'pdfjs-dist',
   'xlsx',
@@ -203,6 +215,7 @@ interface StagedDependency {
 interface LicenseText {
   path: string;
   sha256: string;
+  source?: string;
 }
 interface LicenseEntry {
   name: string;
@@ -454,6 +467,13 @@ async function packageFiles(directory: string, value: Manifest, prefix = ''): Pr
     const path = join(directory, entry.name);
     const name = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isSymbolicLink()) throw new Error(`Dependency contains unexpected symlink: ${path}`);
+    if (value.name === 'better-sqlite3') {
+      // v13 loads an N-API prebuild directly. Exclude local node-gyp builds,
+      // sources and other platforms so a host build cannot override this pin.
+      if (prefix === '' && entry.isDirectory() && !['lib', 'prebuilds'].includes(entry.name))
+        continue;
+      if (extname(name) === '.node' && name !== SQLITE_NATIVE_BINDING) continue;
+    }
     if (entry.isDirectory()) selected.push(...(await packageFiles(path, value, name)));
     else if (entry.isFile()) {
       const legal =
@@ -624,6 +644,14 @@ async function packageRelease(work: string): Promise<string[]> {
   const releasePackages = await closure(runtimeRoots, lock);
   const sdk = requirePackage(releasePackages, '@anthropic-ai/claude-agent-sdk');
   const cli = requirePackage(releasePackages, nativeCli);
+  const orm = requirePackage(releasePackages, 'drizzle-orm');
+  const sqliteDriver = requirePackage(releasePackages, 'better-sqlite3');
+  for (const [item, version] of [
+    [orm, ORM_VERSION],
+    [sqliteDriver, SQLITE_DRIVER_VERSION],
+  ] as const)
+    if (project.dependencies[item.manifest.name] !== version || item.manifest.version !== version)
+      throw new Error(`${item.manifest.name} must be pinned to ${version}.`);
   if (sdk.manifest.version !== cli.manifest.version || !sdk.manifest.claudeCodeVersion)
     throw new Error(
       'SDK and Linux x64 CLI package versions must match and declare the CLI version.',
@@ -672,6 +700,11 @@ async function packageRelease(work: string): Promise<string[]> {
     plugins: [inputPlugin],
   };
   await build(runtimeBuild);
+  const migrations: { path: string; sha256: string }[] = [];
+  for (const path of RUNTIME_MIGRATIONS) {
+    await copy(join(root, path), join(runtime, path));
+    migrations.push({ path: `resources/runtime/${path}`, sha256: await hash(join(runtime, path)) });
+  }
   await putJson(join(runtime, 'package.json'), {
     name: `${project.name}-runtime`,
     version: project.version,
@@ -734,6 +767,12 @@ async function packageRelease(work: string): Promise<string[]> {
     const selected = await packageFiles(join(root, item.path), item.manifest);
     if (!selected.includes('package.json'))
       throw new Error(`No package manifest selected: ${item.path}`);
+    if (
+      item.manifest.name === sqliteDriver.manifest.name &&
+      (selected.filter((name) => extname(name) === '.node').length !== 1 ||
+        !selected.includes(SQLITE_NATIVE_BINDING))
+    )
+      throw new Error('SQLite release must contain exactly the Linux x64 prebuild.');
     for (const name of selected)
       await copy(join(root, item.path, name), join(runtime, item.path, name));
     stagedDependencies.push({
@@ -767,6 +806,7 @@ async function packageRelease(work: string): Promise<string[]> {
       const supplement = `${item.manifest.name}-${item.manifest.version}`;
       if (
         [
+          `drizzle-orm-${ORM_VERSION}`,
           'fastdom-1.0.12',
           'react-remove-scroll-bar-2.3.8',
           'rehype-katex-7.0.1',
@@ -776,8 +816,21 @@ async function packageRelease(work: string): Promise<string[]> {
         ].includes(supplement)
       ) {
         const destination = `resources/licenses/${item.path}/LICENSE-upstream.txt`;
-        await copy(join(root, 'docs/licenses', `${supplement}.txt`), join(stage, destination));
-        texts.push({ path: destination, sha256: await hash(join(stage, destination)) });
+        const source = join(root, 'docs/licenses', `${supplement}.txt`);
+        if (
+          item.manifest.name === 'drizzle-orm' &&
+          (await rememberInput(source, 'orm-license')) !== ORM_LICENSE.sha256
+        )
+          throw new Error(
+            `Drizzle ${ORM_VERSION} LICENSE does not match its pinned upstream source.`,
+          );
+        await copy(source, join(stage, destination));
+        const text: LicenseText = {
+          path: destination,
+          sha256: await hash(join(stage, destination)),
+        };
+        if (item.manifest.name === 'drizzle-orm') text.source = ORM_LICENSE.source;
+        texts.push(text);
       }
     }
     licenseInventory.push({
@@ -790,6 +843,17 @@ async function packageRelease(work: string): Promise<string[]> {
       missingLicenseText: texts.length === 0,
     });
   }
+  for (const item of [orm, sqliteDriver])
+    if (
+      !licenseInventory.some(
+        (entry) =>
+          entry.dependencyPath === item.path &&
+          entry.version === item.manifest.version &&
+          entry.shippedAsRuntimePackage &&
+          !entry.missingLicenseText,
+      )
+    )
+      throw new Error(`Runtime license inventory is incomplete for ${item.manifest.name}.`);
   await putJson(join(stage, 'resources/licenses/inventory.json'), {
     application: {
       name: project.name,
@@ -808,6 +872,15 @@ async function packageRelease(work: string): Promise<string[]> {
   await copy(join(root, 'scripts/linux/atelier.desktop'), join(stage, 'atelier.desktop'));
   await copy(join(root, 'scripts/linux/atelier.svg'), join(stage, 'atelier.svg'));
   const esbuildManifest = await manifest(join(root, 'node_modules/esbuild'));
+  const sqliteRelease = {
+    orm: { name: orm.manifest.name, version: orm.manifest.version },
+    driver: { name: sqliteDriver.manifest.name, version: sqliteDriver.manifest.version },
+    nativeBinding: {
+      path: `resources/runtime/${sqliteDriver.path}/${SQLITE_NATIVE_BINDING}`,
+      sha256: await hash(join(runtime, sqliteDriver.path, SQLITE_NATIVE_BINDING)),
+    },
+    migrations,
+  };
   await putJson(join(stage, 'resources/release.json'), {
     schemaVersion: 1,
     name: project.name,
@@ -824,6 +897,7 @@ async function packageRelease(work: string): Promise<string[]> {
       licenseSha256: NODE_LICENSE_SHA256,
     },
     shunt: shuntRelease,
+    sqlite: sqliteRelease,
     sdk: {
       version: sdk.manifest.version,
       cliPackage: nativeCli,
@@ -901,7 +975,12 @@ async function packageRelease(work: string): Promise<string[]> {
   ])
     run(join(runtime, 'bin/node'), ['--check', join(stage, path)]);
   const runtimeIdentity = z
-    .object({ node: z.literal(NODE_VERSION), sqlite: z.literal(true) })
+    .object({
+      node: z.literal(NODE_VERSION),
+      sqlite: z.literal(true),
+      betterSqlite3: z.literal(true),
+      drizzle: z.literal(true),
+    })
     .parse(
       parseJson(
         run(
@@ -909,7 +988,28 @@ async function packageRelease(work: string): Promise<string[]> {
           [
             '--input-type=module',
             '-e',
-            `await import('./server/app.js'); await import('@anthropic-ai/claude-agent-sdk'); await import('@anthropic-ai/sdk'); const {DatabaseSync}=await import('node:sqlite'); const db=new DatabaseSync(':memory:'); const row=db.prepare('select 1 as ok').get(); db.close(); console.log(JSON.stringify({node:process.versions.node,sqlite:row?.ok===1}));`,
+            `
+              await import('./server/app.js');
+              await import('@anthropic-ai/claude-agent-sdk');
+              await import('@anthropic-ai/sdk');
+              const {DatabaseSync}=await import('node:sqlite');
+              const db=new DatabaseSync(':memory:');
+              const row=db.prepare('select 1 as ok').get();
+              db.close();
+              const {default:Database}=await import('better-sqlite3');
+              const {drizzle}=await import('drizzle-orm/better-sqlite3');
+              const {sqliteTable,integer}=await import('drizzle-orm/sqlite-core');
+              const native=new Database(':memory:');
+              native.exec('CREATE TABLE probe(ok INTEGER NOT NULL) STRICT');
+              const probe=sqliteTable('probe',{ok:integer('ok').notNull()});
+              const orm=drizzle(native);
+              orm.insert(probe).values({ok:1}).run();
+              const nativeRow=native.prepare('SELECT ok FROM probe').get();
+              const ormRow=orm.select().from(probe).get();
+              native.close();
+              console.log(JSON.stringify({node:process.versions.node,sqlite:row?.ok===1,
+                betterSqlite3:nativeRow?.ok===1,drizzle:ormRow?.ok===1}));
+            `,
           ],
           { cwd: runtime },
         ),
@@ -921,7 +1021,7 @@ async function packageRelease(work: string): Promise<string[]> {
   if (cliOutput !== `${sdk.manifest.claudeCodeVersion} (Claude Code)`)
     throw new Error(`Staged SDK CLI identity mismatch: ${cliOutput}`);
   console.log(
-    `Verified staged Node ${runtimeIdentity.node}, SQLite, runtime imports and SDK CLI ${sdk.manifest.claudeCodeVersion}.`,
+    `Verified staged Node ${runtimeIdentity.node}, SQLite, better-sqlite3 ${SQLITE_DRIVER_VERSION}, Drizzle ${ORM_VERSION}, runtime imports and SDK CLI ${sdk.manifest.claudeCodeVersion}.`,
   );
 
   const archiveName = `atelier-${project.version}-linux-x64.tar.zst`;
@@ -982,11 +1082,15 @@ async function packageRelease(work: string): Promise<string[]> {
     ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map((path) => `atelier/${path}`),
     'atelier/resources/input-inventory.json',
     `atelier/resources/runtime/node_modules/${nativeCli}/claude`,
+    `atelier/${sqliteRelease.nativeBinding.path}`,
+    ...migrations.map((migration) => `atelier/${migration.path}`),
   ])
     if (!portableListing.includes(path)) throw new Error(`Portable archive is missing ${path}`);
   for (const path of [
     '.PKGINFO',
     'opt/atelier/atelier',
+    `opt/atelier/${sqliteRelease.nativeBinding.path}`,
+    ...migrations.map((migration) => `opt/atelier/${migration.path}`),
     ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map(
       (path) => `opt/atelier/${path}`,
     ),
@@ -1039,7 +1143,10 @@ async function packageRelease(work: string): Promise<string[]> {
     listingVerified: true,
     stagedChecks: {
       node: runtimeIdentity.node,
-      sqlite: true,
+      sqlite: runtimeIdentity.sqlite,
+      betterSqlite3: runtimeIdentity.betterSqlite3,
+      drizzle: runtimeIdentity.drizzle,
+      sqliteResources: sqliteRelease,
       runtimeImports: true,
       sdkCli: cliOutput,
       shunt: { version: SHUNT.version, sha256: stagedShunt.sha256, mode: stagedShunt.mode },

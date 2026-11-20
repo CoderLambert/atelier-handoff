@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-21",
+  "scope": "GET /api/sessions/:id, SQLite schema v6",
+  "orm": "drizzle-orm@0.45.4",
+  "driver": "better-sqlite3@13.2.0",
+  "runtimeTestsPassed": 142,
+  "frontendTestsPassed": 59,
+  "installedLinux": {
+    "status": "passed",
+    "phase": "complete",
+    "nativeResource": "resources/runtime/node_modules/better-sqlite3/prebuilds/linux-x64.node",
+    "packagedNode": "24.21.0",
+    "archiveSha256": {
+      "atelier-0.2.0-1-x86_64.pkg.tar.zst": "87ee6bc9a2e4c8e2147086b28d7cecce59245600939bc78b23fb029006671a9f",
+      "atelier-0.2.0-linux-x64.tar.zst": "cae4a88b7f4b5de572ec912353adf60f3634f87831e31c44791b7d36256a6d73"
+    }
+  },
+  "queryPlan": {
+    "source": "tests/session-snapshot-orm.test.ts, actual generated SELECTs and bindings",
+    "indexedSearchWithoutTableScan": ["runs", "messages", "tools", "permissions", "artifacts", "attachments"]
+  },
+  "migrationRehearsal": {
+    "sourceVersion": 5,
+    "destinationVersion": 6,
+    "copiedLocalSessionsCompared": 14,
+    "snapshotRecordFieldsAndOrderMatch": true,
+    "quickCheck": "ok",
+    "foreignKeyFailures": 0
+  },
+  "benchmark": {
+    "node": "v24.21.0",
+    "scope": "warm snapshot record reads, same SQLite connection, excludes HTTP and agent/queue enrichment",
+    "fixtureSessions": 100,
+    "fixtureMessages": 10000,
+    "selectedMessages": 100,
+    "warmupPairs": 5,
+    "alternatingTimedPairs": 40,
+    "legacyMedianMs": 6.10,
+    "legacyP95Ms": 7.88,
+    "ormMedianMs": 0.61,
+    "ormP95Ms": 0.87
+  }
+}

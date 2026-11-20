@@ -16,6 +16,12 @@
 
 **兼容性实测。** 2026-11-21，用 `dist/linux/atelier/resources/runtime/bin/node`（24.21.0，Linux x64）加载上述稳定版本。临时 WAL 数据库由 `node:sqlite` 创建，含 STRICT 表和索引。Drizzle 完成插入与按会话查询。第一次领取在 `immediate` 事务中抛错并回滚，重新领取影响 1 行，重复领取影响 0 行。连接打开期间用 Node 的只读连接进行在线备份，重开副本时结果一致，`quick_check` 返回 `ok`。这是驱动兼容性实验。正式验收还包括原 v5 库、安装包内的驱动加载、迁移和恢复。
 
+### 首批接入的实现与验收
+
+会话快照通过一个同步读仓储装配。v6 在 runs、messages、tools、permissions、artifacts、attachments 六张既有记录表上增加由 `data.sessionId` 派生的 VIRTUAL 列与索引；附件另有派生可见标志。`ALTER TABLE` 保留历史 rowid，仓储显式按 rowid 排序，与原来的 `Store.list` 顺序一致。事件按索引读取当前会话最近 500 条，返回全局 SSE 游标。快照的队列与智能体信息继续调用各自的领域服务。可见性、游标和历史顺序在真实 SQLite 上做旧版对照。
+
+`Store` 在过渡期是数据库基础设施的兼容入口。它通过 `db/connection.ts` 取得一个 better-sqlite3 句柄，既有写事务与 Drizzle 读仓储共享该连接。v6 迁移使用版本固定的 SQL 资源。租约数据库及在线备份沿用 `node:sqlite`。实际切换前备份 v5，验证迁移及数据一致性，再用随包 Node 在隔离环境加载目标平台驱动。
+
 ## 目录和依赖
 
 以下是接入后的目录约定。按功能迁入，有实际用途时创建文件。

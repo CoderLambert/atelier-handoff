@@ -51,7 +51,9 @@ export function databaseSites(file: string, text: string): DatabaseSite[] {
         !['server/main.ts', 'server/app.ts'].includes(file)
       ) {
         const target = posix.normalize(posix.join(posix.dirname(file), node.value));
-        if (target.startsWith('server/db/')) add(node, 'persistence-import', node.value);
+        const storeConnection = file === 'server/store.ts' && target === 'server/db/connection.js';
+        if (target.startsWith('server/db/') && !storeConnection)
+          add(node, 'persistence-import', node.value);
       }
     }
     const value = t.isStringLiteral(node)

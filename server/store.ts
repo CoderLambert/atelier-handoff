@@ -5,7 +5,8 @@
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openWorkbenchDatabase, type LegacyDatabase } from './db/connection.js';
+import type { SessionSnapshotRepository } from './modules/sessions/session-snapshot-repository.js';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
@@ -28,15 +29,28 @@ const tables: Table[] = [
   'attachments',
 ];
 export class Store {
-  readonly db: DatabaseSync;
+  readonly db: LegacyDatabase;
+  readonly readTransaction: <T>(work: () => T) => T;
+  readonly sessionSnapshots: SessionSnapshotRepository;
   readonly events = new EventEmitter();
   constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     chmodSync(directory, 0o700);
-    this.db = new DatabaseSync(join(directory, 'atelier.sqlite'));
+    const connection = openWorkbenchDatabase(join(directory, 'atelier.sqlite'));
+    this.db = connection.db;
+    this.sessionSnapshots = connection.sessionSnapshots;
+    this.readTransaction = connection.readTransaction;
+    try {
+      this.initialize(connection.applySnapshotIndexes);
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
+  }
+  private initialize(applySnapshotIndexes: () => void): void {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
     const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 5) throw new Error('Database schema is newer than this application.');
+    if (version > 6) throw new Error('Database schema is newer than this application.');
     if (version === 0)
       this.transaction(() => {
         for (const table of tables)
@@ -107,6 +121,7 @@ export class Store {
         PRAGMA user_version=5;
       `),
       );
+    if (version < 6) this.transaction(applySnapshotIndexes);
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {

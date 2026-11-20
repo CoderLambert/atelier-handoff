@@ -19,6 +19,7 @@ import { isDocumentAttachmentMime } from '../shared/document-attachments.js';
 import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
+import { createGetSessionSnapshot } from './modules/sessions/get-session-snapshot.js';
 import { MessageQueue, type PendingSessionMessage } from './message-queue.js';
 import { serveClient } from './client-assets.js';
 import { AgentRunner, type AttachmentImages, type Runner } from './agent.js';
@@ -250,47 +251,18 @@ export async function createApp(options: {
         });
       }),
     );
-  const sessionSnapshot = (id: string) => {
-    const session = store.get('sessions', id);
-    const agent = session.agentRevisionId
-      ? agents.binding(agents.revision(session.projectId, session.agentRevisionId))
-      : undefined;
-    const runs = store.list('runs').filter((run) => run.sessionId === id);
-    const messages = store.list('messages').filter((message) => message.sessionId === id);
-    const latest =
-      agent?.issues.length && session.status === 'active' && !runs.length && !messages.length
-        ? agents.card(session.projectId, agent.id)
-        : undefined;
-    return {
-      ...(agent
-        ? {
-            agent: {
-              ...agent,
-              canUpgrade:
-                !!latest && latest.revisionId !== agent.revisionId && !latest.issues.length,
-            },
-          }
-        : {}),
-      session,
-      project: store.get('projects', session.projectId),
-      messages,
-      runs,
-      messageQueue: messageQueue.snapshot(id, (item) => {
-        const active = runs.find(
-          (run) => run.status === 'running' || run.status === 'awaiting_permission',
-        );
-        return active ? insertionMode(item, active) : undefined;
-      }),
-      tools: store.list('tools').filter((t) => t.sessionId === id),
-      permissions: store.list('permissions').filter((p) => p.sessionId === id),
-      artifacts: store.list('artifacts').filter((a) => a.sessionId === id),
-      attachments: store
-        .list('attachments')
-        .filter((a) => a.sessionId === id && (!a.removed || a.status === 'used')),
-      events: store.history(id),
-      cursor: store.cursor(),
-    };
-  };
+  const sessionSnapshot = createGetSessionSnapshot({
+    repository: store.sessionSnapshots,
+    readTransaction: store.readTransaction,
+    boundAgent: (projectId, revisionId) => agents.binding(agents.revision(projectId, revisionId)),
+    latestAgent: (projectId, agentId) => agents.card(projectId, agentId),
+    queue: (sessionId, active) => {
+      let config: AppConfig | undefined;
+      return messageQueue.snapshot(sessionId, (item) =>
+        active ? insertionMode(item, active, (config ??= effectiveConfig())) : undefined,
+      );
+    },
+  });
   const sameSessionRunning = (id: string) =>
     store.list('runs').some((run) => run.sessionId === id && activeStatuses.includes(run.status));
   function assertExecutionSlot(sessionId: string, path: string) {
@@ -310,11 +282,14 @@ export async function createApp(options: {
       throw new AppError('SERVER_BUSY', '同时最多执行 3 个不同项目，请稍后发送。', 409, true);
   }
   const queueChanged = (id: string) => store.event('session-' + id, id, 'session.queue_changed');
-  function insertionMode(item: PendingSessionMessage, run: Run) {
+  function insertionMode(
+    item: PendingSessionMessage,
+    run: Run,
+    current: AppConfig = effectiveConfig(),
+  ) {
     const parsed = queuedIntent.safeParse(item.intent);
     if (!parsed.success) return undefined;
     const { request, model, scope } = parsed.data;
-    const current = effectiveConfig();
     const compatible =
       Boolean(runner.insert) &&
       scope === run.inputScope &&

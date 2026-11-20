@@ -20,6 +20,11 @@ test('ORM queries are accepted in repositories and rejected in use cases', () =>
     1,
   );
   assert.equal(databaseSites(repo, "import Database from 'better-sqlite3';").length, 1);
+  assert.equal(databaseSites('server/store.ts', "import './db/connection.js';").length, 0);
+  assert.equal(
+    databaseSites('server/store.ts', "import './db/repositories/session-snapshot.js';").length,
+    1,
+  );
 });
 
 test('raw expressions and dynamic driver access need individual review', () => {

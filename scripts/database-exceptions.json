@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "file": "server/db/migrations/apply-snapshot-indexes.ts",
+    "key": "driver-call:f536f29bc9a57547",
+    "decision": "docs/decisions/2026-11-21-orm-architecture.md",
+    "test": "tests/session-snapshot-orm.test.ts"
+  }
+]

@@ -46,6 +46,8 @@
 - [x] 会话附件支持 XLS、XLSX、PDF 和 DOCX。安装态验证超过 20 MiB 的表格可上传、下载原件并通过 SDK 读取。
 - [x] 优化待处理消息布局，支持在当前 SDK 会话中立即插入补充文字。[附件与消息验收](../../../docs/evidence/desktop-p7-linux-x64/document-attachments-and-live-input.json)
 
+- [x] 会话快照接入 Drizzle ORM。六类关联记录按会话索引读取，验证 v5 升级、原消息顺序和 Linux 原生驱动。[快照验收](../../../docs/evidence/desktop-p7-linux-x64/session-snapshot-orm.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。
