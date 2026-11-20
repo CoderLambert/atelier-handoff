@@ -1,7 +1,7 @@
 /**
- * @file 管理项目浏览器下载、显示状态和文件位置。
- * @implementation 使用 Electron 下载事件获取进度，在系统下载目录发布完成文件，并按项目核对取消或定位请求。
- * @updated 2026-11-20T18:15:00+08:00
+ * @file 管理项目浏览器下载、文件命名、进度和保存位置。
+ * @implementation 使用 Electron 下载事件跟踪进度，按链接标题确定可读名称，在系统下载目录防止同名覆盖，并按项目核对取消和定位请求。
+ * @updated 2026-11-20T19:54:30+08:00
  */
 import { app, shell, type DownloadItem, type Session, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
