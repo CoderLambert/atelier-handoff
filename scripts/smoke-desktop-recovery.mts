@@ -1,7 +1,7 @@
 /**
  * @file 验证桌面安装件的运行时监督和故障恢复。
- * @implementation 按宿主平台定位随包运行时，用隔离数据和回环 SDK 验证崩溃恢复与正常退出。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 按平台定位随包运行时，用隔离数据、真实 SDK 和本地回环网关替身验证崩溃恢复与正常退出。
+ * @updated 2026-11-20T11:00:37+08:00
  */
 import assert from 'node:assert/strict';
 import { fork, spawn } from 'node:child_process';
