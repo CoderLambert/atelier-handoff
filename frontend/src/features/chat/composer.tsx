@@ -392,7 +392,7 @@ export function Composer({
               draft.attachmentIds.length >= 20
             }
             aria-label="上传附件"
-            title="上传文本或 PNG、JPEG 图片"
+            title="上传 XLS、XLSX、PDF、DOCX、文本或 PNG、JPEG 图片"
             onClick={() => fileInput.current?.click()}
           >
             <Paperclip size={18} aria-hidden="true" />

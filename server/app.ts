@@ -11,7 +11,11 @@ import { desktopBrowserEnabled } from './desktop-browser.js';
 import { DesktopBrowserAccess } from './desktop-browser-access.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, lstat, rm } from 'node:fs/promises';
+import { readFile, lstat, mkdtemp, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { prepareDocumentView } from './attachment-document-reader.js';
+import { isDocumentAttachmentMime } from '../shared/document-attachments.js';
 import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
@@ -271,7 +275,12 @@ export async function createApp(options: {
       project: store.get('projects', session.projectId),
       messages,
       runs,
-      messageQueue: messageQueue.snapshot(id),
+      messageQueue: messageQueue.snapshot(id, (item) => {
+        const active = runs.find(
+          (run) => run.status === 'running' || run.status === 'awaiting_permission',
+        );
+        return active ? insertionMode(item, active) : undefined;
+      }),
       tools: store.list('tools').filter((t) => t.sessionId === id),
       permissions: store.list('permissions').filter((p) => p.sessionId === id),
       artifacts: store.list('artifacts').filter((a) => a.sessionId === id),
@@ -301,6 +310,29 @@ export async function createApp(options: {
       throw new AppError('SERVER_BUSY', '同时最多执行 3 个不同项目，请稍后发送。', 409, true);
   }
   const queueChanged = (id: string) => store.event('session-' + id, id, 'session.queue_changed');
+  function insertionMode(item: PendingSessionMessage, run: Run) {
+    const parsed = queuedIntent.safeParse(item.intent);
+    if (!parsed.success) return undefined;
+    const { request, model, scope } = parsed.data;
+    const current = effectiveConfig();
+    const compatible =
+      Boolean(runner.insert) &&
+      scope === run.inputScope &&
+      model === run.config.model &&
+      request.mode === run.mode &&
+      request.effort === run.config.effort &&
+      request.approvalMode === run.approvalMode &&
+      request.maxSearchChargeFen === run.maxSearchChargeFen &&
+      current.gateway === run.config.gateway &&
+      current.limitExecution === run.config.limitExecution &&
+      current.maxTurns === run.config.maxTurns &&
+      current.timeoutMs === run.config.timeoutMs &&
+      !request.contextPaths.length &&
+      !request.attachmentIds.length &&
+      !request.extensionSelections.length &&
+      !/^\s*[/!]/u.test(request.text);
+    return compatible ? 'live' : 'priority';
+  }
   const createRun = async (
     sessionId: string,
     raw: unknown,
@@ -504,8 +536,10 @@ export async function createApp(options: {
     const images: AttachmentImages = [];
     let imageBytes = 0;
     for (const id of [...new Set(request.attachmentIds)]) {
-      const { attachment, bytes } = await files.attachmentContent(id, sessionId);
+      const { attachment } = files.attachmentFile(id, sessionId);
       const mime = attachment.mime;
+      if (isDocumentAttachmentMime(mime)) continue;
+      const { bytes } = await files.attachmentContent(id, sessionId);
       if (mime === 'image/png' || mime === 'image/jpeg') {
         imageBytes += bytes.length;
         if (imageBytes > 10 * 1024 * 1024)
@@ -532,6 +566,7 @@ export async function createApp(options: {
         ? {}
         : { maxSearchChargeFen: request.maxSearchChargeFen }),
       status: 'queued',
+      inputScope: planned.scope,
       createdAt: now(),
       startedAt: null,
       endedAt: null,
@@ -1184,6 +1219,75 @@ export async function createApp(options: {
           }
           if (method === 'POST') return json(res, await createRun(id, await body(req)), 202);
         }
+        if (
+          parts[3] === 'message-queue' &&
+          parts.length === 6 &&
+          parts[5] === 'insert' &&
+          method === 'POST'
+        ) {
+          const itemId = z.string().uuid().parse(parts[4]);
+          const { runId, mode } = z
+            .strictObject({ runId: z.string().uuid(), mode: z.enum(['live', 'priority']) })
+            .parse(await body(req));
+          const active = store.get('runs', runId);
+          if (active.sessionId !== id)
+            throw new AppError('QUEUE_CHANGED', '消息和当前运行不属于同一会话。', 409);
+          const item = messageQueue.pending(id, itemId);
+          if (
+            !item &&
+            store
+              .list('messages')
+              .some((message) => message.id === itemId && message.runId === runId)
+          )
+            return json(res, { ok: true });
+          if (
+            item?.target_run_id === runId &&
+            (item.delivery === 'waiting' || item.delivery === 'sending')
+          )
+            return json(res, { ok: true });
+          if (
+            !item ||
+            item.delivery ||
+            !['running', 'awaiting_permission'].includes(active.status) ||
+            mode !== insertionMode(item, active)
+          )
+            throw new AppError('QUEUE_CHANGED', '当前运行或排队消息已变化，请刷新后重试。', 409);
+          if (mode === 'priority') {
+            messageQueue.prioritize(item);
+            runner.stop(runId);
+            queueChanged(id);
+            wakeQueue();
+            return json(res, { ok: true });
+          }
+          const intent = queuedIntent.parse(item.intent);
+          messageQueue.beginLive(item, runId);
+          try {
+            if (!runner.insert)
+              throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
+            runner.insert(runId, {
+              id: item.id,
+              text: intent.request.text,
+              dispatched() {
+                messageQueue.dispatched(item, runId);
+                queueChanged(id);
+              },
+              confirmed() {
+                messageQueue.confirmLive(item, runId);
+                queueChanged(id);
+              },
+              released() {
+                messageQueue.releaseLive(item, runId);
+                queueChanged(id);
+              },
+            });
+          } catch (error) {
+            messageQueue.releaseLive(item, runId);
+            queueChanged(id);
+            throw error;
+          }
+          queueChanged(id);
+          return json(res, { ok: true });
+        }
         if (parts[3] === 'message-queue' && parts.length === 5) {
           const session = store.get('sessions', id);
           if (method === 'DELETE') {
@@ -1199,13 +1303,51 @@ export async function createApp(options: {
           return json(res, { ok: true });
         }
         if (parts[3] === 'attachments') {
-          if (parts.length === 6 && parts[5] === 'content' && method === 'GET') {
-            const { attachment, bytes } = await files.attachmentContent(parts[4]!, id);
-            if (attachment.mime === 'image/png' || attachment.mime === 'image/jpeg') {
-              res.writeHead(200, { 'Content-Type': attachment.mime, 'Cache-Control': 'no-store' });
-              return res.end(bytes);
+          if (parts.length === 6 && method === 'GET') {
+            const { attachment, path } = files.attachmentFile(parts[4]!, id);
+            const document = isDocumentAttachmentMime(attachment.mime);
+            if (parts[5] === 'document-preview' && document) {
+              const directory = await mkdtemp(join(store.directory, 'attachment-preview-'));
+              const abort = new AbortController();
+              const disconnect = () => abort.abort();
+              res.once('close', disconnect);
+              try {
+                const { preview } = await prepareDocumentView({
+                  path,
+                  mime: attachment.mime,
+                  directory,
+                  signal: abort.signal,
+                });
+                files.attachmentFile(attachment.id, id);
+                return json(res, { text: preview });
+              } finally {
+                res.removeListener('close', disconnect);
+                await rm(directory, { recursive: true, force: true });
+              }
             }
-            return json(res, { text: bytes.toString('utf8') });
+            if (parts[5] === 'download' || parts[5] === 'content') {
+              const download = parts[5] === 'download';
+              const image = attachment.mime === 'image/png' || attachment.mime === 'image/jpeg';
+              if (!download && !image && !document) {
+                const { bytes } = await files.attachmentContent(attachment.id, id);
+                return json(res, { text: bytes.toString('utf8') });
+              }
+              const metadata = await lstat(path);
+              if (!metadata.isFile() || metadata.size !== attachment.size)
+                throw new AppError('ATTACHMENT_UNAVAILABLE', '附件原件不可用。', 404);
+              res.writeHead(200, {
+                'Content-Type': download ? 'application/octet-stream' : attachment.mime,
+                'Content-Length': attachment.size,
+                'Cache-Control': 'no-store',
+                ...(download
+                  ? {
+                      'Content-Disposition': `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(attachment.name).replace(/[!'()*]/gu, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`,
+                    }
+                  : {}),
+              });
+              await pipeline(createReadStream(path), res);
+              return;
+            }
           }
           if (parts.length === 4 && method === 'POST') {
             const session = store.get('sessions', id);
@@ -1216,13 +1358,6 @@ export async function createApp(options: {
                 .config.capabilities.includes('attachments')
             )
               throw new AppError('AGENT_CAPABILITY_DENIED', '此智能体未启用附件。', 403);
-            const upload = z
-              .object({
-                name: z.string().min(1).max(255),
-                mime: z.string().optional(),
-                contentBase64: z.string(),
-              })
-              .parse(await body(req, 7_100_000));
             if (deletingSessions.has(id))
               throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
             if (uploadingSessions.has(id))
@@ -1233,6 +1368,17 @@ export async function createApp(options: {
               );
             uploadingSessions.add(id);
             try {
+              if (req.headers['content-type'] === 'application/octet-stream') {
+                const name = z.string().min(1).max(255).parse(url.searchParams.get('name'));
+                return json(res, { attachment: await files.uploadDocument(id, name, req) }, 201);
+              }
+              const upload = z
+                .object({
+                  name: z.string().min(1).max(255),
+                  mime: z.string().optional(),
+                  contentBase64: z.string(),
+                })
+                .parse(await body(req, 7_100_000));
               return json(
                 res,
                 { attachment: await files.upload(id, upload.name, upload.contentBase64) },

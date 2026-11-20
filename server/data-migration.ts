@@ -161,7 +161,7 @@ export async function migrateWorkspace(oldPath: string, newPath: string) {
     try {
       integrity(db);
       const version = Number(db.prepare('PRAGMA user_version').get()?.user_version);
-      if (version < 1 || version > 4) throw new Error('旧版工作台数据库版本不支持。');
+      if (version < 1 || version > 5) throw new Error('旧版工作台数据库版本不支持。');
       const copy = join(backupPath, databases);
       await backup(db, copy);
       await chmod(copy, 0o600);

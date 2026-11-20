@@ -87,6 +87,9 @@ const runtimeRoots = [
   '@anthropic-ai/sdk',
   '@modelcontextprotocol/sdk',
   'diff',
+  'mammoth',
+  'pdfjs-dist',
+  'xlsx',
   'yaml',
   'yauzl',
   'zod',
@@ -461,7 +464,11 @@ async function packageFiles(directory: string, value: Manifest, prefix = ''): Pr
         !configName.test(entry.name) &&
         !/(?:^|[.-])(?:test|spec|bench)(?:[.-]|$)/i.test(entry.name) &&
         !entry.name.endsWith('.map');
-      if (legal || code || (value.name === nativeCli && name === 'claude')) selected.push(name);
+      const pdfTextAsset =
+        value.name === 'pdfjs-dist' &&
+        /^(?:cmaps\/[^/]+\.bcmap|standard_fonts\/[^/]+\.(?:pfb|ttf))$/.test(name);
+      if (legal || code || pdfTextAsset || (value.name === nativeCli && name === 'claude'))
+        selected.push(name);
     } else throw new Error(`Unexpected dependency input type: ${path}`);
   }
   return selected.sort();

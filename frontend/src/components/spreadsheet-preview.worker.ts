@@ -4,6 +4,7 @@
  * @updated 2026-11-20T20:05:12+08:00
  */
 import { read, utils, type CellObject, type WorkSheet } from 'xlsx';
+import { documentPreviewBytes } from '@shared/document-attachments';
 
 export type SpreadsheetSheet = {
   name: string;
@@ -16,7 +17,7 @@ export type SpreadsheetSheet = {
 export type SpreadsheetWorkerResponse =
   { status: 'success'; sheets: SpreadsheetSheet[] } | { status: 'error'; message: string };
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_FILE_BYTES = documentPreviewBytes;
 const MAX_SHEETS = 20;
 const MAX_ROWS = 200;
 const MAX_COLUMNS = 50;

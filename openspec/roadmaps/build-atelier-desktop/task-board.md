@@ -43,6 +43,9 @@
 
 - [x] 当前轮执行时可继续发送到会话队列。安装态验证 Enter 入队、撤回和依次执行，运行时验证重开后继续。[消息队列验收](../../../docs/evidence/desktop-p7-linux-x64/session-message-queue.json)
 
+- [x] 会话附件支持 XLS、XLSX、PDF 和 DOCX。安装态验证超过 20 MiB 的表格可上传、下载原件并通过 SDK 读取。
+- [x] 优化待处理消息布局，支持在当前 SDK 会话中立即插入补充文字。[附件与消息验收](../../../docs/evidence/desktop-p7-linux-x64/document-attachments-and-live-input.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

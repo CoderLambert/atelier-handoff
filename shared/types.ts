@@ -225,6 +225,7 @@ export interface Run {
   approvalMode?: 'automatic';
   maxSearchChargeFen?: number;
   browserRevision?: string;
+  inputScope?: string;
   id: string;
   sessionId: string;
   projectId: string;
@@ -251,6 +252,8 @@ export interface QueuedSessionMessage {
   createdAt: string;
   error: string | null;
   extensions?: Run['extensions'];
+  insertion?: 'live' | 'priority';
+  delivery?: 'waiting' | 'sending' | 'unknown';
 }
 export interface SessionMessageQueue {
   items: QueuedSessionMessage[];

@@ -36,6 +36,13 @@ export const queueAnswers = [
   'INSTALLED_QUEUE_THIRD',
 ] as const;
 export const queueWithdrawn = 'Queue fixture withdrawn turn.';
+export const liveInitial = 'Hold this actively streaming reply for immediate insertion.';
+export const liveInserted = 'Read this inserted steering message immediately.';
+export const liveAnswer = 'INSTALLED_LIVE_INPUT_COMPLETED';
+export const documentPrompt =
+  'Inspect the selected large workbook Target sheet and return its last record.';
+export const documentAnswer = 'INSTALLED_ATTACHMENT_READ_COMPLETED';
+const documentReadId = 'toolu_installed_document_read';
 
 export const browserReadPrompt = 'Observe the installed native browser fixture in read-only mode.';
 export const browserEditPrompt =
@@ -317,6 +324,7 @@ function streamMessage(
   tool?: { id: string; name: string; input: Record<string, unknown> },
   text = answer,
   responseModel = model,
+  hold = false,
 ): void {
   const invokeTool = tool !== undefined;
   const sequence = ++messageSequence;
@@ -370,8 +378,9 @@ function streamMessage(
     'Cache-Control': 'no-cache',
     'request-id': `req_installed_${sequence}`,
   });
-  for (const event of events) res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-  res.end();
+  for (const event of hold ? events.slice(0, 3) : events)
+    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  if (!hold) res.end();
 }
 
 export function streamFixtureApproval(res: ServerResponse): void {
@@ -412,6 +421,8 @@ export interface FixtureEvidence {
   pdfRequests: number;
   browserDownloadRequests: number;
   queueRequests: string[];
+  liveRequests: string[];
+  documentRequests: number;
   nativeBrowser: BrowserFixtureEvidence;
   automatic: AutomaticFixtureEvidence;
   errors: string[];
@@ -435,6 +446,8 @@ export async function fixtures(): Promise<Fixtures> {
     pdfRequests: 0,
     browserDownloadRequests: 0,
     queueRequests: [],
+    liveRequests: [],
+    documentRequests: 0,
     nativeBrowser: {
       readRequests: 0,
       editRequests: 0,
@@ -498,6 +511,33 @@ export async function fixtures(): Promise<Fixtures> {
         const conversation = JSON.stringify(messages);
         const latestUser = JSON.stringify(messages.findLast((item) => item.role === 'user') ?? {});
         const currentTask = latestUser.split('用户本轮任务：').at(-1) ?? '';
+        if (currentTask.includes(liveInserted)) {
+          evidence.liveRequests.push(liveInserted);
+          assert.deepEqual(evidence.liveRequests, [liveInitial, liveInserted]);
+          streamMessage(res, undefined, liveAnswer);
+          return;
+        }
+        if (currentTask.includes(liveInitial)) {
+          evidence.liveRequests.push(liveInitial);
+          streamMessage(res, undefined, 'Partial reply before insertion.', model, true);
+          return;
+        }
+        if (currentTask.includes(documentPrompt) || latestUser.includes(documentReadId)) {
+          if (++evidence.documentRequests === 1) {
+            const path = /\/[^"\\\s]*\/sheet-0002\.txt/u.exec(latestUser)?.[0];
+            assert.ok(path, 'SDK receives a local file reference for the target sheet');
+            streamMessage(res, {
+              id: documentReadId,
+              name: 'Read',
+              input: { file_path: path, limit: 16 },
+            });
+          } else {
+            assert.equal(evidence.documentRequests, 2);
+            assert.match(toolResultText(messages, documentReadId), /last-hiring-record/u);
+            streamMessage(res, undefined, documentAnswer);
+          }
+          return;
+        }
         assert.ok(!currentTask.includes(queueWithdrawn), 'Withdrawn input must not reach SDK');
         const queueStage = queuePrompts.findIndex((text) => currentTask.includes(text));
         const queueAnswer = queueAnswers[queueStage];

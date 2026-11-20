@@ -1,7 +1,27 @@
+/**
+ * @file 管理会话附件与任务交付物的本地原件。
+ * @implementation 保留附件归属与字节校验，流式接收文档并在验证后登记，按标识定位原件和不可变交付物。
+ * @updated 2026-11-21T00:26:04+08:00
+ */
 import { randomUUID } from 'node:crypto';
 import { constants, mkdirSync, writeFileSync } from 'node:fs';
-import { lstat, mkdir, open, readFile, realpath, writeFile, unlink } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  statfs,
+  writeFile,
+  unlink,
+} from 'node:fs/promises';
 import { join, extname, relative, sep } from 'node:path';
+import type { IncomingMessage } from 'node:http';
+import { documentAttachmentMime } from '../shared/document-attachments.js';
+import { validateDocumentFile } from './attachment-document-reader.js';
 import {
   AppError,
   attachmentImageMime,
@@ -142,11 +162,79 @@ export class FileRecords {
     });
     return attachment;
   }
-  async attachmentContent(id: string, sessionId: string) {
+  async uploadDocument(sessionId: string, name: string, request: IncomingMessage) {
+    this.store.get('sessions', sessionId);
+    name = safeName(name);
+    const mime = documentAttachmentMime(name);
+    if (!mime) throw new AppError('UNSUPPORTED_FILE', '此文件格式不支持文档上传。', 415);
+    const directory = join(this.store.directory, 'attachments');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const disk = await statfs(directory, { bigint: true });
+    const declared = request.headers['content-length'];
+    const free = disk.bavail * disk.bsize;
+    if (declared && BigInt(declared) > free)
+      throw new AppError('ATTACHMENT_DISK_FULL', '磁盘空间不足，无法保存附件。', 507);
+    const staging = await mkdtemp(join(directory, '.upload-'));
+    const temporary = join(staging, name);
+    let size = 0;
+    try {
+      const output = await open(temporary, 'wx', 0o600);
+      try {
+        for await (const input of request.iterator({ destroyOnReturn: false })) {
+          const chunk = Buffer.isBuffer(input) ? input : Buffer.from(input as Uint8Array);
+          size += chunk.length;
+          if (BigInt(size) > free)
+            throw new AppError('ATTACHMENT_DISK_FULL', '磁盘空间不足，无法保存附件。', 507);
+          for (let offset = 0; offset < chunk.length;) {
+            const { bytesWritten } = await output.write(chunk, offset, chunk.length - offset);
+            offset += bytesWritten;
+          }
+        }
+      } finally {
+        await output.close();
+      }
+      if (request.aborted || !size || (declared && BigInt(size) !== BigInt(declared)))
+        throw new AppError('INVALID_UPLOAD', '文档上传未完成或文件为空。', 400);
+      await validateDocumentFile(temporary, mime);
+      this.store.get('sessions', sessionId);
+      const attachment = {
+        id: randomUUID(),
+        sessionId,
+        name,
+        mime,
+        size,
+        status: 'ready' as const,
+        createdAt: now(),
+      };
+      const destination = this.path('attachments', attachment.id);
+      await rename(temporary, destination);
+      try {
+        this.store.put('attachments', attachment);
+      } catch (error) {
+        await unlink(destination);
+        throw error;
+      }
+      this.store.event('session-' + sessionId, sessionId, 'attachment.created', {
+        attachmentId: attachment.id,
+      });
+      return attachment;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOSPC')
+        throw new AppError('ATTACHMENT_DISK_FULL', '磁盘空间不足，无法保存附件。', 507);
+      throw error;
+    } finally {
+      await rm(staging, { recursive: true, force: true });
+    }
+  }
+  attachmentFile(id: string, sessionId: string) {
     const attachment = this.store.get('attachments', id);
     if (attachment.sessionId !== sessionId || attachment.removed)
       throw new AppError('CONTEXT_DENIED', '附件不属于当前会话或已移除。', 403);
-    return { attachment, bytes: await readFile(this.path('attachments', id)) };
+    return { attachment, path: this.path('attachments', id) };
+  }
+  async attachmentContent(id: string, sessionId: string) {
+    const { attachment, path } = this.attachmentFile(id, sessionId);
+    return { attachment, bytes: await readFile(path) };
   }
   async removeAttachment(id: string, sessionId: string): Promise<void> {
     const item = this.store.get('attachments', id);

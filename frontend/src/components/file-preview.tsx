@@ -1,7 +1,7 @@
 /**
  * @file 复用 FileVista 渲染聊天附件、交付物和本地下载。
- * @implementation 按来源构造预览数据，注册适用插件，并在 Markdown 中单独展示结构化元数据。
- * @updated 2026-11-20T20:10:00+08:00
+ * @implementation 按来源及可选文件 ID 构造预览数据，注册适用插件，支持可选失败回调，并在 Markdown 中单独展示结构化元数据。
+ * @updated 2026-11-21T00:00:00+08:00
  */
 import { useMemo, useState } from 'react';
 import { Markdown } from '@atelier/markdown';
@@ -16,14 +16,16 @@ import {
   sourceCodePlugin,
   textPlugin,
   type FileInfo,
+  type PreviewError,
 } from '@lamberl-lee/file-preview';
 import { pdfPlugin } from '@lamberl-lee/file-preview/plugins/pdf';
 import '@lamberl-lee/file-preview/styles/index.css';
 
-type PreviewFile =
+type PreviewFile = (
   | { name: string; text: string }
   | { name: string; size: number; url: string }
-  | { name: string; bytes: ArrayBuffer; mimeType: string };
+  | { name: string; bytes: ArrayBuffer; mimeType: string }
+) & { id?: string; onError?: (error: PreviewError) => void };
 
 const registry = createPreviewPluginRegistry([
   sourceCodePlugin,
@@ -35,7 +37,7 @@ const registry = createPreviewPluginRegistry([
   {
     id: 'atelier.spreadsheet',
     name: '电子表格预览',
-    match: (file) => file.fileType === 'xlsx',
+    match: (file) => file.fileType === 'xlsx' || file.fileType === 'xls',
     load: () => import('./spreadsheet-preview'),
   },
 ]);
@@ -46,7 +48,7 @@ function toFileInfo(file: PreviewFile): FileInfo {
   const { name } = file;
   if ('url' in file) {
     return {
-      id: file.url,
+      id: file.id ?? file.url,
       name,
       size: file.size,
       type: 'application/pdf',
@@ -57,12 +59,18 @@ function toFileInfo(file: PreviewFile): FileInfo {
   if ('bytes' in file) {
     const { mimeType, bytes } = file;
     return {
-      id: name,
+      id: file.id ?? name,
       name,
       size: bytes.byteLength,
       type: mimeType,
       fileType:
-        mimeType === 'application/pdf' ? 'pdf' : mimeType.startsWith('image/') ? 'image' : 'xlsx',
+        mimeType === 'application/pdf'
+          ? 'pdf'
+          : mimeType.startsWith('image/')
+            ? 'image'
+            : mimeType === 'application/vnd.ms-excel'
+              ? 'xls'
+              : 'xlsx',
       source: { kind: 'arrayBuffer', buffer: bytes, name, mimeType },
     };
   }
@@ -71,7 +79,7 @@ function toFileInfo(file: PreviewFile): FileInfo {
   // FileVista's CSV parser splits on newlines before interpreting quotes.
   const simpleCsv = /\.csv$/i.test(name) && !file.text.includes('"');
   return {
-    id: name,
+    id: file.id ?? name,
     name,
     size: blob.size,
     type: blob.type,
@@ -83,9 +91,11 @@ function toFileInfo(file: PreviewFile): FileInfo {
 function FrontmatterPreview({
   file,
   frontmatter,
+  onError,
 }: {
   file: FileInfo;
   frontmatter: NonNullable<ReturnType<typeof readMarkdownFrontmatter>>;
+  onError?: (error: PreviewError) => void;
 }) {
   const { body, fields } = frontmatter;
   const [source, setSource] = useState(false);
@@ -113,7 +123,11 @@ function FrontmatterPreview({
         </div>
       </div>
       {source ? (
-        <PluginPreviewRenderer file={{ ...file, fileType: 'code' }} registry={registry} />
+        <PluginPreviewRenderer
+          file={{ ...file, fileType: 'code' }}
+          registry={registry}
+          onError={onError}
+        />
       ) : (
         <div className="fv-markdown__preview">
           <section className="markdown-metadata" aria-label="文档元数据">
@@ -140,7 +154,7 @@ export default function FilePreview(file: PreviewFile) {
   const size = 'size' in file ? file.size : undefined;
   const bytes = 'bytes' in file ? file.bytes : undefined;
   const mimeType = 'mimeType' in file ? file.mimeType : undefined;
-  const { name } = file;
+  const { id, name, onError } = file;
   const content = useMemo(
     () =>
       bytes && (mimeType?.startsWith('text/') || mimeType === 'application/json')
@@ -149,10 +163,11 @@ export default function FilePreview(file: PreviewFile) {
     [bytes, mimeType, text],
   );
   const info = useMemo(() => {
-    if (url !== undefined) return toFileInfo({ name, url, size: size ?? 0 });
-    if (bytes && mimeType && content === undefined) return toFileInfo({ name, bytes, mimeType });
-    return toFileInfo({ name, text: content ?? '' });
-  }, [name, url, size, bytes, mimeType, content]);
+    if (url !== undefined) return toFileInfo({ id, name, url, size: size ?? 0 });
+    if (bytes && mimeType && content === undefined)
+      return toFileInfo({ id, name, bytes, mimeType });
+    return toFileInfo({ id, name, text: content ?? '' });
+  }, [id, name, url, size, bytes, mimeType, content]);
   const frontmatter = useMemo(
     () =>
       info.fileType === 'markdown' && content !== undefined
@@ -162,6 +177,8 @@ export default function FilePreview(file: PreviewFile) {
   );
   if (content === '' || bytes?.byteLength === 0) return <p className="p-4">（空文件）</p>;
   if (frontmatter)
-    return <FrontmatterPreview key={info.id} file={info} frontmatter={frontmatter} />;
-  return <PluginPreviewRenderer key={info.id} file={info} registry={registry} />;
+    return (
+      <FrontmatterPreview key={info.id} file={info} frontmatter={frontmatter} onError={onError} />
+    );
+  return <PluginPreviewRenderer key={info.id} file={info} registry={registry} onError={onError} />;
 }

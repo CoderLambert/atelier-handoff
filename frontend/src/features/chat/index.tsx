@@ -47,6 +47,9 @@ export default function Chat(props: ChatProps) {
           key={`queue:${snapshot.session.id}`}
           sessionId={snapshot.session.id}
           queue={snapshot.messageQueue}
+          activeRun={snapshot.runs.find((run) =>
+            ['running', 'awaiting_permission', 'stopping'].includes(run.status),
+          )}
           archived={snapshot.session.status === 'archived'}
           available={snapshot.project.available}
         />

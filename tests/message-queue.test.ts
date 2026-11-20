@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
+import { MessageQueue } from '../server/message-queue.js';
 import {
   emptyDraft,
   now,
@@ -201,7 +202,10 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     running = await startApp();
     const reopened = (await state()).messageQueue;
     assert.equal(reopened.paused, true);
-    assert.deepEqual(reopened.items.map((item) => item.text), ['C']);
+    assert.deepEqual(
+      reopened.items.map((item) => item.text),
+      ['C'],
+    );
     assert.equal(
       (await state()).runs.find((run) => run.id === second.run.id)?.status,
       'interrupted',
@@ -216,7 +220,29 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     );
     assert.deepEqual((await state()).messageQueue.items, []);
     assert.equal((await state()).session.draft.text, 'keep editing');
-    complete.get(starts[2]?.run.id ?? '')?.();
+    const activeId = starts[2]?.run.id;
+    assert.ok(activeId);
+    const queuedWhileRunning = (await sendBody(send('interrupted insertion'))).queuedMessage;
+    assert.ok(queuedWhileRunning);
+    const queueStore = new MessageQueue(running.app.store);
+    queueStore.resume(session.id);
+    const item = queueStore.pending(session.id, queuedWhileRunning.id);
+    assert.ok(item);
+    queueStore.beginLive(item, activeId);
+    queueStore.dispatched(item, activeId);
+    await running.app.close();
+    running = await startApp();
+    const uncertain = (await state()).messageQueue;
+    assert.equal(uncertain.paused, false);
+    assert.equal(uncertain.items[0]?.delivery, 'unknown');
+    await sendBody(send('new message after uncertain delivery'));
+    await waitFor(() => starts.length === 4);
+    assert.equal(starts[3]?.run.prompt, 'new message after uncertain delivery');
+    assert.deepEqual(
+      (await state()).messageQueue.items.map((row) => row.delivery),
+      ['unknown'],
+    );
+    complete.get(starts[3]?.run.id ?? '')?.();
   } finally {
     await running?.app.close();
     await rm(temp, { recursive: true, force: true });

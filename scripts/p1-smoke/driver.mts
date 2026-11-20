@@ -6,7 +6,8 @@
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import XLSX from 'xlsx';
 import { constants } from 'node:fs';
 import { access, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -55,6 +56,11 @@ import {
   chatLinkLabel,
   chatLinkPath,
   fixtures,
+  documentAnswer,
+  documentPrompt,
+  liveAnswer,
+  liveInitial,
+  liveInserted,
   model,
   prompt,
   queueAnswers,
@@ -638,6 +644,119 @@ async function messageQueueSdk(run: Launch, fixture: Fixtures, sessionId: string
     priorAnswerInContext: true,
     newerDraftPreserved: true,
     paidModelCalls: 0,
+  };
+  await save();
+}
+
+async function attachmentAndLiveSdk(run: Launch, fixture: Fixtures, sessionId: string) {
+  evidence.phase = 'live-insert-sdk';
+  await save();
+  const { page } = run;
+  const route = `/api/sessions/${sessionId}`;
+  const input = page.getByRole('textbox', { name: '继续对话', exact: true });
+  await input.fill(liveInitial);
+  await input.press('Enter');
+  await until(async () => fixture.evidence.liveRequests[0], 10_000, 'SDK starts the held reply');
+  await input.fill(liveInserted);
+  await input.press('Enter');
+  const queue = page.getByRole('region', { name: '待处理消息', exact: true });
+  await queue.getByRole('button', { name: '立即插入消息 1', exact: true }).click();
+  await page.getByText(liveAnswer, { exact: true }).waitFor({ state: 'visible', timeout: 18_000 });
+  const insertedRun = await until(
+    async () => {
+      const snapshot = await api(page, route);
+      const live = array(snapshot.runs)
+        .map((item) => record(item))
+        .find((item) => item.prompt === liveInitial);
+      return live?.status === 'completed' && array(record(snapshot.messageQueue).items).length === 0
+        ? snapshot
+        : undefined;
+    },
+    6000,
+    'Live input is acknowledged and completes on the current run',
+  );
+  const messages = array(insertedRun.messages).map((item) => record(item));
+  assert.equal(
+    messages.find((row) => row.text === liveInserted)?.runId,
+    messages.find((row) => row.text === liveInitial)?.runId,
+  );
+  assert.deepEqual(fixture.evidence.liveRequests, [liveInitial, liveInserted]);
+  evidence.checks.liveInput = {
+    sameRun: true,
+    interruptedHeldReply: true,
+    acknowledged: true,
+    realSdk: true,
+  };
+
+  evidence.phase = 'large-document-attachment';
+  await save();
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    XLSX.utils.aoa_to_sheet(
+      Array.from({ length: 700 }, (_, index) => [String(index), 'x'.repeat(32000)]),
+    ),
+    'Large',
+  );
+  const target = XLSX.utils.aoa_to_sheet([['role', 'code']]);
+  target.A245 = { t: 's', v: 'last-hiring-record' };
+  target['!ref'] = 'A1:B245';
+  XLSX.utils.book_append_sheet(book, target, 'Target');
+  const bytes: Buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx', compression: false });
+  assert.ok(bytes.length > 20 * 1024 * 1024);
+  const name = '岗位资料.xlsx';
+  await page.locator('form[aria-label="撰写任务"] input[type=file]').setInputFiles({
+    name,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: bytes,
+  });
+  const preview = page.getByRole('button', { name: `预览附件 ${name}`, exact: true });
+  await preview.waitFor({ state: 'visible', timeout: 12000 });
+  await preview.click();
+  const dialog = page.getByRole('dialog', { name, exact: true });
+  const link = dialog.getByRole('link', { name: '下载原件', exact: true });
+  await link.waitFor({ state: 'visible' });
+  const href = await link.getAttribute('href');
+  assert.ok(href && href.endsWith('/download'));
+  const downloaded = await page.evaluate(async (path) => {
+    const response = await fetch(path);
+    const file = await response.arrayBuffer();
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', file)), (n) =>
+      n.toString(16).padStart(2, '0'),
+    ).join('');
+    return { bytes: file.byteLength, hash, status: response.status };
+  }, href);
+  assert.equal(downloaded.status, 200);
+  assert.equal(downloaded.bytes, bytes.length);
+  assert.equal(downloaded.hash, createHash('sha256').update(bytes).digest('hex'));
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await input.fill(documentPrompt);
+  await input.press('Enter');
+  await page
+    .getByText(documentAnswer, { exact: true })
+    .waitFor({ state: 'visible', timeout: 25000 });
+  await until(
+    async () => {
+      const snapshot = await api(page, route);
+      return (
+        array(snapshot.runs)
+          .map((item) => record(item))
+          .some((item) => item.prompt === documentPrompt && item.status === 'completed') ||
+        undefined
+      );
+    },
+    6000,
+    'Document Read completed',
+  );
+  assert.equal(fixture.evidence.documentRequests, 2);
+  evidence.checks.largeDocumentAttachment = {
+    bytes: bytes.length,
+    directDownload: true,
+    originalBytesMatch: true,
+    nativeSdkRead: true,
+    row245: true,
+    realSdk: true,
   };
   await save();
 }
@@ -1549,6 +1668,7 @@ async function functional(
     sdkCliObserved: true,
   };
   await messageQueueSdk(run, fixture, sessionId);
+  await attachmentAndLiveSdk(run, fixture, sessionId);
   await nativeBrowserSdk(run, fixture, projectId, sessionId);
   await automaticToolsSdk(run, fixture, projectId);
   // Address-bar navigation gives control to the user, so test it after the Agent runs.

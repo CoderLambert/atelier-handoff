@@ -10,13 +10,17 @@ import type { Store } from './store.js';
 
 const rowSchema = z.object({
   seq: z.number(),
-  id: z.string(),
+  id: z.custom<ReturnType<typeof randomUUID>>(
+    (value) => z.string().uuid().safeParse(value).success,
+  ),
   session_id: z.string(),
   request_key: z.string(),
   body_hash: z.string(),
   withdrawn: z.number(),
   paused: z.number(),
   error: z.string().nullable(),
+  delivery: z.enum(['waiting', 'sending', 'unknown']).nullable(),
+  target_run_id: z.string().nullable(),
   data: z.string(),
 });
 const summarySchema = z.object({
@@ -40,7 +44,9 @@ export type PendingSessionMessage = QueueRow & { intent: unknown };
 
 export class MessageQueue {
   constructor(private readonly store: Store) {
-    store.db.prepare('UPDATE pending_messages SET paused=1 WHERE withdrawn=0').run();
+    store.db.exec(`UPDATE pending_messages SET paused=1 WHERE withdrawn=0;
+      UPDATE pending_messages SET delivery='unknown', error='运行中断，插入结果待确认。' WHERE delivery='sending';
+      UPDATE pending_messages SET delivery=NULL,target_run_id=NULL WHERE delivery='waiting';`);
   }
 
   receipt(key: string, bodyHash: string): QueuedSessionMessage | undefined {
@@ -56,7 +62,12 @@ export class MessageQueue {
   }
 
   private summary(row: QueueRow): QueuedSessionMessage {
-    return { id: row.id, ...summarySchema.parse(JSON.parse(row.data)), error: row.error };
+    return {
+      id: row.id,
+      ...summarySchema.parse(JSON.parse(row.data)),
+      error: row.error,
+      ...(row.delivery ? { delivery: row.delivery } : {}),
+    };
   }
 
   enqueue(
@@ -72,7 +83,7 @@ export class MessageQueue {
       .prepare(
         `
       INSERT INTO pending_messages(id,session_id,request_key,body_hash,data,paused)
-      VALUES(?,?,?,?,?,EXISTS(SELECT 1 FROM pending_messages WHERE session_id=? AND withdrawn=0 AND paused=1))
+      VALUES(?,?,?,?,?,EXISTS(SELECT 1 FROM pending_messages WHERE session_id=? AND withdrawn=0 AND delivery IS NULL AND paused=1))
     `,
       )
       .run(id, sessionId, key, hash, JSON.stringify({ ...summary, createdAt, intent }), sessionId);
@@ -87,15 +98,35 @@ export class MessageQueue {
     );
   }
 
-  snapshot(sessionId: string) {
+  snapshot(
+    sessionId: string,
+    action?: (item: PendingSessionMessage) => QueuedSessionMessage['insertion'],
+  ) {
     const rows = this.store.db
-      .prepare('SELECT * FROM pending_messages WHERE session_id=? AND withdrawn=0 ORDER BY seq')
+      .prepare(
+        'SELECT * FROM pending_messages WHERE session_id=? AND withdrawn=0 ORDER BY priority DESC,seq',
+      )
       .all(sessionId)
       .map((row) => rowSchema.parse(row));
+    const pending = rows.filter((row) => row.delivery === null);
     return {
-      items: rows.map((row) => this.summary(row)),
-      paused: rows.some((row) => Boolean(row.paused)) || Boolean(rows[0]?.error),
+      items: rows.map((row) => ({
+        ...this.summary(row),
+        ...(action ? { insertion: action(this.item(row)) } : {}),
+      })),
+      paused: pending.some((row) => Boolean(row.paused)) || Boolean(pending[0]?.error),
     };
+  }
+
+  private item(row: QueueRow): PendingSessionMessage {
+    return { ...row, intent: z.object({ intent: z.unknown() }).parse(JSON.parse(row.data)).intent };
+  }
+
+  pending(sessionId: string, id: string) {
+    const raw = this.store.db
+      .prepare('SELECT * FROM pending_messages WHERE session_id=? AND id=? AND withdrawn=0')
+      .get(sessionId, id);
+    return raw ? this.item(rowSchema.parse(raw)) : undefined;
   }
 
   heads(): PendingSessionMessage[] {
@@ -103,26 +134,23 @@ export class MessageQueue {
       .prepare(
         `
       SELECT * FROM pending_messages WHERE seq IN (
-        SELECT min(seq) FROM pending_messages WHERE withdrawn=0 GROUP BY session_id
+        SELECT seq FROM (
+          SELECT seq,row_number() OVER (PARTITION BY session_id ORDER BY priority DESC,seq) AS position
+          FROM pending_messages WHERE withdrawn=0 AND delivery IS NULL
+        ) WHERE position=1
       ) AND paused=0 AND error IS NULL ORDER BY seq
     `,
       )
       .all()
-      .map((raw) => {
-        const row = rowSchema.parse(raw);
-        return {
-          ...row,
-          intent: z.object({ intent: z.unknown() }).parse(JSON.parse(row.data)).intent,
-        };
-      });
+      .map((row) => this.item(rowSchema.parse(row)));
   }
 
   consume(item: PendingSessionMessage) {
     const result = this.store.db
       .prepare(
         `
-      DELETE FROM pending_messages WHERE seq=? AND withdrawn=0 AND paused=0 AND error IS NULL
-        AND seq=(SELECT min(seq) FROM pending_messages WHERE session_id=? AND withdrawn=0)
+      DELETE FROM pending_messages WHERE seq=? AND withdrawn=0 AND delivery IS NULL AND paused=0 AND error IS NULL
+        AND seq=(SELECT seq FROM pending_messages WHERE session_id=? AND withdrawn=0 AND delivery IS NULL ORDER BY priority DESC,seq LIMIT 1)
     `,
       )
       .run(item.seq, item.session_id);
@@ -130,11 +158,68 @@ export class MessageQueue {
       throw new AppError('QUEUE_CHANGED', '待处理消息已变化。', 409);
   }
 
+  prioritize(item: PendingSessionMessage) {
+    const changes = this.store.db
+      .prepare(
+        `
+      UPDATE pending_messages SET priority=(SELECT coalesce(max(priority),0)+1 FROM pending_messages WHERE session_id=?),paused=0,error=NULL
+      WHERE seq=? AND withdrawn=0 AND delivery IS NULL
+    `,
+      )
+      .run(item.session_id, item.seq).changes;
+    if (!Number(changes)) throw new AppError('QUEUE_CHANGED', '待处理消息已变化。', 409);
+  }
+
+  beginLive(item: PendingSessionMessage, runId: string) {
+    const changes = this.store.db
+      .prepare(
+        `UPDATE pending_messages SET delivery='waiting',target_run_id=?,error=NULL WHERE seq=? AND withdrawn=0 AND delivery IS NULL`,
+      )
+      .run(runId, item.seq).changes;
+    if (!Number(changes)) throw new AppError('QUEUE_CHANGED', '待处理消息已变化。', 409);
+  }
+
+  dispatched(item: PendingSessionMessage, runId: string) {
+    const changes = this.store.db
+      .prepare(
+        `UPDATE pending_messages SET delivery='sending' WHERE seq=? AND target_run_id=? AND delivery='waiting'`,
+      )
+      .run(item.seq, runId).changes;
+    if (!Number(changes)) throw new AppError('QUEUE_CHANGED', '待处理消息已变化。', 409);
+  }
+
+  confirmLive(item: PendingSessionMessage, runId: string) {
+    this.store.transaction(() => {
+      const changes = this.store.db
+        .prepare(
+          `DELETE FROM pending_messages WHERE seq=? AND target_run_id=? AND delivery='sending'`,
+        )
+        .run(item.seq, runId).changes;
+      if (Number(changes))
+        this.store.db
+          .prepare('INSERT INTO idempotency(key,body_hash,run_id) VALUES(?,?,?)')
+          .run(item.request_key, item.body_hash, runId);
+    });
+  }
+
+  releaseLive(item: PendingSessionMessage, runId: string) {
+    this.store.db
+      .prepare(
+        `
+      UPDATE pending_messages SET delivery=CASE WHEN delivery='sending' THEN 'unknown' END,
+        target_run_id=CASE WHEN delivery='sending' THEN target_run_id END,
+        error=CASE WHEN delivery='sending' THEN '未收到 SDK 回执，请核对会话结果。' END
+      WHERE seq=? AND target_run_id=? AND delivery IN ('waiting','sending')
+    `,
+      )
+      .run(item.seq, runId);
+  }
+
   withdraw(sessionId: string, id: string) {
     const result = this.store.db
       .prepare(
         `
-      UPDATE pending_messages SET withdrawn=1, data='{}', error=NULL WHERE id=? AND session_id=? AND withdrawn=0
+      UPDATE pending_messages SET withdrawn=1, data='{}', error=NULL WHERE id=? AND session_id=? AND withdrawn=0 AND (delivery IS NULL OR delivery='unknown')
     `,
       )
       .run(id, sessionId);
@@ -154,7 +239,9 @@ export class MessageQueue {
 
   resume(sessionId: string) {
     this.store.db
-      .prepare('UPDATE pending_messages SET paused=0,error=NULL WHERE session_id=? AND withdrawn=0')
+      .prepare(
+        'UPDATE pending_messages SET paused=0,error=NULL WHERE session_id=? AND withdrawn=0 AND delivery IS NULL',
+      )
       .run(sessionId);
   }
 

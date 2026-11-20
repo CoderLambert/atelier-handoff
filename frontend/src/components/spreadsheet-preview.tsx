@@ -1,10 +1,16 @@
 /**
  * @file 提供 FileVista 的 XLS/XLSX 纯文本预览适配器。
- * @implementation 通过统一字节源读取文件，以 Vite 独立 worker 解析有界表格；管理切表、重试、超时和析构。
- * @updated 2026-11-20T20:05:12+08:00
+ * @implementation 通过统一字节源读取文件，以 Vite 独立 worker 解析有界表格；管理切表、重试、超时、析构及可选失败回调。
+ * @updated 2026-11-21T00:00:00+08:00
  */
 import { useEffect, useId, useState } from 'react';
-import { getSourceSize, readSourceAsArrayBuffer, type FileInfo } from '@lamberl-lee/file-preview';
+import {
+  getSourceSize,
+  readSourceAsArrayBuffer,
+  PreviewError,
+  type FileInfo,
+} from '@lamberl-lee/file-preview';
+import { documentPreviewBytes } from '@shared/document-attachments';
 import { Button } from './ui/button';
 import {
   Select,
@@ -25,7 +31,7 @@ type PreviewState = {
   | { status: 'success'; sheets: SpreadsheetSheet[] }
 );
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_FILE_BYTES = documentPreviewBytes;
 const LOAD_TIMEOUT_MS = 15_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -84,8 +90,14 @@ function columnLabel(index: number): string {
   return label;
 }
 
-export default function SpreadsheetPreview({ file }: { file: FileInfo }) {
-  const { source, size } = file;
+export default function SpreadsheetPreview({
+  file,
+  reportError,
+}: {
+  file: FileInfo;
+  reportError?: (error: PreviewError) => void;
+}) {
+  const { source, size, name } = file;
   const [attempt, setAttempt] = useState(0);
   const [activeSheet, setActiveSheet] = useState('0');
   const [state, setState] = useState<PreviewState>({ source, attempt, status: 'loading' });
@@ -114,6 +126,7 @@ export default function SpreadsheetPreview({ file }: { file: FileInfo }) {
       settled = true;
       stop();
       setState({ source, attempt, status: 'error', message });
+      reportError?.(new PreviewError('PARSE_FAILED', message, { fileName: name }));
     }
 
     const timeout = window.setTimeout(() => {
@@ -165,7 +178,7 @@ export default function SpreadsheetPreview({ file }: { file: FileInfo }) {
       settled = true;
       stop();
     };
-  }, [source, size, attempt]);
+  }, [source, size, name, attempt, reportError]);
 
   if (state.source !== source || state.attempt !== attempt || state.status === 'loading') {
     return (
