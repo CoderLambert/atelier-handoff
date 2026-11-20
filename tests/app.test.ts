@@ -579,9 +579,9 @@ test('automation is explicit for one edit run, participates in idempotency, and 
       assert.ok(address && typeof address === 'object');
       const url = `http://127.0.0.1:${address.port}`;
       const boot = await fetch(url + '/api/bootstrap').then((res) => res.json());
-      const post = async (path: string, body: unknown, expected: number) => {
+      const post = async (path: string, body: unknown, expected: number, method = 'POST') => {
         const res = await fetch(url + path, {
-          method: 'POST',
+          method,
           headers: { 'content-type': 'application/json', 'x-atelier-token': boot.csrfToken },
           body: JSON.stringify(body),
         });
@@ -613,6 +613,11 @@ test('automation is explicit for one edit run, participates in idempotency, and 
           .error.code,
         'AUTOMATION_MODE_INVALID',
       );
+      const sessionRoute = `/api/sessions/${session.id}`;
+      const automaticDraft = { ...session.draft, mode: 'edit', approvalMode: 'automatic' };
+      await post(sessionRoute, { draft: automaticDraft }, 200, 'PATCH');
+      await post(route, { ...message, idempotencyKey: randomUUID() }, 202);
+      assert.equal(app.store.get('sessions', session.id).draft.approvalMode, 'automatic');
       const { run: retry } = await post(
         `/api/runs/${run.id}/retry`,
         { idempotencyKey: randomUUID() },
@@ -621,7 +626,11 @@ test('automation is explicit for one edit run, participates in idempotency, and 
       assert.equal(retry.mode, 'readonly');
       assert.equal(retry.approvalMode, undefined);
       assert.equal(retry.maxSearchChargeFen, undefined);
-      assert.equal(app.store.get('sessions', session.id).draft.mode, 'readonly');
+      const savedDraft = app.store.get('sessions', session.id).draft;
+      assert.equal(savedDraft.mode, 'edit');
+      assert.equal(savedDraft.approvalMode, 'automatic');
+      await post(sessionRoute, { draft: { ...session.draft, mode: 'edit' } }, 200, 'PATCH');
+      assert.equal(app.store.get('sessions', session.id).draft.approvalMode, undefined);
     } finally {
       await app.close();
     }

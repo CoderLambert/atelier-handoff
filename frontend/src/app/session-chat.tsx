@@ -29,7 +29,7 @@ export default function SessionChat({
 }) {
   const { id, draft: serverDraft } = snapshot.session;
   const savedDraft = useWorkspace((state) => state.workspace.drafts[id]);
-  const automaticApproval = useWorkspace((state) => state.workspace.automaticApprovals[id]);
+  const searchChargeLimit = useWorkspace((state) => state.workspace.searchChargeLimits[id]);
   const submitting = useWorkspace((state) => state.workspace.submitting[id] === true);
   const message = useSendSessionMessage();
   const fallback = useMemo(() => readDraft(id, serverDraft), [id, serverDraft]);
@@ -42,13 +42,17 @@ export default function SessionChat({
   function changeMode(mode: ComposerMode) {
     if (store.getState().workspace.submitting[id]) return;
     if (snapshot.agent?.mode === 'readonly' && mode !== 'readonly') return;
-    store.dispatch(
-      actions.setAutomaticApproval({
-        id,
-        selection: mode === 'automatic' ? { maxSearchChargeFen: '0' } : undefined,
+    if (mode !== 'automatic') store.dispatch(actions.setSearchChargeLimit({ id }));
+    updateDraft(
+      id,
+      (previous) => ({
+        ...previous,
+        mode: mode === 'automatic' ? 'edit' : mode,
+        approvalMode: mode === 'automatic' ? 'automatic' : undefined,
       }),
+      serverDraft,
+      true,
     );
-    if (mode !== 'automatic') changeDraft((previous) => ({ ...previous, mode }));
   }
   async function send() {
     try {
@@ -67,12 +71,12 @@ export default function SessionChat({
     <Chat
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
-      automaticApproval={automaticApproval}
+      searchChargeLimit={searchChargeLimit}
       onModeChange={changeMode}
-      onSearchChargeChange={(maxSearchChargeFen) => {
+      onSearchChargeChange={(value) => {
         if (store.getState().workspace.submitting[id] || snapshot.agent?.mode === 'readonly')
           return;
-        store.dispatch(actions.setAutomaticApproval({ id, selection: { maxSearchChargeFen } }));
+        store.dispatch(actions.setSearchChargeLimit({ id, value }));
       }}
       onDraftChange={changeDraft}
       onSend={send}

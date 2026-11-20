@@ -35,6 +35,8 @@ export const browserManualValue = 'installed-browser-manual-handoff';
 export const automaticPrompt =
   'Complete the isolated automatic fixture: click the native page, write its local receipt, and call the local approval MCP.';
 export const automaticAnswer = 'INSTALLED_AUTOMATIC_TOOLS_COMPLETED';
+export const automaticFollowupPrompt = 'Verify the saved automatic session mode on this follow-up.';
+export const automaticFollowupAnswer = 'INSTALLED_SESSION_AUTOMATION_PERSISTED';
 export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
 export const automaticReceipt = 'Installed automatic browser, file, and MCP fixture completed.\n';
@@ -442,6 +444,11 @@ export async function fixtures(): Promise<Fixtures> {
           record(value, 'message'),
         );
         const conversation = JSON.stringify(messages);
+        if (conversation.includes(automaticFollowupPrompt)) {
+          assert.equal(++evidence.automatic.requests, automaticToolCount + 2);
+          streamMessage(res, undefined, automaticFollowupAnswer);
+          return;
+        }
         if (conversation.includes(automaticPrompt)) {
           automaticMessage(res, request, messages, evidence.automatic, siteUrl);
           return;

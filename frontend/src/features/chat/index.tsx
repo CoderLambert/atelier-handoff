@@ -1,19 +1,19 @@
 /**
  * @file 组合会话消息和任务输入界面。
- * @implementation 将会话快照、草稿、自动审批选择及运行操作传给消息区和输入区。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 将会话快照、持久草稿、临时搜索上限及运行操作传给消息区和输入区。
+ * @updated 2026-11-20T15:49:33+08:00
  */
 import type { Draft } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Composer, type DraftChange } from './composer';
 import { Conversation } from './conversation';
-import type { AutomaticApprovalSelection, ComposerMode } from './run-mode';
+import type { ComposerMode } from './run-mode';
 import './chat.css';
 
 export interface ChatProps {
   snapshot: Snapshot;
   draft: Draft;
-  automaticApproval?: AutomaticApprovalSelection;
+  searchChargeLimit?: string;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -39,7 +39,7 @@ export default function Chat(props: ChatProps) {
         key={`composer:${snapshot.session.id}`}
         snapshot={snapshot}
         draft={props.draft}
-        automaticApproval={props.automaticApproval}
+        searchChargeLimit={props.searchChargeLimit}
         onModeChange={props.onModeChange}
         onSearchChargeChange={props.onSearchChargeChange}
         onDraftChange={props.onDraftChange}

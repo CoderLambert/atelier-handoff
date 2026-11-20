@@ -32,6 +32,8 @@ import {
 import {
   answer,
   automaticAnswer,
+  automaticFollowupAnswer,
+  automaticFollowupPrompt,
   automaticMcpName,
   automaticMcpTool,
   automaticPrompt,
@@ -893,13 +895,14 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   await page.getByRole('button', { name: '浏览器', exact: true }).click();
   await page.getByRole('button', { name: '人工接管', exact: true }).waitFor({ state: 'visible' });
   const mode = page.getByRole('combobox', { name: '运行模式', exact: true });
-  assert.equal(await mode.inputValue(), 'readonly');
+  await mode.getByText('只读', { exact: true }).waitFor({ state: 'visible' });
   const file = join(directory, 'project', automaticReceiptName);
   assert.equal((await lstat(join(directory, 'project'))).isSymbolicLink(), false);
   assert.equal(automaticReceiptName.includes('/'), false, 'Receipt stays in the isolated project');
   await assert.rejects(access(file), { code: 'ENOENT' });
-  await mode.selectOption({ label: '全工具自动化' });
-  assert.equal(await mode.inputValue(), 'automatic');
+  await mode.click();
+  await page.getByRole('option', { name: /全工具自动化/ }).click();
+  await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(automaticPrompt);
   const chat = await thread.evaluateHandle((element) => {
     const selectors =
@@ -980,12 +983,10 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       'automatic browser, file and MCP real packaged SDK round trip',
     );
     await thread.getByText(automaticAnswer, { exact: true }).waitFor({ state: 'visible' });
-    assert.equal(
-      await mode.inputValue(),
-      'readonly',
-      'Automatic selection is consumed after confirmed send',
-    );
-    assert.equal(record(record(state.session).draft).mode, 'readonly');
+    await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
+    const savedDraft = record(record(state.session).draft);
+    assert.equal(savedDraft.mode, 'edit');
+    assert.equal(savedDraft.approvalMode, 'automatic');
     assert.equal(await thread.locator('.chat-approval').count(), 0);
     assert.equal(await thread.locator('.assistant-message').count(), 1);
     assert.equal(await thread.locator('.user-message').count(), 1);
@@ -1046,6 +1047,26 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.equal(fixture.evidence.automatic.mcpCalls, 1);
     assert.equal(record(state.session).sdkMode, 'edit');
     assert.ok(string(record(state.session).sdkSessionId));
+    await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(automaticFollowupPrompt);
+    const [followup] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          new URL(response.url()).pathname === `${sessionRoute}/messages`,
+      ),
+      page.getByRole('button', { name: '发送任务', exact: true }).click(),
+    ]);
+    assert.equal(followup.status(), 202);
+    const followupRun = record(record((await followup.json()) as unknown).run);
+    assert.equal(followupRun.approvalMode, 'automatic');
+    assert.equal(followupRun.maxSearchChargeFen, 0);
+    await thread.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
+    await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
+    assert.equal(fixture.evidence.automatic.requests, automaticToolCount + 2);
+    await mode.click();
+    await page.getByRole('listbox').waitFor({ state: 'visible' });
+    await page.screenshot({ path: join(root, 'session-mode-menu.png') });
+    await page.keyboard.press('Escape');
     await page.screenshot({
       path: join(root, 'automatic-tools-completed.png'),
       mask: [page.locator('.history-meta')],
@@ -1059,7 +1080,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       composerOption: '全工具自动化',
       mode: accepted.mode,
       approvalMode: accepted.approvalMode,
-      selectionConsumed: true,
+      sessionSelectionPreserved: true,
+      followupApprovalMode: followupRun.approvalMode,
       pendingApprovals: 0,
       chatCardsObserved: violations.length,
       permissions: permissions.map(({ id, kind, status, decisionSource }) => ({
@@ -1150,7 +1172,8 @@ async function functional(
   // The ordinary renderer bootstraps gateway status when opening settings.
   await settings(page, false);
   // Edit mode ensures command absence is actually caused by missing bwrap.
-  await page.getByRole('combobox', { name: '运行模式', exact: true }).selectOption('edit');
+  await page.getByRole('combobox', { name: '运行模式', exact: true }).click();
+  await page.getByRole('option', { name: /受控修改/ }).click();
   await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(prompt);
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   const snapshot = await until(
@@ -1369,6 +1392,20 @@ async function reopen(
     .filter({ has: run.page.locator('.history-title', { hasText: string(session.title) }) })
     .click();
   await run.page.getByText(answer, { exact: true }).waitFor({ state: 'visible' });
+  const mode = run.page.getByRole('combobox', { name: '运行模式', exact: true });
+  await mode.getByText('受控修改', { exact: true }).waitFor({ state: 'visible' });
+  const automaticId = string(record(evidence.checks.automaticToolsSdk).sessionId);
+  const automaticState = await api(run.page, `/api/sessions/${automaticId}`);
+  const automaticSession = record(automaticState.session);
+  assert.equal(record(automaticSession.draft).approvalMode, 'automatic');
+  await run.page
+    .getByRole('button')
+    .filter({
+      has: run.page.locator('.history-title', { hasText: string(automaticSession.title) }),
+    })
+    .click();
+  await run.page.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
+  await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
   await settings(run.page, true);
   assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no receipt model request');
   assert.equal(
@@ -1383,7 +1420,7 @@ async function reopen(
   );
   assert.equal(
     fixture.evidence.automatic.requests,
-    automaticToolCount + 1,
+    automaticToolCount + 2,
     'Offline reopen must make no automatic model request',
   );
   assert.equal(

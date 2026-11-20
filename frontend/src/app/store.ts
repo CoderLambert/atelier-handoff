@@ -6,7 +6,6 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 import type { Draft } from '@shared/types';
-import type { AutomaticApprovalSelection } from '@/features/chat/run-mode';
 
 export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
@@ -18,7 +17,7 @@ interface WorkspaceState {
   drawer?: 'navigation' | 'details';
   connected: boolean;
   drafts: Record<string, Draft>;
-  automaticApprovals: Record<string, AutomaticApprovalSelection>;
+  searchChargeLimits: Record<string, string>;
   submitting: Record<string, boolean>;
 }
 
@@ -27,7 +26,7 @@ const initialState: WorkspaceState = {
   tab: 'conversation',
   connected: false,
   drafts: {},
-  automaticApprovals: {},
+  searchChargeLimits: {},
   submitting: {},
 };
 const workspace = createSlice({
@@ -62,17 +61,14 @@ const workspace = createSlice({
     setDraft(state, action: PayloadAction<{ id: string; draft: Draft }>) {
       state.drafts[action.payload.id] = action.payload.draft;
     },
-    setAutomaticApproval(
-      state,
-      action: PayloadAction<{ id: string; selection?: AutomaticApprovalSelection }>,
-    ) {
-      if (action.payload.selection)
-        state.automaticApprovals[action.payload.id] = action.payload.selection;
-      else delete state.automaticApprovals[action.payload.id];
+    setSearchChargeLimit(state, action: PayloadAction<{ id: string; value?: string }>) {
+      if (action.payload.value !== undefined)
+        state.searchChargeLimits[action.payload.id] = action.payload.value;
+      else delete state.searchChargeLimits[action.payload.id];
     },
     dropDraft(state, action: PayloadAction<string>) {
       delete state.drafts[action.payload];
-      delete state.automaticApprovals[action.payload];
+      delete state.searchChargeLimits[action.payload];
     },
     setSubmitting(state, action: PayloadAction<{ id: string; pending: boolean }>) {
       if (action.payload.pending) state.submitting[action.payload.id] = true;

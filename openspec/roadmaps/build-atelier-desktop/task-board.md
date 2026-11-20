@@ -26,6 +26,7 @@
 - [x] 输入区支持本轮全工具自动化。安装态验证网页点击、项目文件写入和本地 MCP 的实际效果及自动审批轨迹。
 - [x] 正常退出旧实例，使用同一数据目录和网页 profile 开启新版，核对项目、会话、草稿和设置。[本轮验收](../../../docs/evidence/desktop-p7-linux-x64/task-automation.json)
 - [x] 默认支持长任务，执行上限可在设置中开启。安装态验证超过 16 轮后生成结论并完成同目录切换。[长任务验收](../../../docs/evidence/desktop-p7-linux-x64/long-tasks.json)
+- [x] 运行模式改用 shadcn Select 并随会话保存。安装态验证连续发送、隔离选择和重开后恢复。[会话模式验收](../../../docs/evidence/desktop-p7-linux-x64/session-approval-mode.json)
 
 ## 另行安排的发布与平台验收
 

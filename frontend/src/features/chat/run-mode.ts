@@ -6,10 +6,6 @@
 import type { Run } from '@shared/types';
 
 export type ComposerMode = 'readonly' | 'edit' | 'automatic';
-export interface AutomaticApprovalSelection {
-  maxSearchChargeFen: string;
-}
-
 export function parseSearchChargeLimit(value: string): number | undefined {
   if (!value.trim()) return undefined;
   if (!/^\d+$/.test(value)) throw new Error('付费搜索单次上限须为 0–100000 的整数（分）。');

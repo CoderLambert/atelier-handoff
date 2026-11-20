@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archiveSha256": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "d08b574fd4ed66aa7907cf376040717fed8dd4c6da8465940462e2fa4ba03956",
+    "atelier-0.2.0-linux-x64.tar.zst": "fdae236eb12c349b6283c5747fbf9e5ace872341398748dff3327c356260de89"
+  },
+  "runtimeTestsPassed": 106,
+  "frontendTestsPassed": 35,
+  "installedDesktop": {
+    "environment": "Linux x64, isolated Xvfb, bundled SDK with loopback model transport",
+    "shadcnSelectVisible": true,
+    "selectedThroughComposer": true,
+    "automaticModeSavedOnSession": true,
+    "consecutiveAutomaticSends": 2,
+    "toolCallsOnFirstRun": 17,
+    "modelRequestsAcrossBothRuns": 19,
+    "automaticApprovalRecordsOnFirstRun": 3,
+    "followupSearchChargeLimitFen": 0,
+    "automaticModeRestoredAfterReopen": true,
+    "otherSessionRetainedControlledEdit": true,
+    "paidModelCalls": 0
+  }
+}

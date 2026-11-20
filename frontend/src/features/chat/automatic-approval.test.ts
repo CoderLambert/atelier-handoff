@@ -58,12 +58,13 @@ function memoryStorage(t: TestContext) {
   });
   return data;
 }
-function automatic(id: string, maxSearchChargeFen = '0') {
-  store.dispatch(actions.setAutomaticApproval({ id, selection: { maxSearchChargeFen } }));
+function automatic(id: string, value = '0') {
+  updateDraft(id, (draft) => ({ ...draft, mode: 'edit', approvalMode: 'automatic' }));
+  store.dispatch(actions.setSearchChargeLimit({ id, value }));
 }
 
 // No model, runtime, window or real user storage is used by these send-lane regressions.
-test('automatic request survives an unconfirmed send with identical dedupe payload, then is consumed once', async (t) => {
+test('automatic session mode persists across sends and reload, while the paid limit is consumed once', async (t) => {
   const persisted = memoryStorage(t);
   const id = 'auto-retry';
   const draft: Draft = { ...emptyDraft(), text: 'make the change', contextPaths: ['src/file.ts'] };
@@ -84,13 +85,11 @@ test('automatic request survives an unconfirmed send with identical dedupe paylo
   });
   try {
     await assert.rejects(submitDraft(id, draft, sendSessionMessage), /response lost/);
-    assert.deepEqual(readDraft(id), draft);
-    assert.equal(store.getState().workspace.automaticApprovals[id]?.maxSearchChargeFen, '12');
+    assert.deepEqual(readDraft(id), { ...draft, mode: 'edit', approvalMode: 'automatic' });
+    assert.equal(store.getState().workspace.searchChargeLimits[id], '12');
     assert.equal(store.getState().workspace.submitting[id], undefined);
-    assert.doesNotMatch(
-      persisted.get(`atelier-draft:${id}`) ?? '',
-      /approvalMode|maxSearchChargeFen|automatic/,
-    );
+    assert.match(persisted.get(`atelier-draft:${id}`) ?? '', /"approvalMode":"automatic"/);
+    assert.doesNotMatch(persisted.get(`atelier-draft:${id}`) ?? '', /maxSearchChargeFen/);
     await submitDraft(id, draft, sendSessionMessage);
     assert.equal(sent.length, 2);
     assert.deepEqual(sent[0], sent[1]);
@@ -98,8 +97,14 @@ test('automatic request survives an unconfirmed send with identical dedupe paylo
     assert.equal(sent[0]?.approvalMode, 'automatic');
     assert.equal(sent[0]?.maxSearchChargeFen, 12);
     assert.equal(readDraft(id).text, '');
-    assert.equal(readDraft(id).mode, 'readonly');
-    assert.equal(store.getState().workspace.automaticApprovals[id], undefined);
+    assert.equal(readDraft(id).approvalMode, 'automatic');
+    assert.equal(store.getState().workspace.searchChargeLimits[id], undefined);
+    store.dispatch(actions.dropDraft(id));
+    assert.equal(readDraft(id).approvalMode, 'automatic');
+    updateDraft(id, (current) => ({ ...current, text: 'next message' }));
+    await submitDraft(id, draft, sendSessionMessage);
+    assert.equal(sent[2]?.approvalMode, 'automatic');
+    assert.equal(sent[2]?.maxSearchChargeFen, 0);
   } finally {
     await deleteDraft(id, async () => {});
   }
@@ -161,13 +166,15 @@ test('late send completion preserves new draft edits and another session automat
     await ready;
     await submitDraft(id, draft, send);
     assert.equal(sends, 1);
-    assert.equal(store.getState().workspace.automaticApprovals[id]?.maxSearchChargeFen, '2');
+    assert.equal(store.getState().workspace.searchChargeLimits[id], '2');
     updateDraft(id, (previous) => ({ ...previous, text: 'next task' }));
     finish(result(id));
     await pending;
     assert.equal(readDraft(id).text, 'next task');
-    assert.equal(store.getState().workspace.automaticApprovals[id], undefined);
-    assert.equal(store.getState().workspace.automaticApprovals[other]?.maxSearchChargeFen, '9');
+    assert.equal(store.getState().workspace.searchChargeLimits[id], undefined);
+    assert.equal(readDraft(id).approvalMode, 'automatic');
+    assert.equal(readDraft(other).approvalMode, 'automatic');
+    assert.equal(store.getState().workspace.searchChargeLimits[other], '9');
   } finally {
     await deleteDraft(id, async () => {});
     await deleteDraft(other, async () => {});
@@ -240,7 +247,7 @@ test('readonly bound profile cannot send automatic options or edit mode', async 
       true,
     );
     assert.equal(readDraft(id).mode, 'readonly');
-    assert.equal(store.getState().workspace.automaticApprovals[id], undefined);
+    assert.equal(store.getState().workspace.searchChargeLimits[id], undefined);
   } finally {
     await deleteDraft(id, async () => {});
   }
@@ -264,7 +271,7 @@ test('invalid cap rejects before a send, empty is optional, and run mode preserv
       /整数/,
     );
     assert.equal(store.getState().workspace.submitting[id], undefined);
-    assert.equal(store.getState().workspace.automaticApprovals[id]?.maxSearchChargeFen, '100001');
+    assert.equal(store.getState().workspace.searchChargeLimits[id], '100001');
     const { run } = result(id);
     assert.equal(runModeLabel(run), '全工具自动化');
     assert.equal(runModeLabel({ ...run, approvalMode: undefined }), '受控修改 · 逐次审批');

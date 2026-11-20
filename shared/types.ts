@@ -184,6 +184,7 @@ export interface Draft {
   contextPaths: string[];
   attachmentIds: string[];
   mode: Mode;
+  approvalMode?: 'automatic';
   extensionSelections?: ExtensionSelection[];
 }
 export interface Session {

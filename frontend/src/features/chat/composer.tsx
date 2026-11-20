@@ -1,7 +1,7 @@
 /**
  * @file 提供聊天任务输入、上下文与附件编辑界面。
- * @implementation 根据会话和智能体状态控制发送、停止与本轮审批模式，校验付费搜索上限并编排附件。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 根据草稿与智能体派生会话模式，校验下次发送的搜索上限并编排输入、附件和发送操作。
+ * @updated 2026-11-20T15:49:33+08:00
  */
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
@@ -13,12 +13,8 @@ import { ExtensionPicker } from '@/features/extensions/picker';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { isActive } from './conversation';
-import {
-  parseSearchChargeLimit,
-  runModeLabel,
-  type AutomaticApprovalSelection,
-  type ComposerMode,
-} from './run-mode';
+import { ComposerModeSelector } from './mode-selector';
+import { parseSearchChargeLimit, runModeLabel, type ComposerMode } from './run-mode';
 
 import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
 
@@ -28,7 +24,7 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 export function Composer({
   snapshot,
   draft,
-  automaticApproval,
+  searchChargeLimit = '0',
   onModeChange,
   onSearchChargeChange,
   onDraftChange,
@@ -38,7 +34,7 @@ export function Composer({
 }: {
   snapshot: Snapshot;
   draft: Draft;
-  automaticApproval?: AutomaticApprovalSelection;
+  searchChargeLimit?: string;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
@@ -56,11 +52,15 @@ export function Composer({
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
   const mode: ComposerMode =
-    agent?.mode === 'readonly' ? 'readonly' : automaticApproval ? 'automatic' : draft.mode;
+    agent?.mode === 'readonly'
+      ? 'readonly'
+      : draft.mode === 'edit' && draft.approvalMode === 'automatic'
+        ? 'automatic'
+        : draft.mode;
   let searchChargeError = '';
   if (mode === 'automatic') {
     try {
-      parseSearchChargeLimit(automaticApproval?.maxSearchChargeFen ?? '0');
+      parseSearchChargeLimit(searchChargeLimit);
     } catch (failure) {
       searchChargeError = errorText(failure);
     }
@@ -235,65 +235,25 @@ export function Composer({
         >
           <Plus size={14} aria-hidden="true" /> 上下文
         </button>
-        <label className="composer-policy mode-toggle">
-          <span className="sr-only">运行模式</span>
-          <select
-            aria-label="运行模式"
-            aria-describedby="composer-mode-help"
-            value={mode}
-            disabled={archived || submitting}
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next === 'readonly' || next === 'edit' || next === 'automatic')
-                onModeChange(next);
-            }}
-          >
-            <option value="readonly">只读</option>
-            <option value="edit" disabled={agent?.mode === 'readonly'}>
-              受控修改
-            </option>
-            <option value="automatic" disabled={agent?.mode === 'readonly'}>
-              全工具自动化
-            </option>
-          </select>
-        </label>
+        <ComposerModeSelector
+          mode={mode}
+          readonlyProfile={agent?.mode === 'readonly'}
+          disabled={archived || submitting}
+          searchChargeLimit={searchChargeLimit}
+          searchChargeError={searchChargeError}
+          onModeChange={onModeChange}
+          onSearchChargeChange={onSearchChargeChange}
+        />
       </div>
-      {mode === 'automatic' ? (
-        <div className="mb-3 flex flex-col gap-2 text-xs text-muted-foreground">
-          <p id="composer-mode-help">
-            本轮自动批准所有可用工具操作，仅本次发送生效。内置浏览器仍需项目授权，人工接管时暂停。
-          </p>
-          <label
-            className="flex flex-wrap items-center gap-2"
-            data-invalid={Boolean(searchChargeError)}
-          >
-            付费搜索单次上限（分）
-            <input
-              type="number"
-              min={0}
-              max={100000}
-              step={1}
-              value={automaticApproval?.maxSearchChargeFen ?? '0'}
-              disabled={archived || submitting}
-              aria-invalid={Boolean(searchChargeError)}
-              aria-describedby="composer-search-charge-help chat-composer-error"
-              className="h-8 w-28 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              onChange={(event) => onSearchChargeChange(event.target.value)}
-            />
-          </label>
-          <p id="composer-search-charge-help">
-            仅限制已知付费搜索的单次请求，不是总费用上限；留空按 0 分处理。
-          </p>
-        </div>
-      ) : (
-        <p id="composer-mode-help" className="sr-only">
-          {agent?.mode === 'readonly'
-            ? '当前智能体仅支持只读。'
+      <p id="composer-mode-help" className="sr-only">
+        {agent?.mode === 'readonly'
+          ? '当前智能体仅支持只读。'
+          : mode === 'automatic'
+            ? '自动批准可用工具操作。运行模式随当前会话保存。'
             : mode === 'edit'
               ? '需要审批的工具操作逐次确认。'
               : '只读讨论。'}
-        </p>
-      )}
+      </p>
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
           {agent.issues.join('；')}。
@@ -372,7 +332,7 @@ export function Composer({
             draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
             onChange={(next: Draft) => {
               if (!archived && !submitting)
-                onDraftChange(mode === 'automatic' ? { ...next, mode: draft.mode } : next);
+                onDraftChange({ ...next, mode: draft.mode, approvalMode: draft.approvalMode });
             }}
             inputRef={inputRef}
             onSubmit={() => void submit()}
@@ -439,7 +399,7 @@ export function Composer({
         <span>Shift + Enter 换行</span>
         <span>
           {mode === 'automatic'
-            ? '全工具自动化 · 仅本轮'
+            ? '全工具自动化 · 随会话保存'
             : mode === 'edit'
               ? '受控修改 · 每次操作逐次审批'
               : '只读 · 先讨论，再决定'}

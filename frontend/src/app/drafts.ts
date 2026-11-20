@@ -82,15 +82,24 @@ function persistedDraft(draft: Draft): Draft {
     attachmentIds: draft.attachmentIds,
     extensionSelections: draft.extensionSelections,
     mode: draft.mode === 'edit' ? 'edit' : 'readonly',
+    ...(draft.mode === 'edit' && draft.approvalMode === 'automatic'
+      ? { approvalMode: draft.approvalMode }
+      : {}),
   };
 }
 export function readDraft(id: string, server?: Draft): Draft {
-  return (
-    store.getState().workspace.drafts[id] ??
-    persistedDraft({ ...emptyDraft(), ...server, ...localDraft(id) })
-  );
+  const current = store.getState().workspace.drafts[id];
+  if (current) return current;
+  const local = localDraft(id);
+  return persistedDraft({
+    ...emptyDraft(),
+    ...server,
+    ...local,
+    // Both fields describe the local mode, including an explicit return to manual approval.
+    ...(local.mode ? { approvalMode: local.approvalMode } : {}),
+  });
 }
-export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
+export function updateDraft(id: string, update: DraftUpdate, server?: Draft, immediate = false) {
   const draft = persistedDraft(
     typeof update === 'function' ? update(readDraft(id, server)) : update,
   );
@@ -99,7 +108,7 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
   store.dispatch(actions.setDraft({ id, draft }));
   storage.set(key(id), JSON.stringify(draft));
   clearTimeout(save.timer);
-  save.timer = setTimeout(() => {
+  const enqueue = () => {
     save.write = (save.write ?? Promise.resolve()).then(async () => {
       if (sequence !== save.sequence) return;
       try {
@@ -109,7 +118,9 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft) {
         /* Keep the local draft for recovery. */
       }
     });
-  }, 500);
+  };
+  if (immediate) enqueue();
+  else save.timer = setTimeout(enqueue, 500);
 }
 
 export async function submitDraft(
@@ -122,17 +133,13 @@ export async function submitDraft(
   const save = lane(id);
   const draft = readDraft(id, server);
   const draftFingerprint = JSON.stringify(draft);
-  const selection = store.getState().workspace.automaticApprovals[id];
-  const automatic = readonlyProfile ? undefined : selection;
+  const searchChargeLimit = store.getState().workspace.searchChargeLimits[id];
+  const approvalMode = readonlyProfile ? undefined : draft.approvalMode;
   const payload: Omit<SessionMessageBody, 'idempotencyKey'> = {
     ...draft,
-    mode: readonlyProfile ? 'readonly' : automatic ? 'edit' : draft.mode,
-    ...(automatic
-      ? {
-          approvalMode: 'automatic',
-          maxSearchChargeFen: parseSearchChargeLimit(automatic.maxSearchChargeFen),
-        }
-      : {}),
+    mode: readonlyProfile ? 'readonly' : draft.mode,
+    approvalMode,
+    ...(approvalMode ? { maxSearchChargeFen: parseSearchChargeLimit(searchChargeLimit ?? '0') } : {}),
   };
   const fingerprint = JSON.stringify(payload);
   if (save.attempt?.fingerprint !== fingerprint)
@@ -140,19 +147,18 @@ export async function submitDraft(
   const attempt = save.attempt;
   store.dispatch(actions.setSubmitting({ id, pending: true }));
   clearTimeout(save.timer);
-  save.sequence++;
   try {
     await save.write;
     const { run } = await send({
       sessionId: id,
       body: { ...payload, idempotencyKey: attempt.key },
     });
-    if (store.getState().workspace.automaticApprovals[id] === selection)
-      store.dispatch(actions.setAutomaticApproval({ id }));
-    // Approval options belong to the request, not the editable draft comparison.
+    if (store.getState().workspace.searchChargeLimits[id] === searchChargeLimit)
+      store.dispatch(actions.setSearchChargeLimit({ id }));
     if (JSON.stringify(readDraft(id, server)) === draftFingerprint)
       updateDraft(id, {
         ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
+        approvalMode,
         extensionSelections: retainedSkillSelections(run.extensions),
       });
     save.attempt = undefined;

@@ -61,13 +61,16 @@ const inputSchema = z.object({
   extensionSelections: extensionSelections.default([]),
   idempotencyKey: z.string().uuid(),
 });
-const draftSchema = z.object({
-  text: z.string().max(32000),
-  mode: z.enum(['readonly', 'edit']),
-  contextPaths: z.array(z.string().max(1000)).max(30),
-  attachmentIds: z.array(z.string().uuid()).max(20),
-  extensionSelections: extensionSelections.optional(),
-});
+const draftSchema = z
+  .object({
+    text: z.string().max(32000),
+    mode: z.enum(['readonly', 'edit']),
+    approvalMode: z.literal('automatic').optional(),
+    contextPaths: z.array(z.string().max(1000)).max(30),
+    attachmentIds: z.array(z.string().uuid()).max(20),
+    extensionSelections: extensionSelections.optional(),
+  })
+  .refine((draft) => !draft.approvalMode || draft.mode === 'edit', '自动化草稿须允许修改。');
 const configSchema = z.object({
   gateway: z.string().url().optional(),
   model: z.string().min(1).max(200).optional(),
@@ -447,7 +450,11 @@ export async function createApp(options: {
         updatedAt: now(),
         draft: {
           ...emptyDraft(),
-          mode: run.approvalMode === 'automatic' ? latest.draft.mode : request.mode,
+          mode:
+            retryOf || run.approvalMode || latest.draft.approvalMode
+              ? latest.draft.mode
+              : request.mode,
+          ...(latest.draft.approvalMode ? { approvalMode: latest.draft.approvalMode } : {}),
           extensionSelections: retryOf
             ? latest.draft.extensionSelections
             : retainedSkillSelections(run.extensions),
