@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { constants, lstatSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { copyFile, link, lstat, rm } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { DesktopBrowserDownload } from '../../shared/desktop-browser.js';
 
 interface Transfer {
@@ -32,9 +33,22 @@ function safeFilename(input: string) {
   return `${reserved ? '_' : ''}${base}${extension.slice(0, 18)}`;
 }
 
+interface DownloadSource {
+  projectId: string;
+  findLinkTitle(url: string): Promise<string | undefined>;
+}
+
+function usesOpaqueName(filename: string, link: string): boolean {
+  if (!URL.canParse(link) || !/^\.[a-z0-9]{1,10}$/iu.test(extname(filename))) return false;
+  const pathname = new URL(link).pathname;
+  const encodedName = pathname.slice(pathname.lastIndexOf('/') + 1);
+  const basename = filename.slice(0, filename.length - extname(filename).length);
+  return /^[a-f0-9]{24,64}$/iu.test(basename) && filename === encodedName;
+}
+
 export function createBrowserDownloads(
   publishState: (projectId: string) => void,
-  projectForDownload: (contents: WebContents, url: string) => string | undefined,
+  sourceForDownload: (contents: WebContents, url: string) => DownloadSource | undefined,
 ) {
   const observed = new WeakSet<Session>();
   const transfers = new Map<string, Transfer>();
@@ -80,13 +94,16 @@ export function createBrowserDownloads(
     if (observed.has(session)) return;
     observed.add(session);
     session.on('will-download', (event, item, contents) => {
-      const projectId = projectForDownload(contents, item.getURL());
-      if (!projectId) {
+      const source = sourceForDownload(contents, item.getURL());
+      if (!source) {
         event.preventDefault();
         return;
       }
+      const { projectId } = source;
       const id = randomUUID();
-      const filename = safeFilename(item.getFilename());
+      const suggestedFilename = item.getFilename();
+      const filename = safeFilename(suggestedFilename);
+      const originalUrl = item.getURLChain()[0] ?? item.getURL();
       const transfer: Transfer = {
         projectId,
         entry: {
@@ -120,6 +137,27 @@ export function createBrowserDownloads(
         reservedPaths.add(transfer.entry.path);
         reserved = true;
         item.setSavePath(staging);
+        const nameReady = usesOpaqueName(suggestedFilename, originalUrl)
+          ? Promise.race([source.findLinkTitle(originalUrl), delay(500, undefined, { ref: false })])
+              .then((title) => {
+                const label = title?.replace(/\s+/gu, ' ').trim();
+                if (!label || /^(?:点击)?下载(?:附件|文件)?$/u.test(label)) return;
+                const suffix = extname(filename);
+                const basename =
+                  suffix && label.toLowerCase().endsWith(suffix.toLowerCase())
+                    ? label.slice(0, -suffix.length)
+                    : label;
+                const name = safeFilename(basename + suffix);
+                if (name === filename || transfers.get(id) !== transfer) return;
+                const path = availablePath(name);
+                reservedPaths.delete(transfer.entry.path);
+                reservedPaths.add(path);
+                transfer.entry.filename = name;
+                transfer.entry.path = path;
+                notify(transfer);
+              })
+              .catch(() => {})
+          : undefined;
         item.on('updated', (_event, state) => {
           refreshBytes();
           transfer.entry.error =
@@ -135,7 +173,10 @@ export function createBrowserDownloads(
           transfer.item = undefined;
           void (async () => {
             try {
-              if (status === 'completed') await saveCompleted(transfer, staging);
+              if (status === 'completed') {
+                await nameReady;
+                await saveCompleted(transfer, staging);
+              }
               transfer.entry.status = status;
               transfer.entry.error =
                 status === 'interrupted' ? '下载中断，请重新打开下载链接。' : undefined;

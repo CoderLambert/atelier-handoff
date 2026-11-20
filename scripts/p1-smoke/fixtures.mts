@@ -40,8 +40,9 @@ export const automaticFollowupPrompt = 'Verify the saved automatic session mode 
 export const automaticFollowupAnswer = 'INSTALLED_SESSION_AUTOMATION_PERSISTED';
 export const chatLinkLabel = '查看本地测试网页';
 export const chatLinkPath = '/browser-chat-link';
-export const browserDownloadName = 'installed-job-list.xls';
-export const browserDownloadLabel = '下载职位表';
+export const browserDownloadLabel = '附件4.苏州市2026年市属事业单位公开招聘咨询电话一览表';
+export const browserDownloadName = `${browserDownloadLabel}.xls`;
+const browserDownloadPath = '/downloads/346049a64aa44dcda7e6e2ebd9cb7cad.xls';
 export const browserDownloadBody = 'job-list-fixture\n'.repeat(32_768);
 export const automaticToolCount = 17;
 export const automaticReceiptName = 'installed-automatic-receipt.txt';
@@ -567,7 +568,7 @@ export async function fixtures(): Promise<Fixtures> {
       res.end(samplePdf());
       return;
     }
-    if (req.url === `/downloads/${browserDownloadName}`) {
+    if (req.url === browserDownloadPath) {
       evidence.browserDownloadRequests++;
       res.writeHead(200, {
         'Content-Type': 'application/vnd.ms-excel',
@@ -591,7 +592,7 @@ export async function fixtures(): Promise<Fixtures> {
       return;
     }
     res.end(
-      `<!doctype html><html><head><title>Installed native fixture</title></head><body style="background:#e6f4eb;font:24px sans-serif;padding:32px"><h1>Installed native fixture</h1><label>Fixture input <input autofocus></label><p><a href="/downloads/${browserDownloadName}" target="_blank">${browserDownloadLabel}</a></p></body></html>`,
+      `<!doctype html><html><head><title>Installed native fixture</title></head><body style="background:#e6f4eb;font:24px sans-serif;padding:32px"><h1>Installed native fixture</h1><label>Fixture input <input autofocus></label><p><a href="${browserDownloadPath}" target="_blank">${browserDownloadLabel}</a></p></body></html>`,
     );
   });
   try {

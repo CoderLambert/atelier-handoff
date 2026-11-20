@@ -35,6 +35,8 @@
 
 - [x] 内置浏览器支持附件下载。安装态验证实际写盘、进度、保存路径与同名文件保留。[下载验收](../../../docs/evidence/desktop-p7-linux-x64/browser-downloads.json)
 
+- [x] 编号式附件使用可匹配的网页标题保存。安装态核对中文文件名、原后缀和同名文件保留。[文件名验收](../../../docs/evidence/desktop-p7-linux-x64/browser-download-filenames.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

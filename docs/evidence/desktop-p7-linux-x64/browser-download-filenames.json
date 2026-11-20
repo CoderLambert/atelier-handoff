@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "1420e6a374930d0d411c8fb678bca501bd1a5a7e15508ba68f73f0ac3c107307",
+    "atelier-0.2.0-linux-x64.tar.zst": "08f20474dfa82b2663ad2f55270adebed8d2901b0750ee5c7e2165537c15443a",
+    "resourceManifestSha256": "c0b526c36d193d64bfe347903ca563286c532c6e6fc5aba6b5e2568758a1e6b0"
+  },
+  "runtimeTestsPassed": 107,
+  "frontendTestsPassed": 35,
+  "installedDesktop": {
+    "environment": "Linux x64, packaged Electron, isolated Xvfb, local response without Content-Disposition",
+    "sourceUrlFilename": "346049a64aa44dcda7e6e2ebd9cb7cad.xls",
+    "filenameDisplayed": "附件4.苏州市2026年市属事业单位公开招聘咨询电话一览表.xls",
+    "fileSaved": "附件4.苏州市2026年市属事业单位公开招聘咨询电话一览表 (1).xls",
+    "completeSavePathDisplayed": true,
+    "existingFilePreserved": true,
+    "expectedFileContentsVerified": true,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 132,
+    "sameDataRootAndBrowserProfile": true,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true
+  }
+}

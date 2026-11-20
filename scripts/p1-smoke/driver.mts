@@ -1313,7 +1313,7 @@ async function functional(
       .waitFor({ state: 'visible', timeout: 10_000 });
     await dialog.getByRole('button', { name: '在文件夹中显示', exact: true }).waitFor();
     await dialog.getByRole('button', { name: '打开下载文件夹', exact: true }).waitFor();
-    const saved = join(destination, 'installed-job-list (1).xls');
+    const saved = join(destination, `${browserDownloadLabel} (1).xls`);
     assert.ok((await dialog.innerText()).includes(saved));
     assert.equal(await readFile(saved, 'utf8'), browserDownloadBody);
     assert.equal(await readFile(join(destination, browserDownloadName), 'utf8'), 'original file');
@@ -1326,6 +1326,7 @@ async function functional(
       progressVisible: true,
       systemDownloadsPath: true,
       duplicatePreserved: true,
+      readableAttachmentTitle: true,
       originalPageRetained: true,
       folderActionsVisible: true,
       savedBytes: Buffer.byteLength(browserDownloadBody),

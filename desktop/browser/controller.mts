@@ -66,7 +66,28 @@ export function createBrowserController(host: BrowserHost) {
     if (!tab || !ownsTab(tab) || !human.has(tab.projectId)) return undefined;
     try {
       siteUrl(url);
-      return tab.projectId;
+      return {
+        projectId: tab.projectId,
+        async findLinkTitle(originalUrl: string) {
+          const href = siteUrl(originalUrl);
+          const title: unknown = await tabContents(tab).executeJavaScriptInIsolatedWorld(1001, [
+            {
+              code: `(() => {
+              const titles = new Set();
+              for (const link of document.links) {
+                if (link.href !== ${JSON.stringify(href)}) continue;
+                const text = (link.innerText || link.textContent || '').trim().slice(0, 240);
+                if (text) titles.add(text);
+                if (titles.size > 1) return '';
+              }
+              return titles.values().next().value || '';
+            })()`,
+            },
+          ]);
+          if (ownsTab(tab) && typeof title === 'string') return title;
+          return undefined;
+        },
+      };
     } catch {
       return undefined;
     }
