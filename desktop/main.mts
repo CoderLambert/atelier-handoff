@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
- * @implementation 装配运行时监督、窗口、浏览器和原生文件入口，在适用的 Linux 安装环境中启动内置 Shunt，并协调连接恢复和退出清理。
- * @updated 2026-11-20T17:32:12+08:00
+ * @implementation 装配运行时监督、窗口和原生入口，将浏览器操作结果和结构化错误返回当前运行时。启动 Linux 安装包内置的 Shunt，并协调连接恢复和退出清理。
+ * @updated 2026-11-20T22:16:28+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';

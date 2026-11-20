@@ -1,7 +1,7 @@
 /**
  * @file 执行 Linux 安装态验收。
- * @implementation 驱动隔离界面与回环夹具，验证网页、下载、文件预览、系统打开、网关和进程管理等流程，并核对项目边界。
- * @updated 2026-11-20T20:17:41+08:00
+ * @implementation 驱动隔离界面和回环夹具，验证浏览器超时提示及后续操作、下载、文件预览、系统打开、网关与进程管理，并核对项目边界。
+ * @updated 2026-11-20T22:16:28+08:00
  */
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';

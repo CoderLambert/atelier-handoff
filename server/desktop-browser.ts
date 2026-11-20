@@ -1,7 +1,7 @@
 /**
- * @file 将服务端浏览器操作转发给桌面进程。
- * @implementation 校验 IPC 消息，关联请求结果并处理取消、超时和断连。
- * @updated 2026-11-20T02:00+08:00
+ * @file 将运行时浏览器操作转发给桌面进程并管理请求生命周期。
+ * @implementation 按请求标识关联 IPC 响应，在桌面操作时限外预留恢复时间，并处理取消、超时和断连。
+ * @updated 2026-11-20T22:16:28+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../shared/types.js';

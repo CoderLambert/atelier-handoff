@@ -1,7 +1,7 @@
 /**
- * @file 在隔离 Electron 中验证挂起浏览器工具的取消与后续导航。
+ * @file 在隔离 Electron 中运行浏览器取消、超时和状态恢复回归。
  * @implementation 临时编译真实控制器和故障夹具，用独立 Xvfb、profile 及本地网页运行有时限的回归，退出时清理测试子进程。
- * @updated 2026-11-20T21:57:13+08:00
+ * @updated 2026-11-20T22:16:28+08:00
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
