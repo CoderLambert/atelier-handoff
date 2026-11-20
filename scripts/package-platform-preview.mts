@@ -1,7 +1,7 @@
 /**
  * @file 生成供 Windows x64 和 macOS arm64 本机验收的桌面候选 ZIP。
- * @implementation 校验选取的 Linux 共享资源和目标平台输入包，使用 Electron Packager 装配，检查可执行文件格式与 ZIP，并记录检查结果。
- * @updated 2026-11-20T13:22:51+08:00
+ * @implementation 校验 Linux 共享资源与目标平台输入，替换并核验 SQLite 原生驱动、核对快照迁移文件，使用 Electron Packager 装配并检查候选 ZIP。
+ * @updated 2026-11-21T01:12:55+08:00
  */
 import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';

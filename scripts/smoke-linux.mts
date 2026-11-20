@@ -1,8 +1,8 @@
 #!/usr/bin/env -S tsx
 /**
  * @file 组织已安装 Linux 应用的冒烟验收。
- * @implementation 解析参数、准备隔离测试资源并运行验收驱动，记录产物信息。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 准备隔离环境并运行验收驱动，核对安装资源清单、SQLite 原生驱动及快照迁移文件，记录验收结果。
+ * @updated 2026-11-21T01:12:55+08:00
  */
 // Controller only. esbuild emits the driver into a private test-resource directory;
 // neither the driver nor its dependencies are copied into the distributed app.

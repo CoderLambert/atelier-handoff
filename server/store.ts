@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 提供记录、配置和事件读写，执行数据库版本迁移，包括排队与投递状态，在重启时处理运行中断与审批失效。
- * @updated 2026-11-21T00:28:46+08:00
+ * @implementation 管理记录、配置、事件与数据库迁移，让会话快照仓储和既有写操作共享连接，并在重启时处理运行中断与审批失效。
+ * @updated 2026-11-21T01:12:55+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
