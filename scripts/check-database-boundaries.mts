@@ -1,7 +1,7 @@
 /**
  * @file 检查运行时代码中的 SQL 和 ORM 导入边界。
- * @implementation 用 TypeScript 语法树定位静态查询、SQL 模板和驱动访问，按路径、指纹和出现次数核对遗留清单。
- * @updated 2026-11-21T00:00:00+08:00
+ * @implementation 用语法树定位数据库访问，按路径、指纹和次数核对遗留调用与单独登记的例外，检查例外关联的决策和测试文件，并报告失效条目。
+ * @updated 2026-11-21T00:51:43+08:00
  */
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';

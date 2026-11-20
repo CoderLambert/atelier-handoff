@@ -1,7 +1,7 @@
 /**
  * @file 检查项目架构规则和源码边界。
- * @implementation 验证规则引用、路径范围与源码扩展名，并检查 P2 导入边界和宿主模块循环。
- * @updated 2026-11-20T02:27:00+08:00
+ * @implementation 验证规则引用、路径范围与源码扩展名，并检查导入边界、宿主模块循环和数据库访问边界。
+ * @updated 2026-11-21T00:51:43+08:00
  */
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
