@@ -671,8 +671,8 @@ async function nativeBrowserSdk(
         const { state, current } = await snapshot(runId);
         return current.status === 'completed' ? state : undefined;
       },
-      60_000,
-      'real packaged SDK native browser round trip',
+      85_000,
+      'real packaged SDK native browser round trip including the navigation deadline',
     );
   const readRunId = await submit(browserReadPrompt, 'readonly');
   const readState = await complete(readRunId);
@@ -681,6 +681,18 @@ async function nativeBrowserSdk(
     0,
   );
   await page.getByText(browserReadAnswer, { exact: true }).waitFor({ state: 'visible' });
+  const browserFailure = page.getByRole('region', { name: '浏览器操作异常' });
+  await browserFailure.getByText(/60 秒内未完成。原标签已保留。/u).waitFor({ state: 'visible' });
+  await browserFailure.getByText('后续浏览器操作已成功执行。').waitFor({ state: 'visible' });
+  await page.getByText('Agent 正在操作', { exact: true }).waitFor({ state: 'hidden' });
+  await browserFailure.screenshot({ path: join(root, 'native-browser-timeout-notice.png') });
+  const readCalls = array(readState.tools)
+    .map((value) => record(value))
+    .filter((tool) => tool.runId === readRunId);
+  const timedOut = readCalls.find((tool) => tool.status === 'failed');
+  assert.equal(timedOut?.name, 'mcp__atelier__browser_navigate');
+  assert.match(string(timedOut?.output), /60 秒内未完成/u);
+  assert.equal(readCalls.filter((tool) => tool.status === 'succeeded').length, 2);
   const native = await until(
     async () =>
       run.browser
@@ -763,7 +775,7 @@ async function nativeBrowserSdk(
     browserManualValue,
   );
   const browserEvidence = fixture.evidence.nativeBrowser;
-  assert.equal(browserEvidence.readRequests, 3);
+  assert.equal(browserEvidence.readRequests, 4);
   assert.equal(browserEvidence.editRequests, 5);
   assert.equal(browserEvidence.clickResultReturned, true);
   assert.ok(browserEvidence.screenshotArtifactId);
@@ -817,6 +829,13 @@ async function nativeBrowserSdk(
     revoked: true,
     readonlyRun: readRunId,
     editRun: editRunId,
+    navigationTimeout: {
+      durationMs: Date.parse(string(timedOut?.endedAt)) - Date.parse(string(timedOut?.startedAt)),
+      failureVisibleInChat: true,
+      busyCleared: true,
+      samePageReadAfterTimeout: true,
+      sdkRunCompleted: true,
+    },
     separateNativeTarget: true,
     header,
     manualTakeoverAndRelease: true,
@@ -1634,7 +1653,7 @@ async function reopen(
   assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no receipt model request');
   assert.equal(
     fixture.evidence.nativeBrowser.readRequests,
-    3,
+    4,
     'Offline reopen must make no browser read request',
   );
   assert.equal(

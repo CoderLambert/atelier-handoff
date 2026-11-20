@@ -39,6 +39,8 @@
 
 - [x] 下载列表支持 FileVista 预览、系统应用打开和保留定位入口。安装态验证真实 XLS 内容及原生打开链路。[下载预览验收](../../../docs/evidence/desktop-p7-linux-x64/browser-download-previews.json)
 
+- [x] 浏览器工具按操作设定时限，超时后释放占用，尽量保留当前页面。安装态验证聊天失败提示、同页恢复和任务继续执行。[超时恢复验收](../../../docs/evidence/desktop-p7-linux-x64/browser-timeout-recovery.json)
+
 ## 另行安排的发布与平台验收
 
 - Linux 对外发行，待确认应用及 `@atelier/markdown` 的许可证与发布授权。

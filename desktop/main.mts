@@ -24,10 +24,12 @@ import { createBrowserController } from './browser/controller.mjs';
 import {
   desktopBrowserCallSchema,
   desktopBrowserCancelSchema,
+  desktopBrowserErrorCodeSchema,
   desktopBrowserProtocolVersion,
   desktopBrowserResultSchema,
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
+import { AppError } from '../shared/types.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The development bundle lives in dist/desktop; source execution lives in desktop.
@@ -92,6 +94,8 @@ async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<v
     result = desktopBrowserResultSchema.parse({
       ...header,
       error: error instanceof Error ? error.message : '浏览器操作失败。',
+      errorCode: desktopBrowserErrorCodeSchema.safeParse(error instanceof AppError && error.code)
+        .data,
     });
   }
   if (supervisor.owns(child) && child.connected && !stopping)

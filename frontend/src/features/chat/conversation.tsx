@@ -50,6 +50,11 @@ const toolLabels: Record<string, string> = {
   weather_lookup: '查询天气',
   update_plan: '更新计划',
   publish_artifact: '发布交付物',
+  browser_navigate: '打开网页',
+  browser_snapshot: '读取网页',
+  browser_take_screenshot: '截取网页',
+  browser_click: '点击网页',
+  browser_type: '输入网页文本',
 };
 const toolStatuses: Record<ToolCall['status'], string> = {
   running: '进行中',
@@ -156,6 +161,29 @@ function RunProgress({
           </ol>
         </details>
       ) : null}
+    </section>
+  );
+}
+
+function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () => void }) {
+  const browserTools = tools.filter((tool) => tool.name.startsWith('mcp__atelier__browser_'));
+  const last = browserTools.findLast((tool) => tool.status === 'failed');
+  if (!last) return null;
+  const continued = browserTools.some(
+    (tool) => tool.status === 'succeeded' && last.endedAt && tool.startedAt >= last.endedAt,
+  );
+  return (
+    <section className="run-recovery" aria-label="浏览器操作异常">
+      <div role="status">
+        <strong>{toolLabel(last.name)}失败</strong>
+        <p className="break-words">{last.output.slice(0, 550) || '请查看执行轨迹了解原因。'}</p>
+        {continued ? <p>后续浏览器操作已成功执行。</p> : null}
+      </div>
+      <div className="run-recovery-actions">
+        <Button type="button" variant="outline" size="sm" onClick={onTrace}>
+          查看浏览器执行轨迹
+        </Button>
+      </div>
     </section>
   );
 }
@@ -446,6 +474,9 @@ export function Conversation({
                   )}
                   {!assistant && run ? (
                     <MessageContext run={run} attachments={indexes.attachments} />
+                  ) : null}
+                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
+                    <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
                   ) : null}
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunResult

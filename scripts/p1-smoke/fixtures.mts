@@ -64,6 +64,7 @@ const automaticToolIds = {
 } as const;
 const browserToolIds = {
   navigate: 'toolu_installed_browser_navigate',
+  stalledNavigation: 'toolu_installed_browser_stalled_navigation',
   initialSnapshot: 'toolu_installed_browser_initial_snapshot',
   refreshedSnapshot: 'toolu_installed_browser_refreshed_snapshot',
   click: 'toolu_installed_browser_click',
@@ -120,7 +121,7 @@ function browserMessage(
     assert.equal(tools.includes(`mcp__atelier__${name}`), edit, `${name} is edit mode only`);
   const url = `${siteUrl}/browser`;
   const step = edit ? ++evidence.editRequests : ++evidence.readRequests;
-  assert.ok(step <= (edit ? 5 : 3), 'Unexpected native browser model request');
+  assert.ok(step <= (edit ? 5 : 4), 'Unexpected native browser model request');
   const invoke = (id: string, name: string, input: Record<string, unknown>) => {
     const fullName = `mcp__atelier__${name}`;
     evidence.calls.push({ name: fullName, input });
@@ -130,6 +131,19 @@ function browserMessage(
     if (step === 1) return invoke(browserToolIds.navigate, 'browser_navigate', { url });
     if (step === 2) {
       assert.ok(toolResultText(messages, browserToolIds.navigate).includes(url));
+      return invoke(browserToolIds.stalledNavigation, 'browser_navigate', {
+        url: `${siteUrl}/browser-stalled`,
+      });
+    }
+    if (step === 3) {
+      const failure = messages
+        .flatMap((message) =>
+          Array.isArray(message.content) ? (message.content as unknown[]) : [],
+        )
+        .map((value) => record(value, 'content block'))
+        .find((block) => block.tool_use_id === browserToolIds.stalledNavigation);
+      assert.equal(failure?.is_error, true, 'The SDK must receive a real browser tool failure');
+      assert.match(JSON.stringify(failure), /60 秒内未完成。原标签已保留。/u);
       return invoke(browserToolIds.initialSnapshot, 'browser_snapshot', {});
     }
     evidence.initialRef = snapshotButton(messages, browserToolIds.initialSnapshot, url).ref;
@@ -560,6 +574,8 @@ export async function fixtures(): Promise<Fixtures> {
     })();
   });
   const site = createServer((req, res) => {
+    // Leave the response pending so Chromium times out before committing a new page.
+    if (req.url === '/browser-stalled') return;
     if (req.url === '/mcp') {
       void approvalMcp(req, res, evidence).catch((error: unknown) =>
         evidence.errors.push(errorText(error)),

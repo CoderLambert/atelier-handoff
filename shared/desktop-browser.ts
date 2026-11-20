@@ -194,6 +194,14 @@ export const desktopBrowserArgs = {
 };
 export type DesktopBrowserToolName = keyof typeof desktopBrowserArgs;
 
+export const desktopBrowserTimeoutMs = (name: DesktopBrowserToolName) =>
+  name === 'browser_navigate' ? 60_000 : 30_000;
+export const desktopBrowserIpcGraceMs = 5_000;
+export const desktopBrowserErrorCodeSchema = z.enum([
+  'DESKTOP_BROWSER_TIMEOUT',
+  'DESKTOP_BROWSER_RENDERER_GONE',
+]);
+
 export const desktopBrowserCallSchema = z.discriminatedUnion('name', [
   z.strictObject({
     ...callHeader,
@@ -254,6 +262,7 @@ export const desktopBrowserResultSchema = z.union([
   z.strictObject({
     ...resultHeader,
     error: z.string().min(1),
+    errorCode: desktopBrowserErrorCodeSchema.optional(),
     text: z.never().optional(),
     png: z.never().optional(),
   }),

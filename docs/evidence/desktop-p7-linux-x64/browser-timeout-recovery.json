@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-20",
+  "status": "passed",
+  "archives": {
+    "atelier-0.2.0-1-x86_64.pkg.tar.zst": "66f7c6509b65ca764604217790207c064b041ad8901336a4f152525dd16cb0ac",
+    "atelier-0.2.0-linux-x64.tar.zst": "4318c2bd0f6306163718fc74719404eeb711d045647e26f4a0c69bb1b8ac2477",
+    "resourceInventorySha256": "9454a79c186a8e83f68945e8b4723868b4d482e04d89d2deb12c052d953b87e1"
+  },
+  "runtimeTestsPassed": 107,
+  "frontendTestsPassed": 35,
+  "isolatedElectron": {
+    "command": "node --import tsx scripts/smoke-browser-cancellation.mts --xvfb /path/to/Xvfb",
+    "slowSuccessfulNavigationMs": 31014,
+    "readCancellationPreservedPageAndUnsavedInput": true,
+    "inputTimeoutReplacedViewInSamePartition": true,
+    "lateResponseAndCancelIgnored": true,
+    "otherProjectPreserved": true,
+    "rendererExitDetectedAndRecovered": true,
+    "blankPageFailsBeforeCDP": true
+  },
+  "installedDesktop": {
+    "environment": "Packaged Linux x64, real SDK, isolated Xvfb and loopback fixtures",
+    "timedOutNavigationMs": 60010,
+    "failureReturnedToSdk": true,
+    "failureVisibleInChat": true,
+    "busyCleared": true,
+    "subsequentReadOfSamePageSucceeded": true,
+    "runCompletedWithAssistantReply": true,
+    "paidModelCalls": 0
+  },
+  "desktopSwitch": {
+    "normalShutdownMs": 129,
+    "runtimeLockReleasedBeforeLaunch": true,
+    "sameDataRootBrowserProfileAndOrigin": true,
+    "sessionsPreserved": 14,
+    "nonEmptyDraftsPreserved": 2,
+    "settingsUnchanged": true
+  }
+}

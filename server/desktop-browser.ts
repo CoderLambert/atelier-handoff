@@ -8,9 +8,11 @@ import { AppError } from '../shared/types.js';
 import {
   desktopBrowserCallSchema,
   desktopBrowserCancelSchema,
+  desktopBrowserIpcGraceMs,
   desktopBrowserProtocolVersion,
   desktopBrowserResultIdentitySchema,
   desktopBrowserResultSchema,
+  desktopBrowserTimeoutMs,
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
 
@@ -69,7 +71,11 @@ export async function callDesktopBrowser(
   if (!parsed.success)
     throw new AppError('DESKTOP_BROWSER_INVALID_INPUT', '桌面浏览器操作参数无效。', 400);
   const request = parsed.data;
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+  // Give main time to finish recovery and return its more specific result.
+  const ipcTimeout = AbortSignal.timeout(
+    desktopBrowserTimeoutMs(request.name) + desktopBrowserIpcGraceMs,
+  );
+  const deadline = AbortSignal.any([signal, ipcTimeout]);
   deadline.throwIfAborted();
   return new Promise<DesktopBrowserResult>((resolve, reject) => {
     const clean = () => {
@@ -89,13 +95,29 @@ export async function callDesktopBrowser(
         });
         process.send(message, () => {});
       }
-      fail(deadline.reason);
+      if (deadline.reason === ipcTimeout.reason) {
+        const input = request.name === 'browser_click' || request.name === 'browser_type';
+        fail(
+          new AppError(
+            'DESKTOP_BROWSER_TIMEOUT',
+            '桌面浏览器未返回结果，已请求取消。请确认浏览器状态。' +
+              (input ? '网站可能已收到操作。请先核对结果，勿直接重试。' : ''),
+            504,
+          ),
+        );
+      } else fail(deadline.reason);
     };
     pending.set(request.id, {
       resolve(result) {
         clean();
         if (result.error !== undefined)
-          reject(new AppError('DESKTOP_BROWSER_FAILED', result.error, 409));
+          reject(
+            new AppError(
+              result.errorCode ?? 'DESKTOP_BROWSER_FAILED',
+              result.error,
+              result.errorCode === 'DESKTOP_BROWSER_TIMEOUT' ? 504 : result.errorCode ? 502 : 409,
+            ),
+          );
         else resolve(result);
       },
       reject: fail,

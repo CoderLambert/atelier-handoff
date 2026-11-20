@@ -24,11 +24,17 @@ import {
   desktopBrowserLayoutSchema,
   desktopBrowserProjectIdSchema,
   desktopBrowserStateSchema,
+  desktopBrowserTimeoutMs,
   desktopBrowserUrlSchema,
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
 } from '../../shared/desktop-browser.js';
+import { AppError } from '../../shared/types.js';
 import { createBrowserDownloads } from './downloads.mjs';
+
+const stopGraceMs = 1_000;
+const rendererGone = () =>
+  new AppError('DESKTOP_BROWSER_RENDERER_GONE', '网页进程已退出，已替换受影响的标签。', 502);
 
 interface BrowserHost {
   getWindow(): BrowserWindow | undefined;
@@ -44,7 +50,12 @@ export function createBrowserController(host: BrowserHost) {
     view: WebContentsView;
     busy: boolean;
     refs: Map<string, { id: number; editable: boolean }>;
-    operation?: { id: string; abort: AbortController; done: Promise<void> };
+    operation?: {
+      id: string;
+      abort: AbortController;
+      done: Promise<void>;
+      retire: (error?: Error) => void;
+    };
     allowedOrigins?: string[];
     expectedKey?: (input: Input) => boolean;
     expectedMouse?: (input: MouseInputEvent) => boolean;
@@ -295,6 +306,10 @@ export function createBrowserController(host: BrowserHost) {
     wc.on('did-navigate-in-page', () => state(projectId, tab));
     wc.on('page-title-updated', () => state(projectId, tab));
     wc.on('did-finish-load', () => state(projectId, tab));
+    wc.on('render-process-gone', () => {
+      tab.refs.clear();
+      if (tab.operation && ownsTab(tab)) replaceTab(tab, rendererGone());
+    });
     wc.on('destroyed', () => {
       contentsOwners.delete(wc);
       removeTab(tab);
@@ -344,10 +359,11 @@ export function createBrowserController(host: BrowserHost) {
     tab.view.setBounds({ x, y, width: w, height: h });
   }
 
-  function removeTab(tab: BrowserTab): void {
+  function removeTab(tab: BrowserTab, error?: Error): void {
     if (tabs.get(tab.id) !== tab) return;
     const { projectId } = tab;
     tabs.delete(tab.id);
+    tab.operation?.retire(error);
     tab.operation?.abort.abort();
     if (visible === tab) hideVisible();
     if (agentTarget.get(projectId) === tab.id) agentTarget.delete(projectId);
@@ -356,7 +372,20 @@ export function createBrowserController(host: BrowserHost) {
       if (replacement) selected.set(projectId, replacement.id);
       else selected.delete(projectId);
     }
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+    if (!tab.view.webContents.isDestroyed())
+      tab.view.webContents.close({ waitForBeforeUnload: false });
+  }
+
+  function replaceTab(tab: BrowserTab, error?: Error): void {
+    const { projectId } = tab;
+    const wasSelected = selected.get(projectId) === tab.id;
+    const wasAgentTarget = agentTarget.get(projectId) === tab.id;
+    removeTab(tab, error);
+    if (host.isStopping() || host.getWindow()?.isDestroyed() !== false) return;
+    const replacement = createTab(projectId);
+    if (wasSelected) selected.set(projectId, replacement.id);
+    if (wasAgentTarget) agentTarget.set(projectId, replacement.id);
+    repaint(projectId);
   }
 
   function repaint(projectId: string): void {
@@ -375,20 +404,7 @@ export function createBrowserController(host: BrowserHost) {
         const operation = tab.operation;
         if (!operation) continue;
         operation.abort.abort();
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([
-            operation.done,
-            new Promise<void>((resolve) => {
-              timer = setTimeout(() => {
-                removeTab(tab);
-                resolve();
-              }, 1000);
-            }),
-          ]);
-        } finally {
-          clearTimeout(timer);
-        }
+        await operation.done;
       }
       if (!origin || origin !== host.getOrigin()) throw new Error('工作台连接已更新。');
       human.add(projectId);
@@ -518,10 +534,7 @@ export function createBrowserController(host: BrowserHost) {
     const { projectId, allowedOrigins } = request;
     if (human.has(projectId) || transferring.has(projectId)) throw new Error('浏览器由用户控制。');
     const tab = getTab(projectId, 'agent');
-    if (tab.busy) throw new Error('浏览器正在被接管或执行操作，请稍后重试。');
-    tab.busy = true;
-    tab.allowedOrigins = allowedOrigins;
-    state(projectId, tab);
+    if (tab.busy) throw new Error('该浏览器标签正在处理上一条操作，请稍后重试。');
     const wc = tabContents(tab);
     const cdp = wc.debugger;
     const abort = new AbortController();
@@ -529,30 +542,74 @@ export function createBrowserController(host: BrowserHost) {
     const done = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    tab.operation = { id: request.id, abort, done };
+    let viewFailure: Error | undefined;
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const retire = (error?: Error) => {
+      viewFailure = error;
+      release();
+    };
+    const waitForNative = <T,>(pending: Promise<T>): Promise<T> =>
+      Promise.race([
+        pending,
+        released.then(() => {
+          throw viewFailure ?? new Error('已结束对网页操作的等待。');
+        }),
+      ]);
+    const timeoutMs = desktopBrowserTimeoutMs(request.name);
+    const timeoutReason = new Error('Browser tool deadline exceeded');
+    const readOnly =
+      request.name === 'browser_snapshot' || request.name === 'browser_take_screenshot';
+    let inputDispatched = false;
+    let replaced = false;
+    tab.operation = { id: request.id, abort, done, retire };
+    tab.busy = true;
+    tab.allowedOrigins = allowedOrigins;
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
     const stop = () => {
-      if (!wc.isDestroyed()) wc.stop();
+      tab.refs.clear();
+      tab.expectedKey = undefined;
+      tab.expectedMouse = undefined;
+      if (!ownsTab(tab)) return;
+      if (readOnly) {
+        // Reads can be abandoned without reloading the page or stopping its navigation.
+        release();
+        if (request.name === 'browser_snapshot' && cdp.isAttached()) cdp.detach();
+        return;
+      }
+      cleanupTimer = setTimeout(() => {
+        if (tab.operation?.id !== request.id || !ownsTab(tab)) return;
+        replaced = true;
+        replaceTab(tab);
+      }, stopGraceMs);
+      if (request.name === 'browser_navigate') wc.stop();
     };
     abort.signal.addEventListener('abort', stop, { once: true });
+    const deadline = setTimeout(() => abort.abort(timeoutReason), timeoutMs);
     const send = async (name: string, params?: object): Promise<unknown> => {
       abort.signal.throwIfAborted();
-      const result: unknown = await cdp.sendCommand(name, params);
+      if (name.startsWith('Input.')) inputDispatched = true;
+      const result: unknown = await waitForNative(cdp.sendCommand(name, params));
       abort.signal.throwIfAborted();
       return result;
     };
     try {
+      state(projectId, tab);
       if (request.name === 'browser_navigate') {
         const destination = siteUrl(request.args.url);
         if (allowedOrigins && !allowedOrigins.includes(new URL(destination).origin))
           throw new Error('站点未在项目的浏览器授权范围内。');
-        await wc.loadURL(destination);
+        await waitForNative(wc.loadURL(destination));
         abort.signal.throwIfAborted();
         tabContents(tab);
         return { text: `已打开 ${wc.getURL()}\n页面标题：${wc.getTitle()}` };
       }
-      if (allowedOrigins && !allowedOrigins.includes(new URL(wc.getURL()).origin))
+      const url = wc.getURL();
+      if (!url || url === 'about:blank') throw new Error('当前标签尚未打开网页，请先打开网址。');
+      if (allowedOrigins && !allowedOrigins.includes(new URL(url).origin))
         throw new Error('当前页面未在项目的浏览器授权范围内。');
-      if (!cdp.isAttached()) cdp.attach('1.3');
       if (request.name === 'browser_take_screenshot') {
         const detached = !tab.owner.contentView.children.includes(tab.view);
         if (detached) {
@@ -560,7 +617,7 @@ export function createBrowserController(host: BrowserHost) {
           tab.owner.contentView.addChildView(tab.view, 0);
         }
         try {
-          const capture = await wc.capturePage(undefined, { stayHidden: false });
+          const capture = await waitForNative(wc.capturePage(undefined, { stayHidden: false }));
           abort.signal.throwIfAborted();
           tabContents(tab);
           return { png: capture.toPNG().toString('base64') };
@@ -574,6 +631,7 @@ export function createBrowserController(host: BrowserHost) {
             tab.owner.contentView.removeChildView(tab.view);
         }
       }
+      if (!cdp.isAttached()) cdp.attach('1.3');
       if (request.name === 'browser_snapshot') {
         const { nodes } = accessibilityTreeSchema.parse(await send('Accessibility.getFullAXTree'));
         tabContents(tab);
@@ -685,14 +743,30 @@ export function createBrowserController(host: BrowserHost) {
       tab.refs.clear();
       return { text: '网页操作已执行。请重新读取页面确认结果。' };
     } catch (error) {
-      if (abort.signal.aborted)
-        throw new Error('网页操作已取消。若此前已派发操作，请确认页面结果。');
+      if (ownsTab(tab) && wc.isCrashed()) replaceTab(tab, rendererGone());
+      const verifyInput = inputDispatched ? '网站可能已收到操作。请先核对结果，勿直接重试。' : '';
+      if (viewFailure instanceof AppError)
+        throw new AppError(viewFailure.code, viewFailure.message + verifyInput, viewFailure.status);
+      const recovery = replaced
+        ? '旧标签未响应，已换成空白标签。请重新打开网页。'
+        : '原标签已保留。';
+      if (abort.signal.reason === timeoutReason)
+        throw new AppError(
+          'DESKTOP_BROWSER_TIMEOUT',
+          `网页操作在 ${timeoutMs / 1000} 秒内未完成。${recovery}${verifyInput}`,
+          504,
+        );
+      if (abort.signal.aborted) throw new Error(`网页操作已取消。${verifyInput}`);
+      if (verifyInput && error instanceof Error) throw new Error(error.message + verifyInput);
       throw error;
     } finally {
+      clearTimeout(deadline);
+      clearTimeout(cleanupTimer);
+      abort.signal.removeEventListener('abort', stop);
       tab.operation = undefined;
-      finish();
       tab.busy = false;
       tab.allowedOrigins = undefined;
+      finish();
       state(projectId, tab);
     }
   }
