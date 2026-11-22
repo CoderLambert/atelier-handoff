@@ -1,8 +1,16 @@
 # atelier. · 本机 AI 工作台
 
-面向个人项目的 AI 工作台。现已接通真实对话、工具轨迹、逐次审批、文件操作、停止与续接、附件、成果和历史。底层使用官方 Claude Agent SDK，通过本机 Shunt 调用 `gpt-6.1-sol`。
+atelier 是一个面向个人项目的桌面 AI 工作台。在同一个窗口中绑定本地项目，与 AI 协作处理文件、命令和网页，并查看执行过程、审批记录与生成的成果。
 
-现有浅色三栏设计继续沿用。原来的静态演示完整保留在 [prototype/](prototype/index.html)，与真实应用的数据和执行逻辑分开。
+- **对话与执行**：流式对话、工具调用明细、子任务进度、停止与会话恢复。
+- **项目与文件**：浏览项目文件、引用上下文、上传文本附件，以及预览和导出成果。
+- **浏览器协作**：使用内置网页面板，按项目授权 Agent 操作，并可随时人工接管。
+- **权限与扩展**：按会话选择运行模式，管理项目智能体、Skills 和 MCP 工具。
+- **本地数据**：项目、会话与运行记录保存在本机，桌面版支持数据迁入和备份。
+
+应用使用 Electron、React、TypeScript 和 SQLite，Agent 执行基于 Claude Agent SDK。当前优先支持 Linux x64；Windows 和 macOS 仍处于候选构建阶段，尚未完成平台验收。模型连接需要可用的本机网关及相应账号配置。
+
+静态设计参考见 [prototype/](prototype/index.html)，产品范围与进度见[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)。
 
 ## 桌面版
 
@@ -21,8 +29,9 @@ Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运�
 本轮验证环境：Node **24.21.0**、npm 11.19.0、Claude Agent SDK **0.3.326** / CLI **2.1.326**、Shunt **0.64.0**。Node 最低要求 24，推荐使用已验证版本。
 
 ```sh
-cd /home/lambert/lambert-workspace/atelier-handoff
-export PATH=/home/lambert/.local/share/mise/installs/node/24.21.0/bin:$PATH
+git clone https://github.com/CoderLambert/atelier-handoff.git
+cd atelier-handoff
+# 使用 Node 24；推荐 24.21.0
 npm ci
 npm start
 ```
@@ -155,7 +164,7 @@ npm run test:live -- --authorized
 npm run test:live -- --authorized --final-tools
 ```
 
-当前实施与验收见 [本机首版完成记录](docs/local-release.md)，逐项状态见 [开发任务清单](docs/development-tasks.md)。源码提交按功能分批保存在本地 Git；没有自动推送或部署。
+当前实施与验收见 [本机首版完成记录](docs/local-release.md)，逐项状态见 [开发任务清单](docs/development-tasks.md)。仓库内容和验收记录不代表已完成对外发行。
 
 ## 同步 OpenWiki
 
