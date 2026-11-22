@@ -1,6 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import type { Draft, Extension } from '@shared/types';
+import { uiI18n } from '@/i18n';
+import { capabilityLabels, initialConfig } from '@/features/agents/api';
 import {
   allowedTools,
   choices,
@@ -198,6 +200,35 @@ test('MCP choices union permitted tools at the same version and replace stale se
     ).draft.extensionSelections?.[0]?.tools,
     ['write'],
   );
+});
+
+test('completion labels follow language changes while selections and template instructions stay as data', async () => {
+  const template = initialConfig(true);
+  const selection = { id: skill.id, version: 1 };
+  try {
+    await uiI18n.changeLanguage('en');
+    assert.equal(capabilityLabels.read.label, 'Read files');
+    assert.equal(selectionReason(undefined, selection, 'readonly', true), 'Unavailable');
+    const readRows = choices([mcp], atEnd('#')!, '#', 'readonly');
+    const editRows = choices([mcp], atEnd('#')!, '#', 'edit');
+    assert.equal(readRows[0]?.description, '1 allowed tool');
+    assert.equal(editRows[0]?.description, '2 allowed tools');
+    assert.equal(readRows[1]?.description, 'Read docs');
+    const token = atEnd('#docs');
+    const choice = readRows[0];
+    assert.ok(token);
+    assert.ok(choice);
+    assert.deepEqual(
+      chooseExtension({ ...draft, text: '#docs' }, token, choice).draft.extensionSelections,
+      [{ id: mcp.id, version: mcp.version, tools: ['read'] }],
+    );
+    assert.deepEqual(initialConfig(true), template);
+    await uiI18n.changeLanguage('zh-CN');
+    assert.equal(capabilityLabels.read.label, '读取文件');
+    assert.equal(choices([mcp], atEnd('#')!, '#', 'readonly')[0]?.description, '1 个已允许的工具');
+  } finally {
+    await uiI18n.changeLanguage('zh-CN');
+  }
 });
 
 test('chips report missing, disabled, incompatible, changed and restricted tools', () => {

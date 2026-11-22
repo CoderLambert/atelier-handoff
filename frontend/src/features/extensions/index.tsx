@@ -1,13 +1,28 @@
+/**
+ * @file 提供按项目管理扩展的目录页面。
+ * @implementation 按类型、搜索词和状态展示扩展，并协调编辑、导入、市场和删除入口。
+ * @updated 2026-11-23T04:54:16+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import { useDeferredValue, useId, useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import type { Extension, Project } from '@shared/types';
-import { ActionButton, ErrorMessage, FeatureDialog, SourceLink, Switch } from './components';
+import { FolderPlus, Plus, RefreshCw, Store, Trash2 } from 'lucide-react';
+import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
+import { Switch } from '@/components/ui/switch';
+import {
+  ActionButton,
+  ErrorMessage,
+  ExtensionKindIcon,
+  FeatureDialog,
+  SourceLink,
+} from './components';
 import {
   autoEnabled,
   allowsAuto,
   extensionKeys,
+  extensionDetail,
   kinds,
-  marks,
   messageOf,
   testLabels,
   useExtensionMutation,
@@ -38,37 +53,32 @@ export interface ExtensionsPageProps {
   onStartSkill?: StartSkill;
 }
 export default function ExtensionsPage({ projects, projectId, onStartSkill }: ExtensionsPageProps) {
+  const { t } = useUiTranslation('extensions');
   const [pinnedId, setPinnedId] = useState<string>();
   const project =
     projects.find((value) => value.id === pinnedId) ??
     projects.find((value) => value.id === projectId) ??
     projects[0];
   return (
-    <section className="ext-page" aria-label="项目扩展">
+    <section className="ext-page" aria-label={t('extensions.pageTitle')}>
       <header className="ext-heading">
         <div>
-          <p className="ext-eyebrow">EXTENSIONS</p>
-          <h1>项目扩展</h1>
-          <p className="ext-subtitle">为每个项目配置常用指令、Skill 与工具服务。</p>
+          <p className="ext-eyebrow">{t('extensions.eyebrow')}</p>
+          <h1>{t('extensions.pageTitle')}</h1>
+          <p className="ext-subtitle">{t('extensions.subtitle')}</p>
         </div>
-        <label className="ext-project-label">
-          当前项目
-          <select
-            aria-label="选择扩展所属项目"
-            value={project?.id ?? ''}
-            onChange={(event) => setPinnedId(event.target.value)}
-          >
-            {projects.length ? (
-              projects.map((value) => (
-                <option key={value.id} value={value.id}>
-                  {value.name || value.path || value.id}
-                </option>
-              ))
-            ) : (
-              <option value="">暂无项目</option>
-            )}
-          </select>
-        </label>
+        <CatalogProjectSelect
+          className="ext-project-label"
+          label={t('common.currentProject')}
+          selectLabel={t('extensions.projectSelector')}
+          value={project?.id ?? ''}
+          options={projects.map((value) => ({
+            value: value.id,
+            label: value.name || value.path || value.id,
+          }))}
+          emptyLabel={t('common.noProjects')}
+          onValueChange={setPinnedId}
+        />
       </header>
       <ProjectExtensions
         key={project?.id ?? 'none'}
@@ -85,6 +95,7 @@ function ProjectExtensions({
   project?: Project;
   onStartSkill?: ExtensionsPageProps['onStartSkill'];
 }) {
+  const { t } = useUiTranslation('extensions');
   const projectId = project?.id ?? '';
   const query = useExtensions(projectId);
   const toggle = useExtensionMutation(projectId);
@@ -123,11 +134,11 @@ function ProjectExtensions({
       setNotice(
         field === 'autoInvoke'
           ? old
-            ? '已关闭自动调用'
-            : '已允许自动调用，下一轮对话生效'
+            ? t('extensions.autoOff')
+            : t('extensions.autoOn')
           : old
-            ? '扩展已停用'
-            : '扩展已启用',
+            ? t('extensions.disabledNotice')
+            : t('extensions.enabledNotice'),
       );
     } catch (cause) {
       setErrors((value) => ({ ...value, [item.id]: messageOf(cause) }));
@@ -135,7 +146,7 @@ function ProjectExtensions({
   }
   return (
     <>
-      <div className="ext-tabs" role="tablist" aria-label="扩展类型">
+      <div className="ext-tabs" role="tablist" aria-label={t('extensions.tabsLabel')}>
         {tabs.map((value, index) => (
           <button
             ref={(element) => {
@@ -163,7 +174,7 @@ function ProjectExtensions({
             }}
           >
             <span className="ext-tab-mark" aria-hidden="true">
-              {marks[value]}
+              <ExtensionKindIcon kind={value} />
             </span>
             {kinds[value]}
             <span className="ext-count">
@@ -172,63 +183,65 @@ function ProjectExtensions({
           </button>
         ))}
       </div>
-      <div className="ext-toolbar">
-        <label className="ext-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            placeholder="搜索名称或描述"
-            aria-label="搜索扩展"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <label className="ext-filter">
-          状态
-          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-            <option value="all">全部</option>
-            <option value="enabled">已启用</option>
-            <option value="disabled">已停用</option>
-          </select>
-        </label>
-        <div className="ext-toolbar-actions">
-          {kind === 'skill' ? (
-            <ActionButton
-              primary
-              disabled={!projectId || pending}
-              onClick={() => setModal({ type: 'market' })}
-            >
-              Skill 市场
-            </ActionButton>
-          ) : null}
+      <CatalogToolbar
+        className="ext-toolbar"
+        search={{
+          label: t('extensions.searchLabel'),
+          placeholder: t('extensions.searchPlaceholder'),
+          value: search,
+          onChange: setSearch,
+        }}
+        filter={{
+          label: t('common.status'),
+          value: filter,
+          options: [
+            { value: 'all', label: t('common.all') },
+            { value: 'enabled', label: t('common.enabled') },
+            { value: 'disabled', label: t('common.disabled') },
+          ],
+          onChange: setFilter,
+        }}
+      >
+        {kind === 'skill' ? (
+          <ActionButton
+            variant="default"
+            disabled={!projectId || pending}
+            onClick={() => setModal({ type: 'market' })}
+          >
+            <Store data-icon="inline-start" aria-hidden="true" />
+            {t('extensions.market')}
+          </ActionButton>
+        ) : null}
+        <ActionButton
+          disabled={!projectId || pending}
+          onClick={() => setModal({ type: 'public', kind })}
+        >
+          {t('extensions.publicImport')}
+        </ActionButton>
+        {kind !== 'mcp' ? (
           <ActionButton
             disabled={!projectId || pending}
-            onClick={() => setModal({ type: 'public', kind })}
+            onClick={() => setModal({ type: 'editor', kind, importFile: true })}
           >
-            从公开来源导入
+            {t('extensions.importMarkdown')}
           </ActionButton>
-          {kind !== 'mcp' ? (
-            <ActionButton
-              disabled={!projectId || pending}
-              onClick={() => setModal({ type: 'editor', kind, importFile: true })}
-            >
-              导入 Markdown
-            </ActionButton>
-          ) : null}
-          <ActionButton
-            disabled={!projectId || query.isPending || pending}
-            onClick={() => setModal({ type: 'editor', kind })}
-          >
-            + {kind === 'mcp' ? '添加 MCP' : `新建 ${kinds[kind]}`}
-          </ActionButton>
-        </div>
-      </div>
+        ) : null}
+        <ActionButton
+          disabled={!projectId || query.isPending || pending}
+          onClick={() => setModal({ type: 'editor', kind })}
+        >
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          {kind === 'mcp'
+            ? t('extensions.addMcp')
+            : t('extensions.createKind', { kind: kinds[kind] })}
+        </ActionButton>
+      </CatalogToolbar>
       <p className="ext-scope-note">
         {kind === 'mcp'
-          ? '只在当前项目生效。连接测试通过后，可在会话中输入 # 选择已允许的工具。'
+          ? t('extensions.mcpScope')
           : kind === 'skill'
-            ? '只在当前项目生效。允许自动调用的 Skill 可由模型按需使用；输入 / 可手动选择支持的 Skill。'
-            : '只在当前项目生效。在会话中输入 /，选择命令。'}
+            ? t('extensions.skillScope')
+            : t('extensions.commandScope')}
       </p>
       <div className="ext-page-message" role="status" aria-live="polite">
         {notice}
@@ -237,7 +250,8 @@ function ProjectExtensions({
         <div className="ext-error" role="alert">
           {messageOf(query.error)}{' '}
           <ActionButton disabled={query.isFetching} onClick={() => void query.refetch()}>
-            重新加载
+            <RefreshCw data-icon="inline-start" aria-hidden="true" />
+            {t('common.reload')}
           </ActionButton>
         </div>
       ) : null}
@@ -251,27 +265,33 @@ function ProjectExtensions({
       >
         {!project ? (
           <div className="ext-empty">
-            <span aria-hidden="true">+</span>
-            <h2>先绑定一个项目</h2>
-            <p>项目绑定后，就可以在这里管理专属扩展。</p>
+            <span aria-hidden="true">
+              <FolderPlus />
+            </span>
+            <h2>{t('common.bindProject')}</h2>
+            <p>{t('extensions.bindHelp')}</p>
           </div>
         ) : query.isPending ? (
           <p className="ext-loading" role="status">
-            正在读取项目扩展…
+            {t('extensions.loading')}
           </p>
         ) : !visible.length ? (
           query.isError && !query.data ? null : (
             <div className="ext-empty">
-              <span aria-hidden="true">{marks[kind]}</span>
+              <span aria-hidden="true">
+                <ExtensionKindIcon kind={kind} />
+              </span>
               <h2>
-                {searchText || filter !== 'all' ? '没有符合条件的扩展' : `还没有 ${kinds[kind]}`}
+                {searchText || filter !== 'all'
+                  ? t('extensions.noMatches')
+                  : t('extensions.noKind', { kind: kinds[kind] })}
               </h2>
               <p>
                 {searchText || filter !== 'all'
-                  ? '试试其他关键词或状态。'
+                  ? t('common.trySearch')
                   : kind === 'mcp'
-                    ? '连接一个工具服务，再选择这个项目可以使用的工具。'
-                    : '创建一份常用指令，或导入已有的 Markdown 文件。'}
+                    ? t('extensions.mcpEmptyHelp')
+                    : t('extensions.markdownEmptyHelp')}
               </p>
             </div>
           )
@@ -284,14 +304,15 @@ function ProjectExtensions({
               >
                 <div className="ext-card-top">
                   <span className="ext-kind-mark" aria-hidden="true">
-                    {marks[item.kind]}
+                    <ExtensionKindIcon kind={item.kind} />
                   </span>
                   <span className="ext-card-kind">{kinds[item.kind]}</span>
                   <Switch
+                    className="ext-switch"
                     checked={item.enabled}
-                    label={`${item.enabled ? '停用' : '启用'} ${item.name}`}
+                    aria-label={`${item.enabled ? t('extensions.disable') : t('extensions.enable')} ${item.name}`}
                     disabled={pending}
-                    onChange={() => void toggleItem(item, 'enabled')}
+                    onCheckedChange={() => void toggleItem(item, 'enabled')}
                   />
                 </div>
                 <button
@@ -302,24 +323,30 @@ function ProjectExtensions({
                   {item.kind === 'command' ? <span className="ext-name-prefix">/</span> : null}
                   {item.name}
                 </button>
-                <p className="ext-card-description">{item.description || '暂无描述'}</p>
+                <p className="ext-card-description">
+                  {item.description || t('common.noDescription')}
+                </p>
                 <div className="ext-card-meta">
                   <span className={`ext-state-dot ${item.enabled ? 'ext-is-enabled' : ''}`}>
-                    {item.enabled ? '已启用' : '已停用'}
+                    {item.enabled ? t('common.enabled') : t('common.disabled')}
                   </span>
                   {item.kind === 'mcp' ? (
                     <span className="ext-status" data-ext-status={item.status || 'untested'}>
                       <span aria-hidden="true" />
-                      {item.status ? testLabels[item.status] : '未测试'}
+                      {item.status ? testLabels[item.status] : t('extensions.untested')}
                     </span>
                   ) : (
-                    <span>{item.userInvocable === false ? '不支持手动调用' : '可手动调用'}</span>
+                    <span>
+                      {item.userInvocable === false
+                        ? t('extensions.manualUnsupported')
+                        : t('extensions.manualAvailable')}
+                    </span>
                   )}
                   <span className="ext-version">v{item.version}</span>
                 </div>
                 {item.kind !== 'mcp' && (!item.supported || item.compatibility) ? (
                   <p className="ext-compatibility">
-                    {item.compatibility || '当前运行环境暂不支持此扩展'}
+                    {extensionDetail(item.compatibility) || t('extensions.unsupported')}
                   </p>
                 ) : null}
                 <p className="ext-card-source">
@@ -328,77 +355,92 @@ function ProjectExtensions({
                       {item.transport.type === 'stdio'
                         ? item.transport.command
                         : item.transport.url}
-                      <span>{item.allowedTools.length} 个允许的工具</span>
+                      <span>
+                        {t('extensions.allowedCount', { count: item.allowedTools.length })}
+                      </span>
                     </>
                   ) : (
-                    item.source || '项目内创建'
+                    item.source || t('extensions.createdLocally')
                   )}
                 </p>
                 {item.kind === 'skill' ? (
                   <div className="ext-auto-setting">
-                    <span>允许自动调用</span>
+                    <span>{t('extensions.autoLabel')}</span>
                     <Switch
+                      className="ext-switch"
                       checked={autoEnabled(item)}
-                      label={`${item.name} 允许自动调用`}
+                      aria-label={t('extensions.autoToggleLabel', { name: item.name })}
+                      aria-describedby={`${id}-auto-${item.id}`}
                       disabled={pending || !allowsAuto(item) || !item.supported}
-                      onChange={() => void toggleItem(item, 'autoInvoke')}
+                      onCheckedChange={() => void toggleItem(item, 'autoInvoke')}
                     />
-                    <small>
+                    <small id={`${id}-auto-${item.id}`}>
                       {!allowsAuto(item)
-                        ? '上游禁止模型调用，仅可按手动调用声明使用。'
+                        ? t('extensions.upstreamForbids')
                         : !item.supported
-                          ? '当前不兼容，暂不能自动调用。'
+                          ? t('extensions.incompatibleAuto')
                           : !item.enabled
-                            ? '启用此扩展后生效。'
+                            ? t('extensions.enableFirst')
                             : autoEnabled(item)
-                              ? '模型可按需加载，下一轮对话生效。'
-                              : '已关闭自动调用。'}
+                              ? t('extensions.modelAutoHelp')
+                              : t('extensions.autoOffHelp')}
                     </small>
                   </div>
                 ) : null}
                 {item.origin ? (
                   <p className="ext-card-source">
-                    <SourceLink url={item.origin.location}>公开来源</SourceLink>
+                    <SourceLink url={item.origin.location}>
+                      {t('extensions.publicSource')}
+                    </SourceLink>
                     <span title={item.origin.revision}>{item.origin.revision.slice(0, 12)}</span>
                   </p>
                 ) : null}
                 {item.kind === 'mcp' && item.statusMessage ? (
                   <p className="ext-test-message" data-ext-status={item.status}>
-                    {item.statusMessage}
+                    {extensionDetail(item.statusMessage)}
                   </p>
                 ) : null}
                 <ErrorMessage error={errors[item.id]} />
                 <footer className="ext-card-actions">
                   <ActionButton
+                    variant="ghost"
+                    size="sm"
                     disabled={pending}
                     onClick={() => setModal({ type: 'editor', kind: item.kind, item })}
                   >
-                    查看与编辑
+                    {t('extensions.viewEdit')}
                   </ActionButton>
                   {item.origin ? (
                     <ActionButton
+                      variant="ghost"
+                      size="sm"
                       disabled={pending}
                       onClick={() => setModal({ type: 'public', kind: item.kind, item })}
                     >
-                      检查更新
+                      {t('extensions.checkUpdates')}
                     </ActionButton>
                   ) : null}
                   {item.kind === 'mcp' ? (
                     <ActionButton
+                      variant="ghost"
+                      size="sm"
                       disabled={pending}
                       onClick={() =>
                         setModal({ type: 'editor', kind: 'mcp', item, testOnOpen: true })
                       }
                     >
-                      测试连接
+                      {t('extensions.testConnection')}
                     </ActionButton>
                   ) : null}
                   <ActionButton
-                    danger
+                    variant="destructive"
+                    size="sm"
+                    className="ms-auto"
                     disabled={pending}
                     onClick={() => setModal({ type: 'delete', item })}
                   >
-                    删除
+                    <Trash2 data-icon="inline-start" aria-hidden="true" />
+                    {t('extensions.delete')}
                   </ActionButton>
                 </footer>
               </article>
@@ -456,6 +498,7 @@ function DeleteExtension({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const mutation = useExtensionMutation(projectId);
   async function remove() {
     if (mutation.isPending) return;
@@ -465,25 +508,27 @@ function DeleteExtension({
         method: 'DELETE',
         removeId: item.id,
       });
-      onSaved('扩展已删除');
+      onSaved(t('extensions.deleted'));
       onClose();
     } catch {
       /* The mutation error is shown in place. */
     }
   }
   return (
-    <FeatureDialog title="删除扩展" busy={mutation.isPending} onClose={onClose}>
-      <p>
-        删除 <strong>{item.name}</strong>？后续会话将无法再选择这个扩展。
-      </p>
-      <p className="ext-help">已有草稿中的选择会标记为不可用，可手动移除。</p>
+    <FeatureDialog title={t('extensions.deleteTitle')} busy={mutation.isPending} onClose={onClose}>
+      <p>{t('extensions.deleteConfirmation', { name: item.name })}</p>
+      <p className="ext-help">{t('extensions.deleteHelp')}</p>
       <ErrorMessage error={mutation.error} />
       <div className="ext-dialog-actions">
         <ActionButton disabled={mutation.isPending} onClick={onClose}>
-          取消
+          {t('common.cancel')}
         </ActionButton>
-        <ActionButton danger disabled={mutation.isPending} onClick={() => void remove()}>
-          {mutation.isPending ? '正在删除…' : '确认删除'}
+        <ActionButton
+          variant="destructive"
+          disabled={mutation.isPending}
+          onClick={() => void remove()}
+        >
+          {mutation.isPending ? t('extensions.deleting') : t('extensions.confirmDelete')}
         </ActionButton>
       </div>
     </FeatureDialog>

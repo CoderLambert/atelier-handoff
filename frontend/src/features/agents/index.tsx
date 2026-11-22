@@ -1,6 +1,13 @@
+/**
+ * @file 提供按项目管理智能体的目录页面。
+ * @implementation 查询并筛选智能体，协调创建、编辑、复制、归档和开启会话等操作。
+ * @updated 2026-11-23T05:01:08+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import { useDeferredValue, useRef, useState } from 'react';
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Bot, Copy, MessageSquarePlus, Plus, RefreshCw, Search } from 'lucide-react';
+import { Archive, Bot, Copy, MessageSquarePlus, Plus, RefreshCw } from 'lucide-react';
+import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
 import type { AgentCard, Project, Session } from '@shared/types';
 import { api } from '@/api/client';
 import { keys } from '@/app/events';
@@ -9,6 +16,7 @@ import { messageOf, useExtensions } from '@/features/extensions/api';
 import {
   agentKeys,
   agentsQuery,
+  agentIssueMessage,
   capabilityLabels,
   dependencyIssues,
   useAgentMutation,
@@ -26,6 +34,7 @@ type Modal =
   { type: 'editor'; item?: AgentCard; template?: boolean } | { type: 'archive'; item: AgentCard };
 
 export default function AgentsPage({ projects, projectId, onOpenSession }: AgentsPageProps) {
+  const { t } = useUiTranslation('extensions');
   const [selection, setSelection] = useState<{ from?: string; id: string }>();
   const project =
     projects.find((value) => selection?.from === projectId && value.id === selection?.id) ??
@@ -33,34 +42,26 @@ export default function AgentsPage({ projects, projectId, onOpenSession }: Agent
     projects[0];
   const pending = useIsMutating({ mutationKey: ['agents'] }) > 0;
   return (
-    <section className="agents-page" aria-label="项目智能体">
+    <section className="agents-page" aria-label={t('agents.pageTitle')}>
       <header className="agents-heading">
         <div>
-          <p className="agents-eyebrow">AGENTS</p>
-          <h1>项目智能体</h1>
-          <p className="agents-subtitle">
-            把常用的工作方式、能力与工具，配置成随时可用的专属智能体。
-          </p>
+          <p className="agents-eyebrow">{t('agents.eyebrow')}</p>
+          <h1>{t('agents.pageTitle')}</h1>
+          <p className="agents-subtitle">{t('agents.subtitle')}</p>
         </div>
-        <label className="agents-project">
-          当前项目
-          <select
-            aria-label="选择智能体所属项目"
-            disabled={!projects.length || pending}
-            value={project?.id ?? ''}
-            onChange={(event) => setSelection({ from: projectId, id: event.target.value })}
-          >
-            {projects.length ? (
-              projects.map((value) => (
-                <option key={value.id} value={value.id}>
-                  {value.name || value.path || value.id}
-                </option>
-              ))
-            ) : (
-              <option value="">暂无项目</option>
-            )}
-          </select>
-        </label>
+        <CatalogProjectSelect
+          className="agents-project"
+          label={t('common.currentProject')}
+          selectLabel={t('agents.projectSelector')}
+          disabled={!projects.length || pending}
+          value={project?.id ?? ''}
+          options={projects.map((value) => ({
+            value: value.id,
+            label: value.name || value.path || value.id,
+          }))}
+          emptyLabel={t('common.noProjects')}
+          onValueChange={(value) => setSelection({ from: projectId, id: value })}
+        />
       </header>
       <ProjectAgents key={project?.id ?? 'none'} project={project} onOpenSession={onOpenSession} />
     </section>
@@ -74,6 +75,7 @@ function ProjectAgents({
   project?: Project;
   onOpenSession: (id: string) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const projectId = project?.id ?? '';
   const client = useQueryClient();
   const query = useQuery(agentsQuery(projectId));
@@ -120,7 +122,7 @@ function ProjectAgents({
         baseRevisionId: item.revisionId,
       });
       setModal({ type: 'editor', item: copied });
-      setNotice(`已复制为「${copied.config.name}」，可继续调整配置。`);
+      setNotice(t('agents.copied', { name: copied.config.name }));
       setFilter('active');
       setSearch('');
     } catch (cause) {
@@ -144,64 +146,60 @@ function ProjectAgents({
   }
   return (
     <>
-      <div className="agents-toolbar">
-        <label className="agents-search">
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            aria-label="搜索智能体"
-            value={search}
-            placeholder="搜索名称或介绍"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <label className="agents-filter">
-          状态
-          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-            <option value="active">可用智能体</option>
-            <option value="archived">已归档</option>
-            <option value="all">全部</option>
-          </select>
-        </label>
-        <div className="agents-toolbar-actions">
-          <Button
-            variant="secondary"
-            disabled={!projectId || query.isFetching || pending}
-            onClick={() => {
-              void query.refetch();
-              void extensions.refetch();
-            }}
-          >
-            <RefreshCw size={15} aria-hidden="true" />
-            刷新
-          </Button>
-          <Button disabled={!canManage || pending} onClick={() => setModal({ type: 'editor' })}>
-            <Plus size={16} aria-hidden="true" />
-            创建智能体
-          </Button>
-        </div>
-      </div>
+      <CatalogToolbar
+        className="agents-toolbar"
+        search={{
+          label: t('agents.searchLabel'),
+          placeholder: t('agents.searchPlaceholder'),
+          value: search,
+          onChange: setSearch,
+        }}
+        filter={{
+          label: t('common.status'),
+          value: filter,
+          options: [
+            { value: 'active', label: t('agents.active') },
+            { value: 'archived', label: t('agents.archived') },
+            { value: 'all', label: t('common.all') },
+          ],
+          onChange: setFilter,
+        }}
+      >
+        <Button
+          variant="secondary"
+          disabled={!projectId || query.isFetching || pending}
+          onClick={() => {
+            void query.refetch();
+            void extensions.refetch();
+          }}
+        >
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
+          {t('common.refresh')}
+        </Button>
+        <Button disabled={!canManage || pending} onClick={() => setModal({ type: 'editor' })}>
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          {t('agents.create')}
+        </Button>
+      </CatalogToolbar>
       {project ? (
         <div className="agents-template">
           <div className="agents-template-icon" aria-hidden="true">
-            <Bot size={23} />
+            <Bot aria-hidden="true" />
           </div>
           <div>
-            <h2>资料整理助手</h2>
-            <p>从一个只读模板开始，整理项目资料、附件和待办。</p>
+            <h2>{t('agents.templateName')}</h2>
+            <p>{t('agents.templateDescription')}</p>
           </div>
           <Button
             variant="secondary"
             disabled={!canManage || pending}
             onClick={() => setModal({ type: 'editor', template: true })}
           >
-            使用模板
+            {t('agents.useTemplate')}
           </Button>
         </div>
       ) : null}
-      <p className="agents-scope-note">
-        智能体仅属于当前项目。每次保存生成新版本，已有会话保留创建时的配置。
-      </p>
+      <p className="agents-scope-note">{t('agents.scope')}</p>
       {notice ? (
         <p className="agent-notice" role="status">
           {notice}
@@ -209,7 +207,7 @@ function ProjectAgents({
       ) : null}
       {project && !project.available ? (
         <p className="agent-error" role="alert">
-          项目路径当前不可用，请先在项目管理中恢复访问。
+          {t('agents.pathUnavailable')}
         </p>
       ) : null}
       {query.isError ? (
@@ -220,25 +218,29 @@ function ProjectAgents({
             disabled={query.isFetching}
             onClick={() => void query.refetch()}
           >
-            重新加载
+            {t('common.reload')}
           </Button>
         </div>
       ) : null}
       {extensions.isError && project ? (
         <p className="agent-error" role="alert">
-          无法检查最新项目依赖：{messageOf(extensions.error)} 请刷新后再启动智能体。
+          {t('agents.dependencyError', { error: messageOf(extensions.error) })}
         </p>
       ) : null}
-      <section className="agents-results" aria-label="智能体列表" aria-busy={query.isFetching}>
+      <section
+        className="agents-results"
+        aria-label={t('agents.listLabel')}
+        aria-busy={query.isFetching}
+      >
         {!project ? (
           <div className="agents-empty">
             <Bot size={30} aria-hidden="true" />
-            <h2>先绑定一个项目</h2>
-            <p>项目绑定后，就可以为它创建专属智能体。</p>
+            <h2>{t('common.bindProject')}</h2>
+            <p>{t('agents.bindHelp')}</p>
           </div>
         ) : query.isPending ? (
           <p className="agents-loading" role="status">
-            正在读取项目智能体…
+            {t('agents.loading')}
           </p>
         ) : !visible.length ? (
           query.isError && !query.data ? null : (
@@ -246,17 +248,17 @@ function ProjectAgents({
               <Bot size={30} aria-hidden="true" />
               <h2>
                 {searchText
-                  ? '没有符合条件的智能体'
+                  ? t('agents.noMatches')
                   : filter === 'archived'
-                    ? '还没有已归档的智能体'
-                    : '创建你的第一个项目智能体'}
+                    ? t('agents.noArchived')
+                    : t('agents.createFirst')}
               </h2>
               <p>
                 {searchText
-                  ? '试试其他关键词或状态。'
+                  ? t('common.trySearch')
                   : filter === 'archived'
-                    ? '归档后的智能体会保留在这里，已有会话可以继续查看。'
-                    : '从「资料整理助手」模板开始，或定义一套自己的工作方式。'}
+                    ? t('agents.archivedHelp')
+                    : t('agents.createHelp')}
               </p>
             </div>
           )
@@ -265,7 +267,7 @@ function ProjectAgents({
             {visible.map((item) => {
               const issues = [
                 ...new Set([
-                  ...item.issues,
+                  ...item.issues.map(agentIssueMessage),
                   ...(extensions.data ? dependencyIssues(item.config, extensions.data) : []),
                 ]),
               ];
@@ -276,14 +278,14 @@ function ProjectAgents({
                 >
                   <div className="agent-card-heading">
                     <span className="agent-card-icon" aria-hidden="true">
-                      <Bot size={22} />
+                      <Bot aria-hidden="true" />
                     </span>
                     <span className="agent-card-mode">
                       {item.archived
-                        ? '已归档'
+                        ? t('agents.archived')
                         : item.config.mode === 'readonly'
-                          ? '只读模式'
-                          : '编辑模式'}
+                          ? t('agents.readonlyMode')
+                          : t('agents.editMode')}
                     </span>
                     <span className="agent-version">v{item.version}</span>
                   </div>
@@ -295,18 +297,30 @@ function ProjectAgents({
                   >
                     {item.config.name}
                   </button>
-                  <p className="agent-card-description">{item.config.description || '暂无介绍'}</p>
-                  <ul className="agent-capability-tags" aria-label={`${item.config.name} 的能力`}>
+                  <p className="agent-card-description">
+                    {item.config.description || t('common.noIntroduction')}
+                  </p>
+                  <ul
+                    className="agent-capability-tags"
+                    aria-label={t('agents.capabilitiesLabel', { name: item.config.name })}
+                  >
                     {item.config.capabilities.map((capability) => (
                       <li key={capability}>{capabilityLabels[capability]?.label ?? capability}</li>
                     ))}
                   </ul>
                   <p className="agent-card-dependencies">
-                    {item.config.skills.length} 个 Skill ·{' '}
-                    {item.config.mcp.reduce((count, server) => count + server.tools.length, 0)} 个
-                    MCP 工具
+                    {t('agents.skillCount', { count: item.config.skills.length })}
+                    {' · '}
+                    {t('agents.mcpCount', {
+                      count: item.config.mcp.reduce(
+                        (count, server) => count + server.tools.length,
+                        0,
+                      ),
+                    })}
                   </p>
-                  {!item.archived ? <AgentProblems issues={issues} label="需要更新配置" /> : null}
+                  {!item.archived ? (
+                    <AgentProblems issues={issues} label={t('agents.updateConfig')} />
+                  ) : null}
                   {errors[item.id] ? (
                     <p className="agent-error" role="alert">
                       {errors[item.id]}
@@ -315,6 +329,7 @@ function ProjectAgents({
                   <footer className="agent-card-actions">
                     {!item.archived ? (
                       <Button
+                        size="sm"
                         disabled={
                           !canManage ||
                           pending ||
@@ -325,37 +340,40 @@ function ProjectAgents({
                         }
                         onClick={() => void openSession(item)}
                       >
-                        <MessageSquarePlus size={15} aria-hidden="true" />
+                        <MessageSquarePlus data-icon="inline-start" aria-hidden="true" />
                         {start.isPending && start.variables?.id === item.id
-                          ? '正在启动…'
-                          : '开始会话'}
+                          ? t('agents.starting')
+                          : t('agents.startSession')}
                       </Button>
                     ) : null}
                     <Button
                       variant="secondary"
+                      size="sm"
                       disabled={pending || (!canManage && !item.archived)}
                       onClick={() => setModal({ type: 'editor', item })}
                     >
-                      {item.archived ? '查看配置' : '编辑'}
+                      {item.archived ? t('agents.viewConfig') : t('agents.edit')}
                     </Button>
                     <Button
                       variant="ghost"
+                      size="sm"
                       disabled={!canManage || pending}
-                      aria-label={`复制 ${item.config.name}`}
+                      aria-label={t('agents.copyLabel', { name: item.config.name })}
                       onClick={() => void duplicate(item)}
                     >
-                      <Copy size={15} aria-hidden="true" />
-                      复制
+                      <Copy data-icon="inline-start" aria-hidden="true" />
+                      {t('agents.copy')}
                     </Button>
                     {!item.archived ? (
                       <Button
                         variant="ghost"
+                        size="sm"
                         disabled={!canManage || pending}
-                        aria-label={`归档 ${item.config.name}`}
+                        aria-label={t('agents.archiveLabel', { name: item.config.name })}
                         onClick={() => setModal({ type: 'archive', item })}
                       >
-                        <Archive size={15} aria-hidden="true" />
-                        归档
+                        <Archive data-icon="inline-start" aria-hidden="true" />
+                        {t('agents.archive')}
                       </Button>
                     ) : null}
                   </footer>
@@ -393,6 +411,7 @@ function ArchiveAgent({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const mutation = useAgentMutation(projectId);
   const lock = useRef(false);
   async function archive() {
@@ -404,7 +423,7 @@ function ArchiveAgent({
         id: item.id,
         baseRevisionId: item.revisionId,
       });
-      onSaved(`「${item.config.name}」已归档。已有会话与历史版本仍会保留。`);
+      onSaved(t('agents.archivedNotice', { name: item.config.name }));
       onClose();
     } catch {
       // The mutation error stays visible in this confirmation dialog.
@@ -414,29 +433,27 @@ function ArchiveAgent({
   }
   return (
     <AgentDialog
-      title="归档智能体"
-      description="归档后将无法使用此智能体创建新会话。"
+      title={t('agents.archiveTitle')}
+      description={t('agents.archiveHelp')}
       busy={mutation.isPending}
       onClose={onClose}
     >
-      <p>
-        确认归档「{item.config.name}」v{item.version}？已有会话与历史版本会保留。
-      </p>
+      <p>{t('agents.archiveConfirmation', { name: item.config.name, version: item.version })}</p>
       {mutation.error ? (
         <p className="agent-error" role="alert">
-          {messageOf(mutation.error)} 请关闭后刷新列表，确认最新状态。
+          {t('agents.archiveError', { error: messageOf(mutation.error) })}
         </p>
       ) : null}
       <footer className="agent-dialog-actions">
         <Button variant="secondary" disabled={mutation.isPending} onClick={onClose}>
-          取消
+          {t('common.cancel')}
         </Button>
         <Button
           variant="destructive"
           disabled={mutation.isPending || Boolean(mutation.error)}
           onClick={() => void archive()}
         >
-          {mutation.isPending ? '正在归档…' : '确认归档'}
+          {mutation.isPending ? t('agents.archiving') : t('agents.confirmArchive')}
         </Button>
       </footer>
     </AgentDialog>

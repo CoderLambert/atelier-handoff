@@ -23,7 +23,11 @@ export function createGetSessionSnapshot(dependencies: SnapshotDependencies) {
   return (sessionId: string) =>
     dependencies.readTransaction(() => {
       const records = dependencies.repository.read(sessionId);
-      const { session, runs, messages } = records;
+      const {
+        session: { inheritedMessages, creatingFork: _creating, ...session },
+        runs,
+        messages,
+      } = records;
       const agent = session.agentRevisionId
         ? dependencies.boundAgent(session.projectId, session.agentRevisionId)
         : undefined;
@@ -36,6 +40,8 @@ export function createGetSessionSnapshot(dependencies: SnapshotDependencies) {
       );
       return {
         ...records,
+        session,
+        ...(inheritedMessages ? { inheritedMessages } : {}),
         ...(agent
           ? {
               agent: {

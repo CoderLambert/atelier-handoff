@@ -3,12 +3,17 @@
  * @implementation 按来源及可选文件 ID 构造预览数据，注册适用插件，支持可选失败回调，并在 Markdown 中单独展示结构化元数据。
  * @updated 2026-11-21T00:00:00+08:00
  */
+import { useUiTranslation, getTranslator } from '@/i18n';
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Markdown } from '@atelier/markdown';
 import '@atelier/markdown/style.css';
 import { readMarkdownFrontmatter } from './markdown-frontmatter';
 import {
   PluginPreviewRenderer,
+  LocaleProvider,
+  zhCN,
+  enUS,
   createPreviewPluginRegistry,
   csvPlugin,
   imagePlugin,
@@ -27,20 +32,23 @@ type PreviewFile = (
   | { name: string; bytes: ArrayBuffer; mimeType: string }
 ) & { id?: string; onError?: (error: PreviewError) => void };
 
-const registry = createPreviewPluginRegistry([
-  sourceCodePlugin,
-  textPlugin,
-  csvPlugin,
-  markdownPlugin,
-  pdfPlugin,
-  imagePlugin,
-  {
-    id: 'atelier.spreadsheet',
-    name: '电子表格预览',
-    match: (file) => file.fileType === 'xlsx' || file.fileType === 'xls',
-    load: () => import('./spreadsheet-preview'),
-  },
-]);
+function previewRegistry() {
+  const t = getTranslator('inspector');
+  return createPreviewPluginRegistry([
+    sourceCodePlugin,
+    textPlugin,
+    csvPlugin,
+    markdownPlugin,
+    pdfPlugin,
+    imagePlugin,
+    {
+      id: 'atelier.spreadsheet',
+      name: t('preview.spreadsheetPlugin'),
+      match: (file) => file.fileType === 'xlsx' || file.fileType === 'xls',
+      load: () => import('./spreadsheet-preview'),
+    },
+  ]);
+}
 const markdownFile = /\.(?:md|markdown)$/i;
 const sourceFile = /\.(?:[cm]?[jt]sx?|css|html?|json|py|sh|sql|toml|xml|ya?ml)$/i;
 
@@ -97,29 +105,31 @@ function FrontmatterPreview({
   frontmatter: NonNullable<ReturnType<typeof readMarkdownFrontmatter>>;
   onError?: (error: PreviewError) => void;
 }) {
+  const { t, locale } = useUiTranslation('inspector');
+  const registry = useMemo(() => previewRegistry(), [locale]);
   const { body, fields } = frontmatter;
   const [source, setSource] = useState(false);
 
   return (
     <div className="fv-markdown">
       <div className="fv-view-mode-bar">
-        <div className="fv-view-mode-group" role="group" aria-label="文件视图">
-          <button
-            type="button"
-            className={`fv-view-mode-btn${source ? '' : ' fv-view-mode-btn--active'}`}
+        <div className="fv-view-mode-group" role="group" aria-label={t('preview.fileViews')}>
+          <Button
+            size="xs"
+            variant={source ? 'ghost' : 'secondary'}
             aria-pressed={!source}
             onClick={() => setSource(false)}
           >
-            预览
-          </button>
-          <button
-            type="button"
-            className={`fv-view-mode-btn${source ? ' fv-view-mode-btn--active' : ''}`}
+            {t('common.preview')}
+          </Button>
+          <Button
+            size="xs"
+            variant={source ? 'secondary' : 'ghost'}
             aria-pressed={source}
             onClick={() => setSource(true)}
           >
-            源码
-          </button>
+            {t('common.source')}
+          </Button>
         </div>
       </div>
       {source ? (
@@ -130,8 +140,8 @@ function FrontmatterPreview({
         />
       ) : (
         <div className="fv-markdown__preview">
-          <section className="markdown-metadata" aria-label="文档元数据">
-            <h2>文档元数据</h2>
+          <section className="markdown-metadata" aria-label={t('preview.metadata')}>
+            <h2>{t('preview.metadata')}</h2>
             <dl>
               {fields.map(({ key, value, structured }, index) => (
                 <div key={index}>
@@ -141,14 +151,20 @@ function FrontmatterPreview({
               ))}
             </dl>
           </section>
-          {body.trim() ? <Markdown text={body} className="fv-prose" /> : '（无正文）'}
+          {body.trim() ? (
+            <Markdown text={body} locale={locale} className="fv-prose" />
+          ) : (
+            t('preview.noBody')
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export default function FilePreview(file: PreviewFile) {
+function FilePreviewContent(file: PreviewFile) {
+  const { t, locale } = useUiTranslation('inspector');
+  const registry = useMemo(() => previewRegistry(), [locale]);
   const text = 'text' in file ? file.text : undefined;
   const url = 'url' in file ? file.url : undefined;
   const size = 'size' in file ? file.size : undefined;
@@ -175,10 +191,34 @@ export default function FilePreview(file: PreviewFile) {
         : undefined,
     [info.fileType, content],
   );
-  if (content === '' || bytes?.byteLength === 0) return <p className="p-4">（空文件）</p>;
+  if (content === '' || bytes?.byteLength === 0)
+    return <p className="p-4">{t('common.emptyFile')}</p>;
   if (frontmatter)
     return (
       <FrontmatterPreview key={info.id} file={info} frontmatter={frontmatter} onError={onError} />
     );
   return <PluginPreviewRenderer key={info.id} file={info} registry={registry} onError={onError} />;
+}
+
+export default function FilePreview(file: PreviewFile) {
+  const { t, locale } = useUiTranslation('inspector');
+  const messages = useMemo(
+    () =>
+      locale === 'en'
+        ? enUS
+        : {
+            ...zhCN,
+            loadingEbook: t('preview.loadingEbook'),
+            noChaptersFound: t('preview.noChapters'),
+            ebookLoadFailed: t('preview.ebookLoadFailed'),
+            tableOfContents: t('preview.tableOfContents'),
+            foundInChapters: t('preview.foundInChapters', { chapters: '{count}' }),
+          },
+    [t, locale],
+  );
+  return (
+    <LocaleProvider value={messages}>
+      <FilePreviewContent {...file} />
+    </LocaleProvider>
+  );
 }

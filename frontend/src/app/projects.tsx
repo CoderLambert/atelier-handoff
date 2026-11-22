@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Project } from '@shared/types';
+import { translateError, useUiTranslation } from '@/i18n';
 
 export function ProjectsDialog({
   open,
@@ -26,14 +27,15 @@ export function ProjectsDialog({
   projects: Project[];
   onChoose: (id: string) => Promise<void>;
 }) {
+  const { t } = useUiTranslation('navigation');
   const { path, setPath, busy, picking, error, close, pickDirectory, openProject } =
     useProjectSelection(onChoose, onOpenChange);
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>绑定项目目录</DialogTitle>
-          <DialogDescription>选择本机目录作为会话工作区。</DialogDescription>
+          <DialogTitle>{t('projects.title')}</DialogTitle>
+          <DialogDescription>{t('projects.description')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">
           {projects.map((project) => (
@@ -45,7 +47,7 @@ export function ProjectsDialog({
               onClick={() => void openProject(project.id)}
             >
               {project.name} · {project.path}
-              {project.available ? '' : '（不可访问）'}
+              {project.available ? '' : t('projects.unavailable')}
             </Button>
           ))}
         </div>
@@ -56,17 +58,17 @@ export function ProjectsDialog({
             void openProject();
           }}
         >
-          <label htmlFor="project-path">本机目录</label>
+          <label htmlFor="project-path">{t('projects.localDirectory')}</label>
           <input
             id="project-path"
             className="field"
-            placeholder="/home/…/project"
+            placeholder={t('projects.pathPlaceholder')}
             value={path}
             onChange={(event) => setPath(event.target.value)}
           />
           {error ? (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {translateError(error, t('projects.openFailed'))}
             </p>
           ) : null}
           <div className="dialog-actions">
@@ -77,10 +79,10 @@ export function ProjectsDialog({
               onClick={() => void pickDirectory()}
             >
               <FolderOpen size={16} />
-              {picking ? '等待系统选择…' : '选择目录'}
+              {picking ? t('projects.waitingForPicker') : t('projects.chooseDirectory')}
             </Button>
             <Button type="submit" disabled={!path.trim() || busy}>
-              绑定项目
+              {t('projects.bind')}
             </Button>
           </div>
         </form>

@@ -1,15 +1,36 @@
 /**
  * @file 编排工作区、会话及各功能页面。
- * @implementation 组合会话查询、操作与布局，将桌面会话中用户选择的网页打开方式转成项目浏览器命令。
- * @updated 2026-11-20T17:59:46+08:00
+ * @implementation 按路由装配会话、执行轨迹和设置，保存浏览器返回位置，并按需打开网页面板或会话变更记录。
+ * @updated 2026-11-22T18:47:41+08:00
  */
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Menu, PanelRight, Settings2 } from 'lucide-react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FolderOpen, Globe, X } from 'lucide-react';
+import { cn } from '@/components/ui/utils';
+import { WorkspaceToolbar } from './workspace-toolbar';
+import { WorkspaceNotice } from './workspace-notice';
+import {
+  useCanGoBack,
+  useLocation,
+  useNavigate,
+  useParams,
+  useRouter,
+} from '@tanstack/react-router';
+import { isWorkspaceLocation, workspaceSessionId } from '@shared/workspace-location';
+import { useRememberWorkspaceLocation } from '@/use-query/settings/use-remember-workspace-location';
 import type { Run, Session } from '@shared/types';
+import { initialWorkspaceLayout, type WorkspaceLayout } from '@shared/workspace-layout';
+import { useWorkspaceLayout } from '@/use-query/settings/use-workspace-layout';
+import { useUpdateWorkspaceLayout } from '@/use-query/settings/use-update-workspace-layout';
+import { useCreateSession } from '@/use-query/sessions/use-create-session';
+import { useUpdateSession } from '@/use-query/sessions/use-update-session';
+import { useDeleteSession } from '@/use-query/sessions/use-delete-session';
+import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
+import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
 import { api, bootstrap } from '@/api/client';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { translateError, useUiTranslation } from '@/i18n';
 import {
   Dialog,
   DialogContent,
@@ -23,14 +44,24 @@ import { ProjectsDialog } from './projects';
 import { Sidebar } from './sidebar';
 import { BrowserPreview } from './browser-preview';
 import { useBrowserPreview } from '@/use-query/browser/use-browser-preview';
+import { useForkSession } from '@/use-query/sessions/use-fork-session';
+import { useUpgradeSessionAgent } from '@/use-query/sessions/use-upgrade-session-agent';
+import { useStopRun } from '@/use-query/runs/use-stop-run';
+import { useRetryRun } from '@/use-query/runs/use-retry-run';
 import { DesktopBrowser, useDesktopBrowser } from './desktop-browser';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
-const Inspector = lazy(() =>
-  import('@/features/inspector').then(({ Inspector }) => ({ default: Inspector })),
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    workspaceBrowserReturn?: string;
+  }
+}
+
+const SessionChanges = lazy(() =>
+  import('@/features/inspector').then(({ SessionChanges }) => ({ default: SessionChanges })),
 );
 const RunTrace = lazy(() =>
   import('@/features/inspector').then(({ RunTrace }) => ({ default: RunTrace })),
@@ -38,31 +69,91 @@ const RunTrace = lazy(() =>
 const Collections = lazy(() =>
   import('@/features/inspector').then(({ Collections }) => ({ default: Collections })),
 );
-const Settings = lazy(() =>
-  import('@/features/inspector').then(({ Settings }) => ({ default: Settings })),
-);
+const Settings = lazy(() => import('@/features/inspector/settings-page'));
+const sectionNames = {
+  runs: 'section.runs',
+  artifacts: 'section.artifacts',
+  extensions: 'section.extensions',
+  agents: 'section.agents',
+  settings: 'section.settings',
+} as const;
+const collectionPaths = {
+  runs: '/runs',
+  artifacts: '/artifacts',
+  extensions: '/extensions',
+  agents: '/agents',
+} as const;
+type SettingsSection = 'models' | 'layout' | 'diagnostics';
+const settingsPaths = {
+  models: '/settings/models',
+  layout: '/settings/layout',
+  diagnostics: '/settings/diagnostics',
+} as const;
+
+function currentView(pathname: string): View {
+  if (pathname.startsWith('/settings/')) return 'settings';
+  return (
+    (Object.keys(collectionPaths) as (keyof typeof collectionPaths)[]).find(
+      (view) => collectionPaths[view] === pathname,
+    ) ?? 'chat'
+  );
+}
 const tabs = [
-  { id: 'conversation', label: '会话' },
-  { id: 'trace', label: '执行轨迹' },
-  { id: 'artifacts', label: '交付物' },
+  { id: 'conversation', labelKey: 'tab.conversation' },
+  { id: 'trace', labelKey: 'tab.trace' },
+  { id: 'artifacts', labelKey: 'section.artifacts' },
 ] as const;
 const active = new Set(['queued', 'running', 'awaiting_permission', 'stopping']);
-const loading = (
-  <p className="empty-text px-5 py-4" role="status">
-    加载中…
-  </p>
-);
 
-type SessionAction = 'rename' | 'archive' | 'delete';
-const sessionActions = { rename: '重命名会话', archive: '归档会话', delete: '删除会话' };
+type SessionAction = 'rename' | 'archive' | 'restore' | 'delete';
+const sessionActions = {
+  rename: 'session.rename',
+  archive: 'session.archive',
+  restore: 'session.restore',
+  delete: 'session.delete',
+} as const;
 
 export default function Workspace() {
+  const { t, locale } = useUiTranslation('workbench');
+  const sessionContentId = useId();
+  const numberFormat = new Intl.NumberFormat(locale);
+  const loading = (
+    <p className="empty-text px-5 py-4" role="status">
+      {t('loading')}
+    </p>
+  );
   const dispatch = useAppDispatch();
   const client = useQueryClient();
-  const sessionId = useWorkspace((state) => state.workspace.sessionId);
-  const view = useWorkspace((state) => state.workspace.view);
-  const tab = useWorkspace((state) => state.workspace.tab);
-  const trace = useWorkspace((state) => state.workspace.traceRunId);
+  const location = useLocation();
+  const pathname = location.pathname;
+  const router = useRouter();
+  const navigate = useNavigate();
+  const canGoBack = useCanGoBack();
+  const { sessionId, runId: routeRunId, messageId: routeMessageId } = useParams({ strict: false });
+  const browserOpen = pathname.endsWith('/browser');
+  const savedBrowserReturn = location.state.workspaceBrowserReturn;
+  const browserReturnPath =
+    savedBrowserReturn &&
+    isWorkspaceLocation(savedBrowserReturn) &&
+    workspaceSessionId(savedBrowserReturn) === sessionId &&
+    !savedBrowserReturn.endsWith('/browser')
+      ? savedBrowserReturn
+      : undefined;
+  const contentPath = browserOpen ? (browserReturnPath ?? `/sessions/${sessionId}`) : pathname;
+  const trace = browserOpen ? contentPath.match(/\/trace\/([^/]+)$/u)?.[1] : routeRunId;
+  const messageId = browserOpen ? contentPath.match(/\/messages\/([^/]+)$/u)?.[1] : routeMessageId;
+  const view = currentView(pathname);
+  const tab: Tab = contentPath.includes('/trace')
+    ? 'trace'
+    : sessionId && contentPath.endsWith('/artifacts')
+      ? 'artifacts'
+      : 'conversation';
+  const section: SettingsSection =
+    pathname === settingsPaths.layout
+      ? 'layout'
+      : pathname === settingsPaths.diagnostics
+        ? 'diagnostics'
+        : 'models';
   const drawer = useWorkspace((state) => state.workspace.drawer);
   const connected = useWorkspace((state) => state.workspace.connected);
   const ready = useQuery({ queryKey: keys.bootstrap, queryFn: bootstrap, staleTime: 30_000 });
@@ -88,39 +179,77 @@ export default function Workspace() {
       (item) => item.id === ready.data?.sessions.find((item) => item.id === sessionId)?.projectId,
     ) ??
     ready.data?.projects[0];
-  const [sideTab, setSideTab] = useState<'details' | 'browser'>('details');
   const previewProject = view === 'chat' ? project?.id : undefined;
   const desktop = Boolean(window.atelierDesktop);
   const nativeBrowser = useDesktopBrowser(desktop ? previewProject : undefined);
-  const browser = useBrowserPreview(desktop ? undefined : previewProject, sideTab === 'browser');
-  const previewUrl = desktop ? nativeBrowser?.url : browser.data?.frame?.url;
-  const firstPreview = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (previewProject && previewUrl && firstPreview.current !== previewProject) {
-      firstPreview.current = previewProject;
-      setSideTab('browser');
-    }
-  }, [previewProject, previewUrl]);
+  const browser = useBrowserPreview(desktop || !browserOpen ? undefined : previewProject, true);
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const layoutQuery = useWorkspaceLayout();
+  const updateLayout = useUpdateWorkspaceLayout();
+  const [localLayout, setLocalLayout] = useState<WorkspaceLayout>();
+  const width = useWorkspaceViewport();
+  const layout = localLayout ?? layoutQuery.data ?? initialWorkspaceLayout;
+  const showLeft = width >= 768;
+  const showRight = view === 'chat' && browserOpen && (width > 1120 || (width >= 900 && desktop));
+  const browserTrigger = useRef<HTMLButtonElement>(null);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
+  function openDrawer(next: 'navigation' | 'details') {
+    drawerTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dispatch(actions.setDrawer(next));
+  }
+  function changeLayout(next: WorkspaceLayout) {
+    setLocalLayout(next);
+    updateLayout.mutate(next, {
+      onError: (error) => setNotice(translateError(error, t('layout.saveFailed'))),
+    });
+  }
   const [sessionChange, setSessionChange] = useState<{ type: SessionAction; session: Session }>();
   const [title, setTitle] = useState('');
+  const sessionActionTrigger = useRef<HTMLElement | null>(null);
   const [notice, setNotice] = useState('');
-  const didRestore = useRef(false);
+  const forkSession = useForkSession();
+  const forkKeys = useRef(new Map<string, string>());
+  const forking = useRef(false);
+  const savedLocation = useRef<string | undefined>(undefined);
+  const rememberLocation = useRememberWorkspaceLocation();
   const retryKeys = useRef(new Map<string, string>());
   useRunEvents(client, ready.data?.cursor);
 
   useEffect(() => {
-    if (!ready.data || didRestore.current) return;
-    didRestore.current = true;
-    const saved = lastSession();
-    const restored =
-      ready.data.sessions.find((item) => item.id === saved) ??
-      ready.data.sessions.find((item) => item.status === 'active') ??
-      ready.data.sessions[0];
-    if (restored) dispatch(actions.openSession({ id: restored.id }));
-    if (!ready.data.projects.length) setProjectsOpen(true);
-  }, [dispatch, ready.data]);
+    if (!ready.data || pathname !== '/') return;
+    const saved = ready.data.workspaceLocation;
+    const savedId = saved ? workspaceSessionId(saved) : undefined;
+    if (
+      saved &&
+      isWorkspaceLocation(saved) &&
+      (!savedId || ready.data.sessions.some(({ id }) => id === savedId))
+    ) {
+      router.history.replace(saved);
+    } else {
+      const previous = ready.data.workspaceLastSession ?? lastSession();
+      const restored =
+        ready.data.sessions.find(({ id }) => id === previous) ??
+        ready.data.sessions.find(({ status }) => status === 'active') ??
+        ready.data.sessions[0];
+      if (restored)
+        void navigate({
+          to: '/sessions/$sessionId',
+          params: { sessionId: restored.id },
+          replace: true,
+        });
+      else void navigate({ to: '/sessions', replace: true });
+      if (!ready.data.projects.length) setProjectsOpen(true);
+    }
+  }, [navigate, pathname, ready.data, router.history]);
+
+  useEffect(() => {
+    if (!ready.data || pathname === savedLocation.current || !isWorkspaceLocation(pathname)) return;
+    if (sessionId && !ready.data.sessions.some(({ id }) => id === sessionId)) return;
+    if (sessionId) rememberSession(sessionId);
+    savedLocation.current = pathname;
+    rememberLocation(pathname);
+  }, [pathname, ready.data, rememberLocation, sessionId]);
 
   useEffect(() => {
     if (!notice) return;
@@ -129,404 +258,593 @@ export default function Workspace() {
   }, [notice]);
 
   function openSession(id?: string, runId?: string) {
-    rememberSession(id);
-    dispatch(actions.openSession({ id, runId }));
+    dispatch(actions.setDrawer(undefined));
+    if (!id) void navigate({ to: '/sessions' });
+    else if (runId)
+      void navigate({ to: '/sessions/$sessionId/trace/$runId', params: { sessionId: id, runId } });
+    else void navigate({ to: '/sessions/$sessionId', params: { sessionId: id } });
   }
   function openView(next: View) {
-    dispatch(actions.openView(next));
+    dispatch(actions.setDrawer(undefined));
+    if (next === 'settings') void navigate({ to: settingsPaths.models });
+    else if (next === 'chat') {
+      if (view === 'chat' && sessionId) return;
+      const saved = lastSession() ?? ready.data?.workspaceLastSession;
+      openSession(
+        ready.data?.sessions.find(({ id }) => id === saved)?.id ?? ready.data?.sessions[0]?.id,
+      );
+    } else void navigate({ to: collectionPaths[next] });
   }
   function openTrace(runId: string) {
-    dispatch(actions.showTrace(runId));
+    if (sessionId) openSession(sessionId, runId);
   }
   function selectTab(next: Tab) {
-    dispatch(actions.setTab(next));
+    if (!sessionId) return;
+    const params = { sessionId };
+    if (next === 'trace') void navigate({ to: '/sessions/$sessionId/trace', params });
+    else if (next === 'artifacts') void navigate({ to: '/sessions/$sessionId/artifacts', params });
+    else if (tab !== 'conversation') void navigate({ to: '/sessions/$sessionId', params });
+  }
+  function openBrowser() {
+    if (!sessionId || browserOpen) return;
+    dispatch(actions.setDrawer(undefined));
+    void navigate({
+      to: '/sessions/$sessionId/browser',
+      params: { sessionId },
+      state: { workspaceBrowserReturn: pathname },
+    });
+  }
+  function closeBrowser() {
+    if (!sessionId || !browserOpen) return;
+    if (browserReturnPath && canGoBack) router.history.back();
+    else void navigate({ to: '/sessions/$sessionId', params: { sessionId }, replace: true });
+    browserTrigger.current?.focus({ preventScroll: true });
   }
   async function revalidate(id: string) {
     void client.invalidateQueries({ queryKey: keys.sessions });
     void client.invalidateQueries({ queryKey: keys.runs });
     await client.invalidateQueries({ queryKey: keys.snapshot(id) });
   }
-  const createSession = useMutation({
-    mutationFn: (projectId: string) =>
-      api<{ session: Session }>('/api/sessions', { method: 'POST', body: { projectId } }),
-    onSuccess({ session }) {
-      openSession(session.id);
+  async function continueFromMessage(
+    sourceSessionId: string,
+    messageId: string,
+    rewindFromHead?: string,
+  ) {
+    if (forking.current) throw new Error(t('session.actionBusy'));
+    const sourcePath = router.state.location.pathname;
+    const key = JSON.stringify([sourceSessionId, messageId, rewindFromHead]);
+    const idempotencyKey = forkKeys.current.get(key) ?? crypto.randomUUID();
+    forkKeys.current.set(key, idempotencyKey);
+    forking.current = true;
+    try {
+      const { session: child } = await forkSession.mutateAsync({
+        sessionId: sourceSessionId,
+        messageId,
+        idempotencyKey,
+        rewindFromHead,
+      });
+      forkKeys.current.delete(key);
       void client.invalidateQueries({ queryKey: keys.bootstrap });
       void client.invalidateQueries({ queryKey: keys.sessions });
-    },
-  });
-  const action = useMutation({
-    mutationFn: async (data: { type: SessionAction; session: Session; title: string }) => {
-      const { type, session, title } = data;
-      const path = `/api/sessions/${encodeURIComponent(session.id)}`;
-      if (type === 'delete') return deleteDraft(session.id, () => api(path, { method: 'DELETE' }));
-      return api(path, {
-        method: 'PATCH',
-        body:
-          type === 'rename'
+      if (router.state.location.pathname === sourcePath) {
+        openSession(child.id);
+      } else {
+        setNotice(
+          rewindFromHead
+            ? t('session.rewindCreated', { title: child.title })
+            : t('session.branchCreated', { title: child.title }),
+        );
+      }
+    } finally {
+      forking.current = false;
+    }
+  }
+
+  const createSession = useCreateSession();
+  const updateSession = useUpdateSession();
+  const removeSession = useDeleteSession();
+  const [managingSession, setManagingSession] = useState(false);
+  const managingLock = useRef(false);
+  const [managementError, setManagementError] = useState('');
+  async function createProjectSession(id: string) {
+    const { session: created } = await createSession.mutateAsync(id);
+    openSession(created.id);
+    void client.invalidateQueries({ queryKey: keys.bootstrap });
+    void client.invalidateQueries({ queryKey: keys.sessions });
+  }
+  async function manageSession({
+    type,
+    session: target,
+  }: {
+    type: SessionAction;
+    session: Session;
+  }) {
+    if (managingLock.current) return;
+    managingLock.current = true;
+    setManagingSession(true);
+    setManagementError('');
+    try {
+      if (type === 'delete') {
+        await deleteDraft(target.id, () => removeSession.mutateAsync(target.id));
+        if (workspaceSessionId(router.state.location.pathname) === target.id) {
+          const remaining = ready.data?.sessions.filter(({ id }) => id !== target.id) ?? [];
+          const next =
+            remaining.find(
+              (item) => item.projectId === target.projectId && item.status === 'active',
+            ) ?? remaining[0];
+          openSession(next?.id);
+        }
+        client.removeQueries({ queryKey: keys.snapshot(target.id), exact: true });
+        void client.invalidateQueries({ queryKey: keys.sessions });
+      } else {
+        await updateSession.mutateAsync({
+          id: target.id,
+          ...(type === 'rename'
             ? { title: title.trim() }
-            : { status: session.status === 'active' ? 'archived' : 'active' },
-      });
-    },
-    onSuccess: async (_, data) => {
+            : { status: type === 'archive' ? 'archived' : 'active' }),
+        });
+        void revalidate(target.id);
+      }
       setSessionChange(undefined);
-      if (data.type === 'delete' && sessionId === data.session.id) {
-        openSession(ready.data?.sessions.find((item) => item.id !== data.session.id)?.id);
-        client.removeQueries({ queryKey: keys.snapshot(data.session.id) });
-      }
-      await Promise.all([
-        revalidate(data.session.id),
-        client.invalidateQueries({ queryKey: keys.bootstrap }),
-      ]);
-    },
-    onError: (error) => setNotice(error.message),
-  });
-  const runAction = useMutation({
-    mutationFn: async ({
-      id,
-      intent,
-    }: {
-      id: string;
-      intent: 'stop' | 'retry';
-      sessionId: string;
-    }) => {
-      let key = retryKeys.current.get(id);
-      if (intent === 'retry' && !key) {
-        key = crypto.randomUUID();
-        retryKeys.current.set(id, key);
-      }
-      await api(`/api/runs/${encodeURIComponent(id)}/${intent}`, {
-        method: 'POST',
-        body: intent === 'retry' ? { idempotencyKey: key } : {},
-      });
-      if (intent === 'retry') retryKeys.current.delete(id);
-    },
-    onSuccess: (_, variables) => revalidate(variables.sessionId),
-    onError: (error) => setNotice(error.message),
-  });
-  const upgradeAgent = useMutation({
-    mutationFn: (input: { sessionId: string; revisionId: string }) =>
-      api(`/api/sessions/${encodeURIComponent(input.sessionId)}/upgrade-agent`, {
-        method: 'POST',
-        body: { revisionId: input.revisionId },
-      }),
-    onSuccess: (_, input) => revalidate(input.sessionId),
-    onError: (error) => setNotice(error.message),
-  });
-  function openSessionAction(type: SessionAction) {
-    if (!snapshot) return;
-    setSessionChange({ type, session: snapshot.session });
-    setTitle(snapshot.session.title);
+      await client.invalidateQueries({ queryKey: keys.bootstrap });
+    } catch (error) {
+      setManagementError(translateError(error, t('session.actionFailed')));
+    } finally {
+      managingLock.current = false;
+      setManagingSession(false);
+    }
+  }
+  const stopRun = useStopRun();
+  const retryRun = useRetryRun();
+  const upgradeAgent = useUpgradeSessionAgent();
+  function showSessionError(error: unknown) {
+    setNotice(translateError(error, t('session.actionFailed')));
+  }
+  function retrySessionRun(id: string, sessionId: string) {
+    const idempotencyKey = retryKeys.current.get(id) ?? crypto.randomUUID();
+    retryKeys.current.set(id, idempotencyKey);
+    void retryRun.mutateAsync({ id, sessionId, idempotencyKey }).then(() => {
+      if (retryKeys.current.get(id) === idempotencyKey) retryKeys.current.delete(id);
+    }, showSessionError);
+  }
+  function openSessionAction(type: SessionAction, target: Session) {
+    if (managingSession) return;
+    dispatch(actions.setDrawer(undefined));
+    setManagementError('');
+    sessionActionTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSessionChange({ type, session: target });
+    setTitle(target.title);
   }
   const sideProps = {
     project,
+    current: sessionId,
+    view,
+    projects: ready.data?.projects,
+    onSessionAction: openSessionAction,
+    onNewProject: (id: string) =>
+      void createProjectSession(id).catch((error: Error) =>
+        setNotice(translateError(error, t('session.actionFailed'))),
+      ),
     artifactCount: ready.data?.artifacts.length,
+    sessions: ready.data?.sessions,
+    sessionsFailed: ready.isError,
+    onRetrySessions: () => void ready.refetch(),
     onSession: openSession,
     onView: openView,
     onNew: () =>
       project?.available
-        ? createSession.mutate(project.id, { onError: (error) => setNotice(error.message) })
+        ? void createProjectSession(project.id).catch((error: Error) =>
+            setNotice(translateError(error, t('session.actionFailed'))),
+          )
         : setProjectsOpen(true),
     onProjects: () => {
       dispatch(actions.setDrawer(undefined));
       setProjectsOpen(true);
     },
-    onSettings: () => {
-      dispatch(actions.setDrawer(undefined));
-      setSettingsOpen(true);
-    },
+    onSettings: () => openView('settings'),
   };
-  const inspector = (
-    <Inspector
-      snapshot={snapshot}
-      run={selectedRun}
-      onTrace={openTrace}
-      onSessionAction={openSessionAction}
-    />
-  );
-  const sidePanel = (
-    <>
-      <div className="workspace-side-tabs" role="group" aria-label="右侧面板">
+  const pendingPermissions =
+    snapshot?.permissions.filter((item) => item.status === 'pending').length ?? 0;
+  const browserPanel = (
+    <section className="workspace-browser-panel" aria-label={t('browser.panel')}>
+      <header className="workspace-browser-heading">
+        <h2>
+          <Globe aria-hidden="true" />
+          {t('browser.title')}
+        </h2>
         <Button
-          size="sm"
-          variant={sideTab === 'details' ? 'secondary' : 'ghost'}
-          aria-pressed={sideTab === 'details'}
-          onClick={() => setSideTab('details')}
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t('browser.close')}
+          onClick={closeBrowser}
         >
-          任务详情
+          <X aria-hidden="true" />
         </Button>
-        <Button
-          size="sm"
-          variant={sideTab === 'browser' ? 'secondary' : 'ghost'}
-          aria-pressed={sideTab === 'browser'}
-          onClick={() => setSideTab('browser')}
-        >
-          浏览器
-        </Button>
-      </div>
-      {sideTab === 'browser' ? (
-        desktop && previewProject ? (
-          <DesktopBrowser key={previewProject} projectId={previewProject} state={nativeBrowser} />
-        ) : (
-          <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
-        )
+      </header>
+      {desktop && previewProject ? (
+        <DesktopBrowser key={previewProject} projectId={previewProject} state={nativeBrowser} />
       ) : (
-        inspector
+        <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
       )}
-    </>
+    </section>
   );
-  const archiveLabel =
-    sessionChange?.type === 'archive' && sessionChange.session.status === 'archived'
-      ? '恢复会话'
-      : sessionChange
-        ? sessionActions[sessionChange.type]
-        : '';
+  const archiveLabel = sessionChange ? t(sessionActions[sessionChange.type]) : '';
+  const sessionTitle = snapshot?.session.title;
   return (
     <div
-      className={`app react-workspace${desktop ? ' desktop-workspace' : ''}${sideTab === 'browser' ? ' browser-preview-open' : ''}`}
-    >
-      <Sidebar {...sideProps} />
-      <main className="main">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="react-chrome-action navigation"
-              aria-label="打开导航"
-              onClick={() => dispatch(actions.setDrawer('navigation'))}
-            >
-              <Menu size={17} />
-            </Button>
-            <span className="od-truncate">{project?.name ?? '本地工作台'}</span>
-            <span className="breadcrumb-slash">/</span>
-            <span className="od-truncate">
-              {view === 'chat'
-                ? (snapshot?.session.title ?? '会话')
-                : view === 'runs'
-                  ? '执行记录'
-                  : view === 'artifacts'
-                    ? '交付物'
-                    : view === 'agents'
-                      ? '智能体'
-                      : '扩展'}
-            </span>
-          </div>
-          <div className="topbar-actions">
-            <span
-              className="connection-state"
-              title={connected ? '实时事件已连接' : '正在连接实时事件'}
-            >
-              {connected ? '事件流已连接' : '事件流重连中'}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="模型与网关设置"
-              onClick={sideProps.onSettings}
-            >
-              <Settings2 size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="react-chrome-action details"
-              aria-label="任务详情"
-              onClick={() => dispatch(actions.setDrawer('details'))}
-            >
-              <PanelRight size={16} />
-            </Button>
-          </div>
-        </header>
-        <div className="react-center">
-          {ready.isError ? (
-            <div className="px-5 py-4" role="alert">
-              <p>无法连接本地服务。{ready.error.message}</p>
-              <Button variant="secondary" onClick={() => void ready.refetch()}>
-                重试
-              </Button>
-            </div>
-          ) : null}
-          <Suspense fallback={loading}>
-            {view === 'agents' ? (
-              <div className="react-collections">
-                <AgentsPage
-                  projects={ready.data?.projects ?? []}
-                  projectId={project?.id}
-                  onOpenSession={(id) => openSession(id)}
-                />
-              </div>
-            ) : null}
-            {view === 'extensions' ? (
-              <div className="react-collections">
-                <ExtensionsPage
-                  projects={ready.data?.projects ?? []}
-                  projectId={project?.id}
-                  onStartSkill={async (projectId, selection, editable) => {
-                    const { session } = await api<{ session: Session }>('/api/sessions', {
-                      method: 'POST',
-                      body: { projectId },
-                    });
-                    await api(`/api/sessions/${encodeURIComponent(session.id)}`, {
-                      method: 'PATCH',
-                      body: {
-                        draft: {
-                          ...session.draft,
-                          extensionSelections: [selection],
-                          mode: editable ? 'edit' : 'readonly',
-                        },
-                      },
-                    });
-                    openSession(session.id);
-                    void revalidate(session.id);
-                  }}
-                />
-              </div>
-            ) : null}
-            {view === 'runs' || view === 'artifacts' ? (
-              <div className="react-collections">
-                <Collections
-                  view={view}
-                  projects={ready.data?.projects ?? []}
-                  onOpenRun={(run) => openSession(run.sessionId, run.id)}
-                />
-              </div>
-            ) : null}
-            {view === 'chat' ? (
-              <section className="conversation-screen" aria-label="会话工作区">
-                <header className="session-header">
-                  <div className="session-title-row">
-                    <h1>{snapshot?.session.title ?? '开始工作'}</h1>
-                    {snapshot?.agent?.canUpgrade ? (
-                      <Button
-                        size="sm"
-                        disabled={upgradeAgent.isPending}
-                        onClick={() =>
-                          upgradeAgent.mutate({
-                            sessionId: snapshot.session.id,
-                            revisionId: snapshot.agent!.revisionId,
-                          })
-                        }
-                      >
-                        在此会话使用新版
-                      </Button>
-                    ) : null}
-                    {snapshot?.agent ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openView('agents')}
-                        title="打开智能体管理"
-                      >
-                        {snapshot.agent.name} · v{snapshot.agent.version}
-                      </Button>
-                    ) : null}
-                  </div>
-                  {project ? (
-                    <p className="session-meta">
-                      {project.branch || '本地目录'} <span>·</span> 本地工作空间
-                    </p>
-                  ) : null}
-                </header>
-                <div role="tablist" className="session-tabs" aria-label="会话内容">
-                  {tabs.map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      className={`session-tab ${tab === id ? 'active' : ''}`}
-                      aria-selected={tab === id}
-                      onClick={() => selectTab(id)}
-                    >
-                      {label}
-                      {id === 'trace' && snapshot?.tools.length ? ` ${snapshot.tools.length}` : ''}
-                      {id === 'artifacts' && snapshot?.artifacts.length
-                        ? ` ${snapshot.artifacts.length}`
-                        : ''}
-                    </button>
-                  ))}
-                </div>
-                <div
-                  className="react-conversation-body"
-                  role="tabpanel"
-                  aria-label={tabs.find((item) => item.id === tab)?.label}
-                >
-                  {snapshot && tab === 'conversation' ? (
-                    <SessionChat
-                      key={snapshot.session.id}
-                      snapshot={snapshot}
-                      defaultModel={ready.data?.config.model ?? ''}
-                      onOpenLink={
-                        desktop
-                          ? async (url, destination) => {
-                              const bridge = window.atelierDesktop;
-                              if (!bridge) throw new Error('桌面浏览器当前不可用。');
-                              if (destination === 'internal') setSideTab('browser');
-                              await bridge.command(
-                                snapshot.project.id,
-                                destination === 'internal' ? 'open-tab' : 'open-external',
-                                url,
-                              );
-                            }
-                          : undefined
-                      }
-                      onSent={revalidate}
-                      onError={setNotice}
-                      onStop={(id) =>
-                        runAction.mutate({ id, intent: 'stop', sessionId: snapshot.session.id })
-                      }
-                      onRetry={(id) =>
-                        runAction.mutate({ id, intent: 'retry', sessionId: snapshot.session.id })
-                      }
-                      onTrace={openTrace}
-                    />
-                  ) : null}
-                  {snapshot && tab === 'trace' ? (
-                    <div className="react-scroll-view">
-                      <RunTrace snapshot={snapshot} runId={selectedRun?.id} onSelect={openTrace} />
-                    </div>
-                  ) : null}
-                  {snapshot && tab === 'artifacts' ? (
-                    <div className="react-scroll-view">
-                      <Collections
-                        view="artifacts"
-                        projects={[snapshot.project]}
-                        sessionId={snapshot.session.id}
-                        onOpenRun={(run: Run) => openSession(run.sessionId, run.id)}
-                      />
-                    </div>
-                  ) : null}
-                  {!snapshot ? (
-                    session.isError ? (
-                      <div role="alert" className="empty-text">
-                        <p>{session.error.message}</p>
-                        <Button variant="secondary" onClick={() => void session.refetch()}>
-                          重试
-                        </Button>
-                      </div>
-                    ) : sessionId || ready.isPending ? (
-                      loading
-                    ) : (
-                      <div className="welcome">
-                        <h2>开始你的工作</h2>
-                        <p>绑定本机项目目录，然后新建会话。</p>
-                        <Button onClick={sideProps.onProjects}>绑定项目</Button>
-                      </div>
-                    )
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
-          </Suspense>
-        </div>
-      </main>
-      {drawer !== 'details' ? (
-        <aside className="react-side" aria-label="任务详情">
-          <Suspense fallback={loading}>{sidePanel}</Suspense>
-        </aside>
-      ) : (
-        <aside className="react-side" />
+      className={cn(
+        'app react-workspace',
+        desktop && 'desktop-workspace',
+        browserOpen && 'browser-preview-open',
       )}
+    >
+      <WorkspacePanels
+        layout={layout}
+        width={width}
+        showLeft={showLeft}
+        showRight={showRight}
+        onChange={changeLayout}
+        left={
+          <Sidebar
+            {...sideProps}
+            collapsed={layout.collapsed}
+            onToggleCollapsed={() => changeLayout({ ...layout, collapsed: !layout.collapsed })}
+          />
+        }
+        right={
+          <aside className="react-side" aria-label={t('browser.title')}>
+            {showRight ? browserPanel : null}
+          </aside>
+        }
+        center={
+          <main className="main">
+            <WorkspaceToolbar
+              projectName={project?.name}
+              title={
+                view === 'chat' ? (sessionTitle ?? t('tab.conversation')) : t(sectionNames[view])
+              }
+              connected={connected}
+              canGoBack={canGoBack}
+              onBack={() => router.history.back()}
+              onForward={() => router.history.forward()}
+              onOpenNavigation={() => openDrawer('navigation')}
+              onOpenSettings={sideProps.onSettings}
+              sessionActions={
+                view === 'chat' && sessionId
+                  ? {
+                      pendingPermissions,
+                      browserOpen,
+                      browserTrigger,
+                      onOpenChanges: () => openDrawer('details'),
+                      onToggleBrowser: browserOpen ? closeBrowser : openBrowser,
+                    }
+                  : undefined
+              }
+            />
+            <div className="react-center">
+              {browserOpen && !showRight ? (
+                browserPanel
+              ) : (
+                <>
+                  {ready.isError ? (
+                    <div className="px-5 py-4" role="alert">
+                      <p>{translateError(ready.error, t('connection.failed'))}</p>
+                      <Button variant="secondary" onClick={() => void ready.refetch()}>
+                        {t('retry')}
+                      </Button>
+                    </div>
+                  ) : null}
+                  <Suspense fallback={loading}>
+                    {view === 'settings' && (
+                      <Settings
+                        section={section}
+                        onSectionChange={(next: SettingsSection) =>
+                          void navigate({ to: settingsPaths[next] })
+                        }
+                        onBack={() => openView('chat')}
+                        layout={{
+                          layout,
+                          pending: updateLayout.isPending,
+                          error: updateLayout.error?.message,
+                          onApply: changeLayout,
+                        }}
+                      />
+                    )}
+                    {view === 'agents' ? (
+                      <div className="react-collections">
+                        <AgentsPage
+                          projects={ready.data?.projects ?? []}
+                          projectId={project?.id}
+                          onOpenSession={(id) => openSession(id)}
+                        />
+                      </div>
+                    ) : null}
+                    {view === 'extensions' ? (
+                      <div className="react-collections">
+                        <ExtensionsPage
+                          projects={ready.data?.projects ?? []}
+                          projectId={project?.id}
+                          onStartSkill={async (projectId, selection, editable) => {
+                            const { session } = await createSession.mutateAsync(projectId);
+                            await updateSessionDraft({
+                              sessionId: session.id,
+                              draft: {
+                                ...session.draft,
+                                extensionSelections: [selection],
+                                mode: editable ? 'edit' : 'readonly',
+                              },
+                            });
+                            openSession(session.id);
+                            void revalidate(session.id);
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    {view === 'runs' || view === 'artifacts' ? (
+                      <div className="react-collections">
+                        <Collections
+                          view={view}
+                          projects={ready.data?.projects ?? []}
+                          onOpenRun={(run) => openSession(run.sessionId, run.id)}
+                        />
+                      </div>
+                    ) : null}
+                    {view === 'chat' ? (
+                      <section
+                        className="conversation-screen"
+                        aria-label={t('session.workspace')}
+                        data-has-session={Boolean(sessionId)}
+                      >
+                        {sessionId ? (
+                          <>
+                            <header className="session-header">
+                              <div className="session-title-row">
+                                <h1 title={sessionTitle}>{sessionTitle ?? t('session.begin')}</h1>
+                                {snapshot?.agent?.canUpgrade ? (
+                                  <Button
+                                    size="sm"
+                                    disabled={upgradeAgent.isPending}
+                                    onClick={() =>
+                                      upgradeAgent.mutate(
+                                        {
+                                          sessionId: snapshot.session.id,
+                                          revisionId: snapshot.agent!.revisionId,
+                                        },
+                                        {
+                                          onSuccess: () => revalidate(snapshot.session.id),
+                                          onError: showSessionError,
+                                        },
+                                      )
+                                    }
+                                  >
+                                    {t('session.useNewVersion')}
+                                  </Button>
+                                ) : null}
+                                {snapshot?.agent ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openView('agents')}
+                                    title={t('session.manageAgent')}
+                                  >
+                                    {t('session.agentVersion', {
+                                      name: snapshot.agent.name,
+                                      version: snapshot.agent.version,
+                                    })}
+                                  </Button>
+                                ) : null}
+                              </div>
+                              {project ? (
+                                <p className="session-meta">
+                                  {project.branch || t('session.localDirectory')} <span>·</span>{' '}
+                                  {snapshot?.session.fork
+                                    ? t('session.sharedDirectory')
+                                    : t('session.localWorkspace')}
+                                </p>
+                              ) : null}
+                              {snapshot?.session.fork
+                                ? (() => {
+                                    const origin = snapshot.session.fork;
+                                    const label =
+                                      origin.kind === 'rewind'
+                                        ? t('session.beforeRewind')
+                                        : t('session.source');
+                                    const exists = ready.data?.sessions.some(
+                                      (item) => item.id === origin.sourceSessionId,
+                                    );
+                                    return exists ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() =>
+                                          void navigate({
+                                            to: '/sessions/$sessionId/messages/$messageId',
+                                            params: {
+                                              sessionId: origin.sourceSessionId,
+                                              messageId: origin.sourceMessageId,
+                                            },
+                                          })
+                                        }
+                                      >
+                                        {label} · {origin.sourceTitle}
+                                      </Button>
+                                    ) : (
+                                      <p className="session-meta">
+                                        {t('session.sourceUnavailable', {
+                                          label,
+                                          title: origin.sourceTitle,
+                                        })}
+                                      </p>
+                                    );
+                                  })()
+                                : null}
+                            </header>
+                            <div
+                              role="tablist"
+                              className="session-tabs"
+                              aria-label={t('session.content')}
+                            >
+                              {tabs.map(({ id, labelKey }) => (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  role="tab"
+                                  className="session-tab"
+                                  id={`${sessionContentId}-${id}`}
+                                  aria-controls={`${sessionContentId}-panel`}
+                                  aria-selected={tab === id}
+                                  tabIndex={tab === id ? 0 : -1}
+                                  onClick={() => selectTab(id)}
+                                  onKeyDown={(event) => {
+                                    const index = tabs.findIndex((item) => item.id === id);
+                                    const indexes: Record<string, number> = {
+                                      ArrowLeft: (index - 1 + tabs.length) % tabs.length,
+                                      ArrowRight: (index + 1) % tabs.length,
+                                      Home: 0,
+                                      End: tabs.length - 1,
+                                    };
+                                    const next = tabs[indexes[event.key] ?? -1];
+                                    if (!next) return;
+                                    event.preventDefault();
+                                    document
+                                      .getElementById(`${sessionContentId}-${next.id}`)
+                                      ?.focus();
+                                    selectTab(next.id);
+                                  }}
+                                >
+                                  {t(labelKey)}
+                                  {id === 'trace' && snapshot?.tools.length
+                                    ? ` ${numberFormat.format(snapshot.tools.length)}`
+                                    : ''}
+                                  {id === 'artifacts' && snapshot?.artifacts.length
+                                    ? ` ${numberFormat.format(snapshot.artifacts.length)}`
+                                    : ''}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        ) : null}
+                        <div
+                          className="react-conversation-body"
+                          id={sessionId ? `${sessionContentId}-panel` : undefined}
+                          role={sessionId ? 'tabpanel' : undefined}
+                          aria-labelledby={sessionId ? `${sessionContentId}-${tab}` : undefined}
+                        >
+                          <Suspense fallback={loading}>
+                            {snapshot && tab === 'conversation' ? (
+                              <SessionChat
+                                key={snapshot.session.id}
+                                snapshot={snapshot}
+                                defaultModel={ready.data?.config.model ?? ''}
+                                nativeExecution={ready.data?.capabilities.nativeExecution === true}
+                                onOpenLink={
+                                  desktop
+                                    ? async (url, destination) => {
+                                        const bridge = window.atelierDesktop;
+                                        if (!bridge) throw new Error(t('browser.disabled'));
+                                        if (destination === 'internal') openBrowser();
+                                        await bridge.command(
+                                          snapshot.project.id,
+                                          destination === 'internal' ? 'open-tab' : 'open-external',
+                                          url,
+                                        );
+                                      }
+                                    : undefined
+                                }
+                                onForkMessage={(messageId) => {
+                                  void continueFromMessage(snapshot.session.id, messageId).catch(
+                                    (error: unknown) => {
+                                      setNotice(
+                                        translateError(error, t('session.createBranchFailed')),
+                                      );
+                                    },
+                                  );
+                                }}
+                                onRewindMessage={(messageId, expectedHeadId) =>
+                                  continueFromMessage(
+                                    snapshot.session.id,
+                                    messageId,
+                                    expectedHeadId,
+                                  )
+                                }
+                                forkingMessageId={
+                                  forkSession.isPending &&
+                                  !forkSession.variables?.rewindFromHead &&
+                                  forkSession.variables?.sessionId === snapshot.session.id
+                                    ? forkSession.variables.messageId
+                                    : undefined
+                                }
+                                focusMessageId={messageId}
+                                onSent={revalidate}
+                                onError={setNotice}
+                                onStop={(id) =>
+                                  void stopRun
+                                    .mutateAsync({ id, sessionId: snapshot.session.id })
+                                    .catch(showSessionError)
+                                }
+                                onRetry={(id) => retrySessionRun(id, snapshot.session.id)}
+                                onTrace={openTrace}
+                              />
+                            ) : null}
+                            {snapshot && tab === 'trace' ? (
+                              <div className="react-scroll-view">
+                                <RunTrace
+                                  snapshot={snapshot}
+                                  runId={selectedRun?.id}
+                                  onSelect={openTrace}
+                                />
+                              </div>
+                            ) : null}
+                            {snapshot && tab === 'artifacts' ? (
+                              <div className="react-scroll-view">
+                                <Collections
+                                  view="artifacts"
+                                  projects={[snapshot.project]}
+                                  sessionId={snapshot.session.id}
+                                  onOpenRun={(run: Run) => openSession(run.sessionId, run.id)}
+                                />
+                              </div>
+                            ) : null}
+                            {!snapshot ? (
+                              session.isError ? (
+                                <div role="alert" className="empty-text">
+                                  <p>{translateError(session.error, t('session.loadFailed'))}</p>
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => void session.refetch()}
+                                  >
+                                    {t('retry')}
+                                  </Button>
+                                </div>
+                              ) : sessionId || ready.isPending ? (
+                                loading
+                              ) : (
+                                <div className="workspace-welcome">
+                                  <span className="workspace-welcome-icon" aria-hidden="true">
+                                    <FolderOpen />
+                                  </span>
+                                  <h1>{t('home.title')}</h1>
+                                  <p>{t('home.description')}</p>
+                                  <Button onClick={sideProps.onProjects}>
+                                    {t('home.bindProject')}
+                                  </Button>
+                                </div>
+                              )
+                            ) : null}
+                          </Suspense>
+                        </div>
+                      </section>
+                    ) : null}
+                  </Suspense>
+                </>
+              )}
+            </div>
+          </main>
+        }
+      />
       <Dialog
         open={!!drawer}
         onOpenChange={(open) => {
@@ -534,14 +852,38 @@ export default function Workspace() {
         }}
       >
         <DialogContent
-          className={`react-drawer ${drawer === 'details' ? 'react-drawer-details' : ''}`}
+          className={drawer === 'details' ? 'workspace-changes-dialog' : 'react-drawer'}
+          onCloseAutoFocus={(event) => {
+            const trigger = drawerTrigger.current;
+            if (trigger?.isConnected) {
+              event.preventDefault();
+              trigger.focus({ preventScroll: true });
+            }
+          }}
         >
-          <DialogTitle className="sr-only">
-            {drawer === 'details' ? '任务详情' : '工作空间导航'}
-          </DialogTitle>
-          <DialogDescription className="sr-only">本地工作台</DialogDescription>
+          <DialogHeader className={drawer === 'details' ? undefined : 'sr-only'}>
+            <DialogTitle>
+              {drawer === 'details' ? t('changes.title') : t('drawer.navigation')}
+            </DialogTitle>
+            <DialogDescription>
+              {drawer === 'details' ? t('changes.description') : t('navigation.home')}
+            </DialogDescription>
+          </DialogHeader>
           {drawer === 'navigation' ? <Sidebar {...sideProps} /> : null}
-          {drawer === 'details' ? <Suspense fallback={loading}>{sidePanel}</Suspense> : null}
+          {drawer === 'details' ? (
+            session.isError ? (
+              <div role="alert">
+                <p>{translateError(session.error, t('session.loadFailed'))}</p>
+                <Button variant="secondary" onClick={() => void session.refetch()}>
+                  {t('retry')}
+                </Button>
+              </div>
+            ) : (
+              <Suspense fallback={loading}>
+                <SessionChanges snapshot={snapshot} />
+              </Suspense>
+            )
+          ) : null}
         </DialogContent>
       </Dialog>
       {projectsOpen ? (
@@ -550,29 +892,32 @@ export default function Workspace() {
           onOpenChange={setProjectsOpen}
           projects={ready.data?.projects ?? []}
           onChoose={async (id) => {
-            await createSession.mutateAsync(id);
+            await createProjectSession(id);
           }}
         />
-      ) : null}
-      {settingsOpen ? (
-        <Suspense fallback={null}>
-          <Settings open onOpenChange={setSettingsOpen} />
-        </Suspense>
       ) : null}
       <Dialog
         open={!!sessionChange}
         onOpenChange={(open) => {
-          if (!open && !action.isPending) setSessionChange(undefined);
+          if (!open && !managingSession) setSessionChange(undefined);
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            const trigger = sessionActionTrigger.current;
+            if (trigger?.isConnected) {
+              event.preventDefault();
+              trigger.focus({ preventScroll: true });
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{archiveLabel}</DialogTitle>
             <DialogDescription>{sessionChange?.session.title}</DialogDescription>
           </DialogHeader>
           {sessionChange?.type === 'rename' ? (
             <label className="grid gap-2">
-              会话名称
+              {t('session.name')}
               <input
                 className="field"
                 value={title}
@@ -582,21 +927,26 @@ export default function Workspace() {
             </label>
           ) : null}
           {sessionChange?.type === 'delete' ? (
-            <p className="text-sm">删除后将移除该会话的历史及工作台记录。</p>
+            <p className="text-sm">{t('session.deleteWarning')}</p>
           ) : null}
+          {managementError && (
+            <p role="alert" className="text-sm text-destructive">
+              {managementError}
+            </p>
+          )}
           <div className="dialog-actions">
             <Button
               variant="secondary"
-              disabled={action.isPending}
+              disabled={managingSession}
               onClick={() => setSessionChange(undefined)}
             >
-              取消
+              {t('cancel')}
             </Button>
             <Button
               variant={sessionChange?.type === 'delete' ? 'destructive' : 'default'}
-              disabled={action.isPending || (sessionChange?.type === 'rename' && !title.trim())}
+              disabled={managingSession || (sessionChange?.type === 'rename' && !title.trim())}
               onClick={() => {
-                if (sessionChange) action.mutate({ ...sessionChange, title });
+                if (sessionChange) void manageSession(sessionChange);
               }}
             >
               {archiveLabel}
@@ -604,11 +954,7 @@ export default function Workspace() {
           </div>
         </DialogContent>
       </Dialog>
-      {notice ? (
-        <div className="toast" role="status">
-          {notice}
-        </div>
-      ) : null}
+      <WorkspaceNotice message={notice} />
     </div>
   );
 }

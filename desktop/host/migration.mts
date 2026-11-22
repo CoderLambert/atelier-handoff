@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { dialog } from 'electron';
 import { z } from 'zod';
+import { desktopT, diagnosticText, formatDesktopNumber } from './i18n.mjs';
 
 const run = promisify(execFile);
 const report = z.object({
@@ -27,18 +28,19 @@ export async function importWorkspace(options: {
 }): Promise<boolean> {
   const { runtimeRoot, dataDir, packaged, signal } = options;
   const selected = await dialog.showOpenDialog({
-    title: '选择旧版工作台的数据目录',
-    message: '先退出使用该数据目录的旧版。请选择包含 atelier.sqlite 的目录。',
+    title: desktopT('host.migration.chooseTitle'),
+    message: desktopT('host.migration.chooseMessage'),
+    buttonLabel: desktopT('host.migration.chooseButton'),
     properties: ['openDirectory', 'showHiddenFiles'],
   });
   const source = selected.filePaths[0];
   if (selected.canceled || !source || signal.aborted) return false;
   const answer = await dialog.showMessageBox({
     type: 'question',
-    title: '迁入旧工作台数据',
-    message: '将旧工作台迁入新目录？',
-    detail: `来源 ${source}\n目标 ${dataDir}\n原项目目录及旧数据保留。网页可能需要重新登录。`,
-    buttons: ['迁入', '取消'],
+    title: desktopT('host.migration.confirmTitle'),
+    message: desktopT('host.migration.confirmMessage'),
+    detail: desktopT('host.migration.confirmDetail', { source, destination: dataDir }),
+    buttons: [desktopT('host.migration.import'), desktopT('host.action.cancel')],
     defaultId: 0,
     cancelId: 1,
     signal,
@@ -64,10 +66,17 @@ export async function importWorkspace(options: {
     const result = report.parse(JSON.parse(stdout));
     const complete = await dialog.showMessageBox({
       type: 'info',
-      title: '工作台数据已迁入',
-      message: `已迁入 ${result.projects} 个项目和 ${result.sessions} 个会话`,
-      detail: `附件 ${result.attachments} 个，交付物 ${result.artifacts} 个。\n回退副本 ${result.backupPath}`,
-      buttons: ['打开工作台', '退出'],
+      title: desktopT('host.migration.completeTitle'),
+      message: desktopT('host.migration.completeMessage', {
+        projects: formatDesktopNumber(result.projects),
+        sessions: formatDesktopNumber(result.sessions),
+      }),
+      detail: desktopT('host.migration.completeDetail', {
+        attachments: formatDesktopNumber(result.attachments),
+        artifacts: formatDesktopNumber(result.artifacts),
+        backupPath: result.backupPath,
+      }),
+      buttons: [desktopT('host.migration.open'), desktopT('host.action.exit')],
       defaultId: 0,
       cancelId: 1,
       signal,
@@ -75,15 +84,23 @@ export async function importWorkspace(options: {
     return complete.response === 0 && !signal.aborted;
   } catch (error) {
     if (signal.aborted) return false;
-    const details =
-      typeof error === 'object' && error !== null && 'stderr' in error
-        ? String(error.stderr).trim().split('\n').at(-1)
-        : undefined;
+    const diagnostic =
+      typeof error === 'object' &&
+      error !== null &&
+      'stderr' in error &&
+      typeof error.stderr === 'string' &&
+      error.stderr.trim()
+        ? error.stderr.trim()
+        : diagnosticText(error);
+    const detail = desktopT('host.migration.failedDetail');
     await dialog.showMessageBox({
       type: 'error',
-      title: '未迁入旧数据',
-      message: details || '无法迁入所选工作台数据。',
-      detail: '检查来源目录及目标位置，再启动迁入向导。',
+      title: desktopT('host.migration.failedTitle'),
+      message: desktopT('host.migration.failedMessage'),
+      detail: diagnostic
+        ? `${detail}\n\n${desktopT('host.recovery.diagnostic', { diagnostic })}`
+        : detail,
+      buttons: [desktopT('host.action.ok')],
       signal,
     });
     return false;

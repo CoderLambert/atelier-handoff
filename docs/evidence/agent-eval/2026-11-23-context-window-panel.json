@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "environment": {
+    "node": "24.21.0",
+    "electron": "45.4.1",
+    "sdk": "0.3.326",
+    "cli": "2.1.326",
+    "gateway": "local deterministic fixture",
+    "externalInferenceRequests": 0
+  },
+  "checks": {
+    "check": "passed",
+    "test": {
+      "backendPassed": 289,
+      "frontendPassed": 106,
+      "skipped": 1,
+      "skippedReason": "No deterministic local WebFetch fixture"
+    },
+    "build": "passed",
+    "desktopBuild": "passed"
+  },
+  "electron": {
+    "zh": {
+      "width": 1280,
+      "height": 800
+    },
+    "en": {
+      "width": 1440,
+      "height": 900
+    },
+    "cacheHitRate": 0.6,
+    "requests": [
+      "/v1/messages?beta=true"
+    ],
+    "draftPreserved": true,
+    "persistedAfterRestart": true
+  },
+  "screenshot": "2026-11-23-context-window-panel.png",
+  "sdkManualCompactionProbe": {
+    "calls": [
+      "/v1/messages?beta=true",
+      "/v1/messages?beta=true",
+      "/v1/messages?beta=true",
+      "/v1/messages?beta=true"
+    ],
+    "boundary": {
+      "trigger": "manual",
+      "pre_tokens": 94010,
+      "post_tokens": 415,
+      "cumulative_dropped_tokens": 93595,
+      "duration_ms": 15
+    },
+    "summaries": [
+      {
+        "tokens": 94000,
+        "window": 100000,
+        "apiUsage": {
+          "input_tokens": 94000,
+          "output_tokens": 10,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0
+        },
+        "categories": [
+          {
+            "id": "system_tools",
+            "kind": "used",
+            "tokens": 1140
+          },
+          {
+            "id": "messages",
+            "kind": "used",
+            "tokens": 65860
+          },
+          {
+            "id": "autocompact_buffer",
+            "kind": "buffer",
+            "tokens": 33000
+          },
+          {
+            "id": "free_space",
+            "kind": "free",
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "tokens": 1828,
+        "window": 100000,
+        "apiUsage": null,
+        "categories": [
+          {
+            "id": "system_tools",
+            "kind": "used",
+            "tokens": 1140
+          },
+          {
+            "id": "messages",
+            "kind": "used",
+            "tokens": 688
+          },
+          {
+            "id": "autocompact_buffer",
+            "kind": "buffer",
+            "tokens": 33000
+          },
+          {
+            "id": "free_space",
+            "kind": "free",
+            "tokens": 65172
+          }
+        ]
+      },
+      {
+        "tokens": 10000,
+        "window": 100000,
+        "apiUsage": {
+          "input_tokens": 2500,
+          "output_tokens": 20,
+          "cache_creation_input_tokens": 1500,
+          "cache_read_input_tokens": 6000
+        },
+        "categories": [
+          {
+            "id": "system_tools",
+            "kind": "used",
+            "tokens": 1140
+          },
+          {
+            "id": "messages",
+            "kind": "used",
+            "tokens": 8860
+          },
+          {
+            "id": "autocompact_buffer",
+            "kind": "buffer",
+            "tokens": 33000
+          },
+          {
+            "id": "free_space",
+            "kind": "free",
+            "tokens": 57000
+          }
+        ]
+      }
+    ]
+  }
+}

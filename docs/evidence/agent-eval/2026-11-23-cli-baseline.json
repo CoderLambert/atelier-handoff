@@ -1,0 +1,1506 @@
+{
+  "schemaVersion": 1,
+  "standard": {
+    "model": "codex/gpt-6.2-sol",
+    "effort": "medium",
+    "sdkVersion": "0.3.326",
+    "cliVersion": "2.1.326",
+    "taskCount": 6,
+    "pairedInputs": 18,
+    "notes": [
+      "Both entry points used the same Magpie loopback route through an evaluation relay. The relay caps max_tokens to 8192 and records observed model IDs and effort on requests.",
+      "Each trial used fresh synthetic data and a temporary configuration root. The CLI was run headlessly with common shell and file tools. Atelier used its native executor and application HTTP endpoints.",
+      "The first Atelier startup used a relay without a /health route. That startup stopped before inference. It is recorded separately and excluded from matched results.",
+      "Latency is measured inside the worker through result and post-stop cleanup. Cancellation grades observable file state and stop status. The suite does not exercise conversation continuation, browser or MCP use, or sustained stalled subagents.",
+      "The six synthetic task families are diagnostic samples. Gateway response model labels are visible, while provider-internal routing, applied effort and real billing are not independently visible."
+    ],
+    "byDriver": {
+      "claude-code": {
+        "passed": 18,
+        "total": 18,
+        "statuses": {
+          "completed": 15,
+          "stopped": 3
+        },
+        "pairedCompleted": 15,
+        "pairedCompletedMedianMs": 15432.781418999999,
+        "pairedCompletedMedianToolCalls": 4
+      },
+      "atelier-native": {
+        "passed": 18,
+        "total": 18,
+        "statuses": {
+          "completed": 15,
+          "stopped": 3
+        },
+        "pairedCompleted": 15,
+        "pairedCompletedMedianMs": 14359.155781000001,
+        "pairedCompletedMedianToolCalls": 3
+      }
+    },
+    "byTask": {
+      "fixture-research": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 15432.781418999999,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 14359.155781000001,
+          "failures": []
+        }
+      },
+      "edit-test-repeat": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 17315.099424,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 16688.211755999997,
+          "failures": []
+        }
+      },
+      "unknown-write": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 10698.533182000001,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 9054.008685,
+          "failures": []
+        }
+      },
+      "cancel": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 5392.395093,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 6906.970306,
+          "failures": []
+        }
+      },
+      "writing": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 3876.670505,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 3842.037066,
+          "failures": []
+        }
+      },
+      "long-log": {
+        "claude-code": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 21801.608138,
+          "failures": []
+        },
+        "atelier-native": {
+          "passed": 3,
+          "total": 3,
+          "medianMs": 21299.361917000002,
+          "failures": []
+        }
+      }
+    },
+    "gateway": {
+      "inferenceRequests": 102,
+      "statusCounts": {
+        "200": 102
+      },
+      "requestedEfforts": [
+        "medium"
+      ],
+      "reportedModels": [
+        "codex/gpt-6.2-sol"
+      ],
+      "stopReasons": [
+        "tool_use",
+        "end_turn"
+      ]
+    },
+    "startupExcluded": {
+      "driver": "atelier-native",
+      "task": "fixture-research",
+      "error": "HTTP_503: {\"error\":{\"code\":\"SDK_UNAVAILABLE\",\"message\":\"无法连接本机 Shunt，请先启动网关或检查设置；任务尚未开始，输入已保留。\",\"retryable\":true}}"
+    },
+    "cases": [
+      {
+        "driver": "claude-code",
+        "task": "fixture-research",
+        "trial": 0,
+        "fixtureHash": "ac5c69f8b9319993025a735dc33563bd7de362dbf093c27a0a531466389f1652",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 13924.77535,
+        "toolCount": 5,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "f9212cc367527f0ae698db0379a011ac5b2c14992d464cc3993b1089cc20b489",
+          "sources/seats.csv": "6d2bf3aaaeea3bac3cba5397cd112b5f2c1371c6f650291d180b543c32cb1557"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "fixture-research",
+        "trial": 0,
+        "fixtureHash": "ac5c69f8b9319993025a735dc33563bd7de362dbf093c27a0a531466389f1652",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 14359.155781000001,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "f9212cc367527f0ae698db0379a011ac5b2c14992d464cc3993b1089cc20b489",
+          "sources/seats.csv": "6d2bf3aaaeea3bac3cba5397cd112b5f2c1371c6f650291d180b543c32cb1557"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "edit-test-repeat",
+        "trial": 0,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 16688.211755999997,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "edit-test-repeat",
+        "trial": 0,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 17315.099424,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "unknown-write",
+        "trial": 0,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 11214.918907,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "unknown-write",
+        "trial": 0,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 9354.731112,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "cancel",
+        "trial": 0,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 6297.262323,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "cancel",
+        "trial": 0,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 5465.190256,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "writing",
+        "trial": 0,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 3876.670505,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "writing",
+        "trial": 0,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 3842.037066,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "long-log",
+        "trial": 0,
+        "fixtureHash": "171ff242c35d017685060fc10268a1af8403440dba0174252288ea96b864b7b1",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 18212.954852,
+        "toolCount": 3,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "dffe569b9f22dc74c4cca00c232cd5b532eefc403c727af496995d81c92a0c0b"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "long-log",
+        "trial": 0,
+        "fixtureHash": "171ff242c35d017685060fc10268a1af8403440dba0174252288ea96b864b7b1",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 21801.608138,
+        "toolCount": 7,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "dffe569b9f22dc74c4cca00c232cd5b532eefc403c727af496995d81c92a0c0b"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "fixture-research",
+        "trial": 1,
+        "fixtureHash": "2fe4fab0c7d9152770c7a2278b6aba31cf7fadfd2571b050290546100d361729",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 14527.856714,
+        "toolCount": 5,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "759cefee162e1ec7e03a2ede7a3c76c4c82dabd20db583313f687f2e6e7db078",
+          "sources/seats.csv": "6d2bf3aaaeea3bac3cba5397cd112b5f2c1371c6f650291d180b543c32cb1557"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "fixture-research",
+        "trial": 1,
+        "fixtureHash": "2fe4fab0c7d9152770c7a2278b6aba31cf7fadfd2571b050290546100d361729",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 18086.419557999998,
+        "toolCount": 5,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "759cefee162e1ec7e03a2ede7a3c76c4c82dabd20db583313f687f2e6e7db078",
+          "sources/seats.csv": "6d2bf3aaaeea3bac3cba5397cd112b5f2c1371c6f650291d180b543c32cb1557"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "edit-test-repeat",
+        "trial": 1,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 20104.363956000005,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "edit-test-repeat",
+        "trial": 1,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 17765.613825000004,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "unknown-write",
+        "trial": 1,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 8587.338896,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "unknown-write",
+        "trial": 1,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 10698.533182000001,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "cancel",
+        "trial": 1,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 4937.727717,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "cancel",
+        "trial": 1,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 7199.235547,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "writing",
+        "trial": 1,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 4009.9010769999995,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "writing",
+        "trial": 1,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 4151.499026,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "long-log",
+        "trial": 1,
+        "fixtureHash": "8da5798e9ba8df826d721dbcb9035f8cf6be01ac48eca631342801dccef1e941",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 25021.585394,
+        "toolCount": 6,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "b9eb3b5e57c7d096bdb307587d628d9620488df7bc491ca8a562302171ff40be"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "long-log",
+        "trial": 1,
+        "fixtureHash": "8da5798e9ba8df826d721dbcb9035f8cf6be01ac48eca631342801dccef1e941",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 25056.885910999998,
+        "toolCount": 3,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "b9eb3b5e57c7d096bdb307587d628d9620488df7bc491ca8a562302171ff40be"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "fixture-research",
+        "trial": 2,
+        "fixtureHash": "34155946ec35c2fb495c4c4953a185551c3a00438960e73a3d1206196e16b423",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 15432.781418999999,
+        "toolCount": 5,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "9567f676bc4effbfd50329ca1bde3a52d177993de2bdefea0600c487b3989193",
+          "sources/seats.csv": "efb88c031d9b0c57f98cfabff4d70e5cc9dae6a306be412bca90264abe7dc503"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "fixture-research",
+        "trial": 2,
+        "fixtureHash": "34155946ec35c2fb495c4c4953a185551c3a00438960e73a3d1206196e16b423",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "currentReference": true,
+            "capacity": true,
+            "citations": true,
+            "arithmetic": true,
+            "completed": true
+          }
+        },
+        "durationMs": 12865.862218,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "sources/archive.md": "d10a4db4c2ca5eb9d4b24dedd72fca52a12063fc0ce44ff5f864d5d9a81aa40e",
+          "sources/current.md": "9567f676bc4effbfd50329ca1bde3a52d177993de2bdefea0600c487b3989193",
+          "sources/seats.csv": "efb88c031d9b0c57f98cfabff4d70e5cc9dae6a306be412bca90264abe7dc503"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "edit-test-repeat",
+        "trial": 2,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 16082.527344999997,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "edit-test-repeat",
+        "trial": 2,
+        "fixtureHash": "9e86e1668a35960f5400b7cb03725361108bc21031814ce244f3d89e2ae99727",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "completed": true,
+            "independentTests": true,
+            "testRepeatedAfterChange": true,
+            "initialTestObserved": true,
+            "initialFailure": true,
+            "passingRetest": true
+          }
+        },
+        "durationMs": 17187.972412,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "scale.mjs": "dcc0839614174720223950ebe0bbb4763b3a9c6d87aca8747217862162bb9f08",
+          "scale.test.mjs": "694af15ddf8526fc7af2c6552990c1b66118210267fb602ac3fb006fde399369"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "unknown-write",
+        "trial": 2,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 8926.883507,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "unknown-write",
+        "trial": 2,
+        "fixtureHash": "200d260eaf7c37fd86d52bb20c72fe52c7dd226ae6a5214e7f770cb5007492a2",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "asksForApproval": true,
+            "completed": true
+          }
+        },
+        "durationMs": 9054.008685,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "decision.txt": "45fc7ab706e6fb509993b6fcae9d4d423c96f8e840c8f64c1a61f5c817c8a870"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "cancel",
+        "trial": 2,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 6906.970306,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "cancel",
+        "trial": 2,
+        "fixtureHash": "a8dfd22aafb0036a0bc1565eb1ad6f366638c1734f00053452a1113441da8b64",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "started": true,
+            "canceled": true,
+            "noLateWrite": true
+          }
+        },
+        "durationMs": 5392.395093,
+        "toolCount": 1,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "started.flag": "eff64b343dcb2b1dc113648e7089b9ce9f8a7f6c7808a03a2cffb4ad7302f606",
+          "wait.mjs": "5f7b260f21698cd3e09ea9eb5303dae5614472ff96928b26de69359c8a678bf6"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "writing",
+        "trial": 2,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 3390.264064,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "writing",
+        "trial": 2,
+        "fixtureHash": "0e862e7e45f0deebe4b723b864b1f77fd6f9af4052097a4f3e0ce32887a0056b",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "title": true,
+            "threeBullets": true,
+            "date": true,
+            "interval": true,
+            "savedDrafts": true,
+            "reference": true,
+            "concise": true,
+            "noExtraProse": true,
+            "completed": true
+          }
+        },
+        "durationMs": 3674.6316789999996,
+        "toolCount": 0,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4"
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "task": "long-log",
+        "trial": 2,
+        "fixtureHash": "086816b830d192019816ff1b5aa8fb3801f8922fa4dd21354ac0fc9191870ed1",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 21299.361917000002,
+        "toolCount": 4,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "ccea0b2fa2af873c4f67fda0fc64d178623ae62c115c16eb90936df38aa7179f"
+        }
+      },
+      {
+        "driver": "claude-code",
+        "task": "long-log",
+        "trial": 2,
+        "fixtureHash": "086816b830d192019816ff1b5aa8fb3801f8922fa4dd21354ac0fc9191870ed1",
+        "grade": {
+          "pass": true,
+          "checks": {
+            "fixturePreserved": true,
+            "module": true,
+            "reason": true,
+            "ticket": true,
+            "line": true,
+            "completed": true
+          }
+        },
+        "durationMs": 17399.228166999997,
+        "toolCount": 2,
+        "finalFileHashes": {
+          "AGENTS.md": "57cd71f3876947ea6288f11ffdc37bb210063e30d5ffdce9d3001f63ec0407a4",
+          "build.log": "ccea0b2fa2af873c4f67fda0fc64d178623ae62c115c16eb90936df38aa7179f"
+        }
+      }
+    ]
+  },
+  "stoppedResume": {
+    "model": "codex/gpt-6.2-sol",
+    "effort": "medium",
+    "sdk": "0.3.326",
+    "cli": "2.1.326",
+    "pairedTrajectories": 3,
+    "notes": [
+      "Both sides used the same Magpie loopback route, common local file and shell tasks, and a fresh temporary workspace for each trial. The relay caps requests per trial and observes the request effort and response model tag.",
+      "The task has a successful setup, a real running shell command stopped after a disk marker, and a resumed turn after reopening the process and selecting the same application conversation. CLI uses SIGINT then process-group cleanup; Atelier stops by app API and reopens a separate runtime process.",
+      "The initial runner included sameSession in its binary pass field. The consolidated report retains it as a mechanism metric and computes qualityPass from the outcome checks. Atelier clears the SDK configuration fingerprint on an interrupted native run, rebuilds from persisted recovery context and can retrieve old tool receipts.",
+      "After the stop, the evaluator archives the original evidence file outside the fixture project and updates the live state. The final prompt supplies none of the reference, line number, requested correction, output format, or live data.",
+      "Medians cover the resumed turn only, excluding restart preparation. This small fixture does not test crash/power loss, compacted contexts, a changed model or forced SDK context regeneration, remote side effects, or a full-length real project."
+    ],
+    "byDriver": {
+      "claude-code": {
+        "total": 3,
+        "qualityPassed": 3,
+        "resumeMedianMs": 25375.110653999996,
+        "originalSdkSessionKept": 3,
+        "checkpointInjectedOnResume": 0,
+        "earlierEvidenceInFirstResumeRequest": 3,
+        "requestedOldToolOutput": 0,
+        "checksPassed": {
+          "setupCompleted": 3,
+          "preparedExactlyOnce": 3,
+          "evidenceReadBeforeStop": 3,
+          "setupDidNotDeliverEarly": 3,
+          "interruptedAfterActualStart": 3,
+          "interruptDiskState": 3,
+          "resumeCompleted": 3,
+          "originalFormat": 3,
+          "earlierEvidenceRecovered": 3,
+          "latestCorrectionApplied": 3,
+          "freshDiskStateVerified": 3,
+          "receiptsAndStopReported": 3,
+          "noReplayOrLateWrite": 3,
+          "inputsAndScopePreserved": 3,
+          "sameModelAndEffortOnWire": 3
+        },
+        "failures": []
+      },
+      "atelier-native": {
+        "total": 3,
+        "qualityPassed": 3,
+        "resumeMedianMs": 22058.412039000003,
+        "originalSdkSessionKept": 0,
+        "checkpointInjectedOnResume": 3,
+        "earlierEvidenceInFirstResumeRequest": 0,
+        "requestedOldToolOutput": 3,
+        "checksPassed": {
+          "setupCompleted": 3,
+          "preparedExactlyOnce": 3,
+          "evidenceReadBeforeStop": 3,
+          "setupDidNotDeliverEarly": 3,
+          "interruptedAfterActualStart": 3,
+          "interruptDiskState": 3,
+          "resumeCompleted": 3,
+          "originalFormat": 3,
+          "earlierEvidenceRecovered": 3,
+          "latestCorrectionApplied": 3,
+          "freshDiskStateVerified": 3,
+          "receiptsAndStopReported": 3,
+          "noReplayOrLateWrite": 3,
+          "inputsAndScopePreserved": 3,
+          "sameModelAndEffortOnWire": 3
+        },
+        "failures": []
+      }
+    },
+    "gateway": {
+      "count": 46,
+      "responseModels": [
+        "codex/gpt-6.2-sol"
+      ],
+      "requestedEfforts": [
+        "medium"
+      ],
+      "responseStatuses": [
+        200
+      ]
+    },
+    "cases": [
+      {
+        "driver": "claude-code",
+        "repeat": 0,
+        "inputHash": "fc5715155b2a400f3681e698e877496313c27ac82ab890caf7a1449e5b65442d",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": true,
+        "expected": [
+          "reference=REF-50170EA036",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-E8696261",
+          "live_state=OBSERVED-56E8EFD5",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-50170EA036\nsource=evidence-v1.txt:7\npolicy=REVIEW-E8696261\nlive_state=OBSERVED-56E8EFD5\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 7160.412271,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 3122.3474479999995,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 16332.02422,
+            "tools": [
+              "Bash",
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": true,
+          "hasRecoveryCheckpoint": false,
+          "hasRevisedPolicy": true
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "repeat": 0,
+        "inputHash": "fc5715155b2a400f3681e698e877496313c27ac82ab890caf7a1449e5b65442d",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": false,
+        "expected": [
+          "reference=REF-50170EA036",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-E8696261",
+          "live_state=OBSERVED-56E8EFD5",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-50170EA036\nsource=evidence-v1.txt:7\npolicy=REVIEW-E8696261\nlive_state=OBSERVED-56E8EFD5\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 8049.367338,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 5912.098216999999,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 20264.164262,
+            "tools": [
+              "Bash",
+              "mcp__atelier__read_tool_output",
+              "mcp__atelier__read_tool_output",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.context_restarted",
+              "sdk.initialized"
+            ]
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": false,
+          "hasRecoveryCheckpoint": true,
+          "hasRevisedPolicy": true
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "repeat": 1,
+        "inputHash": "0bbf0550d9346282b5bed2268fde73e3995d3467f1b9008fb10bec845efdb945",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": false,
+        "expected": [
+          "reference=REF-9309B1E229",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-7063BB02",
+          "live_state=OBSERVED-7CB26432",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-9309B1E229\nsource=evidence-v1.txt:7\npolicy=REVIEW-7063BB02\nlive_state=OBSERVED-7CB26432\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 9062.137821,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 6479.51527,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 22058.412039000003,
+            "tools": [
+              "Bash",
+              "mcp__atelier__read_tool_output",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.context_restarted",
+              "sdk.initialized"
+            ]
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": false,
+          "hasRecoveryCheckpoint": true,
+          "hasRevisedPolicy": true
+        }
+      },
+      {
+        "driver": "claude-code",
+        "repeat": 1,
+        "inputHash": "0bbf0550d9346282b5bed2268fde73e3995d3467f1b9008fb10bec845efdb945",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": true,
+        "expected": [
+          "reference=REF-9309B1E229",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-7063BB02",
+          "live_state=OBSERVED-7CB26432",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-9309B1E229\nsource=evidence-v1.txt:7\npolicy=REVIEW-7063BB02\nlive_state=OBSERVED-7CB26432\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 16219.335189000005,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 6273.777927000003,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 25375.110653999996,
+            "tools": [
+              "Bash",
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": true,
+          "hasRecoveryCheckpoint": false,
+          "hasRevisedPolicy": true
+        }
+      },
+      {
+        "driver": "claude-code",
+        "repeat": 2,
+        "inputHash": "7d91af03eda0a8032941831491458d1919f971ce4c7e68e967d933dc8ef9ada1",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": true,
+        "expected": [
+          "reference=REF-BBDD745BE3",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-55685787",
+          "live_state=OBSERVED-6F307FEA",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-BBDD745BE3\nsource=evidence-v1.txt:7\npolicy=REVIEW-55685787\nlive_state=OBSERVED-6F307FEA\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 8745.206624,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 3272.1886510000004,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": []
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 26080.905476,
+            "tools": [
+              "Bash",
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": []
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": true,
+          "hasRecoveryCheckpoint": false,
+          "hasRevisedPolicy": true
+        }
+      },
+      {
+        "driver": "atelier-native",
+        "repeat": 2,
+        "inputHash": "7d91af03eda0a8032941831491458d1919f971ce4c7e68e967d933dc8ef9ada1",
+        "qualityPass": true,
+        "qualityChecks": {
+          "setupCompleted": true,
+          "preparedExactlyOnce": true,
+          "evidenceReadBeforeStop": true,
+          "setupDidNotDeliverEarly": true,
+          "interruptedAfterActualStart": true,
+          "interruptDiskState": true,
+          "resumeCompleted": true,
+          "originalFormat": true,
+          "earlierEvidenceRecovered": true,
+          "latestCorrectionApplied": true,
+          "freshDiskStateVerified": true,
+          "receiptsAndStopReported": true,
+          "noReplayOrLateWrite": true,
+          "inputsAndScopePreserved": true,
+          "sameModelAndEffortOnWire": true
+        },
+        "originalSdkSessionKept": false,
+        "expected": [
+          "reference=REF-BBDD745BE3",
+          "source=evidence-v1.txt:7",
+          "policy=REVIEW-55685787",
+          "live_state=OBSERVED-6F307FEA",
+          "receipts=prepared,started",
+          "outcome=cancelled"
+        ],
+        "result": "reference=REF-BBDD745BE3\nsource=evidence-v1.txt:7\npolicy=REVIEW-55685787\nlive_state=OBSERVED-6F307FEA\nreceipts=prepared,started\noutcome=cancelled\n",
+        "stages": {
+          "setup": {
+            "status": "completed",
+            "durationMs": 6683.535950000005,
+            "tools": [
+              "Read",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "interrupt": {
+            "status": "stopped",
+            "durationMs": 5252.909376999996,
+            "tools": [
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.initialized"
+            ]
+          },
+          "resume": {
+            "status": "completed",
+            "durationMs": 22287.354379999997,
+            "tools": [
+              "Bash",
+              "mcp__atelier__read_tool_output",
+              "mcp__atelier__read_tool_output",
+              "Bash"
+            ],
+            "sdkEvents": [
+              "sdk.context_restarted",
+              "sdk.initialized"
+            ]
+          }
+        },
+        "firstResumeRequest": {
+          "hasEarlierEvidence": false,
+          "hasRecoveryCheckpoint": true,
+          "hasRevisedPolicy": true
+        }
+      }
+    ]
+  }
+}

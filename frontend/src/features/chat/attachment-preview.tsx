@@ -3,6 +3,7 @@
  * @implementation 组合具名附件查询和 FileVista；DOCX 使用原附件 ID 的文本，大表格跳过内容读取，加载或解析失败保留下载及重试。
  * @updated 2026-11-21T00:00:00+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
 import { Component, lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
 import {
   Dialog,
@@ -13,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
-import { ErrorNotice, Loading, errorMessage, formatBytes } from '@/features/inspector/shared';
+import { ErrorNotice, Loading, formatBytes } from '@/features/inspector/shared';
 import {
   attachmentContentUrl,
   attachmentDownloadUrl,
@@ -41,12 +42,18 @@ class PreviewBoundary extends Component<
 }
 
 function AttachmentContent({ attachment, open }: { attachment: Attachment; open: boolean }) {
+  const { t } = useUiTranslation('chat');
   const kind = attachmentPreviewKind(attachment);
   const content = useAttachmentContent(attachment, open);
   const document = useAttachmentDocumentPreview(attachment, open);
-  const [previewError, setPreviewError] = useState<string>();
+  const [previewError, setPreviewError] = useState<
+    { type: 'image' } | { type: 'file'; cause: unknown }
+  >();
   const [attempt, setAttempt] = useState(0);
-  const reportError = useCallback((error: Error) => setPreviewError(error.message), []);
+  const reportError = useCallback(
+    (error: Error) => setPreviewError({ type: 'file', cause: error }),
+    [],
+  );
   const query = kind === 'document-text' ? document : content;
   const retry = () => {
     setPreviewError(undefined);
@@ -54,16 +61,28 @@ function AttachmentContent({ attachment, open }: { attachment: Attachment; open:
     if (kind === 'text' || kind === 'binary' || kind === 'document-text') void query.refetch();
   };
 
-  if (attachment.removed) return <p>附件已移除。</p>;
+  if (attachment.removed) return <p>{t('attachment.removed')}</p>;
   if (kind === 'download') {
     return (
       <p className="p-4 text-sm text-muted-foreground" role="status">
-        此表格超过 20 MiB，暂不支持应用内预览。请下载原件查看完整内容。
+        {t('attachment.tooLargeToPreview')}
       </p>
     );
   }
   if (previewError || query.error) {
-    return <ErrorNotice message={previewError ?? errorMessage(query.error)} onRetry={retry} />;
+    return (
+      <ErrorNotice
+        message={
+          previewError?.type === 'image'
+            ? t('attachment.imageFailed')
+            : translateError(
+                previewError?.type === 'file' ? previewError.cause : query.error,
+                t('attachment.previewFailed'),
+              )
+        }
+        onRetry={retry}
+      />
+    );
   }
   if (kind === 'image') {
     return (
@@ -72,7 +91,7 @@ function AttachmentContent({ attachment, open }: { attachment: Attachment; open:
         src={attachmentContentUrl(attachment)}
         alt={attachment.name}
         className="mx-auto block max-w-full object-contain"
-        onError={() => setPreviewError('无法加载图片，请重试或下载原件。')}
+        onError={() => setPreviewError({ type: 'image' })}
       />
     );
   }
@@ -82,13 +101,13 @@ function AttachmentContent({ attachment, open }: { attachment: Attachment; open:
       : content.data?.kind === 'binary'
         ? { bytes: content.data.bytes, mimeType: attachment.mime }
         : content.data && { text: content.data.text };
-  if (query.isFetching || !file) return <Loading>正在读取附件…</Loading>;
+  if (query.isFetching || !file) return <Loading>{t('attachment.reading')}</Loading>;
   return (
     <PreviewBoundary
       key={attempt}
-      fallback={<ErrorNotice message="文件预览未能加载，请重试或下载原件。" onRetry={retry} />}
+      fallback={<ErrorNotice message={t('attachment.previewFailed')} onRetry={retry} />}
     >
-      <Suspense fallback={<Loading>正在加载预览…</Loading>}>
+      <Suspense fallback={<Loading>{t('attachment.loadingPreview')}</Loading>}>
         <FilePreview id={attachment.id} name={attachment.name} {...file} onError={reportError} />
       </Suspense>
     </PreviewBoundary>
@@ -102,6 +121,7 @@ export function AttachmentPreview({
   attachment: Attachment;
   children: ReactNode;
 }) {
+  const { t } = useUiTranslation('chat');
   const [open, setOpen] = useState(false);
   const { id, sessionId, name, size } = attachment;
   const kind = attachmentPreviewKind(attachment);
@@ -110,14 +130,16 @@ export function AttachmentPreview({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           className="attachment-preview-trigger"
           disabled={attachment.removed}
-          aria-label={`预览附件 ${name}`}
+          aria-label={t('attachment.previewLabel', { name })}
         >
           {children}
-        </button>
+        </Button>
       </DialogTrigger>
       <DialogContent
         className={cn(
@@ -128,16 +150,19 @@ export function AttachmentPreview({
         <DialogTitle className="shrink-0 truncate pe-8" title={name}>
           {name}
         </DialogTitle>
-        <DialogDescription className="sr-only">会话附件 · {formatBytes(size)}</DialogDescription>
+        <DialogDescription className="sr-only">
+          {t('attachment.description', { size: formatBytes(size) })}
+        </DialogDescription>
         {!attachment.removed ? (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {kind === 'document-text' ? 'Word 文档文本预览 · ' : ''}
-              {formatBytes(size)}
+              {kind === 'document-text'
+                ? t('attachment.wordPreview', { size: formatBytes(size) })
+                : formatBytes(size)}
             </p>
             <Button asChild variant="outline" size="sm">
               <a href={attachmentDownloadUrl(attachment)} download={name}>
-                下载原件
+                {t('attachment.downloadOriginal')}
               </a>
             </Button>
           </div>

@@ -14,6 +14,7 @@ import {
   desktopFilesChannels,
 } from '../../shared/desktop-files.js';
 import { desktopPairingHeader } from '../../shared/desktop-host.js';
+import { desktopT } from './i18n.mjs';
 
 type Connection = { origin: string; pairing: string };
 export function createNativeFileActions(
@@ -33,14 +34,15 @@ export function createNativeFileActions(
       event.senderFrame !== owner.webContents.mainFrame ||
       event.senderFrame.origin !== runtime.origin
     )
-      throw new Error('文件操作来源无效。');
+      throw new Error(desktopT('host.files.invalidSource'));
     return { owner, runtime };
   }
 
   ipcMain.handle(desktopFilesChannels.pickDirectory, async (event): Promise<string | null> => {
     const { owner } = trusted(event);
     const result = await dialog.showOpenDialog(owner, {
-      title: '选择项目目录',
+      title: desktopT('host.files.chooseDirectory'),
+      buttonLabel: desktopT('host.files.chooseButton'),
       properties: ['openDirectory'],
     });
     trusted(event);
@@ -53,31 +55,36 @@ export function createNativeFileActions(
       const { owner, runtime } = trusted(event);
       const { id, name } = desktopArtifactSaveSchema.parse(input);
       const result = await dialog.showSaveDialog(owner, {
-        title: '另存交付物',
+        title: desktopT('host.files.saveArtifact'),
+        buttonLabel: desktopT('host.files.saveButton'),
         defaultPath: name,
         properties: ['showOverwriteConfirmation', 'createDirectory'],
       });
       if (result.canceled || !result.filePath) return false;
-      if (trusted(event).runtime !== runtime) throw new Error('工作台连接已更新。');
+      if (trusted(event).runtime !== runtime)
+        throw new Error(desktopT('host.files.connectionChanged'));
       const response = await fetch(new URL(`/api/artifacts/${id}/download`, runtime.origin), {
         headers: { [desktopPairingHeader]: runtime.pairing },
         signal: AbortSignal.timeout(10_000),
         redirect: 'error',
       });
-      if (!response.ok) throw new Error('无法读取交付物，请重新打开后重试。');
+      if (!response.ok)
+        throw new Error(desktopT('host.files.readFailed'), { cause: `HTTP ${response.status}` });
       const bytes = Buffer.from(await response.arrayBuffer());
-      if (bytes.length > 20 * 1024 * 1024) throw new Error('交付物超过另存大小限制。');
+      if (bytes.length > 20 * 1024 * 1024) throw new Error(desktopT('host.files.tooLarge'));
       const path = result.filePath;
       const staged = join(dirname(path), `.atelier-save-${randomUUID()}`);
       try {
         await writeFile(staged, bytes, { flag: 'wx', mode: 0o600 });
-        if (trusted(event).runtime !== runtime) throw new Error('工作台连接已更新。');
+        if (trusted(event).runtime !== runtime)
+          throw new Error(desktopT('host.files.connectionChanged'));
         await rename(staged, path);
         copies.set(id, path);
         return true;
       } catch (error) {
         await rm(staged, { force: true }).catch(() => {});
-        if ((error as NodeJS.ErrnoException).code) throw new Error('无法保存选定的文件。');
+        if (error instanceof Error && 'code' in error)
+          throw new Error(desktopT('host.files.saveFailed'), { cause: error });
         throw error;
       }
     },
@@ -104,7 +111,8 @@ export function createNativeFileActions(
   ipcMain.handle(desktopFilesChannels.exportDiagnostics, async (event): Promise<boolean> => {
     const { owner } = trusted(event);
     const result = await dialog.showSaveDialog(owner, {
-      title: '导出工作台诊断',
+      title: desktopT('host.files.exportDiagnostics'),
+      buttonLabel: desktopT('host.files.exportButton'),
       defaultPath: 'atelier-diagnostics.json',
       properties: ['showOverwriteConfirmation', 'createDirectory'],
     });

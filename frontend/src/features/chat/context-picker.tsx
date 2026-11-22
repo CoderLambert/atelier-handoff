@@ -3,7 +3,9 @@
  * @implementation 浏览目录、预览文件并限制重复选择和文件数量。
  * @updated 2026-11-20T02:00+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
 import { lazy, Suspense, useState } from 'react';
+import { ArrowLeft, ArrowUp, File, Folder } from 'lucide-react';
 import { useProjectFiles } from '@/use-query/projects/use-project-files';
 import { useProjectFile } from '@/use-query/projects/use-project-file';
 import { Button } from '@/components/ui/button';
@@ -17,8 +19,6 @@ import {
 
 const FilePreview = lazy(() => import('@/components/file-preview'));
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : '读取项目文件失败');
-
 export function ContextPicker({
   projectId,
   selectedPaths,
@@ -30,6 +30,7 @@ export function ContextPicker({
   onSelect: (path: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useUiTranslation('chat');
   const [directory, setDirectory] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const files = useProjectFiles(projectId, directory);
@@ -50,28 +51,27 @@ export function ContextPicker({
     >
       <DialogContent className="chat-context-dialog">
         <DialogHeader>
-          <DialogTitle>选择项目上下文</DialogTitle>
-          <DialogDescription>
-            选择的 UTF-8 文本文件会随下次任务一起读取，最多 30 个。
-          </DialogDescription>
+          <DialogTitle>{t('context.title')}</DialogTitle>
+          <DialogDescription>{t('context.description')}</DialogDescription>
         </DialogHeader>
         {preview !== null ? (
           <>
             <div className="dialog-actions chat-context-path">
-              <Button type="button" variant="outline" onClick={() => setPreview(null)}>
-                返回目录
+              <Button type="button" variant="outline" size="sm" onClick={() => setPreview(null)}>
+                <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+                {t('context.backToDirectory')}
               </Button>
               <span>{preview}</span>
             </div>
             {document.isPending ? (
-              <p role="status">正在读取文件…</p>
+              <p role="status">{t('context.readingFile')}</p>
             ) : document.isError ? (
-              <p className="trace-error" role="alert">
-                {errorText(document.error)}
+              <p className="text-sm text-destructive" role="alert">
+                {translateError(document.error, t('context.readFailed'))}
               </p>
             ) : (
-              <div className="chat-file-preview" aria-label="项目文件预览">
-                <Suspense fallback={<p role="status">正在加载预览…</p>}>
+              <div className="chat-file-preview" aria-label={t('context.preview')}>
+                <Suspense fallback={<p role="status">{t('context.loadingPreview')}</p>}>
                   <FilePreview
                     name={preview.split('/').at(-1) ?? preview}
                     text={document.data.text}
@@ -82,11 +82,11 @@ export function ContextPicker({
             <div className="dialog-actions">
               <Button
                 type="button"
-                className="btn btn-primary"
+                size="sm"
                 disabled={!document.isSuccess || selectedPaths.includes(preview) || limitReached}
                 onClick={() => select(preview)}
               >
-                {selectedPaths.includes(preview) ? '已选择' : '选择文件'}
+                {selectedPaths.includes(preview) ? t('context.selected') : t('context.selectFile')}
               </Button>
             </div>
           </>
@@ -99,59 +99,72 @@ export function ContextPicker({
                 disabled={!directory}
                 onClick={() => setDirectory(directory.split('/').slice(0, -1).join('/'))}
               >
-                上一级
+                <ArrowUp data-icon="inline-start" aria-hidden="true" />
+                {t('context.parent')}
               </Button>
               <span>{directory || '/'}</span>
             </div>
             {files.isPending ? (
-              <p role="status">正在读取目录…</p>
+              <p role="status">{t('context.readingDirectory')}</p>
             ) : files.isError ? (
               <div>
-                <p className="trace-error" role="alert">
-                  {errorText(files.error)}
+                <p className="text-sm text-destructive" role="alert">
+                  {translateError(files.error, t('context.readFailed'))}
                 </p>
                 <Button type="button" variant="outline" onClick={() => void files.refetch()}>
-                  重新加载
+                  {t('context.reload')}
                 </Button>
               </div>
             ) : (
-              <div className="context-options chat-context-options">
+              <div className="chat-context-options">
                 {files.data.items.length ? (
                   files.data.items.map((file) => (
-                    <div key={file.path} className="file-choice">
-                      <button
+                    <div key={file.path} className="chat-file-choice">
+                      <Button
                         type="button"
-                        className="context-option"
+                        variant="ghost"
+                        size="sm"
+                        className="chat-context-option"
+                        title={file.path}
                         onClick={() =>
                           file.isDirectory ? setDirectory(file.path) : setPreview(file.path)
                         }
                       >
-                        <span className="chat-file-kind">{file.isDirectory ? '目录' : '文件'}</span>{' '}
+                        {file.isDirectory ? (
+                          <Folder data-icon="inline-start" aria-hidden="true" />
+                        ) : (
+                          <File data-icon="inline-start" aria-hidden="true" />
+                        )}
+                        <span className="chat-file-kind">
+                          {file.isDirectory ? t('context.directory') : t('context.file')}
+                        </span>{' '}
                         {file.name}
-                      </button>
+                      </Button>
                       {!file.isDirectory ? (
                         <Button
                           type="button"
                           variant="outline"
-                          className="btn btn-secondary"
+                          size="sm"
                           disabled={selectedPaths.includes(file.path) || limitReached}
                           onClick={() => select(file.path)}
                         >
-                          {selectedPaths.includes(file.path) ? '已选择' : '选择'}
+                          {selectedPaths.includes(file.path)
+                            ? t('context.selected')
+                            : t('context.select')}
                         </Button>
                       ) : null}
                     </div>
                   ))
                 ) : (
-                  <p className="empty-text">目录为空</p>
+                  <p className="py-6 text-sm text-muted-foreground">{t('context.empty')}</p>
                 )}
               </div>
             )}
           </>
         )}
         {limitReached ? (
-          <p className="muted" role="status">
-            已达到 30 个上下文文件的上限，请先移除部分文件。
+          <p className="text-sm text-warning" role="status">
+            {t('context.limit')}
           </p>
         ) : null}
       </DialogContent>

@@ -1,0 +1,1927 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atelier UI 优化交互原型 (Prototype)</title>
+    <style>
+      /* 基础设计变量，对齐 shadcn / new-york 与 Atelier 桌面端规范 */
+      :root {
+        --bg-base: #f8f9fa;
+        --bg-surface: #ffffff;
+        --bg-sidebar: #f4f5f6;
+        --bg-muted: #f0f2f4;
+        --bg-subtle: #f9fafb;
+        --border-subtle: #e5e7eb;
+        --border-strong: #d1d5db;
+        --text-main: #111827;
+        --text-muted: #6b7280;
+        --text-soft: #9ca3af;
+        --primary: #18181b;
+        --primary-fg: #ffffff;
+        --accent-green: #10b981;
+        --accent-green-bg: #ecfdf5;
+        --accent-green-border: #a7f3d0;
+        --accent-blue: #2563eb;
+        --accent-blue-bg: #eff6ff;
+        --accent-amber: #f59e0b;
+        --accent-amber-bg: #fffbeb;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--font-sans);
+        color: var(--text-main);
+        background-color: var(--bg-base);
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        user-select: none;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* 顶部原型操作栏 (Demo Controls) */
+      .prototype-bar {
+        height: 38px;
+        background: #1e293b;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-size: 12px;
+        flex-shrink: 0;
+        border-bottom: 1px solid #0f172a;
+        z-index: 100;
+      }
+      .proto-left,
+      .proto-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .proto-tag {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      .proto-btn {
+        background: #334155;
+        color: #fff;
+        border: 1px solid #475569;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 11px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
+      }
+      .proto-btn:hover {
+        background: #475569;
+      }
+      .proto-btn.active {
+        background: #3b82f6;
+        border-color: #60a5fa;
+      }
+
+      /* 模拟系统顶栏 (App Header) */
+      .app-header {
+        height: 34px;
+        background: #ffffff;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+      .app-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .window-menu {
+        display: flex;
+        gap: 12px;
+        font-size: 11px;
+      }
+      .window-menu span {
+        cursor: pointer;
+      }
+      .window-menu span:hover {
+        color: var(--text-main);
+      }
+
+      /* 工作台整体容器 (3 栏) */
+      .workbench {
+        display: flex;
+        flex: 1;
+        height: calc(100vh - 72px);
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* =================== 1. 左侧边栏 (Sidebar) =================== */
+      .sidebar {
+        width: 240px;
+        background: var(--bg-sidebar);
+        border-right: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        transition:
+          width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .sidebar.collapsed {
+        margin-left: -240px;
+      }
+      .sidebar-header {
+        padding: 12px 14px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: -0.3px;
+      }
+      .brand-mark {
+        color: #111;
+        font-weight: 900;
+        display: inline-flex;
+        gap: 1px;
+      }
+      .brand-mark span {
+        display: inline-block;
+        width: 3px;
+        height: 12px;
+        background: #111;
+        border-radius: 1px;
+      }
+      .brand-mark span:nth-child(2) {
+        height: 16px;
+      }
+      .brand-mark span:nth-child(3) {
+        height: 9px;
+      }
+
+      .collapse-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 4px;
+        border-radius: var(--radius-sm);
+        display: flex;
+      }
+      .collapse-btn:hover {
+        background: var(--bg-muted);
+        color: var(--text-main);
+      }
+
+      .workspace-pill {
+        margin: 4px 12px 8px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        padding: 6px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+      }
+      .workspace-pill:hover {
+        border-color: var(--border-strong);
+      }
+
+      .sidebar-actions {
+        padding: 0 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .btn-new-chat {
+        background: #ffffff;
+        color: var(--text-main);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.15s;
+      }
+      .btn-new-chat:hover {
+        background: var(--bg-muted);
+        border-color: var(--border-strong);
+      }
+      .btn-new-chat kbd {
+        background: var(--bg-muted);
+        border: 1px solid var(--border-subtle);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .search-box {
+        background: #ffffff;
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-soft);
+      }
+      .search-box input {
+        border: none;
+        outline: none;
+        background: transparent;
+        width: 100%;
+        font-size: 12px;
+        color: var(--text-main);
+      }
+
+      .nav-group {
+        padding: 6px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+      .nav-item:hover {
+        background: var(--bg-muted);
+        color: var(--text-main);
+      }
+      .nav-item .count {
+        background: rgba(0, 0, 0, 0.05);
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 11px;
+      }
+
+      .recent-header {
+        padding: 10px 14px 4px;
+        font-size: 11px;
+        color: var(--text-soft);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .session-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .session-item {
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        transition: background 0.15s;
+        position: relative;
+      }
+      .session-item:hover {
+        background: var(--bg-muted);
+      }
+      .session-item.active {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      .session-item.active::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 6px;
+        bottom: 6px;
+        width: 3px;
+        background: #18181b;
+        border-radius: 0 2px 2px 0;
+      }
+      .session-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .session-item.active .session-title {
+        font-weight: 600;
+      }
+      .session-meta-time {
+        font-size: 11px;
+        color: var(--text-soft);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .sidebar-footer {
+        padding: 10px 14px;
+        border-top: 1px solid var(--border-subtle);
+        font-size: 12px;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--bg-sidebar);
+      }
+      .sidebar-footer:hover {
+        color: var(--text-main);
+        cursor: pointer;
+      }
+
+      /* =================== 2. 中间主任务对话区 (Main Chat) =================== */
+      .main-workspace {
+        flex: 1;
+        min-width: 380px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        position: relative;
+      }
+
+      /* 优化后的极简紧凑头部 */
+      .chat-compact-header {
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+        background: #ffffff;
+      }
+      .chat-header-title-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .expand-sidebar-btn {
+        display: none;
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        padding: 4px 6px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+      }
+      .expand-sidebar-btn:hover {
+        background: var(--bg-muted);
+      }
+      .session-heading {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .badge-scope {
+        background: var(--bg-muted);
+        color: var(--text-muted);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .chat-header-tabs {
+        display: flex;
+        align-items: center;
+        background: var(--bg-muted);
+        padding: 2px;
+        border-radius: var(--radius-md);
+        gap: 2px;
+      }
+      .chat-tab {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: var(--radius-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .chat-tab.active {
+        background: #ffffff;
+        color: var(--text-main);
+        box-shadow: var(--shadow-sm);
+        font-weight: 600;
+      }
+      .chat-tab-count {
+        margin-left: 4px;
+        font-size: 10px;
+        background: rgba(0, 0, 0, 0.06);
+        padding: 1px 5px;
+        border-radius: 8px;
+      }
+
+      /* 会话消息流 */
+      .message-stream {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* 用户气泡 */
+      .msg-user {
+        align-self: flex-end;
+        max-width: 85%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+      }
+      .msg-user-meta {
+        font-size: 11px;
+        color: var(--text-soft);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .msg-user-bubble {
+        background: var(--bg-muted);
+        color: var(--text-main);
+        padding: 10px 14px;
+        border-radius: 12px 12px 2px 12px;
+        font-size: 13.5px;
+        line-height: 1.5;
+      }
+
+      /* 助理回复 */
+      .msg-agent {
+        align-self: flex-start;
+        max-width: 95%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .msg-agent-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+      .agent-avatar {
+        width: 20px;
+        height: 20px;
+        background: #18181b;
+        color: #fff;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+      }
+      .agent-time {
+        font-size: 11px;
+        font-weight: normal;
+        color: var(--text-soft);
+      }
+
+      /* === 核心优化：聚合折叠式工具操作卡片 === */
+      .tool-group-card {
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        background: var(--bg-subtle);
+        overflow: hidden;
+        margin: 4px 0;
+        transition: all 0.2s ease;
+      }
+      .tool-group-summary {
+        padding: 9px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        background: #ffffff;
+        border-bottom: 1px solid transparent;
+      }
+      .tool-group-card.open .tool-group-summary {
+        border-bottom-color: var(--border-subtle);
+      }
+      .tool-group-summary:hover {
+        background: var(--bg-muted);
+      }
+      .tool-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text-main);
+      }
+      .tool-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent-green);
+      }
+      .tool-badge-approved {
+        font-size: 11px;
+        color: #047857;
+        background: var(--accent-green-bg);
+        border: 1px solid var(--accent-green-border);
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-weight: normal;
+      }
+      .tool-toggle-btn {
+        font-size: 11px;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+      }
+      .tool-group-card.open .tool-toggle-btn svg {
+        transform: rotate(180deg);
+      }
+
+      .tool-details-content {
+        padding: 10px 12px;
+        font-size: 12px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        background: var(--bg-subtle);
+      }
+      .tool-group-card.open .tool-details-content {
+        display: flex;
+      }
+      .tool-sub-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--text-muted);
+        background: #ffffff;
+        padding: 6px 10px;
+        border-radius: 4px;
+        border: 1px solid var(--border-subtle);
+      }
+      .sub-step-num {
+        color: var(--text-soft);
+        font-weight: 600;
+      }
+
+      /* 助理文本正文 */
+      .agent-prose {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--text-main);
+      }
+      .agent-prose p {
+        margin-bottom: 8px;
+      }
+      .agent-prose ul {
+        margin-left: 20px;
+        margin-bottom: 8px;
+      }
+      .agent-prose li {
+        margin-bottom: 4px;
+      }
+      .prose-tag {
+        font-weight: 600;
+        color: #111;
+      }
+
+      /* 底部输入框 */
+      .composer-area {
+        padding: 12px 20px 16px;
+        background: #ffffff;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .composer-box {
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        padding: 10px 12px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: var(--shadow-sm);
+        transition: border-color 0.15s;
+      }
+      .composer-box:focus-within {
+        border-color: #111;
+      }
+      .composer-top-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+      }
+      .chip-context {
+        background: var(--bg-muted);
+        color: var(--text-muted);
+        border: 1px dashed var(--border-strong);
+        padding: 2px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .chip-context:hover {
+        background: #e5e7eb;
+        color: #111;
+      }
+      .policy-pill {
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .composer-input {
+        border: none;
+        outline: none;
+        resize: none;
+        font-family: inherit;
+        font-size: 13.5px;
+        color: var(--text-main);
+        width: 100%;
+        height: 48px;
+        line-height: 1.4;
+      }
+      .composer-input::placeholder {
+        color: var(--text-soft);
+      }
+      .composer-bottom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 4px;
+      }
+      .hint-subtle {
+        font-size: 11px;
+        color: var(--text-soft);
+      }
+      .composer-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .send-btn {
+        width: 28px;
+        height: 28px;
+        background: #18181b;
+        color: #fff;
+        border-radius: 50%;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      .send-btn:hover {
+        opacity: 0.85;
+      }
+
+      /* =================== 3. 拖拽分割条 (Splitter) =================== */
+      .panel-splitter {
+        width: 5px;
+        background: transparent;
+        position: relative;
+        cursor: col-resize;
+        flex-shrink: 0;
+        z-index: 10;
+        transition: background 0.15s;
+      }
+      .panel-splitter:hover,
+      .panel-splitter.active {
+        background: #3b82f6;
+      }
+
+      /* =================== 4. 右侧原生浏览器工作区 (Right Browser) =================== */
+      .browser-workspace {
+        width: 520px;
+        min-width: 320px;
+        background: #ffffff;
+        border-left: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        position: relative;
+        flex-shrink: 0;
+      }
+
+      /* === 核心优化：精炼为 2 层的专业浏览器顶栏 === */
+      /* 第一层：标签页与状态 */
+      .browser-tabbar {
+        height: 38px;
+        background: var(--bg-muted);
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 8px;
+        flex-shrink: 0;
+      }
+      .browser-tabs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        overflow-x: auto;
+      }
+      .browser-tab-item {
+        background: #ffffff;
+        padding: 5px 10px;
+        border-radius: 6px 6px 0 0;
+        border: 1px solid var(--border-subtle);
+        border-bottom-color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-main);
+        cursor: pointer;
+        box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.03);
+      }
+      .browser-tab-close {
+        color: var(--text-soft);
+        cursor: pointer;
+        display: flex;
+        padding: 2px;
+        border-radius: 3px;
+      }
+      .browser-tab-close:hover {
+        background: var(--bg-muted);
+        color: var(--text-main);
+      }
+      .new-tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        padding: 4px;
+        cursor: pointer;
+        border-radius: 4px;
+        display: flex;
+      }
+      .new-tab-btn:hover {
+        background: #e2e8f0;
+        color: #111;
+      }
+
+      .browser-tabbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .agent-ready-badge {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: #047857;
+        background: #dcfce7;
+        padding: 2px 7px;
+        border-radius: 12px;
+        font-weight: 500;
+      }
+      .agent-ready-badge .pulse {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #10b981;
+      }
+
+      /* 第二层：一体化工具栏与地址栏 */
+      .browser-nav-bar {
+        height: 40px;
+        background: #ffffff;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .nav-btn {
+        width: 26px;
+        height: 26px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .nav-btn:hover:not(:disabled) {
+        background: var(--bg-muted);
+        color: var(--text-main);
+      }
+      .nav-btn:disabled {
+        color: var(--border-strong);
+        cursor: default;
+      }
+
+      .url-bar-container {
+        flex: 1;
+        height: 28px;
+        background: var(--bg-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        gap: 6px;
+        font-size: 12px;
+        transition: all 0.15s;
+      }
+      .url-bar-container:focus-within {
+        background: #ffffff;
+        border-color: #111;
+        box-shadow: 0 0 0 1px #111;
+      }
+      .url-lock-icon {
+        color: var(--accent-green);
+        display: flex;
+      }
+      .url-input {
+        border: none;
+        outline: none;
+        background: transparent;
+        font-size: 12px;
+        width: 100%;
+        color: var(--text-main);
+        font-family: var(--font-mono);
+      }
+      .url-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .view-mode-pill {
+        font-size: 10.5px;
+        background: var(--bg-muted);
+        color: var(--text-muted);
+        padding: 1px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .view-mode-pill:hover {
+        background: #e2e8f0;
+        color: #111;
+      }
+      .view-mode-pill.active {
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-weight: 600;
+      }
+
+      /* 人工接管与说明浮层入口 */
+      .takeover-btn {
+        background: #ffffff;
+        color: var(--text-main);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        padding: 4px 10px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s;
+      }
+      .takeover-btn:hover {
+        background: var(--bg-muted);
+      }
+      .takeover-btn.taking-over {
+        background: var(--accent-amber-bg);
+        border-color: var(--accent-amber);
+        color: #b45309;
+      }
+
+      /* 规则说明的折叠 Popover 入口 */
+      .info-popover-trigger {
+        position: relative;
+        display: flex;
+      }
+      .info-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: var(--text-soft);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .info-btn:hover {
+        color: var(--text-main);
+        background: var(--bg-muted);
+      }
+      .info-popover {
+        position: absolute;
+        right: 0;
+        top: 32px;
+        width: 280px;
+        background: #ffffff;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        padding: 12px;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--text-muted);
+        z-index: 50;
+        display: none;
+      }
+      .info-popover.show {
+        display: block;
+      }
+      .info-popover strong {
+        color: var(--text-main);
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      /* 网页视口容器 (Webview Box) */
+      .webview-viewport {
+        flex: 1;
+        background: #f1f5f9;
+        overflow-y: auto;
+        position: relative;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* 模拟今日头条内容 (Simulated Page) */
+      .simulated-page {
+        background: #ffffff;
+        width: 100%;
+        min-height: 100%;
+        transition:
+          width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.2s;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+      }
+      /* 开启自适应竖屏模式时 */
+      .simulated-page.mobile-mode {
+        max-width: 420px;
+        margin: 12px auto;
+        border-radius: 12px;
+        border: 1px solid var(--border-subtle);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .toutiao-header {
+        background: #ffffff;
+        border-bottom: 1px solid #f0f0f0;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .toutiao-logo {
+        font-size: 18px;
+        font-weight: 900;
+        color: #f04142;
+        letter-spacing: -0.5px;
+      }
+      .toutiao-nav-channels {
+        display: flex;
+        gap: 14px;
+        padding: 8px 16px;
+        border-bottom: 1px solid #f2f2f2;
+        font-size: 13px;
+        overflow-x: auto;
+      }
+      .channel-item {
+        color: #666;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .channel-item.active {
+        color: #f04142;
+        font-weight: bold;
+        border-bottom: 2px solid #f04142;
+        padding-bottom: 4px;
+      }
+      .agent-click-indicator {
+        position: relative;
+        display: inline-block;
+      }
+      .agent-click-indicator::after {
+        content: 'Agent 点击定位';
+        position: absolute;
+        top: -24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(16, 185, 129, 0.95);
+        color: #fff;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        animation: pulse 1.5s infinite;
+      }
+
+      .toutiao-feed {
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .feed-card {
+        border-bottom: 1px solid #f3f4f6;
+        padding-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .feed-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #222;
+        line-height: 1.4;
+        margin-bottom: 6px;
+      }
+      .feed-meta {
+        font-size: 11px;
+        color: #999;
+        display: flex;
+        gap: 8px;
+      }
+      .feed-thumb {
+        width: 90px;
+        height: 64px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        font-size: 10px;
+      }
+
+      /* 浮动对比切换横幅 (Banner) */
+      .compare-tip-box {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        color: #92400e;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        margin: 10px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 0.8;
+          transform: translateX(-50%) scale(0.98);
+        }
+        50% {
+          opacity: 1;
+          transform: translateX(-50%) scale(1.03);
+        }
+        100% {
+          opacity: 0.8;
+          transform: translateX(-50%) scale(0.98);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 原型顶部控制栏 (供您审查交互与视觉差异) -->
+    <header class="prototype-bar">
+      <div class="proto-left">
+        <span class="proto-tag">Atelier UI 优化设计原型</span>
+        <button class="proto-btn active" id="btn-show-redesign" onclick="setDesignMode('redesign')">
+          <span>✨ 优化方案 (推荐)</span>
+        </button>
+        <button class="proto-btn" id="btn-show-legacy" onclick="setDesignMode('legacy')">
+          <span>⏪ 原版现状对比</span>
+        </button>
+      </div>
+      <div class="proto-right">
+        <span>分栏预设：</span>
+        <button class="proto-btn" onclick="setLayoutPreset(240, 480, 560)">5 : 5 分屏</button>
+        <button class="proto-btn" onclick="setLayoutPreset(240, 680, 360)">专注对话 (7:3)</button>
+        <button class="proto-btn" onclick="setLayoutPreset(240, 360, 680)">专注网页 (3:7)</button>
+        <button class="proto-btn" id="btn-toggle-mobile" onclick="toggleMobileMode()">
+          <span>📱 网页自适应模式: 开启</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 模拟客户端标题栏 -->
+    <div class="app-header">
+      <div class="app-header-left">
+        <div class="window-menu">
+          <span>File</span>
+          <span>Edit</span>
+          <span>View</span>
+          <span>Window</span>
+        </div>
+      </div>
+      <div style="font-size: 11px; color: #10b981; display: flex; align-items: center; gap: 4px">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981"></span>
+        事件流已连接 (实时同步)
+      </div>
+    </div>
+
+    <!-- 主工作台结构 (3 栏) -->
+    <div class="workbench" id="workbench">
+      <!-- 1. 左侧边栏 (Sidebar) -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div class="brand">
+            <div class="brand-mark"><span></span><span></span><span></span></div>
+            <span>atelier<span style="color: #10b981">.</span></span>
+          </div>
+          <button class="collapse-btn" title="收起侧边栏" onclick="toggleSidebar()">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 工作目录切换 -->
+        <div class="workspace-pill" title="当前工作目录">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+            >my-deeptutor</span
+          >
+          <span
+            style="
+              font-size: 10px;
+              background: #e5e7eb;
+              padding: 1px 4px;
+              border-radius: 3px;
+              color: #4b5563;
+            "
+            >本地</span
+          >
+        </div>
+
+        <!-- 操作与搜索 -->
+        <div class="sidebar-actions">
+          <button class="btn-new-chat">
+            <span style="display: flex; align-items: center; gap: 6px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              新建会话
+            </span>
+            <kbd>⌘ K</kbd>
+          </button>
+          <div class="search-box">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" placeholder="搜索会话..." />
+          </div>
+        </div>
+
+        <!-- 功能导航条目 -->
+        <nav class="nav-group">
+          <div class="nav-item">
+            <span style="display: flex; align-items: center; gap: 8px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              全部会话
+            </span>
+            <span class="count">14</span>
+          </div>
+          <div class="nav-item">
+            <span style="display: flex; align-items: center; gap: 8px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              交付物
+            </span>
+            <span class="count">12</span>
+          </div>
+          <div class="nav-item">
+            <span style="display: flex; align-items: center; gap: 8px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              执行记录
+            </span>
+          </div>
+        </nav>
+
+        <div class="recent-header">最近会话</div>
+        <div class="session-list">
+          <!-- 当前高亮选中项 -->
+          <div class="session-item active">
+            <div class="session-title">打开今日头条看下今天新闻</div>
+            <div class="session-meta-time">
+              <span>今日头条 · 任务执行中</span>
+              <span style="font-size: 10px; color: #10b981; font-weight: 600">13:43</span>
+            </div>
+          </div>
+
+          <div class="session-item">
+            <div class="session-title">浏览维基百科</div>
+            <div class="session-meta-time"><span>已归档</span><span>昨天 00:48</span></div>
+          </div>
+          <div class="session-item">
+            <div class="session-title">帮我查询昆明的天气</div>
+            <div class="session-meta-time"><span>已完成</span><span>11/19 22:21</span></div>
+          </div>
+          <div class="session-item">
+            <div class="session-title">我想看下这两个文件</div>
+            <div class="session-meta-time"><span>代码分析</span><span>11/19 20:14</span></div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <span style="display: flex; align-items: center; gap: 6px">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+            工作台设置
+          </span>
+          <span style="font-size: 10px; color: #9ca3af">v0.2.0</span>
+        </div>
+      </aside>
+
+      <!-- 2. 中间主任务对话区 (Main Chat) -->
+      <main class="main-workspace" id="mainWorkspace">
+        <!-- 紧凑单行头部 (替代原先3层大面积空白堆叠) -->
+        <div class="chat-compact-header">
+          <div class="chat-header-title-box">
+            <button
+              class="expand-sidebar-btn"
+              id="expandSidebarBtn"
+              onclick="toggleSidebar()"
+              title="展开侧边栏"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+              </svg>
+            </button>
+            <div class="session-heading">打开今日头条看下今天新闻</div>
+            <span class="badge-scope">main · 本地工作空间</span>
+          </div>
+          <div class="chat-header-tabs">
+            <button class="chat-tab active">会话</button>
+            <button class="chat-tab">执行轨迹<span class="chat-tab-count">9</span></button>
+            <button class="chat-tab">交付物</button>
+          </div>
+        </div>
+
+        <!-- 消息流容器 -->
+        <div class="message-stream">
+          <!-- 用户提问 -->
+          <div class="msg-user">
+            <div class="msg-user-meta">
+              <span>你</span>
+              <span>13:42</span>
+            </div>
+            <div class="msg-user-bubble">看下苏州相关新闻</div>
+          </div>
+
+          <!-- 助理回复与工具调用 -->
+          <div class="msg-agent">
+            <div class="msg-agent-meta">
+              <div class="agent-avatar">A</div>
+              <span>atelier</span>
+              <span class="agent-time">13:42</span>
+            </div>
+
+            <!-- 新版：聚合折叠式卡片 (避免原版多个卡片刷屏) -->
+            <div class="tool-group-card open" id="toolGroupCard">
+              <div class="tool-group-summary" onclick="toggleToolCard()">
+                <div class="tool-left">
+                  <span class="tool-status-dot"></span>
+                  <span>操作内置浏览器 (2 项动作)</span>
+                  <span class="tool-badge-approved">已自动审批</span>
+                </div>
+                <button class="tool-toggle-btn">
+                  <span>详细动作</span>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              </div>
+              <div class="tool-details-content">
+                <div class="tool-sub-step">
+                  <span class="sub-step-num">1.</span>
+                  <span
+                    >browser_click({ element: "#channel-suzhou", description: "点击苏州本地频道"
+                    })</span
+                  >
+                </div>
+                <div class="tool-sub-step">
+                  <span class="sub-step-num">2.</span>
+                  <span
+                    >browser_wait({ selector: ".feed-card", timeout: 3000, description:
+                    "等待信息流就绪" })</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <!-- 文本摘要回答 -->
+            <div class="agent-prose">
+              <p>看了今日头条的苏州频道，今天（11 月 20 日）看到这几条本地消息：</p>
+              <ul>
+                <li>
+                  <span class="prose-tag">古城更新：</span
+                  >苏州一批古宅和老街启动更新。具体涉及哪些街巷、什么时候完工，频道标题没有列出。
+                </li>
+                <li>
+                  <span class="prose-tag">政务：</span
+                  >苏州市政府公布了一批人事调整，具体任免名单未核实。
+                </li>
+                <li>
+                  <span class="prose-tag">医药产业：</span
+                  >频道报道苏州有创新药获批上市，标题未注明药名和适应症。
+                </li>
+                <li>
+                  <span class="prose-tag">非遗：</span>频道有帖子提到，深圳 APEC
+                  的蓝色围巾采用了苏州宋锦。
+                </li>
+              </ul>
+              <p style="color: var(--text-muted); font-size: 12px">
+                这些是根据频道可见标题和帖子整理的，不一定都是今天发布的。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部输入框 (Composer) -->
+        <div class="composer-area">
+          <div class="composer-box">
+            <div class="composer-top-row">
+              <span class="chip-context">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                + 上下文
+              </span>
+              <div class="policy-pill" title="点击切换执行权限模式">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>受控修改 (逐次审批)</span>
+              </div>
+            </div>
+            <textarea
+              class="composer-input"
+              placeholder="输入消息... (/ 调用 Command 或 Skill, # 选择 MCP)"
+            ></textarea>
+            <div class="composer-bottom-row">
+              <div class="hint-subtle">Shift + Enter 换行</div>
+              <div class="composer-actions">
+                <span class="hint-subtle" style="font-size: 10px">Enter 发送</span>
+                <button class="send-btn" title="发送消息">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 3. 中间可拖拽调整宽度的 Splitter -->
+      <div class="panel-splitter" id="panelSplitter" title="拖拽调整分栏宽度"></div>
+
+      <!-- 4. 右侧原生浏览器工作区 (Right Browser) -->
+      <aside class="browser-workspace" id="browserWorkspace">
+        <!-- 第一层：标签栏 (Tab Bar) -->
+        <div class="browser-tabbar">
+          <div class="browser-tabs">
+            <div class="browser-tab-item">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f04142"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path
+                  d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                />
+              </svg>
+              <span>今日头条 · 苏州频道</span>
+              <span class="browser-tab-close">×</span>
+            </div>
+            <button class="new-tab-btn" title="新建标签页">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+          </div>
+          <div class="browser-tabbar-right">
+            <div class="agent-ready-badge" title="具备浏览器能力的 Agent 可以读取当前网页">
+              <span class="pulse"></span>
+              <span>Agent 就绪</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 第二层：一体化导航与地址栏 (集成了前进、后退、刷新、锁、接管、提示浮层) -->
+        <div class="browser-nav-bar">
+          <button class="nav-btn" title="后退" id="btnBack">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button class="nav-btn" title="前进" disabled>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+          <button class="nav-btn" title="刷新页面" onclick="simulateReload()">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          </button>
+
+          <!-- 地址栏输入框 -->
+          <div class="url-bar-container">
+            <span class="url-lock-icon" title="安全连接 (HTTPS)">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </span>
+            <input class="url-input" value="https://www.toutiao.com/ch/news_suzhou/" readonly />
+            <div class="url-actions">
+              <span
+                class="view-mode-pill active"
+                id="pillMobile"
+                onclick="toggleMobileMode()"
+                title="切换视口模式：窄屏自适应 / 原始比例"
+              >
+                自适应
+              </span>
+            </div>
+          </div>
+
+          <!-- 人工接管核心按钮 -->
+          <button class="takeover-btn" id="btnTakeover" onclick="toggleTakeover()">人工接管</button>
+
+          <!-- 规则说明折叠 Popover 入口 (避免原先大段文字占满屏幕) -->
+          <div class="info-popover-trigger">
+            <button
+              class="info-btn"
+              onclick="toggleInfoPopover()"
+              title="查看 Agent 浏览器权限与接管规则"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </button>
+            <div class="info-popover" id="infoPopover">
+              <strong>Agent 浏览器使用规则</strong>
+              <p>1. 具备浏览器能力的 Agent 可以读取当前网页与截图。</p>
+              <p>2. 点击、输入等主动操作需要您的逐次审批。</p>
+              <p>
+                3. 遇到登录、验证码或敏感交互时，随时点击<strong>「人工接管」</strong>，Agent
+                将暂停操作并让出完整控制权。
+              </p>
+              <div
+                style="
+                  margin-top: 8px;
+                  padding-top: 6px;
+                  border-top: 1px solid #eee;
+                  display: flex;
+                  justify-content: space-between;
+                "
+              >
+                <span style="color: #ef4444; cursor: pointer" onclick="alert('已停用 Agent 浏览器')"
+                  >停用浏览器</span
+                >
+                <span style="color: #2563eb; cursor: pointer" onclick="toggleInfoPopover()"
+                  >我知道了</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 网页视口 (下方为真实的网页内容模拟) -->
+        <div class="webview-viewport">
+          <div class="simulated-page mobile-mode" id="simulatedPage">
+            <!-- 网页顶栏 -->
+            <div class="toutiao-header">
+              <div class="toutiao-logo">今日头条</div>
+              <div style="font-size: 12px; color: #666">登录 / 注册</div>
+            </div>
+            <!-- 频道导航 -->
+            <div class="toutiao-nav-channels">
+              <span class="channel-item">推荐</span>
+              <span class="channel-item">关注</span>
+              <span class="channel-item active agent-click-indicator">苏州</span>
+              <span class="channel-item">热点</span>
+              <span class="channel-item">财经</span>
+              <span class="channel-item">科技</span>
+            </div>
+
+            <!-- 信息流列表 -->
+            <div class="toutiao-feed">
+              <div class="feed-card">
+                <div>
+                  <div class="feed-title">
+                    苏州古城更新提速：一批明清古宅与传统老街启动保护性修缮
+                  </div>
+                  <div class="feed-meta">
+                    <span>苏州发布</span><span>·</span><span>120 评</span><span>·</span
+                    ><span>2 小时前</span>
+                  </div>
+                </div>
+                <div class="feed-thumb">古城修缮</div>
+              </div>
+
+              <div class="feed-card">
+                <div>
+                  <div class="feed-title">苏州市政府公布最新人事任免名单，涉及多个职能部门</div>
+                  <div class="feed-meta">
+                    <span>苏州日报</span><span>·</span><span>89 赞</span><span>·</span
+                    ><span>4 小时前</span>
+                  </div>
+                </div>
+                <div class="feed-thumb">政务公开</div>
+              </div>
+
+              <div class="feed-card">
+                <div>
+                  <div class="feed-title">园区生物医药再传捷报！苏州自主研发创新靶向药正式获批</div>
+                  <div class="feed-meta">
+                    <span>苏相创新</span><span>·</span><span>45 评</span><span>·</span
+                    ><span>5 小时前</span>
+                  </div>
+                </div>
+                <div class="feed-thumb">医药产业</div>
+              </div>
+
+              <div class="feed-card">
+                <div>
+                  <div class="feed-title">
+                    惊艳全场！深圳 APEC 会议外宾蓝色围巾采用非遗「苏州宋锦」工艺
+                  </div>
+                  <div class="feed-meta">
+                    <span>非遗中国</span><span>·</span><span>238 赞</span><span>·</span
+                    ><span>昨天</span>
+                  </div>
+                </div>
+                <div class="feed-thumb">非遗宋锦</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      // 交互逻辑
+      let isMobileMode = true;
+      let isTakingOver = false;
+      let isSidebarCollapsed = false;
+
+      function toggleMobileMode() {
+        isMobileMode = !isMobileMode;
+        const page = document.getElementById('simulatedPage');
+        const pill = document.getElementById('pillMobile');
+        const btn = document.getElementById('btn-toggle-mobile');
+
+        if (isMobileMode) {
+          page.classList.add('mobile-mode');
+          pill.classList.add('active');
+          btn.innerHTML = '<span>📱 网页自适应模式: 开启</span>';
+        } else {
+          page.classList.remove('mobile-mode');
+          pill.classList.remove('active');
+          btn.innerHTML = '<span>📱 网页自适应模式: 关闭 (原始比例)</span>';
+        }
+      }
+
+      function toggleTakeover() {
+        isTakingOver = !isTakingOver;
+        const btn = document.getElementById('btnTakeover');
+        const badge = document.querySelector('.agent-ready-badge');
+        if (isTakingOver) {
+          btn.innerText = '交还控制';
+          btn.classList.add('taking-over');
+          badge.innerHTML =
+            '<span style="width:5px;height:5px;border-radius:50%;background:#f59e0b;"></span><span>人工接管中</span>';
+          badge.style.background = '#fef3c7';
+          badge.style.color = '#b45309';
+        } else {
+          btn.innerText = '人工接管';
+          btn.classList.remove('taking-over');
+          badge.innerHTML = '<span class="pulse"></span><span>Agent 就绪</span>';
+          badge.style.background = '#dcfce7';
+          badge.style.color = '#047857';
+        }
+      }
+
+      function toggleInfoPopover() {
+        const popover = document.getElementById('infoPopover');
+        popover.classList.toggle('show');
+      }
+
+      function toggleToolCard() {
+        const card = document.getElementById('toolGroupCard');
+        card.classList.toggle('open');
+      }
+
+      function toggleSidebar() {
+        isSidebarCollapsed = !isSidebarCollapsed;
+        const sidebar = document.getElementById('sidebar');
+        const expandBtn = document.getElementById('expandSidebarBtn');
+        if (isSidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          expandBtn.style.display = 'flex';
+        } else {
+          sidebar.classList.remove('collapsed');
+          expandBtn.style.display = 'none';
+        }
+      }
+
+      function setLayoutPreset(sideW, chatW, browserW) {
+        document.getElementById('sidebar').style.width = sideW + 'px';
+        document.getElementById('browserWorkspace').style.width = browserW + 'px';
+      }
+
+      function simulateReload() {
+        const page = document.getElementById('simulatedPage');
+        page.style.opacity = '0.3';
+        setTimeout(() => {
+          page.style.opacity = '1';
+        }, 200);
+      }
+
+      function setDesignMode(mode) {
+        const btnRedesign = document.getElementById('btn-show-redesign');
+        const btnLegacy = document.getElementById('btn-show-legacy');
+
+        if (mode === 'legacy') {
+          alert(
+            '将在下一版本提供同屏原版像素级对比；当前页面已展示所有优化项：\n1. 浏览器顶部从 5 层减至 2 层\n2. 连续操作聚合折叠\n3. 导航与侧边栏高亮\n4. 支持自适应窄屏与分栏拖拽',
+          );
+          btnLegacy.classList.add('active');
+          btnRedesign.classList.remove('active');
+        } else {
+          btnRedesign.classList.add('active');
+          btnLegacy.classList.remove('active');
+        }
+      }
+
+      // 拖拽调整分栏逻辑 (Splitter drag)
+      const splitter = document.getElementById('panelSplitter');
+      const browserWorkspace = document.getElementById('browserWorkspace');
+      let isDragging = false;
+
+      splitter.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        splitter.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const workbench = document.getElementById('workbench');
+        const rect = workbench.getBoundingClientRect();
+        const newWidth = rect.right - e.clientX;
+        if (newWidth > 280 && newWidth < rect.width - 320) {
+          browserWorkspace.style.width = newWidth + 'px';
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          splitter.classList.remove('active');
+          document.body.style.cursor = '';
+        }
+      });
+    </script>
+  </body>
+</html>

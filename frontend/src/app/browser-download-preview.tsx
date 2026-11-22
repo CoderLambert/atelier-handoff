@@ -4,26 +4,36 @@
  * @updated 2026-11-20T20:14:00+08:00
  */
 import { Component, lazy, Suspense, type ReactNode } from 'react';
-import type { DesktopBrowserDownloadPreview } from '@shared/desktop-browser';
+import {
+  browserDownloadPreviewMaxBytes,
+  type DesktopBrowserDownloadPreview,
+} from '@shared/desktop-browser';
 import { Button } from '@/components/ui/button';
+import { translateError, useUiTranslation } from '@/i18n';
 
 const FilePreview = lazy(() => import('@/components/file-preview'));
 
 export type BrowserDownloadPreviewState =
   | { kind: 'loading' }
   | { kind: 'ready'; file: DesktopBrowserDownloadPreview }
-  | { kind: 'unavailable'; reason: string }
-  | { kind: 'error'; message: string };
+  | { kind: 'unavailable'; reason: 'unsupportedFormat' | 'tooLarge' }
+  | { kind: 'error'; error: unknown };
 
 function PreviewError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useUiTranslation('browser');
   return (
     <div className="flex flex-col items-start gap-3 p-5" role="alert">
       <p className="text-sm text-destructive wrap-anywhere">{message}</p>
       <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-        重试预览
+        {t('preview.retry')}
       </Button>
     </div>
   );
+}
+
+function PreviewLoadError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useUiTranslation('browser');
+  return <PreviewError message={t('preview.loadFailed')} onRetry={onRetry} />;
 }
 
 class PreviewBoundary extends Component<
@@ -38,10 +48,7 @@ class PreviewBoundary extends Component<
 
   render() {
     return this.state.failed ? (
-      <PreviewError
-        message="文件预览未能加载。请重试，或用系统应用打开。"
-        onRetry={this.props.onRetry}
-      />
+      <PreviewLoadError onRetry={this.props.onRetry} />
     ) : (
       this.props.children
     );
@@ -55,18 +62,34 @@ export function BrowserDownloadPreview({
   state: BrowserDownloadPreviewState;
   onRetry: () => void;
 }) {
+  const { t, locale } = useUiTranslation('browser');
   if (state.kind === 'unavailable') {
     return (
       <div className="flex flex-col gap-2 p-5" role="status">
-        <p className="text-sm font-medium">此文件暂不支持内置预览</p>
-        <p className="text-sm text-muted-foreground">{state.reason}请用系统应用打开查看。</p>
+        <p className="text-sm font-medium">{t('preview.unavailable')}</p>
+        <p className="text-sm text-muted-foreground">
+          {state.reason === 'tooLarge'
+            ? t('preview.tooLarge', {
+                size: (browserDownloadPreviewMaxBytes / 1024 ** 2).toLocaleString(locale, {
+                  maximumFractionDigits: 1,
+                }),
+              })
+            : t('preview.unsupportedFormat')}
+        </p>
       </div>
     );
   }
-  if (state.kind === 'error') return <PreviewError message={state.message} onRetry={onRetry} />;
+  if (state.kind === 'error') {
+    return (
+      <PreviewError
+        message={translateError(state.error, t('preview.readFailed'))}
+        onRetry={onRetry}
+      />
+    );
+  }
   const loading = (
     <p className="p-5 text-sm text-muted-foreground" role="status">
-      正在加载预览…
+      {t('preview.loading')}
     </p>
   );
   if (state.kind === 'loading') return loading;

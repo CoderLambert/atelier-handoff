@@ -1,8 +1,16 @@
+/**
+ * @file 提供 SkillHub 市场的搜索、预览与安装界面。
+ * @implementation 按关键词和类别展示结果，预览公开来源并安装技能；已安装技能可通过回调启动。
+ * @updated 2026-11-23T04:52:50+08:00
+ */
+import { getTranslator, useUiTranslation } from '@/i18n';
+import { ArrowLeft, ChevronRight, Search } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import {
   endpoint,
+  extensionDetail,
   extensionsQuery,
   messageOf,
   useExtensionMutation,
@@ -22,16 +30,36 @@ interface SkillHubItem {
 }
 
 const categoryLabels: Record<string, string> = {
-  'dev-programming': '编程开发',
-  professional: '专业服务',
-  'ai-agent': '智能体',
-  'design-media': '设计与媒体',
-  'knowledge-management': '知识管理',
-  'office-efficiency': '办公效率',
-  'data-analysis': '数据分析',
-  'content-creation': '内容创作',
-  'life-service': '生活服务',
-  'business-ops': '商业运营',
+  get 'dev-programming'() {
+    return getTranslator('extensions')('category.programming');
+  },
+  get professional() {
+    return getTranslator('extensions')('category.professional');
+  },
+  get 'ai-agent'() {
+    return getTranslator('extensions')('category.agent');
+  },
+  get 'design-media'() {
+    return getTranslator('extensions')('category.design');
+  },
+  get 'knowledge-management'() {
+    return getTranslator('extensions')('category.knowledge');
+  },
+  get 'office-efficiency'() {
+    return getTranslator('extensions')('category.office');
+  },
+  get 'data-analysis'() {
+    return getTranslator('extensions')('category.data');
+  },
+  get 'content-creation'() {
+    return getTranslator('extensions')('category.content');
+  },
+  get 'life-service'() {
+    return getTranslator('extensions')('category.life');
+  },
+  get 'business-ops'() {
+    return getTranslator('extensions')('category.business');
+  },
 };
 
 export function SkillHubMarket({
@@ -43,6 +71,7 @@ export function SkillHubMarket({
   onSaved: (message: string) => void;
   onStartSkill?: StartSkill;
 }) {
+  const { t } = useUiTranslation('extensions');
   const detailId = useId();
   const resultScroll = useRef<HTMLDivElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -127,7 +156,7 @@ export function SkillHubMarket({
           packageDigest: entry.packageManifest?.digest,
         },
       });
-      const status = `已导入 /${entry.name}，可在对话中手动调用。`;
+      const status = t('market.importedNotice', { name: entry.name });
       setMessage(status);
       onSaved(status);
     } catch (failure) {
@@ -159,40 +188,41 @@ export function SkillHubMarket({
         <div
           className="market-categories"
           role="group"
-          aria-label="SkillHub 分类"
+          aria-label={t('market.categoryLabel')}
           hidden={Boolean(selected)}
         >
           {['', ...categories].map((value) => (
             <ActionButton
               key={value}
-              primary={value === category}
+              variant={value === category ? 'secondary' : 'ghost'}
+              size="sm"
               aria-pressed={value === category}
               onClick={() => {
                 setCategory(value);
                 if (resultScroll.current) resultScroll.current.scrollTop = 0;
               }}
             >
-              {value ? (categoryLabels[value] ?? value) : '全部分类'}
+              {value ? (categoryLabels[value] ?? value) : t('market.allCategories')}
             </ActionButton>
           ))}
         </div>
       ) : null}
       <form className="skillhub-search" onSubmit={search} hidden={Boolean(selected)}>
         <label className="ext-search">
-          <span aria-hidden="true">⌕</span>
+          <Search aria-hidden="true" />
           <input
             type="search"
             name="q"
             autoComplete="off"
-            placeholder="搜索技能，例如 React、写作或项目规划"
-            aria-label="搜索 SkillHub"
+            placeholder={t('market.searchPlaceholder')}
+            aria-label={t('market.searchLabel')}
             value={input}
             maxLength={120}
             onChange={(event) => setInput(event.target.value)}
           />
         </label>
-        <ActionButton type="submit" primary disabled={install.isPending}>
-          搜索
+        <ActionButton type="submit" variant="default" disabled={install.isPending}>
+          {t('market.search')}
         </ActionButton>
       </form>
       <p className="sr-only" role="status">
@@ -201,21 +231,24 @@ export function SkillHubMarket({
       <div className="skillhub-browser">
         <section
           className="skillhub-results"
-          aria-label="搜索结果"
+          aria-label={t('market.resultsLabel')}
           aria-busy={results.isFetching}
           hidden={Boolean(selected)}
         >
           <p className="market-result-count" role="status">
             {results.isFetching
-              ? '正在搜索…'
+              ? t('market.searching')
               : results.isSuccess
-                ? `${query ? `「${query}」` : '推荐技能'} · ${filtered.length} 项`
-                : 'SkillHub 技能'}
+                ? t('market.resultsCount', {
+                    label: query ? `「${query}」` : t('market.recommended'),
+                    count: filtered.length,
+                  })
+                : t('market.skills')}
           </p>
           <div ref={resultScroll} className="skillhub-result-scroll">
             <ErrorMessage error={results.error} />
             {results.isSuccess && !filtered.length ? (
-              <p className="skillhub-empty">没有匹配的技能。可以换一个关键词或分类。</p>
+              <p className="skillhub-empty">{t('market.empty')}</p>
             ) : null}
             <ul className="market-catalog-list">
               {filtered.map((item) => (
@@ -245,16 +278,14 @@ export function SkillHubMarket({
                         ) : null}
                       </span>
                       <span className="market-result-summary">
-                        {item.description || '暂无简介'}
+                        {item.description || t('common.noSummary')}
                       </span>
                     </span>
                     <span className="market-result-meta">
                       <span>{item.publisher || item.coordinate.split('/')[0]}</span>
                       <span>v{item.version}</span>
                     </span>
-                    <span aria-hidden="true" className="market-result-arrow">
-                      ›
-                    </span>
+                    <ChevronRight aria-hidden="true" className="market-result-arrow" />
                   </button>
                 </li>
               ))}
@@ -264,14 +295,15 @@ export function SkillHubMarket({
         <section
           id={detailId}
           className="skillhub-detail"
-          aria-label="SkillHub 技能预览"
+          aria-label={t('market.previewLabel')}
           hidden={!selected}
         >
           {selected ? (
             <>
               <div className="skillhub-detail-header">
                 <ActionButton className="skillhub-back" disabled={install.isPending} onClick={back}>
-                  ← 返回结果
+                  <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+                  {t('market.back')}
                 </ActionButton>
                 <h3 ref={detailHeading} tabIndex={-1}>
                   {selected.title}
@@ -282,15 +314,19 @@ export function SkillHubMarket({
               </div>
               <div ref={detailScroll} className="skillhub-detail-scroll">
                 <p className="skillhub-detail-description">{selected.description}</p>
-                {preview.isFetching ? <p role="status">正在读取 SKILL.md…</p> : null}
+                {preview.isFetching ? <p role="status">{t('market.loading')}</p> : null}
                 <ErrorMessage error={preview.error} />
                 {entry?.packageManifest ? (
                   <details className="ext-preview">
-                    <summary>包内文件 · {entry.packageManifest.files.length} 项</summary>
+                    <summary>
+                      {t('market.packageFiles', { count: entry.packageManifest.files.length })}
+                    </summary>
                     <pre className="ext-body-preview">{entry.packageManifest.files.join('\n')}</pre>
                   </details>
                 ) : null}
-                {entry?.issue ? <p className="ext-compatibility">{entry.issue}</p> : null}
+                {entry?.issue ? (
+                  <p className="ext-compatibility">{extensionDetail(entry.issue)}</p>
+                ) : null}
                 {entry?.body ? (
                   <MarkdownPreview
                     key={selected.source}
@@ -305,13 +341,13 @@ export function SkillHubMarket({
                 <ErrorMessage error={error} />
                 <p className="ext-help">
                   {installed
-                    ? '已加入当前项目'
+                    ? t('market.installed')
                     : entry?.packageManifest
-                      ? `导入技能包 · ${entry.packageManifest.files.length} 个文件`
-                      : '导入技能 · 默认手动调用'}
+                      ? t('market.importPackage', { count: entry.packageManifest.files.length })
+                      : t('market.manualImport')}
                 </p>
                 <ActionButton
-                  primary
+                  variant="default"
                   disabled={
                     !entry?.revision ||
                     !!entry.issue ||
@@ -322,7 +358,11 @@ export function SkillHubMarket({
                   }
                   onClick={() => void save()}
                 >
-                  {installed ? '已导入' : install.isPending ? '正在导入…' : '导入当前项目'}
+                  {installed
+                    ? t('market.imported')
+                    : install.isPending
+                      ? t('publicImport.importing')
+                      : t('market.import')}
                 </ActionButton>
                 {installed &&
                 installed.kind === 'skill' &&
@@ -330,8 +370,12 @@ export function SkillHubMarket({
                 installed.supported &&
                 installed.userInvocable &&
                 onStartSkill ? (
-                  <ActionButton primary disabled={starting} onClick={() => void startSkill()}>
-                    {starting ? '正在打开…' : '到对话中使用'}
+                  <ActionButton
+                    variant="default"
+                    disabled={starting}
+                    onClick={() => void startSkill()}
+                  >
+                    {starting ? t('market.opening') : t('market.useInChat')}
                   </ActionButton>
                 ) : null}
               </div>

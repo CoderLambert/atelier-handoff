@@ -3,6 +3,7 @@
  * @implementation 组合具名 mutations，以会话键追踪在途操作并阻止重复点击；按用户选择发送插入模式，错误留在当前队列界面，队列内容由快照同步。
  * @updated 2026-11-21T00:15:48+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
 import { useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import { sessionKeys } from '@/use-query/sessions/keys';
@@ -19,33 +20,25 @@ type QueueAction =
   | { type: 'insert'; variables: InsertQueuedMessageVariables };
 
 export function useSessionMessageQueue(sessionId: string) {
+  const { t } = useUiTranslation('chat');
   const withdraw = useWithdrawQueuedMessage(sessionId);
   const resume = useResumeMessageQueue(sessionId);
   const insert = useInsertQueuedMessage(sessionId);
   const pending = useIsMutating({ mutationKey: sessionKeys.messageQueue(sessionId) });
   const lock = useRef(false);
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ action: QueueAction; cause: unknown }>();
   const busy = pending > 0 || withdraw.isPending || resume.isPending || insert.isPending;
 
   async function act(action: QueueAction) {
     if (lock.current || busy) return;
     lock.current = true;
-    setError('');
+    setFailure(undefined);
     try {
       if (action.type === 'withdraw') await withdraw.mutateAsync(action.itemId);
       else if (action.type === 'resume') await resume.mutateAsync();
       else await insert.mutateAsync(action.variables);
     } catch (failure) {
-      const detail = failure instanceof Error ? failure.message : '请重试';
-      const label =
-        action.type === 'withdraw'
-          ? '撤回'
-          : action.type === 'resume'
-            ? '继续队列'
-            : action.variables.mode === 'live'
-              ? '立即插入'
-              : '优先执行';
-      setError(`${label}失败：${detail}`);
+      setFailure({ action, cause: failure });
     } finally {
       lock.current = false;
     }
@@ -53,7 +46,20 @@ export function useSessionMessageQueue(sessionId: string) {
 
   return {
     busy,
-    error,
+    error: failure
+      ? translateError(
+          failure.cause,
+          t(
+            failure.action.type === 'withdraw'
+              ? 'queue.withdrawFailed'
+              : failure.action.type === 'resume'
+                ? 'queue.resumeFailed'
+                : failure.action.variables.mode === 'live'
+                  ? 'queue.insertFailed'
+                  : 'queue.prioritizeFailed',
+          ),
+        )
+      : '',
     withdrawingId: withdraw.isPending ? withdraw.variables : undefined,
     insertingId: insert.isPending ? insert.variables?.itemId : undefined,
     resuming: resume.isPending,

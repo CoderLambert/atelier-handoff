@@ -11,13 +11,15 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { Artifact } from '@shared/types';
+import { AppError, type Artifact } from '@shared/types';
+import { translateError, useUiTranslation } from '@/i18n';
 import { desktopFilesBridge } from '@/desktop-files';
 import { artifactKeys } from './keys';
 
 type FileAction = 'save' | 'reveal';
 
 export function useArtifactFileActions(artifact: Artifact) {
+  const { t } = useUiTranslation('common');
   const client = useQueryClient();
   const bridge = desktopFilesBridge();
   const lock = useRef(false);
@@ -34,13 +36,13 @@ export function useArtifactFileActions(artifact: Artifact) {
     mutationKey: key,
     retry: false,
     mutationFn: async (action: FileAction) => {
-      if (!bridge) throw new Error('当前环境不支持原生文件操作。');
+      if (!bridge) throw new AppError('FILE_ACTION_UNAVAILABLE', 'FILE_ACTION_UNAVAILABLE');
       if (action === 'save') {
         if (await bridge.saveArtifact(artifact.id, artifact.name))
           client.setQueryData(artifactKeys.savedCopy(artifact.id), true);
       } else if (!(await bridge.revealArtifact(artifact.id))) {
         client.setQueryData(artifactKeys.savedCopy(artifact.id), false);
-        throw new Error('已保存的副本不可用，请重新保存。');
+        throw new AppError('FILE_COPY_MISSING', 'FILE_COPY_MISSING');
       }
     },
   });
@@ -61,7 +63,7 @@ export function useArtifactFileActions(artifact: Artifact) {
     desktop: Boolean(bridge),
     saved: saved.data,
     pending: active > 0 || mutation.isPending,
-    error: mutation.error instanceof Error ? mutation.error.message : null,
+    error: mutation.error ? translateError(mutation.error, t('errors.fileActionFailed')) : null,
     save: () => perform('save'),
     reveal: () => perform('reveal'),
   };

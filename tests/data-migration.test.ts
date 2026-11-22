@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { FileRecords } from '../server/artifacts.js';
+import { fingerprint } from '../server/files.js';
 import { migrateWorkspace } from '../server/data-migration.js';
 import { acquireDataOwner } from '../server/data-owner.js';
 import { Store } from '../server/store.js';
@@ -26,6 +27,8 @@ await test('migrate real application records and files while preserving the roll
     await mkdir(project);
     let artifactId = '';
     let attachmentId = '';
+    let toolId = '';
+    const logText = 'retained Bash log\n';
     const store = new Store(source);
     try {
       store.put('projects', {
@@ -66,6 +69,27 @@ await test('migrate real application records and files while preserving the roll
         config: store.config(),
       };
       store.put('runs', run);
+      toolId = `${run.id}:toolu_saved`;
+      store.put('tools', {
+        id: toolId,
+        runId: run.id,
+        sessionId,
+        name: 'Bash',
+        inputSummary: '{}',
+        status: 'succeeded',
+        output: 'SDK receipt',
+        bashLog: {
+          status: 'complete',
+          bytes: Buffer.byteLength(logText),
+          sourceBytes: Buffer.byteLength(logText),
+        },
+        startedAt: now(),
+        endedAt: now(),
+      });
+      await mkdir(join(source, 'tool-output'), { recursive: true, mode: 0o700 });
+      await writeFile(join(source, 'tool-output', `${fingerprint(toolId)}.log`), logText, {
+        mode: 0o600,
+      });
       const files = new FileRecords(store);
       artifactId = (await files.publish(run, 'result.md', 'migration output')).id;
       attachmentId = (
@@ -88,7 +112,7 @@ await test('migrate real application records and files while preserving the roll
     }
     const result = await migrateWorkspace(source, target);
     assert.equal(result.target, target);
-    assert.equal(result.files, 3);
+    assert.equal(result.files, 4);
     assert.deepEqual(
       [result.projects, result.sessions, result.artifacts, result.attachments],
       [1, 1, 1, 1],
@@ -97,6 +121,8 @@ await test('migrate real application records and files while preserving the roll
     try {
       const files = new FileRecords(opened);
       assert.equal(opened.get('sessions', sessionId).title, 'migration history');
+      assert.equal(await files.toolOutput(toolId, true), logText);
+      assert.equal(await files.toolOutput(toolId), 'SDK receipt');
       assert.equal((await files.content(artifactId)).bytes.toString(), 'migration output');
       assert.equal(
         (await files.attachmentContent(attachmentId, sessionId)).bytes.toString(),

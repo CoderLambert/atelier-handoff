@@ -1,3 +1,9 @@
+/**
+ * @file 提供公开来源扩展的预览、导入和更新界面。
+ * @implementation 查询来源条目，按版本信息提交导入；更新时处理替换确认和冲突后的重新预览。
+ * @updated 2026-11-23T04:48:56+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Extension } from '@shared/types';
@@ -12,6 +18,7 @@ import {
 } from './components';
 import {
   endpoint,
+  extensionDetail,
   isConflict,
   messageOf,
   useExtensionMutation,
@@ -34,6 +41,7 @@ export function PublicImport({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const initialSource = updating?.origin?.location ?? '';
   const [source, setSource] = useState(initialSource);
   const [submitted, setSubmitted] = useState(initialSource);
@@ -101,16 +109,14 @@ export function PublicImport({
           ...(updating ? { update: { id: updating.id, version: updating.version } } : {}),
         },
       });
-      onSaved(updating ? '同步已完成' : '已导入当前项目');
+      onSaved(updating ? t('publicImport.synced') : t('publicImport.imported'));
       onClose();
     } catch (cause) {
       if (isConflict(cause)) {
         setStale(true);
         setReplaceConfirmed(false);
       }
-      setError(
-        `${messageOf(cause)}${isConflict(cause) ? ' 请关闭后重新打开最新版本，再检查更新。' : ''}`,
-      );
+      setError(`${messageOf(cause)}${isConflict(cause) ? t('publicImport.conflictSuffix') : ''}`);
     }
   }
   function preset() {
@@ -123,14 +129,14 @@ export function PublicImport({
   }
   return (
     <FeatureDialog
-      title={updating ? '同步公开来源' : '从公开来源导入'}
-      description={`当前项目 · ${projectName}`}
+      title={updating ? t('publicImport.sync') : t('extensions.publicImport')}
+      description={t('publicImport.project', { name: projectName })}
       busy={mutation.isPending}
       onClose={onClose}
     >
       <form className="ext-editor" onSubmit={submit}>
         <Field
-          label={kind === 'mcp' ? 'MCP Registry 搜索词或 GitHub 配置链接' : 'GitHub 仓库或文件链接'}
+          label={kind === 'mcp' ? t('publicImport.registrySource') : t('publicImport.githubSource')}
         >
           <input
             autoFocus
@@ -146,33 +152,37 @@ export function PublicImport({
         <div className="ext-dialog-actions">
           {!updating && (kind === 'skill' || kind === 'mcp') ? (
             <ActionButton disabled={busy} onClick={preset}>
-              {kind === 'mcp' ? '搜索 Context7' : 'Anthropic Frontend Design'}
+              {kind === 'mcp' ? t('publicImport.searchContext7') : t('publicImport.frontendDesign')}
             </ActionButton>
           ) : null}
           <ActionButton type="submit" disabled={busy || !source.trim()}>
-            {updating ? '检查更新' : '查询'}
+            {updating ? t('extensions.checkUpdates') : t('publicImport.query')}
           </ActionButton>
         </div>
         <p className="ext-save-state" role="status">
-          {mutation.isPending ? '正在导入…' : query.isFetching ? '正在读取公开来源…' : ''}
+          {mutation.isPending
+            ? t('publicImport.importing')
+            : query.isFetching
+              ? t('publicImport.loading')
+              : ''}
         </p>
         <ErrorMessage error={error || query.error} />
         {updating && updating.kind !== 'mcp' ? (
           <section className="ext-preview-pane">
-            <h4>当前项目正文 · v{updating.version}</h4>
+            <h4>{t('publicImport.localVersion', { version: updating.version })}</h4>
             <pre className="ext-body-preview" tabIndex={0}>
               {updating.body}
             </pre>
             <BackupActions body={updating.body} name={updating.name} version={updating.version} />
             <fieldset className="ext-replacement" disabled={busy}>
-              <p>同步将替换当前 Markdown 正文。请比较预览，并按需备份。</p>
+              <p>{t('publicImport.replaceWarning')}</p>
               <label>
                 <input
                   type="checkbox"
                   checked={replaceConfirmed}
                   onChange={(event) => setReplaceConfirmed(event.target.checked)}
                 />
-                我已检查正文，确认同步公开来源
+                {t('publicImport.confirmReplace')}
               </label>
             </fieldset>
           </section>
@@ -191,24 +201,28 @@ export function PublicImport({
                     <pre className="ext-body-preview" tabIndex={0}>
                       {entry.body}
                     </pre>
-                    <MarkdownPreview body={entry.body} label="预览 Markdown" />
+                    <MarkdownPreview body={entry.body} label={t('publicImport.preview')} />
                   </>
                 ) : entry.transport ? (
                   <pre className="ext-body-preview">{JSON.stringify(entry.transport, null, 2)}</pre>
                 ) : null}
                 {entry.issue ? (
-                  <p className="ext-compatibility">{entry.issue}</p>
+                  <p className="ext-compatibility">{extensionDetail(entry.issue)}</p>
                 ) : unchanged ? (
-                  <p className="ext-help">当前已是此来源的最新版本。</p>
+                  <p className="ext-help">{t('publicImport.upToDate')}</p>
                 ) : (
                   <ActionButton
-                    primary
+                    variant="default"
                     disabled={
                       !ready || mutation.isPending || (needsConfirmation && !replaceConfirmed)
                     }
                     onClick={() => void select(entry)}
                   >
-                    {entry.revision ? (updating ? '应用更新' : '导入到当前项目') : '查看文件'}
+                    {entry.revision
+                      ? updating
+                        ? t('publicImport.applyUpdate')
+                        : t('publicImport.import')
+                      : t('publicImport.viewFile')}
                   </ActionButton>
                 )}
               </article>
@@ -216,11 +230,11 @@ export function PublicImport({
           })}
         </div>
         {submitted && query.isSuccess && !query.data.length ? (
-          <p className="ext-help">未找到匹配的扩展。</p>
+          <p className="ext-help">{t('publicImport.noMatches')}</p>
         ) : null}
         <div className="ext-dialog-actions">
           <ActionButton disabled={mutation.isPending} onClick={onClose}>
-            关闭
+            {t('common.close')}
           </ActionButton>
         </div>
       </form>

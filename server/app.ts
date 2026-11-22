@@ -1,10 +1,15 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 处理配对、会话、事件和内置网关。装配会话快照仓储与队列状态，协调实时插入及优先执行，并提供文档上传、预览和下载。
- * @updated 2026-11-21T01:12:55+08:00
+ * @implementation 处理配对、会话、网关与队列，校验桌面执行范围，冻结每次运行的执行器，并核对实时插入与子任务停止的归属。
+ * @updated 2026-11-22T16:25:00+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
+import {
+  composerTextLimit,
+  formatMessageText,
+  messageQuotesSchema,
+} from '../shared/message-quotes.js';
 import { desktopPairingHeader } from '../shared/desktop-host.js';
 import { desktopBrowserAccessUpdateSchema } from '../shared/desktop-browser.js';
 import { desktopBrowserEnabled } from './desktop-browser.js';
@@ -20,6 +25,7 @@ import { resolve, join, basename, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
 import { createGetSessionSnapshot } from './modules/sessions/get-session-snapshot.js';
+import { publicSession, SessionForks, sessionForkRequest } from './session-forks.js';
 import { MessageQueue, type PendingSessionMessage } from './message-queue.js';
 import { serveClient } from './client-assets.js';
 import { AgentRunner, type AttachmentImages, type Runner } from './agent.js';
@@ -27,6 +33,7 @@ import { AgentProfiles } from './agent-profiles.js';
 import { agentCapabilitiesFor, agentRunInfo, resolveAgentExtensions } from './agent-scope.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
+import { toolOutputFilename } from '../shared/tool-output-download.js';
 import {
   authorizeRoot,
   readProjectText,
@@ -39,6 +46,10 @@ import { commandsAvailable } from './commands.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { gatewayModelId, gatewayModels } from './gateway-models.js';
+import { magpieModel, magpieModels, magpieOrigin } from './magpie-models.js';
+import { gatewayToken } from './gateway-search.js';
+import { workspaceLocationSchema } from '../shared/workspace-location.js';
+import { workspaceLayoutSchema } from '../shared/workspace-layout.js';
 import { ManagedGatewayLogin } from './managed-gateway-login.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
@@ -61,12 +72,14 @@ import {
   type SendSessionMessageResult,
 } from '../shared/types.js';
 
+const executorSchema = z.enum(['native-v1', 'project-v1']);
 const inputSchema = z.object({
-  text: z.string().trim().min(1).max(32000),
+  text: z.string().trim().min(1).max(composerTextLimit),
   mode: z.enum(['readonly', 'edit']).default('readonly'),
   model: gatewayModelId.optional(),
   effort: z.enum(reasoningEfforts).optional(),
   approvalMode: z.literal('automatic').optional(),
+  executionPreference: executorSchema.optional(),
   maxSearchChargeFen: z.int().min(0).max(100_000).optional(),
   contextPaths: z.array(z.string().max(1000)).max(30).default([]),
   attachmentIds: z.array(z.string().uuid()).max(20).default([]),
@@ -77,14 +90,17 @@ const queuedIntent = z.object({
   request: inputSchema,
   model: gatewayModelId,
   scope: z.string(),
+  executor: executorSchema.optional(),
 });
 const draftSchema = z
   .object({
-    text: z.string().max(32000),
+    text: z.string().max(composerTextLimit),
+    messageQuotes: messageQuotesSchema.optional(),
     mode: z.enum(['readonly', 'edit']),
     model: gatewayModelId.optional(),
     effort: z.enum(reasoningEfforts).optional(),
     approvalMode: z.literal('automatic').optional(),
+    executionPreference: executorSchema.optional(),
     contextPaths: z.array(z.string().max(1000)).max(30),
     attachmentIds: z.array(z.string().uuid()).max(20),
     extensionSelections: extensionSelections.optional(),
@@ -93,6 +109,7 @@ const draftSchema = z
 const configSchema = z.object({
   gateway: z.string().url().optional(),
   managedGateway: z.boolean().optional(),
+  magpieEnabled: z.boolean().optional(),
   model: z.string().min(1).max(200).optional(),
   limitExecution: z.boolean().optional(),
   maxTurns: z.number().int().min(1).max(100).optional(),
@@ -178,11 +195,34 @@ export async function createApp(options: {
   runnerFactory?: (store: Store, permissions: PermissionService, files: FileRecords) => Runner;
   permissionTtlMs?: number;
   desktopPairing?: string;
+  nativeExecution?: boolean;
+  magpie?: string;
   pickDirectory?: typeof pickProjectDirectory;
 }) {
+  const nativeExecution =
+    options.nativeExecution === true &&
+    Boolean(options.desktopPairing) &&
+    process.platform === 'linux';
+  function assertNativeExecution(session: Session, mode: Run['mode'], approvalMode?: 'automatic') {
+    if (!nativeExecution)
+      throw new AppError(
+        'NATIVE_EXECUTION_UNAVAILABLE',
+        '本机信任仅在已配对的 Linux 桌面可用。',
+        403,
+      );
+    if (session.agentRevisionId)
+      throw new AppError('AGENT_MODE_DENIED', '绑定智能体须保留其工具与权限范围。', 403);
+    if (mode !== 'edit' || approvalMode)
+      throw new AppError(
+        'NATIVE_EXECUTION_INVALID',
+        '本机信任须单独选择，不能与只读或自动审批组合。',
+      );
+  }
   const store = new Store(options.data);
   store.recover();
   const messageQueue = new MessageQueue(store);
+  const forks = new SessionForks(store, undefined, (id) => messageQueue.hasPending(id));
+  await forks.recover();
   const permissions = new PermissionService(store, options.permissionTtlMs);
   const files = new FileRecords(store);
   const browserAccess = new DesktopBrowserAccess(
@@ -200,6 +240,16 @@ export async function createApp(options: {
   let shuttingDown = false;
   const gatewayLogin = new ManagedGatewayLogin();
   const managedOrigin = process.env.ATELIER_MANAGED_GATEWAY;
+  const magpie = magpieOrigin(options.magpie);
+  let magpieDiscovery = new AbortController();
+  function requireMagpieEnabled() {
+    if (store.config().magpieEnabled !== true)
+      throw new AppError(
+        'MAGPIE_DISABLED',
+        'Magpie 接入已关闭。请在模型与网关设置中开启，或改选 Shunt 模型。',
+        409,
+      );
+  }
   const effectiveConfig = () => {
     const saved = store.config();
     const useManaged =
@@ -215,10 +265,13 @@ export async function createApp(options: {
   let directoryPicker: AbortController | undefined;
   const streams = new Set<ServerResponse>();
   const requests = new Set<Promise<unknown>>();
-  const connection = async (config: AppConfig) => {
+  const connection = async (config: AppConfig, usingMagpie = false) => {
     try {
-      const response = await fetch(config.gateway.replace(/\/$/, '') + '/health', {
+      const endpoint = config.gateway.replace(/\/$/, '') + (usingMagpie ? '/v1/models' : '/health');
+      const response = await fetch(endpoint, {
         signal: AbortSignal.timeout(3000),
+        redirect: 'error',
+        ...(usingMagpie ? { headers: { Authorization: `Bearer ${gatewayToken(config)}` } } : {}),
       });
       if (!response.ok) throw new Error();
       return { available: true, message: '本机网关可访问；模型认证以实际执行结果为准。' };
@@ -231,7 +284,7 @@ export async function createApp(options: {
     const [status, gateway] = await Promise.all([connection(config), gatewayLogin.status()]);
     return {
       config,
-      capabilities: { commands: commandsAvailable() },
+      capabilities: { commands: commandsAvailable(), nativeExecution },
       connection: status,
       ...(gateway
         ? { managedGateway: { ...gateway, externalGateway: store.config().gateway } }
@@ -289,16 +342,20 @@ export async function createApp(options: {
   ) {
     const parsed = queuedIntent.safeParse(item.intent);
     if (!parsed.success) return undefined;
-    const { request, model, scope } = parsed.data;
+    const { request, model, scope, executor = 'project-v1' } = parsed.data;
+    if (executor === 'native-v1' && !nativeExecution) return undefined;
+    const usesMagpie = magpieModel(model) !== undefined;
+    if (usesMagpie && current.magpieEnabled !== true) return undefined;
     const compatible =
       Boolean(runner.insert) &&
       scope === run.inputScope &&
+      executor === (run.executor ?? 'project-v1') &&
       model === run.config.model &&
       request.mode === run.mode &&
       request.effort === run.config.effort &&
       request.approvalMode === run.approvalMode &&
       request.maxSearchChargeFen === run.maxSearchChargeFen &&
-      current.gateway === run.config.gateway &&
+      (usesMagpie ? magpie : current.gateway) === run.config.gateway &&
       current.limitExecution === run.config.limitExecution &&
       current.maxTurns === run.config.maxTurns &&
       current.timeoutMs === run.config.timeoutMs &&
@@ -344,6 +401,14 @@ export async function createApp(options: {
     };
     const receipt = existingReceipt();
     if (receipt) return receipt;
+    // Missing fields in persisted queue intents retain the original project executor.
+    const executor = intent
+      ? (intent.executor ?? 'project-v1')
+      : retryOf
+        ? 'project-v1'
+        : (request.executionPreference ?? 'project-v1');
+    if (executor === 'native-v1')
+      assertNativeExecution(session, request.mode, request.approvalMode);
     if (request.approvalMode === 'automatic' && (request.mode !== 'edit' || retryOf))
       throw new AppError('AUTOMATION_MODE_INVALID', '全工具自动化需要本轮受控修改权限。', 400);
     if (request.maxSearchChargeFen !== undefined && request.approvalMode !== 'automatic')
@@ -386,7 +451,16 @@ export async function createApp(options: {
     const model =
       intent?.model ?? priorConfig?.model ?? request.model ?? session.draft.model ?? defaults.model;
     const effort = priorConfig ? priorConfig.effort : request.effort;
+    const nativeMagpieModel = magpieModel(model);
+    const usingMagpie = nativeMagpieModel !== undefined;
     const selectedConfig = { ...defaults, model, effort };
+    if (usingMagpie) {
+      requireMagpieEnabled();
+      if (!magpie || !gatewayModelId.safeParse(nativeMagpieModel).success)
+        throw new AppError('MAGPIE_UNAVAILABLE', 'Magpie 网关未配置或模型 ID 无效。', 400);
+      selectedConfig.gateway = magpie;
+      selectedConfig.managedGateway = false;
+    }
     const resolveScope = () => {
       let skills: RunSkill[] = [];
       if (bundle) {
@@ -420,6 +494,7 @@ export async function createApp(options: {
           mcp: bundle?.mcp,
           skills,
           browserRevision,
+          ...(executor === 'native-v1' ? { executor } : {}),
         }),
       );
       return { skills, browserRevision, scope };
@@ -429,6 +504,7 @@ export async function createApp(options: {
       if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
       if (deletingSessions.has(sessionId))
         throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
+      if (usingMagpie) requireMagpieEnabled();
       const latest = store.get('sessions', sessionId);
       if (latest.status !== 'active') throw new AppError('SESSION_ARCHIVED', '会话已归档。', 409);
       if (latest.agentRevisionId !== session.agentRevisionId)
@@ -446,15 +522,25 @@ export async function createApp(options: {
         title: latest.title === '新会话' ? request.text.slice(0, 40) : latest.title,
         updatedAt: now(),
         ...(JSON.stringify(latest.draft) === JSON.stringify(session.draft) &&
-        (!latest.draft.text.trim() || latest.draft.text.trim() === request.text)
+        (!formatMessageText(latest.draft.text, latest.draft.messageQuotes).trim() ||
+          formatMessageText(latest.draft.text, latest.draft.messageQuotes).trim() === request.text)
           ? {
               draft: {
                 ...emptyDraft(),
                 mode:
-                  retryOf || request.approvalMode || latest.draft.approvalMode
-                    ? latest.draft.mode
-                    : request.mode,
-                ...(latest.draft.approvalMode ? { approvalMode: latest.draft.approvalMode } : {}),
+                  request.executionPreference && !retryOf
+                    ? request.mode
+                    : retryOf || request.approvalMode || latest.draft.approvalMode
+                      ? latest.draft.mode
+                      : request.mode,
+                ...((retryOf ? latest.draft.executionPreference : request.executionPreference)
+                  ? { executionPreference: retryOf ? latest.draft.executionPreference : executor }
+                  : {}),
+                ...(request.executionPreference && !retryOf
+                  ? { approvalMode: request.approvalMode }
+                  : latest.draft.approvalMode
+                    ? { approvalMode: latest.draft.approvalMode }
+                    : {}),
                 ...(latest.draft.model ? { model: latest.draft.model } : {}),
                 ...(latest.draft.effort ? { effort: latest.draft.effort } : {}),
                 extensionSelections: retryOf
@@ -475,7 +561,7 @@ export async function createApp(options: {
         key,
         bodyHash,
         { text: request.text, ...(bundle?.used.length ? { extensions: bundle.used } : {}) },
-        { request, model, scope: planned.scope },
+        { request, model, scope: planned.scope, executor },
       );
       accepted(latest);
       return { queuedMessage };
@@ -494,10 +580,10 @@ export async function createApp(options: {
         '排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。',
         409,
       );
-    if (!options.runnerFactory && !(await connection(selectedConfig)).available)
+    if (!options.runnerFactory && !(await connection(selectedConfig, usingMagpie)).available)
       throw new AppError(
         'SDK_UNAVAILABLE',
-        '无法连接本机 Shunt，请先启动网关或检查设置；任务尚未开始，输入已保留。',
+        `无法连接本机 ${usingMagpie ? 'Magpie' : 'Shunt'}，请先启动网关或检查设置；任务尚未开始，输入已保留。`,
         503,
         true,
       );
@@ -530,12 +616,14 @@ export async function createApp(options: {
     }
     if (contextBytes > 128 * 1024)
       throw new AppError('CONTEXT_TOO_LARGE', '本轮附件与附加上下文总量不能超过 128 KiB。', 413);
+    const promptMessageId = randomUUID();
     const run: Run = {
       id: randomUUID(),
       sessionId,
       projectId: project.id,
       prompt: request.text,
       mode: request.mode,
+      executor,
       ...(request.approvalMode ? { approvalMode: request.approvalMode } : {}),
       ...(request.maxSearchChargeFen === undefined
         ? {}
@@ -579,7 +667,7 @@ export async function createApp(options: {
       if (currentScope.browserRevision) run.browserRevision = currentScope.browserRevision;
       store.put('runs', run);
       store.put('messages', {
-        id: randomUUID(),
+        id: promptMessageId,
         sessionId,
         runId: run.id,
         role: 'user',
@@ -602,6 +690,7 @@ export async function createApp(options: {
     }
     store.event(run.id, sessionId, 'run.created', {
       status: 'queued',
+      executor: run.executor,
       ...(run.approvalMode ? { approvalMode: run.approvalMode } : {}),
     });
     if (run.extensions)
@@ -622,6 +711,7 @@ export async function createApp(options: {
             }
           : undefined,
         images,
+        promptMessageId,
       );
     const startFailed = () => {
       const current = store.get('runs', run.id);
@@ -721,7 +811,13 @@ export async function createApp(options: {
           csrfToken,
           cursor: store.cursor(),
           projects: projectList,
-          sessions: store.list('sessions').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+          workspaceLocation: store.workspaceLayout.readLocation(),
+          workspaceLastSession: store.workspaceLayout.readLastSession(),
+          sessions: store
+            .list('sessions')
+            .filter((session) => !session.creatingFork)
+            .map(publicSession)
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
           runs: store
             .list('runs')
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -770,8 +866,34 @@ export async function createApp(options: {
         });
         return;
       }
-      if (url.pathname === '/api/models' && method === 'GET')
-        return json(res, await gatewayModels(effectiveConfig()));
+      if (url.pathname === '/api/settings/workspace-location' && method === 'PATCH') {
+        const { path } = workspaceLocationSchema.parse(await body(req));
+        return json(res, store.workspaceLayout.saveLocation(path));
+      }
+      if (url.pathname === '/api/settings/workspace-layout') {
+        if (method === 'GET') return json(res, store.workspaceLayout.read());
+        if (method === 'PATCH')
+          return json(
+            res,
+            store.workspaceLayout.save(workspaceLayoutSchema.parse(await body(req))),
+          );
+      }
+      if (url.pathname === '/api/models' && method === 'GET') {
+        const config = effectiveConfig();
+        const signal = magpieDiscovery.signal;
+        const [catalog, additional] = await Promise.all([
+          gatewayModels(config, undefined, {
+            refresh: url.searchParams.get('refresh') === '1',
+          }),
+          magpie && config.magpieEnabled === true ? magpieModels(magpie, signal) : undefined,
+        ]);
+        catalog.models = catalog.models.filter(({ id }) => magpieModel(id) === undefined);
+        if (additional && !signal.aborted && store.config().magpieEnabled === true) {
+          catalog.models.push(...additional.models);
+          catalog.discovery.magpie = additional.discovery;
+        }
+        return json(res, catalog);
+      }
       if (url.pathname === '/api/config/gateway-login' && method === 'POST') {
         if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
         await gatewayLogin.login();
@@ -782,6 +904,12 @@ export async function createApp(options: {
           const changes = configSchema.parse(await body(req));
           if (changes.managedGateway && !managedOrigin)
             throw new AppError('MANAGED_GATEWAY_UNAVAILABLE', '内置 Shunt 当前不可用。', 409);
+          if (changes.magpieEnabled && !magpie)
+            throw new AppError(
+              'MAGPIE_UNAVAILABLE',
+              'Magpie 网关地址未配置，请检查工作台启动配置。',
+              409,
+            );
           if (changes.managedGateway && changes.gateway === managedOrigin) delete changes.gateway;
           if (changes.gateway) {
             const gateway = new URL(changes.gateway);
@@ -802,6 +930,10 @@ export async function createApp(options: {
             ...(setsLimits ? { limitExecution: true } : {}),
             ...changes,
           });
+          if (changes.magpieEnabled === false) {
+            magpieDiscovery.abort();
+            magpieDiscovery = new AbortController();
+          }
         } else if (method !== 'GET') throw new AppError('NOT_FOUND', '接口不存在。', 404);
         return json(res, await configInfo());
       }
@@ -1057,10 +1189,12 @@ export async function createApp(options: {
                 .list('sessions')
                 .filter(
                   (s) =>
+                    !s.creatingFork &&
                     (!query || s.title.toLowerCase().includes(query)) &&
                     (!projectId || s.projectId === projectId) &&
                     (url.searchParams.get('includeArchived') === 'true' || s.status === 'active'),
                 )
+                .map(publicSession)
                 .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
               url,
             ),
@@ -1080,7 +1214,10 @@ export async function createApp(options: {
             sdkSessionId: null,
             createdAt: now(),
             updatedAt: now(),
-            draft: emptyDraft(),
+            draft:
+              nativeExecution && !input.agentRevisionId
+                ? { ...emptyDraft(), mode: 'edit', executionPreference: 'native-v1' }
+                : emptyDraft(),
             ...(input.agentRevisionId ? { agentRevisionId: input.agentRevisionId } : {}),
           };
           store.transaction(() => {
@@ -1091,7 +1228,20 @@ export async function createApp(options: {
           return json(res, { session }, 201);
         }
         const id = parts[2]!;
-        if (parts.length === 3 && method === 'GET') return json(res, sessionSnapshot(id));
+        if (parts.length === 4 && parts[3] === 'fork' && method === 'POST') {
+          const input = sessionForkRequest.parse(await body(req));
+          if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
+          if (deletingSessions.has(id))
+            throw new AppError('SESSION_DELETING', '来源会话正在删除。', 409);
+          return json(res, { session: await forks.create(id, input) }, 201);
+        }
+        if (store.get('sessions', id).creatingFork)
+          throw new AppError('FORK_NOT_READY', '分支仍在创建，请稍后重试。', 409, true);
+        if (parts.length === 3 && method === 'GET') {
+          const snapshot = sessionSnapshot(id);
+          const restored = await forks.restoreLegacyAnchors(snapshot);
+          return json(res, restored ? sessionSnapshot(id) : snapshot);
+        }
         if (parts.length === 4 && parts[3] === 'upgrade-agent' && method === 'POST') {
           const { revisionId } = z.object({ revisionId: z.string().uuid() }).parse(await body(req));
           const session = store.transaction(() => {
@@ -1119,7 +1269,7 @@ export async function createApp(options: {
             });
           });
           store.event('session-' + id, id, 'session.updated', {});
-          return json(res, { session });
+          return json(res, { session: publicSession(session) });
         }
         if (parts.length === 3 && method === 'PATCH') {
           const update = z
@@ -1130,6 +1280,8 @@ export async function createApp(options: {
             })
             .parse(await body(req));
           const prior = store.get('sessions', id);
+          if (update.draft?.executionPreference === 'native-v1')
+            assertNativeExecution(prior, update.draft.mode, update.draft.approvalMode);
           if (
             update.status === 'archived' &&
             (sameSessionRunning(id) || messageQueue.hasPending(id))
@@ -1146,7 +1298,7 @@ export async function createApp(options: {
             updatedAt: update.title || update.status ? now() : prior.updatedAt,
           });
           if (!update.draft) store.event('session-' + id, id, 'session.updated', {});
-          return json(res, { session });
+          return json(res, { session: publicSession(session) });
         }
         if (parts.length === 3 && method === 'DELETE') {
           store.get('sessions', id);
@@ -1154,6 +1306,8 @@ export async function createApp(options: {
             throw new AppError('RUN_ACTIVE', '请先处理活动运行和待处理消息再删除会话。', 409);
           if (deletingSessions.has(id))
             throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
+          if (forks.usingSource(id))
+            throw new AppError('FORK_ACTIVE', '请等分支创建结束再删除来源会话。', 409);
           if (uploadingSessions.has(id))
             throw new AppError('ATTACHMENT_UPLOAD_ACTIVE', '请等附件上传结束再删除会话。', 409);
           deletingSessions.add(id);
@@ -1242,6 +1396,13 @@ export async function createApp(options: {
             runner.insert(runId, {
               id: item.id,
               text: intent.request.text,
+              canDispatch: () => {
+                const current = store.get('runs', runId);
+                return (
+                  ['running', 'awaiting_permission'].includes(current.status) &&
+                  insertionMode(item, current) === 'live'
+                );
+              },
               dispatched() {
                 messageQueue.dispatched(item, runId);
                 queueChanged(id);
@@ -1420,6 +1581,29 @@ export async function createApp(options: {
           res.end(JSON.stringify(diagnostics, null, 2) + '\n');
           return;
         }
+        if (
+          parts.length === 6 &&
+          parts[3] === 'subagents' &&
+          parts[5] === 'stop' &&
+          method === 'POST'
+        ) {
+          z.strictObject({}).parse(await body(req));
+          const subagentId = z.string().min(1).max(200).parse(parts[4]);
+          const subagent = store.sessionSnapshots
+            .read(run.sessionId)
+            .subagents.find(
+              (item) =>
+                item.id === subagentId && item.runId === run.id && item.sessionId === run.sessionId,
+            );
+          if (!subagent) throw new AppError('NOT_FOUND', '子任务不属于当前运行。', 404);
+          if (subagent.status !== 'running') return json(res, { ok: true });
+          if (!activeStatuses.includes(run.status))
+            throw new AppError('RUN_NOT_ACTIVE', '所属运行已结束，请刷新执行轨迹。', 409);
+          if (!runner.stopSubagent)
+            throw new AppError('SUBAGENT_STOP_UNAVAILABLE', '当前运行不支持单独停止子任务。', 409);
+          await runner.stopSubagent(run.id, subagentId);
+          return json(res, { ok: true });
+        }
         if (parts[3] === 'stop' && method === 'POST') {
           await body(req);
           if (activeStatuses.includes(run.status)) runner.stop(run.id);
@@ -1453,11 +1637,14 @@ export async function createApp(options: {
         parts[3] === 'output' &&
         method === 'GET'
       ) {
-        const text = await files.toolOutput(parts[2]!);
+        const display = url.searchParams.get('view') === 'display';
+        const id = parts[2]!;
+        const text = await files.toolOutput(id, display);
         if (url.searchParams.get('download') === '1') {
+          const filename = toolOutputFilename(display ? store.get('tools', id).bashLog : undefined);
           res.writeHead(200, {
             'Content-Type': 'application/octet-stream',
-            'Content-Disposition': 'attachment; filename="tool-output.txt"',
+            'Content-Disposition': `attachment; filename="${filename}"`,
             'Content-Security-Policy': "sandbox; default-src 'none'",
             'Cache-Control': 'no-store',
           });

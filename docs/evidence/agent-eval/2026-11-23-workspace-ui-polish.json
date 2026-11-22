@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "checks": {
+    "typedChecks": "passed",
+    "backendPassed": 289,
+    "frontendPassed": 106,
+    "skipped": 1,
+    "frontendBuild": "passed",
+    "desktopBuild": "passed"
+  },
+  "electron": {
+    "zh": {
+      "width": 1280,
+      "height": 800
+    },
+    "en": {
+      "width": 1440,
+      "height": 900
+    },
+    "cacheHitRate": 0.6,
+    "requests": [
+      "/v1/messages?beta=true"
+    ],
+    "draftPreserved": true,
+    "persistedAfterRestart": true,
+    "requestDisclosure": true,
+    "sessionTitleEllipsis": true,
+    "browserTabTitleEllipsis": true,
+    "browserSlotRestored": true,
+    "conversationHorizontalOverflow": 0
+  },
+  "source": "Isolated Electron with one deterministic loopback model reply and one local webpage.",
+  "sessionList": {
+    "browser": "Chromium local fixture",
+    "width": 232,
+    "maxRowHeightPxTested": 48,
+    "titleEllipsis": true,
+    "menuInsideSameRow": true,
+    "menuInsideSidebar": true,
+    "branchKeyboardAndFocus": true
+  }
+}

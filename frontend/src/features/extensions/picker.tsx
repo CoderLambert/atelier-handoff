@@ -1,3 +1,9 @@
+/**
+ * @file 提供消息输入区的扩展补全和键盘操作。
+ * @implementation 跟踪光标与输入法状态，展示适用的扩展选项，并将普通发送和 Alt+Enter 快捷插入交给输入区。
+ * @updated 2026-11-22T14:33:25+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import {
   useEffect,
   useId,
@@ -10,7 +16,10 @@ import {
 import { createPortal } from 'react-dom';
 import type { AgentSessionInfo, Draft, Extension } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { extensionKeys, marks, messageOf, useExtensions } from './api';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ExtensionKindIcon } from './components';
+import { extensionKeys, messageOf, useExtensions } from './api';
 import { allowedTools, choices, chooseExtension, selectionReason, triggerAt } from './picker-model';
 import './extensions.css';
 
@@ -21,6 +30,7 @@ export interface ExtensionPickerProps {
   onChange: (draft: Draft) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onSubmit: () => void;
+  onQuickInsert?: () => void;
 }
 interface Cursor {
   text: string;
@@ -58,7 +68,9 @@ export function ExtensionPicker({
   onChange,
   inputRef,
   onSubmit,
+  onQuickInsert,
 }: ExtensionPickerProps) {
+  const { t } = useUiTranslation('extensions');
   const query = useExtensions(projectId);
   const client = useQueryClient();
   const id = useId();
@@ -94,6 +106,7 @@ export function ExtensionPicker({
     draft,
     onChange,
     onSubmit,
+    onQuickInsert,
     open,
     rows,
     selectedIndex,
@@ -106,6 +119,7 @@ export function ExtensionPicker({
     draft,
     onChange,
     onSubmit,
+    onQuickInsert,
     open,
     rows,
     selectedIndex,
@@ -210,8 +224,23 @@ export function ExtensionPicker({
       if (event.key === 'Enter') event.stopImmediatePropagation();
       return;
     }
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     const state = current.current;
+    if (
+      event.key === 'Enter' &&
+      event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      !inputRef.current?.disabled &&
+      !inputRef.current?.readOnly &&
+      state.onQuickInsert
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) state.onQuickInsert();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     if (state.open && state.rows.length && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -382,7 +411,7 @@ export function ExtensionPicker({
   return (
     <>
       {(draft.extensionSelections?.length ?? 0) > 0 ? (
-        <div className="ext-chips" aria-label="已选择的扩展">
+        <div className="ext-chips" aria-label={t('picker.selectedLabel')}>
           {draft.extensionSelections?.map((selection) => {
             const item = byId.get(selection.id);
             const reason = selectionReason(item, selection, draft.mode, query.data !== undefined);
@@ -393,19 +422,24 @@ export function ExtensionPicker({
                 title={
                   reason ||
                   (item?.kind === 'skill'
-                    ? '此会话会保留该 Skill，点击 × 可移除。'
+                    ? t('picker.skillHint')
                     : selection.tools?.join(', ') || item?.description)
                 }
               >
-                <span aria-hidden="true">{item ? marks[item.kind] : '+'}</span>
+                <span aria-hidden="true">
+                  <ExtensionKindIcon kind={item?.kind} />
+                </span>
                 <span>
                   {item?.name || selection.id}
-                  {selection.tools?.length ? ` · ${selection.tools.length} 个工具` : ''}
+                  {selection.tools?.length
+                    ? t('picker.toolsCount', { count: selection.tools.length })
+                    : ''}
                   {reason ? <small>{reason}</small> : null}
                 </span>
-                <button
-                  type="button"
-                  aria-label={`移除 ${item?.name || selection.id}`}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('picker.removeLabel', { name: item?.name || selection.id })}
                   onClick={() => {
                     onChange({
                       ...draft,
@@ -416,8 +450,8 @@ export function ExtensionPicker({
                     inputRef.current?.focus({ preventScroll: true });
                   }}
                 >
-                  ×
-                </button>
+                  <X data-icon="inline-start" aria-hidden="true" />
+                </Button>
               </span>
             );
           })}
@@ -434,14 +468,18 @@ export function ExtensionPicker({
               }}
             >
               <div className="ext-completion-head">
-                <strong>{trigger?.symbol === '/' ? 'Commands & Skills' : 'MCP 工具'}</strong>
-                <span>当前项目</span>
+                <strong>
+                  {trigger?.symbol === '/' ? t('picker.heading') : t('common.mcpTools')}
+                </strong>
+                <span>{t('common.currentProject')}</span>
               </div>
               <div
                 id={`${id}-list`}
                 className="ext-completion-list"
                 role="listbox"
-                aria-label={trigger?.symbol === '/' ? '选择命令或 Skill' : '选择 MCP 工具'}
+                aria-label={
+                  trigger?.symbol === '/' ? t('picker.chooseCommand') : t('picker.chooseMcp')
+                }
               >
                 {rows.length ? (
                   rows.map((row, rowIndex) => (
@@ -461,7 +499,7 @@ export function ExtensionPicker({
                       }}
                     >
                       <span className="ext-option-mark" aria-hidden="true">
-                        {marks[row.item.kind]}
+                        <ExtensionKindIcon kind={row.item.kind} />
                       </span>
                       <span className="ext-option-copy">
                         <strong>{row.label}</strong>
@@ -475,24 +513,24 @@ export function ExtensionPicker({
                     {query.isError ? (
                       <>
                         {messageOf(query.error)}{' '}
-                        <button type="button" onClick={() => void query.refetch()}>
-                          重新加载
-                        </button>
+                        <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                          {t('common.reload')}
+                        </Button>
                       </>
                     ) : query.isPending ? (
-                      '正在读取项目扩展…'
+                      t('extensions.loading')
                     ) : trigger?.symbol === '#' ? (
-                      '没有可用工具。请先测试 MCP 并允许工具。'
+                      t('picker.noTools')
                     ) : (
-                      '此项目暂无已启用的命令或可手动调用的 Skill。'
+                      t('picker.noCommands')
                     )}
                   </div>
                 )}
               </div>
               <div className="ext-completion-footer">
-                <span>↑ ↓ 选择</span>
-                <span>Enter / Tab 确认</span>
-                <span>Esc 关闭</span>
+                <span>{t('picker.selectHint')}</span>
+                <span>{t('picker.confirmHint')}</span>
+                <span>{t('picker.closeHint')}</span>
               </div>
             </div>,
             document.body,

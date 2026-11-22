@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:6bb1ee0737cfa8f8fc0521656fa6b51cbaf990ed6586598495268a8afcb0a885",
+  "claims": [
+    {
+      "id": "claim_6cc51af8605b4047ab11b1e0cc1344a1",
+      "statement": "会话快照由 Drizzle 在 SQLite 读取时汇总各表的会话级记录，按会话筛选运行、工具和可见附件。",
+      "evidence": [
+        {
+          "resource": "repo://server/db/repositories/session-snapshot.ts#L24-L79",
+          "version": "repo-lines-v1:sha256:c55d46d3bc13f67f9eb3c7e64245025172d310c1c7f2a2b172c300523f17cdcc:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1Yjk0Mzk4Njc4OTVhMDFiYzA3NzM3MDE0NGMxZDA3Mzk2NDdkYzY4OWNmMmNhM2Y5ODdkM2IyZWE0MjgzMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMmIwY2VkNjVhMjg1ZjMyOTA5MTQzOTE4NjE4M2ZlYWIzYTIyNmNlMzQ2ZDMzZDc2YmFmYzNhMzMzNTczNDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhNmM4MDlhMzcxYjQ1ODg2Y2NjN2FmMDE0ZjY1ZjY0MzU2ZWRjZjhhNzczMTM0ODhkNzI4OGQzYmI0NDEyMDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlYzc3ZjBkZjI5YmNiMjNkYzk4OGRhNDE5NzU4NzEyNjJlNzY3NWFjMzRjYzc0N2YzNTcwYTE1ZjFiNmY0MTIifQ"
+        },
+        {
+          "resource": "repo://server/db/schema/session-snapshot.ts#L11-L30",
+          "version": "repo-lines-v1:sha256:3cce10b9eb829721f89aacfaaae8b0b56c0d24fe843aa6d160b526808f4ccec0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5MjhmMzk0MzdlZDUwMzFkYzg2NTY0NzIzZmUyMDEzNDQ3MGNlMGQ4Zjk5NWE2MjhhMTkwYjM3NjZiMzU3YjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU1N2JhNWRiZmM3NjlkNWUyNmE5ZTQ5NjhmNjc5MmFkNzdmYWMzZmRhODAyYjI3N2FkZTlmZGE1ZjdiZDU5ZDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkOTc0NGU3NGM5MzFhMTdiYTJhMWE1MGE2ODQ1MWNlYWU5YjgxNzc4ZTRjOTU5ZjY0N2EzMTgxZTE2MmJjMjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0M2RlZGUzNzhkNzRhNzg2ODM5ZDA3YTY1NTMyNDQzM2I3OTUzMzkyNDhhNTU5N2ZkZjJlMDUyMDcyMWQyNWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_16d89c70fa7a4cb68f87406920a8495e",
+      "statement": "Node 运行时在创建应用之前取得数据目录排他所有权。",
+      "evidence": [
+        {
+          "resource": "repo://server/data-owner.ts",
+          "version": "repo-file-v1:sha256:3782f0957025e84e3158fc77e8a39bf3874d70f32b60d61037325509bee9da81"
+        },
+        {
+          "resource": "repo://server/main.ts#L47-L62",
+          "version": "repo-lines-v1:sha256:6222a5c1a760c5b47e1c1ad6afa9151ac41367ae5237dc11f148d41fc6b954c7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmMGNkYjk3MmE3YmZiN2VkMjQ2ZjlmZjY3MjM4NWU1NWY0OTY4ZmMxMTA0M2RjNWI2ODRkNTFkZmEzMWRiY2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhM2U0NmY5NDI3NmI2ZjZmNGVkMWYwMmFmNzhiZWY2YTJlZTFjNDM5ZGQ1NTg0Yjk3Mzk0ODMxMzIxNGQyYjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMxN2FlMzQ4NTVjYTExYTcyZjE4MzU1OGIxNmY0ZDdiYTZjYmI0YjZjNWNhYmRjY2U4Mjk1MjQzNTUyYWQzMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzNTVhM2NiMjJjYmU1ZDYxZWZhNmM2ODlkZjg4MjcwODBlNTlkNzFjOGNmYmUyNmFkNDIyMmU0OTA0Yjc3ZGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c4bc880e02b54cd3b54d66e90754249b",
+      "statement": "工作台把布局、最近位置及最近会话保存至 SQLite settings，保存会话位置时原子更新两个位置键。",
+      "evidence": [
+        {
+          "resource": "repo://server/db/repositories/workspace-layout.ts#L16-L74",
+          "version": "repo-lines-v1:sha256:3b26680ab964c99e45b424d9ee649fda0f2b1846a8b26d8e449cf8207176d9b4:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczMzI2YTZmMGY4ZjY4YmU4MThjMTliZTI1ZjJiNmJjZjhlZTRmNWNjMDQ0NzVlZWNiMWMzMDUzMGM3M2JmY2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjOTM2ZDg5MjJlNmQ3NTI3NDY3MzZiOWNkZmIzNGU1NGFlZTBhMjkxYzU3M2NmNGQyMmQ5OGY2OWE5ZjY2YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1YTQyNDRkZTJlMzExMjU4YThlMjllM2U0MTcyZjk4ZmFmMGI3MGQ0Mzk5MmRlODkwMzJhNDRiZWNiMjk0ZmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmMDFhMWFlODc1ZjNjM2I5ZjI5ODNlOGYxM2Y0MTBiMjg4MWIzMGEyN2NjNTE4MDUzMjRlMzMzOTZlMmNmN2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3f2a5d1efde74db69b06585d4a38f77f",
+      "statement": "会话分支从消息锚点派生 SDK transcript，回退复用该机制并在写入前重新核对来源会话。",
+      "evidence": [
+        {
+          "resource": "repo://server/session-forks.ts#L168-L184",
+          "version": "repo-lines-v1:sha256:60aff8c49ad71e13a27afa48cbd922573440f0c951e969669e815e749618907c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyYWZhMTJkZjFlNTM4MTFiYzhhYTgwYTY5NDJmNjQ1NDA2MTM1ODNhZWVkNjU1NWFmNjMxYjU3OTUyYjE1YmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczZjEzNjg3ODI2ZTZmZGQwM2M2M2FiMjIxNTk1NTFkZTY0ZjUxOWY3ODMwMWUwZTI0NzUxYWE1MzUzNWM2ZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4MjU2ZTIxOWZhM2U2NTUxOWZjNGE1MjliNmJjOWY0MDFjYzBiMDNkMzE2NjgzZGYwMzU0ZTA4NjY1NTg2ZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyZDRlM2VjOTdmODgyYzQzMTFmMTQ0MWY3NTljZWUyYjQxYjkyOTNlMDViN2NiMmYxY2QzZGM3MTFlMmE4NTEifQ"
+        },
+        {
+          "resource": "repo://server/session-forks.ts#L222-L251",
+          "version": "repo-lines-v1:sha256:cc7b8f8518d7761b7f5d1e9729b9a411d1f92364abf962703a1edbbdea844810:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5NzhlMjUwM2I4Y2YzN2EwNmY3ZDZmMGEzYTZiNmZlMzU2OTFmYmNhYjUwYjg3NzVjYWI2ZmFiYzcxYzU5MmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyYjJkMjYwNTFhZTc1MmE4ZjBlMWFhNjhiODkzY2YwZGI2MTVlMGQxNGYwZjEzYWEzMDIwYTY0NTJmYzdkOTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlYjNlOWFhNTViNDIxOTMyYzgyOWE2ZDJhMTU0MzY0NzMyYzBiNGE4N2E5MTNhNzE4Y2ZiZDNjZDAyYmI5YjkifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-22T13:27:54.578Z"
+  }
+}

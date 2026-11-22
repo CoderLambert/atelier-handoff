@@ -3,6 +3,7 @@
  * @implementation 消息卡片和预览工具栏复用同一组按钮，Web 保留同源下载链接。
  * @updated 2026-11-20T11:00:00+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { Download, FolderOpen } from 'lucide-react';
 import type { Artifact } from '@shared/types';
 import { Button } from '@/components/ui/button';
@@ -15,8 +16,12 @@ export function ArtifactFileActions({
   artifact: Artifact;
   actions: ArtifactFileActionsState;
 }) {
+  const { t } = useUiTranslation('inspector');
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label="交付物文件操作">
+    <div
+      className="flex shrink-0 flex-wrap items-center gap-1"
+      aria-label={t('artifact.fileActions')}
+    >
       {actions.desktop ? (
         <>
           <Button
@@ -24,8 +29,8 @@ export function ArtifactFileActions({
             size="icon-sm"
             variant="ghost"
             disabled={actions.pending}
-            aria-label={`保存副本：${artifact.name}`}
-            title={actions.pending ? '正在处理文件…' : '保存副本'}
+            aria-label={t('artifact.saveName', { name: artifact.name })}
+            title={actions.pending ? t('artifact.processing') : t('artifact.saveCopy')}
             onClick={() => void actions.save()}
           >
             <Download data-icon="inline-start" aria-hidden="true" />
@@ -36,8 +41,8 @@ export function ArtifactFileActions({
               size="icon-sm"
               variant="ghost"
               disabled={actions.pending}
-              aria-label={`定位文件：${artifact.name}`}
-              title="定位已保存的副本"
+              aria-label={t('artifact.revealName', { name: artifact.name })}
+              title={t('artifact.revealSaved')}
               onClick={() => void actions.reveal()}
             >
               <FolderOpen data-icon="inline-start" aria-hidden="true" />
@@ -45,12 +50,16 @@ export function ArtifactFileActions({
           ) : null}
         </>
       ) : (
-        <Button asChild size="icon-sm" variant="ghost">
+        <Button
+          asChild
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t('artifact.downloadName', { name: artifact.name })}
+          title={t('artifact.downloadFile')}
+        >
           <a
             href={`/api/artifacts/${encodeURIComponent(artifact.id)}/download`}
             download={artifact.name}
-            aria-label={`下载：${artifact.name}`}
-            title="下载文件"
           >
             <Download data-icon="inline-start" aria-hidden="true" />
           </a>

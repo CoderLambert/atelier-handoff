@@ -1,10 +1,12 @@
 /**
  * @file 管理会话草稿、运行偏好保存与任务发送。
- * @implementation 沿用串行保存与幂等发送，在新运行或排队消息确认后保留模式、模型、深度和有效 Skill，并消费一次临时搜索上限。
- * @updated 2026-11-20T23:09:03+08:00
+ * @implementation 串行保存正文、引用和运行偏好。发送时组合正文与引用并复用幂等键，确认后清除草稿内容并保留运行偏好。
+ * @updated 2026-11-22T14:33:25+08:00
  */
+import { composerTextLimit, formatMessageText, messageQuotesSchema } from '@shared/message-quotes';
 import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
+import { getTranslator } from '@/i18n';
 import type {
   SendSessionMessage,
   SessionMessageBody,
@@ -76,14 +78,20 @@ function localDraft(id: string): Partial<Draft> {
   }
 }
 function persistedDraft(draft: Draft): Draft {
+  const quotes = messageQuotesSchema.safeParse(draft.messageQuotes).data;
   return {
     text: draft.text,
+    ...(quotes?.length ? { messageQuotes: quotes } : {}),
     contextPaths: draft.contextPaths,
     attachmentIds: draft.attachmentIds,
     extensionSelections: draft.extensionSelections,
     mode: draft.mode === 'edit' ? 'edit' : 'readonly',
     ...(typeof draft.model === 'string' && draft.model ? { model: draft.model } : {}),
     ...(draft.effort && reasoningEfforts.includes(draft.effort) ? { effort: draft.effort } : {}),
+    ...(draft.executionPreference === 'project-v1' ||
+    (draft.executionPreference === 'native-v1' && draft.mode === 'edit' && !draft.approvalMode)
+      ? { executionPreference: draft.executionPreference }
+      : {}),
     ...(draft.mode === 'edit' && draft.approvalMode === 'automatic'
       ? { approvalMode: draft.approvalMode }
       : {}),
@@ -99,7 +107,13 @@ export function readDraft(id: string, server?: Draft): Draft {
     ...local,
     // A complete local draft can explicitly clear either saved preference.
     ...(local.mode
-      ? { approvalMode: local.approvalMode, model: local.model, effort: local.effort }
+      ? {
+          approvalMode: local.approvalMode,
+          executionPreference: local.executionPreference,
+          model: local.model,
+          effort: local.effort,
+          messageQuotes: local.messageQuotes,
+        }
       : {}),
   });
 }
@@ -133,6 +147,7 @@ export async function submitDraft(
   send: SendSessionMessage,
   readonlyProfile = false,
   defaultModel?: string,
+  nativeExecution = false,
 ) {
   if (store.getState().workspace.submitting[id]) return;
   const save = lane(id);
@@ -140,11 +155,21 @@ export async function submitDraft(
   const draftFingerprint = JSON.stringify(draft);
   const searchChargeLimit = store.getState().workspace.searchChargeLimits[id];
   const approvalMode = readonlyProfile ? undefined : draft.approvalMode;
+  const executionPreference =
+    draft.executionPreference === 'native-v1' && (!nativeExecution || readonlyProfile)
+      ? 'project-v1'
+      : draft.executionPreference;
+  const { messageQuotes, ...input } = draft;
+  const text = formatMessageText(input.text, messageQuotes);
+  if (text.length > composerTextLimit)
+    throw new Error(getTranslator('navigation')('drafts.inputTooLong'));
   const payload: Omit<SessionMessageBody, 'idempotencyKey'> = {
-    ...draft,
+    ...input,
+    text,
     mode: readonlyProfile ? 'readonly' : draft.mode,
     model: draft.model ?? defaultModel,
     approvalMode,
+    executionPreference,
     ...(approvalMode
       ? { maxSearchChargeFen: parseSearchChargeLimit(searchChargeLimit ?? '0') }
       : {}),
@@ -167,6 +192,7 @@ export async function submitDraft(
       updateDraft(id, {
         ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
         approvalMode,
+        executionPreference,
         model: draft.model,
         effort: draft.effort,
         extensionSelections: retainedSkillSelections(
@@ -174,6 +200,7 @@ export async function submitDraft(
         ),
       });
     save.attempt = undefined;
+    return result;
   } catch (error) {
     updateDraft(id, readDraft(id, server));
     throw error;

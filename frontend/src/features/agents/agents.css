@@ -1,3 +1,8 @@
+/**
+ * @file 定义智能体目录与编辑对话框样式。
+ * @implementation 覆盖卡片、配置字段、依赖状态和操作区，并在窄屏下调整布局。
+ * @updated 2026-11-23T04:56:14+08:00
+ */
 .agents-page,
 .agent-dialog {
   color: var(--fg);
@@ -46,16 +51,6 @@
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.agents-project {
-  display: grid;
-  flex-shrink: 0;
-  gap: 6px;
-  min-width: 160px;
-  max-width: 260px;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-.agents-page select,
 .agent-dialog select,
 .agent-dialog input:not([type='checkbox']),
 .agent-dialog textarea {
@@ -68,60 +63,11 @@
   color: var(--fg);
   font: inherit;
 }
-.agents-page select,
 .agent-dialog select {
   padding-right: 28px;
 }
-.agents-project select {
-  width: 100%;
-  font-size: var(--text-sm);
-}
-.agents-toolbar,
-.agents-toolbar-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 .agents-toolbar {
-  padding: 20px 0;
   border-top: 1px solid var(--border-soft);
-}
-.agents-toolbar-actions {
-  gap: 8px;
-  margin-left: auto;
-}
-.agents-search {
-  display: flex;
-  align-items: center;
-  flex: 1 1 180px;
-  gap: 8px;
-  min-width: 0;
-  max-width: 340px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-}
-.agents-search input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--fg);
-  font: inherit;
-}
-.agents-search:focus-within {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
-}
-.agents-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: var(--text-sm);
 }
 .agents-template {
   display: flex;
@@ -145,6 +91,11 @@
   background: var(--surface);
   color: var(--accent);
 }
+.agents-template-icon svg,
+.agent-card-icon svg {
+  width: var(--ui-icon-size-emphasis);
+  height: var(--ui-icon-size-emphasis);
+}
 .agents-template h2 {
   font-size: var(--text-base);
   font-weight: 600;
@@ -154,7 +105,7 @@
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.agents-template > .btn {
+.agents-template > [data-slot='button'] {
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -189,7 +140,10 @@
   gap: 10px;
 }
 .agent-card-mode {
-  color: var(--muted);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .agent-card-heading .agent-version {
@@ -249,10 +203,6 @@
   margin-top: 16px;
   border-top: 1px solid var(--border-soft);
 }
-.agent-card-actions .btn {
-  padding: 7px 9px;
-  font-size: var(--text-xs);
-}
 .agents-empty,
 .agents-loading {
   padding: 56px 20px;
@@ -282,24 +232,24 @@
   overflow-wrap: anywhere;
 }
 .agent-error {
-  color: var(--danger);
+  color: var(--ui-destructive);
 }
 .agent-notice {
-  color: var(--accent);
+  color: var(--ui-success);
 }
 .agent-callout,
 .agent-problems {
   padding: 12px;
-  border: 1px solid var(--approval-border, var(--border));
+  border: 1px solid var(--ui-warning);
   border-radius: var(--radius-sm);
-  background: var(--approval-bg, var(--surface-warm));
-  color: var(--warn);
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
 }
 .agent-problems ul {
   padding-left: 20px;
   margin: 6px 0 0;
 }
-.agent-callout .btn {
+.agent-callout [data-slot='button'] {
   margin-top: 8px;
 }
 .agent-dialog {
@@ -369,7 +319,7 @@
   flex: 1;
   width: 100%;
 }
-.agent-editor-section > .btn {
+.agent-editor-section > [data-slot='button'] {
   justify-self: start;
 }
 .agent-check {
@@ -433,17 +383,13 @@
 .agent-dependency-copy {
   flex: 1;
 }
-.agent-dependency-heading .btn {
-  padding: 5px 8px;
-  font-size: var(--text-xs);
-}
 .agent-dependency > .agent-help,
 .agent-dependency > .agent-dependency-warning {
   margin-top: 8px;
 }
 .agent-dependency-warning,
 .agent-check small.agent-dependency-warning {
-  color: var(--warn);
+  color: var(--ui-warning);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
@@ -468,7 +414,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--warn);
+  color: var(--ui-warning);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
@@ -482,7 +428,7 @@
 }
 .agents-page :focus-visible,
 .agent-dialog :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ui-ring);
   outline-offset: 3px;
 }
 .agent-dialog :disabled {
@@ -496,10 +442,6 @@
     flex-direction: column;
     gap: 16px;
   }
-  .agents-project {
-    width: 100%;
-    max-width: none;
-  }
   .agents-template {
     flex-wrap: wrap;
   }
@@ -507,14 +449,8 @@
     flex: 1;
     min-width: 180px;
   }
-  .agents-template > .btn {
+  .agents-template > [data-slot='button'] {
     margin-left: 54px;
-  }
-  .agents-toolbar-actions {
-    margin-left: 0;
-  }
-  .agents-search {
-    max-width: none;
   }
   .agent-basic-fields,
   .agent-capability-grid,

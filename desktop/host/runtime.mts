@@ -15,12 +15,14 @@ import {
   type DesktopHostHello,
 } from '../../shared/desktop-host.js';
 
-const failureMessage: Record<DesktopHostFailure, string> = {
-  PORT_IN_USE: '工作台端口已被占用。释放端口后重试。',
-  DATA_LOCKED: '工作台数据正在被其他实例使用。关闭该实例后重试。',
-  DATA_PATH: '工作台数据目录不可用。请检查目录及所有者。',
-  STARTUP_FAILED: '工作台服务启动失败。请查看运行日志。',
-};
+import { DesktopHostError, type DesktopFailureKey } from './i18n.mjs';
+
+const failureKey = {
+  PORT_IN_USE: 'host.failure.portInUse',
+  DATA_LOCKED: 'host.failure.dataLocked',
+  DATA_PATH: 'host.failure.dataPath',
+  STARTUP_FAILED: 'host.failure.startupFailed',
+} as const satisfies Record<DesktopHostFailure, DesktopFailureKey>;
 
 interface LaunchOptions {
   packaged: boolean;
@@ -52,7 +54,7 @@ export class RuntimeSupervisor {
   constructor(
     private readonly options: LaunchOptions,
     private readonly onMessage: (child: ChildProcess, value: unknown) => void,
-    private readonly onLost: (reason: string) => void,
+    private readonly onLost: (reason: DesktopHostError) => void,
   ) {}
 
   get connected(): boolean {
@@ -64,7 +66,7 @@ export class RuntimeSupervisor {
   }
 
   async start(gateway?: ManagedShuntConnection): Promise<{ origin: string; pairing: string }> {
-    if (this.current) throw new Error('工作台服务尚未停止。');
+    if (this.current) throw new DesktopHostError('host.failure.notStopped');
     const { root, packaged, dataDir } = this.options;
     const nodeBin = join(root, 'bin');
     const env: NodeJS.ProcessEnv = {
@@ -112,23 +114,27 @@ export class RuntimeSupervisor {
     try {
       const port = await new Promise<number>((resolve, reject) => {
         let failed = false;
-        const lost = (reason: string) => {
+        const lost = (key: DesktopFailureKey, diagnostic?: unknown) => {
           clearTimeout(timeout);
           if (this.current !== launch || failed) return;
           failed = true;
+          const reason = new DesktopHostError(key, diagnostic);
           if (launch.ready) {
             launch.ready = false;
             if (!launch.retired) this.onLost(reason);
-          } else reject(new Error(reason));
+          } else reject(reason);
         };
-        const timeout = setTimeout(() => lost('工作台服务启动超时。'), desktopHostDeadlines.ready);
-        launch.cancelStartup = () => lost('工作台服务启动已取消。');
-        child.on('error', () => lost('无法启动或连接工作台服务。'));
-        child.once('disconnect', () => lost('工作台服务连接已断开。'));
-        child.once('exit', () => {
+        const timeout = setTimeout(
+          () => lost('host.failure.startupTimeout'),
+          desktopHostDeadlines.ready,
+        );
+        launch.cancelStartup = () => lost('host.failure.startupCanceled');
+        child.on('error', (error) => lost('host.failure.connectionFailed', error));
+        child.once('disconnect', () => lost('host.failure.disconnected'));
+        child.once('exit', (code, exitSignal) => {
           // Descendants may still exist after an unexpected exit of their process group leader.
           if (this.current === launch) signal(child, 'SIGKILL');
-          lost('工作台服务已退出。');
+          lost('host.failure.exited', `exitCode=${code}; signal=${exitSignal}`);
         });
         child.on('message', (message: unknown) => {
           if (launch.retired || failed) return;
@@ -138,11 +144,11 @@ export class RuntimeSupervisor {
           }
           const reply = desktopHostReplySchema.safeParse(message);
           if (!reply.success || reply.data.generation !== hello.generation) {
-            lost('工作台服务协议不兼容。');
+            lost('host.failure.protocolMismatch');
             return;
           }
           if (reply.data.type === 'atelier-host:failed') {
-            lost(failureMessage[reply.data.code]);
+            lost(failureKey[reply.data.code]);
             return;
           }
           clearTimeout(timeout);
@@ -151,10 +157,11 @@ export class RuntimeSupervisor {
           resolve(reply.data.port);
         });
         child.send(hello, (error) => {
-          if (error) lost('无法建立工作台服务连接。');
+          if (error) lost('host.failure.connectionFailed', error);
         });
       });
-      if (!this.owns(child) || !child.connected) throw new Error('工作台服务连接已断开。');
+      if (!this.owns(child) || !child.connected)
+        throw new DesktopHostError('host.failure.disconnected');
       return { origin: `http://127.0.0.1:${port}`, pairing: hello.pairing };
     } catch (error) {
       if (this.current === launch) await this.stop();

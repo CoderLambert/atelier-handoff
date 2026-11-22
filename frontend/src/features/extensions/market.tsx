@@ -1,3 +1,4 @@
+import { useUiTranslation } from '@/i18n';
 import { useIsMutating } from '@tanstack/react-query';
 import { extensionKeys, type StartSkill } from './api';
 import { FeatureDialog } from './components';
@@ -16,12 +17,13 @@ export function SkillMarket({
   onSaved: (message: string) => void;
   onStartSkill?: StartSkill;
 }) {
+  const { t } = useUiTranslation('extensions');
   const busy = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
   return (
     <FeatureDialog
-      title="SkillHub 市场"
+      title={t('market.title')}
       className="market-catalog-dialog"
-      description={`安装到 ${projectName}`}
+      description={t('market.installTo', { name: projectName })}
       busy={busy}
       onClose={onClose}
     >

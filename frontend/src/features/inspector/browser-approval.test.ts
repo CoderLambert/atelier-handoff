@@ -193,7 +193,9 @@ test('permission detail rejects responses for another approval', async (t) => {
     Response.json({ permission: { ...permission, id: 'another-permission' } }),
   );
   try {
-    await assert.rejects(client.fetchQuery(permissionQuery(permission)), /审批响应不匹配/);
+    await assert.rejects(client.fetchQuery(permissionQuery(permission)), {
+      code: 'PERMISSION_RESPONSE_MISMATCH',
+    });
   } finally {
     client.clear();
   }

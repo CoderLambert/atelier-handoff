@@ -1,13 +1,25 @@
+/**
+ * @file 提供扩展管理界面的共享组件。
+ * @implementation 组合对话框、字段、来源链接和 Markdown 预览，并提供本地内容复制与下载操作。
+ * @updated 2026-11-23T04:52:50+08:00
+ */
+import { getTranslator, useUiTranslation } from '@/i18n';
 import {
   Braces,
   ChartNoAxesColumnIncreasing,
+  Copy,
+  Download,
   FileText,
   Layers3,
   Palette,
+  Plug,
   Sparkles,
+  Terminal,
 } from 'lucide-react';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
+import type { ExtensionKind } from './api';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +43,7 @@ export function MarketCategoryIcon({ category }: { category?: string }) {
   const Icon = entry?.icon ?? Layers3;
   return (
     <span className="market-category-icon" data-tone={entry?.tone ?? 'default'} aria-hidden="true">
-      <Icon size={18} strokeWidth={1.8} />
+      <Icon aria-hidden="true" />
     </span>
   );
 }
@@ -51,6 +63,7 @@ export function FeatureDialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useUiTranslation('extensions');
   return (
     <Dialog
       open
@@ -59,12 +72,15 @@ export function FeatureDialog({
       }}
     >
       <DialogContent
-        className={`ext-dialog max-h-[90dvh] w-[calc(100%-32px)] overflow-y-auto sm:max-w-[960px] ${className}`}
+        className={cn(
+          'ext-dialog max-h-[90dvh] w-[calc(100%-32px)] overflow-y-auto sm:max-w-[960px]',
+          className,
+        )}
         aria-busy={busy}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description ?? '管理当前项目的扩展。'}</DialogDescription>
+          <DialogDescription>{description ?? t('preview.dialogDescription')}</DialogDescription>
         </DialogHeader>
         {children}
       </DialogContent>
@@ -72,23 +88,14 @@ export function FeatureDialog({
   );
 }
 export function ActionButton({
-  children,
-  primary,
-  danger,
-  className = '',
+  className,
+  variant = 'outline',
   ...props
-}: React.ComponentProps<typeof Button> & { primary?: boolean; danger?: boolean }) {
-  return (
-    <Button
-      type="button"
-      {...props}
-      className={`ext-button ${primary ? 'ext-button-primary' : ''} ${danger ? 'ext-button-danger' : ''} ${className}`}
-    >
-      {children}
-    </Button>
-  );
+}: React.ComponentProps<typeof Button>) {
+  return <Button variant={variant} {...props} className={cn('ext-button', className)} />;
 }
 export function ErrorMessage({ error }: { error: unknown }) {
+  useUiTranslation('extensions');
   return error ? (
     <p className="ext-form-error" role="alert">
       {typeof error === 'string' ? error : messageOf(error)}
@@ -137,7 +144,9 @@ function renderMarkdown(body: string) {
   markdownRenderer ??= import('markdown-it').then(({ default: MarkdownIt }) => {
     const renderer = new MarkdownIt({ html: false, linkify: false });
     renderer.renderer.rules.image = (tokens, index) =>
-      renderer.utils.escapeHtml(tokens[index]?.content ?? '图片');
+      renderer.utils.escapeHtml(
+        tokens[index]?.content ?? getTranslator('extensions')('preview.image'),
+      );
     renderer.renderer.rules.link_open = (tokens, index, options, _env, self) => {
       tokens[index]?.attrSet('target', '_blank');
       tokens[index]?.attrSet('rel', 'noopener noreferrer');
@@ -149,7 +158,7 @@ function renderMarkdown(body: string) {
 }
 export function MarkdownPreview({
   body,
-  label = '预览内容',
+  label,
   initiallyOpen = false,
   standalone = false,
 }: {
@@ -158,6 +167,7 @@ export function MarkdownPreview({
   initiallyOpen?: boolean;
   standalone?: boolean;
 }) {
+  const { t, locale } = useUiTranslation('extensions');
   const [open, setOpen] = useState(initiallyOpen || standalone);
   const [html, setHtml] = useState<{ body: string; html: string }>();
   useEffect(() => {
@@ -173,12 +183,12 @@ export function MarkdownPreview({
     return () => {
       active = false;
     };
-  }, [body, open]);
+  }, [body, open, locale]);
   const content =
     html?.body === body ? (
       <div className="ext-prose" dangerouslySetInnerHTML={{ __html: html.html }} />
     ) : (
-      <pre className="ext-body-preview">{body || '暂无内容'}</pre>
+      <pre className="ext-body-preview">{body || t('preview.empty')}</pre>
     );
   if (standalone) return content;
   return (
@@ -187,7 +197,7 @@ export function MarkdownPreview({
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>{label}</summary>
+      <summary>{label ?? t('preview.label')}</summary>
       {open ? content : null}
     </details>
   );
@@ -201,15 +211,15 @@ export function BackupActions({
   name: string;
   version: number;
 }) {
+  const { t } = useUiTranslation('extensions');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   async function copy() {
     setError('');
     try {
-      if (!navigator.clipboard?.writeText)
-        throw new Error('当前浏览器无法复制，请下载 Markdown 备份。');
+      if (!navigator.clipboard?.writeText) throw new Error(t('preview.copyUnsupported'));
       await navigator.clipboard.writeText(body);
-      setStatus('已复制本地正文。');
+      setStatus(t('preview.copied'));
     } catch (cause) {
       setError(messageOf(cause));
     }
@@ -225,7 +235,7 @@ export function BackupActions({
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setStatus('已发起 Markdown 备份下载。');
+      setStatus(t('preview.downloadStarted'));
     } catch (cause) {
       setError(messageOf(cause));
     }
@@ -233,8 +243,14 @@ export function BackupActions({
   return (
     <>
       <div className="ext-backup-actions">
-        <ActionButton onClick={() => void copy()}>复制本地正文</ActionButton>
-        <ActionButton onClick={download}>下载 Markdown 备份</ActionButton>
+        <ActionButton size="sm" onClick={() => void copy()}>
+          <Copy data-icon="inline-start" aria-hidden="true" />
+          {t('preview.copy')}
+        </ActionButton>
+        <ActionButton size="sm" onClick={download}>
+          <Download data-icon="inline-start" aria-hidden="true" />
+          {t('preview.backup')}
+        </ActionButton>
       </div>
       <p className="ext-help" role="status">
         {status}
@@ -243,30 +259,9 @@ export function BackupActions({
     </>
   );
 }
-export function Switch({
-  checked,
-  label,
-  disabled,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  disabled?: boolean;
-  onChange: () => void;
-}) {
-  const id = useId();
-  return (
-    <button
-      id={id}
-      type="button"
-      className="ext-switch"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onChange}
-    >
-      <span />
-    </button>
-  );
+const extensionIcons = { skill: Sparkles, command: Terminal, mcp: Plug } as const;
+
+export function ExtensionKindIcon({ kind }: { kind?: ExtensionKind }) {
+  const Icon = kind ? extensionIcons[kind] : Layers3;
+  return <Icon data-icon="inline-start" aria-hidden="true" />;
 }

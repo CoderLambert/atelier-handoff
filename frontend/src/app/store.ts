@@ -7,13 +7,9 @@ import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolki
 import { useDispatch, useSelector } from 'react-redux';
 import type { Draft } from '@shared/types';
 
-export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents';
+export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents' | 'settings';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
 interface WorkspaceState {
-  view: View;
-  tab: Tab;
-  sessionId?: string;
-  traceRunId?: string;
   drawer?: 'navigation' | 'details';
   connected: boolean;
   drafts: Record<string, Draft>;
@@ -22,8 +18,6 @@ interface WorkspaceState {
 }
 
 const initialState: WorkspaceState = {
-  view: 'chat',
-  tab: 'conversation',
   connected: false,
   drafts: {},
   searchChargeLimits: {},
@@ -33,25 +27,6 @@ const workspace = createSlice({
   name: 'workspace',
   initialState,
   reducers: {
-    openSession(state, action: PayloadAction<{ id?: string; runId?: string }>) {
-      state.sessionId = action.payload.id;
-      state.traceRunId = action.payload.runId;
-      state.tab = action.payload.runId ? 'trace' : 'conversation';
-      state.view = 'chat';
-      state.drawer = undefined;
-    },
-    openView(state, action: PayloadAction<View>) {
-      state.view = action.payload;
-      state.drawer = undefined;
-    },
-    setTab(state, action: PayloadAction<Tab>) {
-      state.tab = action.payload;
-    },
-    showTrace(state, action: PayloadAction<string>) {
-      state.traceRunId = action.payload;
-      state.tab = 'trace';
-      state.drawer = undefined;
-    },
     setDrawer(state, action: PayloadAction<WorkspaceState['drawer']>) {
       state.drawer = action.payload;
     },

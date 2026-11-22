@@ -5,6 +5,11 @@
  */
 import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
+import { existsSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
+import { chromium } from 'playwright-core';
 import type { Draft, Run, SendSessionMessageResult } from '@shared/types';
 import { actions, store } from '@/app/store';
 import {
@@ -20,7 +25,7 @@ import {
   type SessionMessageBody,
 } from '@/use-query/sessions/use-send-session-message';
 import { permissionSchema } from '@/use-query/permissions/use-permission';
-import { parseSearchChargeLimit, runModeLabel } from './run-mode';
+import { composerMode, withComposerMode, parseSearchChargeLimit, runModeLabel } from './run-mode';
 
 function result(sessionId: string): { run: Run } {
   return {
@@ -393,6 +398,180 @@ test('queued response waits for SaveLane and preserves newer edits and another s
     await deleteDraft(other, async () => {});
   }
 });
+
+test('native preference persists across send and reload and switching back to controlled changes the full request', async (t) => {
+  const persisted = memoryStorage(t);
+  const id = 'native-persist';
+  const draft: Draft = {
+    ...emptyDraft('edit'),
+    text: 'local work',
+    executionPreference: 'native-v1',
+  };
+  const sent: SessionMessageBody[] = [];
+  const send = async ({ body }: { body: SessionMessageBody }) => {
+    sent.push(body);
+    return {
+      run: { ...result(id).run, executor: body.executionPreference, approvalMode: undefined },
+    };
+  };
+  try {
+    updateDraft(id, draft);
+    assert.equal(composerMode(readDraft(id), false, true), 'native');
+    await submitDraft(id, draft, send, false, undefined, true);
+    assert.equal(sent[0]?.executionPreference, 'native-v1');
+    assert.equal(sent[0]?.mode, 'edit');
+    assert.equal(sent[0]?.approvalMode, undefined);
+    assert.equal(readDraft(id).executionPreference, 'native-v1');
+    store.dispatch(actions.dropDraft(id));
+    assert.equal(readDraft(id).executionPreference, 'native-v1');
+    assert.match(persisted.get(`atelier-draft:${id}`) ?? '', /native-v1/);
+    updateDraft(id, (previous) => ({
+      ...withComposerMode(previous, 'edit'),
+      text: 'controlled work',
+    }));
+    assert.equal(composerMode(readDraft(id), false, true), 'edit');
+    await submitDraft(id, draft, send, false, undefined, true);
+    assert.equal(sent[1]?.executionPreference, 'project-v1');
+    assert.equal(sent[1]?.approvalMode, undefined);
+    assert.notEqual(sent[0]?.idempotencyKey, sent[1]?.idempotencyKey);
+    assert.equal(readDraft(id).executionPreference, 'project-v1');
+    assert.equal(runModeLabel({ ...result(id).run, executor: 'native-v1' }), '本机信任');
+    assert.equal(
+      runModeLabel({ ...result(id).run, executor: undefined, approvalMode: undefined }),
+      '受控修改 · 逐次审批',
+    );
+  } finally {
+    await deleteDraft(id, async () => {});
+  }
+});
+
+test('native preference never leaks into readonly profiles, disabled desktop capability or a full legacy local draft', async (t) => {
+  const persisted = memoryStorage(t);
+  const draft: Draft = { ...emptyDraft('edit'), text: 'task', executionPreference: 'native-v1' };
+  persisted.set('atelier-draft:legacy-local', JSON.stringify(emptyDraft('edit')));
+  assert.equal(readDraft('legacy-local', draft).executionPreference, undefined);
+  assert.equal(composerMode(draft, false, false), 'edit');
+  assert.equal(composerMode(draft, true, true), 'readonly');
+  assert.equal(withComposerMode(draft, 'automatic').executionPreference, 'project-v1');
+  assert.equal(withComposerMode(draft, 'readonly').executionPreference, 'project-v1');
+  for (const readonly of [true, false]) {
+    const id = `native-unavailable-${readonly}`;
+    try {
+      updateDraft(id, draft);
+      await submitDraft(
+        id,
+        draft,
+        async ({ body }) => {
+          assert.equal(body.executionPreference, 'project-v1');
+          assert.equal(body.mode, readonly ? 'readonly' : 'edit');
+          return result(id);
+        },
+        readonly,
+        undefined,
+        false,
+      );
+      assert.equal(readDraft(id).executionPreference, 'project-v1');
+    } finally {
+      await deleteDraft(id, async () => {});
+    }
+  }
+});
+
+const browserPath = [
+  process.env.ATELIER_TEST_CHROMIUM,
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].find((path) => path && existsSync(path));
+test(
+  'native mode menu explicitly switches to controlled and follows authoritative availability and profile scope',
+  { skip: !browserPath, timeout: 30000 },
+  async () => {
+    const root = fileURLToPath(new URL('../../../', import.meta.url));
+    const compiled = await build({
+      absWorkingDir: root,
+      stdin: {
+        resolveDir: root,
+        loader: 'tsx',
+        contents: `
+      import React, {useState} from 'react';
+      import {createRoot} from 'react-dom/client';
+      import {ComposerModeSelector} from '@/features/chat/mode-selector';
+      import {composerMode,withComposerMode} from '@/features/chat/run-mode';
+      function App() {
+        const [draft,setDraft]=useState({text:'',contextPaths:[],attachmentIds:[],mode:'edit',executionPreference:'native-v1'});
+        const [available,setAvailable]=useState(true);
+        const [readonly,setReadonly]=useState(false);
+        window.configureFixture=(nextAvailable,nextReadonly)=>{setAvailable(nextAvailable);setReadonly(nextReadonly);};
+        return <><ComposerModeSelector mode={composerMode(draft,readonly,available)} nativeExecution={available} readonlyProfile={readonly} disabled={false} searchChargeLimit="0" searchChargeError="" onModeChange={mode=>setDraft(previous=>withComposerMode(previous,mode))} onSearchChargeChange={()=>{}}/><output id="draft">{JSON.stringify(draft)}</output></>;
+      }
+      createRoot(document.getElementById('app')).render(<App/>);
+    `,
+      },
+      tsconfig: `${root}/tsconfig.json`,
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'browser',
+    });
+    const bundle = compiled.outputFiles[0]?.text;
+    assert.ok(bundle);
+    const server = createServer((req, res) => {
+      if (req.url === '/bundle.js') {
+        res.setHeader('content-type', 'text/javascript');
+        res.end(bundle);
+        return;
+      }
+      res.setHeader('content-type', 'text/html');
+      res.end(
+        '<!doctype html><html lang="zh"><head><meta charset="utf-8"></head><body><div id="app"></div><script type="module" src="/bundle.js"></script></body></html>',
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const browser = await chromium.launch({
+      executablePath: browserPath,
+      headless: true,
+      args: ['--no-sandbox'],
+    });
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+      page.setDefaultTimeout(3000);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto(`http://127.0.0.1:${address.port}`);
+      const selector = page.getByRole('combobox', { name: '运行模式', exact: true });
+      await selector.waitFor();
+      assert.match(await selector.innerText(), /本机信任/);
+      await selector.click();
+      await page.getByRole('option', { name: /^受控修改/ }).click();
+      assert.match(await selector.innerText(), /受控修改/);
+      assert.match(await page.locator('#draft').innerText(), /project-v1/);
+      await selector.click();
+      await page.getByRole('option', { name: /^本机信任/ }).click();
+      assert.match(await page.locator('#draft').innerText(), /native-v1/);
+      await page.evaluate('window.configureFixture(false,false)');
+      await selector.click();
+      assert.equal(await page.getByRole('option', { name: /^本机信任/ }).count(), 0);
+      await page.keyboard.press('Escape');
+      assert.match(await selector.innerText(), /受控修改/);
+      await page.evaluate('window.configureFixture(true,true)');
+      await selector.click();
+      assert.equal(await page.getByRole('option', { name: /^本机信任/ }).count(), 0);
+      assert.equal(
+        await page.getByRole('option', { name: /^受控修改/ }).getAttribute('aria-disabled'),
+        'true',
+      );
+      await page.keyboard.press('Escape');
+      assert.match(await selector.innerText(), /只读/);
+      assert.deepEqual(errors, []);
+    } finally {
+      await browser.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
 
 test('permission detail parser retains automatic decision provenance and accepts old manual records', () => {
   const record = {

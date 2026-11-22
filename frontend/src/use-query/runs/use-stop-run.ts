@@ -9,17 +9,17 @@ import { api } from '@/api/client';
 import { sessionKeys } from '@/use-query/sessions/keys';
 import { runKeys } from './keys';
 
-export function useStopRun(run: Pick<Run, 'id' | 'sessionId'>) {
+export function useStopRun() {
   const client = useQueryClient();
   return useMutation({
-    mutationKey: runKeys.stop(run.id),
-    mutationFn: () =>
+    mutationKey: ['runs', 'stop'],
+    mutationFn: (run: Pick<Run, 'id' | 'sessionId'>) =>
       api<{ run: Run }>(`/api/runs/${encodeURIComponent(run.id)}/stop`, {
         method: 'POST',
         body: {},
       }),
     retry: false,
-    onSuccess: () => {
+    onSuccess: (_, run) => {
       void client.invalidateQueries({ queryKey: sessionKeys.snapshot(run.sessionId) });
       void client.invalidateQueries({ queryKey: ['bootstrap'] });
       void client.invalidateQueries({ queryKey: ['runs'] });

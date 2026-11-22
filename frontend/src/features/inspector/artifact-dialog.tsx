@@ -3,9 +3,11 @@
  * @implementation 按交付物 ID 查询内容，选择 HTML 沙箱、图片、PDF 或文本视图，并提供预览状态、重试和共享的文件操作。
  * @updated 2026-11-20T03:34:05+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { Maximize, Minimize, X } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import {
   Dialog,
   DialogClose,
@@ -30,6 +32,7 @@ export default function ArtifactDialog({
   fileActions: ArtifactFileActionsState;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useUiTranslation('inspector');
   const [source, setSource] = useState(false);
   const [fullscreen, setFullscreen] = useState(true);
   const path = `/api/artifacts/${encodeURIComponent(artifact.id)}`;
@@ -41,13 +44,16 @@ export default function ArtifactDialog({
   const canExpand = html || pdf || image;
   const expanded = fullscreen && canExpand;
   const previewable = html && content.data?.previewable === true;
-  const fullscreenLabel = expanded ? '退出全屏' : '全屏';
+  const fullscreenLabel = expanded ? t('artifact.exitFullscreen') : t('artifact.fullscreen');
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className={`artifact-dialog flex flex-col overflow-hidden${expanded ? ' artifact-dialog-fullscreen' : ''}`}
+        className={cn(
+          'artifact-dialog flex flex-col overflow-hidden',
+          expanded && 'artifact-dialog-fullscreen',
+        )}
         onEscapeKeyDown={(event) => {
           if (expanded) {
             event.preventDefault();
@@ -63,14 +69,18 @@ export default function ArtifactDialog({
             {formatBytes(item.size)} · {item.mime} · {formatDate(item.createdAt)}
           </DialogDescription>
           {previewable ? (
-            <div role="group" aria-label="交付物视图" className="flex shrink-0 items-center gap-1">
+            <div
+              role="group"
+              aria-label={t('artifact.views')}
+              className="flex shrink-0 items-center gap-1"
+            >
               <Button
                 size="sm"
                 variant={source ? 'ghost' : 'secondary'}
                 aria-pressed={!source}
                 onClick={() => setSource(false)}
               >
-                预览
+                {t('common.preview')}
               </Button>
               <Button
                 size="sm"
@@ -78,7 +88,7 @@ export default function ArtifactDialog({
                 aria-pressed={source}
                 onClick={() => setSource(true)}
               >
-                源文件
+                {t('common.sourceFile')}
               </Button>
             </div>
           ) : null}
@@ -91,15 +101,25 @@ export default function ArtifactDialog({
                 title={fullscreenLabel}
                 onClick={() => setFullscreen((current) => !current)}
               >
-                {expanded ? <Minimize size={16} /> : <Maximize size={16} />}
+                {expanded ? (
+                  <Minimize data-icon="inline-start" aria-hidden="true" />
+                ) : (
+                  <Maximize data-icon="inline-start" aria-hidden="true" />
+                )}
               </Button>
             ) : null}
             {content.data && !content.error ? (
               <ArtifactFileActions artifact={item} actions={fileActions} />
             ) : null}
-            <Button asChild size="icon-sm" variant="ghost">
-              <DialogClose aria-label="关闭预览" title="关闭预览">
-                <X size={17} />
+            <Button
+              asChild
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t('artifact.closePreview')}
+              title={t('artifact.closePreview')}
+            >
+              <DialogClose>
+                <X data-icon="inline-start" aria-hidden="true" />
               </DialogClose>
             </Button>
           </div>
@@ -111,7 +131,7 @@ export default function ArtifactDialog({
         ) : null}
         {content.isFetching && !content.data ? (
           <div className="p-4">
-            <Loading>正在读取交付物…</Loading>
+            <Loading>{t('artifact.reading')}</Loading>
           </div>
         ) : null}
         {content.error ? (
@@ -125,18 +145,21 @@ export default function ArtifactDialog({
         {content.data ? (
           previewable && !source ? (
             <iframe
-              title={`${item.name} 的沙箱预览`}
+              title={t('artifact.sandboxName', { name: item.name })}
               src={`${path}/preview`}
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"
-              className={`block w-full border-0 bg-white ${expanded ? 'min-h-0 flex-1' : 'h-[62dvh] min-h-0'}`}
+              className={cn(
+                'block w-full min-h-0 border-0 bg-background',
+                expanded ? 'flex-1' : 'h-[62dvh]',
+              )}
             />
           ) : (
-            <div className={`min-h-0 overflow-auto ${expanded ? 'flex-1' : 'max-h-[75dvh]'}`}>
+            <div className={cn('min-h-0 overflow-auto', expanded ? 'flex-1' : 'max-h-[75dvh]')}>
               <Suspense
                 fallback={
                   <div className="p-4">
-                    <Loading>正在加载预览…</Loading>
+                    <Loading>{t('artifact.loadingPreview')}</Loading>
                   </div>
                 }
               >

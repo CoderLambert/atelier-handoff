@@ -14,9 +14,10 @@ export function useUpdateAppConfig() {
   return useMutation({
     mutationKey: settingsKeys.updateConfig,
     retry: false,
-    mutationFn: (config: AppConfig) =>
+    mutationFn: (config: Partial<AppConfig>) =>
       api<ConfigInfo>('/api/config', { method: 'PATCH', body: config }),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await client.cancelQueries({ queryKey: settingsKeys.config, exact: true });
       client.setQueryData(settingsKeys.config, data);
       void client.invalidateQueries({ queryKey: settingsKeys.models });
       void client.invalidateQueries({ queryKey: ['bootstrap'] });

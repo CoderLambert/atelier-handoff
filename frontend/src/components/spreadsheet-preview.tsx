@@ -3,6 +3,7 @@
  * @implementation 通过统一字节源读取文件，以 Vite 独立 worker 解析有界表格；管理切表、重试、超时、析构及可选失败回调。
  * @updated 2026-11-21T00:00:00+08:00
  */
+import { useUiTranslation, getTranslator } from '@/i18n';
 import { useEffect, useId, useState } from 'react';
 import {
   getSourceSize,
@@ -20,14 +21,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import type { SpreadsheetSheet, SpreadsheetWorkerResponse } from './spreadsheet-preview.worker';
+import type {
+  SpreadsheetErrorCode,
+  SpreadsheetSheet,
+  SpreadsheetWorkerResponse,
+} from './spreadsheet-preview.worker';
+
+const workerErrorKeys = {
+  tooLarge: 'spreadsheet.tooLarge',
+  noSheets: 'spreadsheet.noSheets',
+  tooManySheets: 'spreadsheet.tooManySheets',
+  parseFailed: 'spreadsheet.parseFailed',
+} as const satisfies Record<SpreadsheetErrorCode, string>;
+type SpreadsheetMessageKey =
+  | (typeof workerErrorKeys)[SpreadsheetErrorCode]
+  | 'spreadsheet.timeout'
+  | 'spreadsheet.invalidResponse'
+  | 'spreadsheet.workerFailed'
+  | 'spreadsheet.messageFailed'
+  | 'spreadsheet.loadFailed';
 
 type PreviewState = {
   source: FileInfo['source'];
   attempt: number;
 } & (
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; messageKey: SpreadsheetMessageKey }
   | { status: 'success'; sheets: SpreadsheetSheet[] }
 );
 
@@ -71,7 +90,7 @@ function isSheet(value: unknown): value is SpreadsheetSheet {
 function isWorkerResponse(value: unknown): value is SpreadsheetWorkerResponse {
   if (!isRecord(value)) return false;
   if (value.status === 'error') {
-    return typeof value.message === 'string' && value.message.length <= 500;
+    return typeof value.code === 'string' && Object.hasOwn(workerErrorKeys, value.code);
   }
   return (
     value.status === 'success' &&
@@ -97,6 +116,7 @@ export default function SpreadsheetPreview({
   file: FileInfo;
   reportError?: (error: PreviewError) => void;
 }) {
+  const { t, locale } = useUiTranslation('inspector');
   const { source, size, name } = file;
   const [attempt, setAttempt] = useState(0);
   const [activeSheet, setActiveSheet] = useState('0');
@@ -121,28 +141,29 @@ export default function SpreadsheetPreview({
       }
     }
 
-    function fail(message: string) {
+    function fail(messageKey: SpreadsheetMessageKey) {
       if (settled) return;
       settled = true;
       stop();
-      setState({ source, attempt, status: 'error', message });
+      setState({ source, attempt, status: 'error', messageKey });
+      const message = getTranslator('inspector')(messageKey);
       reportError?.(new PreviewError('PARSE_FAILED', message, { fileName: name }));
     }
 
     const timeout = window.setTimeout(() => {
-      fail('读取或解析工作簿超时，请重试或使用系统应用打开原文件。');
+      fail('spreadsheet.timeout');
     }, LOAD_TIMEOUT_MS);
 
     void (async () => {
       if (size > MAX_FILE_BYTES || (getSourceSize(source) ?? 0) > MAX_FILE_BYTES) {
-        fail('文件超过 20 MB，暂不支持应用内表格预览。');
+        fail('spreadsheet.tooLarge');
         return;
       }
       // FileVista copies arrayBuffer sources, so transferring this buffer preserves the original.
       const buffer = await readSourceAsArrayBuffer(source, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (buffer.byteLength > MAX_FILE_BYTES) {
-        fail('文件超过 20 MB，暂不支持应用内表格预览。');
+        fail('spreadsheet.tooLarge');
         return;
       }
       worker = new Worker(new URL('./spreadsheet-preview.worker.ts', import.meta.url), {
@@ -152,11 +173,11 @@ export default function SpreadsheetPreview({
       worker.onmessage = (event: MessageEvent<unknown>) => {
         if (settled) return;
         if (!isWorkerResponse(event.data)) {
-          fail('工作簿预览返回了无效数据，请重试或使用系统应用打开原文件。');
+          fail('spreadsheet.invalidResponse');
           return;
         }
         if (event.data.status === 'error') {
-          fail(event.data.message);
+          fail(workerErrorKeys[event.data.code]);
           return;
         }
         settled = true;
@@ -166,13 +187,13 @@ export default function SpreadsheetPreview({
       };
       worker.onerror = (event) => {
         event.preventDefault();
-        fail('无法启动或运行表格预览，请重试或使用系统应用打开原文件。');
+        fail('spreadsheet.workerFailed');
       };
       worker.onmessageerror = () => {
-        fail('无法接收工作簿预览，请重试或使用系统应用打开原文件。');
+        fail('spreadsheet.messageFailed');
       };
       worker.postMessage(buffer, [buffer]);
-    })().catch(() => fail('无法加载工作簿，请重试或使用系统应用打开原文件。'));
+    })().catch(() => fail('spreadsheet.loadFailed'));
 
     return () => {
       settled = true;
@@ -183,7 +204,7 @@ export default function SpreadsheetPreview({
   if (state.source !== source || state.attempt !== attempt || state.status === 'loading') {
     return (
       <div className="p-6 text-sm text-muted-foreground" role="status" aria-live="polite">
-        正在读取工作簿…
+        {t('spreadsheet.reading')}
       </div>
     );
   }
@@ -191,10 +212,10 @@ export default function SpreadsheetPreview({
   if (state.status === 'error') {
     return (
       <div className="flex flex-col items-start gap-3 p-6 text-sm">
-        <p role="alert">{state.message}</p>
-        <p className="text-muted-foreground">可关闭预览，使用系统应用查看原文件。</p>
+        <p role="alert">{t(state.messageKey)}</p>
+        <p className="text-muted-foreground">{t('spreadsheet.openOriginal')}</p>
         <Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>
-          重试
+          {t('common.retry')}
         </Button>
       </div>
     );
@@ -202,13 +223,13 @@ export default function SpreadsheetPreview({
 
   const sheet = state.sheets[Number(activeSheet)] ?? state.sheets[0];
   if (!sheet)
-    return <p className="p-6 text-sm text-muted-foreground">工作簿中没有可预览的工作表。</p>;
+    return <p className="p-6 text-sm text-muted-foreground">{t('spreadsheet.noSheets')}</p>;
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground">
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <label htmlFor={selectId} className="text-sm text-muted-foreground">
-          工作表
+          {t('spreadsheet.sheet')}
         </label>
         <Select value={activeSheet} onValueChange={setActiveSheet}>
           <SelectTrigger id={selectId} size="sm" className="max-w-80 min-w-0">
@@ -218,14 +239,19 @@ export default function SpreadsheetPreview({
             <SelectGroup>
               {state.sheets.map((item, index) => (
                 <SelectItem key={index} value={String(index)} title={item.name}>
-                  {item.name || `工作表 ${index + 1}`}
+                  {item.name ||
+                    t('spreadsheet.unnamedSheet', { number: (index + 1).toLocaleString(locale) })}
                 </SelectItem>
               ))}
             </SelectGroup>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {sheet.rows.length} 行 × {sheet.columnCount} 列 · 共 {state.sheets.length} 个工作表
+          {t('spreadsheet.dimensions', {
+            rows: sheet.rows.length.toLocaleString(locale),
+            columns: sheet.columnCount.toLocaleString(locale),
+          })}{' '}
+          · {t('spreadsheet.sheetCount', { count: state.sheets.length })}
         </p>
       </div>
       {sheet.rangeTruncated || sheet.textTruncated ? (
@@ -233,16 +259,16 @@ export default function SpreadsheetPreview({
           role="status"
           className="shrink-0 border-b border-border px-4 py-2 text-xs text-muted-foreground"
         >
-          {sheet.rangeTruncated ? '仅预览前 200 行、50 列。' : ''}
-          {sheet.textTruncated ? '部分单元格文本已截短。' : ''}
-          完整内容请使用系统应用打开原文件。
+          {sheet.rangeTruncated ? t('spreadsheet.rangeTruncated') : ''}
+          {sheet.textTruncated ? t('spreadsheet.textTruncated') : ''}
+          {t('spreadsheet.fullContentsHint')}
         </p>
       ) : null}
       {sheet.rows.length && sheet.columnCount ? (
         <div
           key={activeSheet}
           role="region"
-          aria-label={`${sheet.name} 工作表内容`}
+          aria-label={t('spreadsheet.sheetContents', { name: sheet.name })}
           tabIndex={0}
           className="min-h-0 min-w-0 flex-1 overflow-auto"
         >
@@ -253,7 +279,7 @@ export default function SpreadsheetPreview({
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr>
                 <th scope="col" className="sticky left-0 bg-muted px-3 py-2 font-normal">
-                  <span className="sr-only">行号</span>
+                  <span className="sr-only">{t('spreadsheet.rowNumber')}</span>
                 </th>
                 {Array.from({ length: sheet.columnCount }, (_, column) => (
                   <th
@@ -273,7 +299,7 @@ export default function SpreadsheetPreview({
                     scope="row"
                     className="sticky left-0 border border-border bg-muted px-3 py-2 text-right font-normal text-muted-foreground"
                   >
-                    {rowIndex + 1}
+                    {(rowIndex + 1).toLocaleString(locale)}
                   </th>
                   {row.map((cell, columnIndex) => (
                     <td key={columnIndex} className="border border-border px-3 py-2 align-top">
@@ -288,10 +314,10 @@ export default function SpreadsheetPreview({
           </table>
         </div>
       ) : (
-        <p className="p-6 text-sm text-muted-foreground">（空工作表）</p>
+        <p className="p-6 text-sm text-muted-foreground">{t('spreadsheet.emptySheet')}</p>
       )}
       <p className="shrink-0 border-t border-border px-4 py-2 text-xs text-muted-foreground">
-        公式显示文件中已保存的结果，不重新计算；图表、图片和原始排版请使用系统应用查看。
+        {t('spreadsheet.formulasHint')}
       </p>
     </div>
   );

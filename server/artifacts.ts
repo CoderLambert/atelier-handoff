@@ -1,7 +1,7 @@
 /**
- * @file 管理会话附件与任务交付物的本地原件。
- * @implementation 保留附件归属与字节校验，流式接收文档并在验证后登记，按标识定位原件和不可变交付物。
- * @updated 2026-11-21T00:26:04+08:00
+ * @file 管理会话附件、交付物与工具结果的本地原件。
+ * @implementation 流式接收文档并核对归属，保存工具回执和 SDK 提供的 Bash 日志，按会话读取与清理。
+ * @updated 2026-11-22T21:17:02+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { constants, mkdirSync, writeFileSync } from 'node:fs';
@@ -23,12 +23,19 @@ import type { IncomingMessage } from 'node:http';
 import { documentAttachmentMime } from '../shared/document-attachments.js';
 import { validateDocumentFile } from './attachment-document-reader.js';
 import {
+  captureSdkBashLog,
+  discardCapturedBashLog,
+  publishBashLog,
+  readCapturedBashLog,
+} from './bash-log-capture.js';
+import {
   AppError,
   attachmentImageMime,
   maxImageAttachmentBytes,
   now,
   type Artifact,
   type Run,
+  type ToolCall,
 } from '../shared/types.js';
 import { Store } from './store.js';
 import { fingerprint, mimeFor, resolveProjectPath, safeName, textExtensions } from './files.js';
@@ -361,19 +368,135 @@ export class FileRecords {
       mode: 0o600,
     });
   }
-  async toolOutput(id: string): Promise<string> {
-    const tool = this.store.get('tools', id);
-    this.store.get('sessions', tool.sessionId);
-    if (!tool.outputTruncated) return tool.output;
+  async captureBashLog(
+    id: string,
+    sdkRoot: string,
+    sdkSessionId: string,
+    toolUseId: string,
+    response: unknown,
+    signal?: AbortSignal,
+    sdkActorId?: string,
+  ): Promise<ToolCall['bashLog']> {
     try {
-      return await readFile(join(this.store.directory, 'tool-output', fingerprint(id)), 'utf8');
+      signal?.throwIfAborted();
+      const tool = this.store.get('tools', id);
+      const run = this.store.get('runs', tool.runId);
+      const session = this.store.get('sessions', tool.sessionId);
+      const project = this.store.get('projects', run.projectId);
+      const assertCurrent = () => {
+        signal?.throwIfAborted();
+        const currentTool = this.store.get('tools', id);
+        const currentRun = this.store.get('runs', run.id);
+        const currentSession = this.store.get('sessions', session.id);
+        const currentProject = this.store.get('projects', project.id);
+        if (
+          currentTool.name !== 'Bash' ||
+          currentTool.runId !== run.id ||
+          currentTool.sessionId !== session.id ||
+          currentTool.subagentId !== tool.subagentId ||
+          (currentTool.status !== 'running' && currentTool.status !== 'awaiting_permission') ||
+          currentRun.sessionId !== session.id ||
+          currentRun.projectId !== project.id ||
+          currentRun.status !== 'running' ||
+          currentSession.projectId !== project.id ||
+          currentSession.sdkSessionId !== sdkSessionId ||
+          currentProject.path !== project.path ||
+          sdkRoot !== join(this.store.directory, 'sdk', session.id) ||
+          !/^[a-zA-Z0-9_-]{1,200}$/.test(toolUseId) ||
+          Boolean(tool.subagentId) !== Boolean(sdkActorId) ||
+          id !== `${run.id}:${sdkActorId ? `${sdkActorId}:` : ''}${toolUseId}`
+        )
+          throw new Error('Bash log ownership changed');
+      };
+      assertCurrent();
+      // Only the caller can bind the opaque spill filename to this exact SDK Hook.
+      // Keep response and toolUseId paired; serialize duplicate completion/cancel cleanup.
+      const snapshot = await captureSdkBashLog(
+        sdkRoot,
+        project.path,
+        sdkSessionId,
+        response,
+        signal,
+      );
+      if (!snapshot) return undefined;
+      return await publishBashLog(
+        this.store.directory,
+        fingerprint(id),
+        snapshot,
+        assertCurrent,
+        signal,
+      );
     } catch {
-      throw new AppError('OUTPUT_UNAVAILABLE', '完整工具输出已丢失，短预览仍可查看。', 404);
+      signal?.throwIfAborted();
+      return { status: 'unavailable' };
     }
   }
+  async discardBashLog(id: string): Promise<void> {
+    await discardCapturedBashLog(this.store.directory, fingerprint(id));
+  }
+  async toolOutput(id: string, display = false): Promise<string> {
+    const tool = this.store.get('tools', id);
+    this.store.get('sessions', tool.sessionId);
+    if (
+      display &&
+      tool.name === 'Bash' &&
+      tool.bashLog &&
+      ['complete', 'partial'].includes(tool.bashLog.status)
+    ) {
+      try {
+        return await readCapturedBashLog(this.store.directory, fingerprint(id), tool.bashLog);
+      } catch {
+        throw new AppError(
+          'OUTPUT_UNAVAILABLE',
+          '已采集的命令日志丢失或损坏，原始回执仍可查看。',
+          404,
+        );
+      }
+    }
+    let text = tool.output;
+    if (tool.outputTruncated) {
+      try {
+        text = await readFile(join(this.store.directory, 'tool-output', fingerprint(id)), 'utf8');
+      } catch {
+        throw new AppError('OUTPUT_UNAVAILABLE', '完整工具输出已丢失，短预览仍可查看。', 404);
+      }
+    }
+    if (!display || !['Bash', 'mcp__atelier__run_command', 'run_command'].includes(tool.name))
+      return text;
+    try {
+      const result: unknown = JSON.parse(text);
+      if (typeof result !== 'object' || result === null) return text;
+      if (
+        tool.name === 'Bash' &&
+        'stdout' in result &&
+        'stderr' in result &&
+        typeof result.stdout === 'string' &&
+        typeof result.stderr === 'string'
+      ) {
+        return (
+          [result.stdout && `stdout\n${result.stdout}`, result.stderr && `stderr\n${result.stderr}`]
+            .filter(Boolean)
+            .join('\n\n') || text
+        );
+      }
+      if (
+        tool.name !== 'Bash' &&
+        'output' in result &&
+        typeof result.output === 'string' &&
+        result.output
+      )
+        return result.output;
+    } catch {
+      /* Historic text and command errors can be rendered directly. */
+    }
+    return text;
+  }
   async deleteSessionFiles(sessionId: string): Promise<void> {
-    for (const tool of this.store.list('tools').filter((tool) => tool.sessionId === sessionId))
+    for (const tool of this.store.list('tools').filter((tool) => tool.sessionId === sessionId)) {
       await unlink(join(this.store.directory, 'tool-output', fingerprint(tool.id))).catch(() => {});
+      if (tool.bashLog?.status === 'complete' || tool.bashLog?.status === 'partial')
+        await this.discardBashLog(tool.id);
+    }
     for (const kind of ['attachments', 'artifacts'] as const)
       for (const item of this.store.list(kind).filter((item) => item.sessionId === sessionId))
         await unlink(this.path(kind, item.id)).catch(() => {});

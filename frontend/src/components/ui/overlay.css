@@ -1,0 +1,35 @@
+/**
+ * @file 定义共享对话框的遮罩、表面和内部布局。
+ * @implementation 从工作台主题读取边界、阴影与间距，保留 Radix 的显示和焦点生命周期。
+ * @updated 2026-11-23T04:49:37+08:00
+ */
+@layer components {
+  .react-dialog-overlay {
+    background: var(--ui-scrim);
+  }
+  .react-dialog {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(500px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+    padding: var(--space-6);
+    background: var(--ui-popover);
+    color: var(--ui-popover-foreground);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--ui-shadow-overlay);
+  }
+  .react-dialog-header {
+    display: grid;
+    gap: 8px;
+    padding-inline-end: 34px;
+    margin-block-end: 16px;
+  }
+  .react-dialog-dismiss {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+}

@@ -3,7 +3,9 @@
  * @implementation 按权威快照显示紧凑消息、投递与暂停状态，保留全文展开，并通过会话隔离的 hook 插入、撤回或继续。
  * @updated 2026-11-21T00:15:48+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { useId } from 'react';
+import { ChevronRight } from 'lucide-react';
 import type { Run, SessionMessageQueue } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { useSessionMessageQueue } from './hooks/use-session-message-queue';
@@ -21,6 +23,7 @@ export function MessageQueue({
   available: boolean;
   activeRun?: Run;
 }) {
+  const { t } = useUiTranslation('chat');
   const actions = useSessionMessageQueue(sessionId);
   const priorityDescriptionId = useId();
   const canInsert =
@@ -28,25 +31,31 @@ export function MessageQueue({
     (activeRun.status === 'running' || activeRun.status === 'awaiting_permission');
   if (!queue.items.length && !actions.error) return null;
   return (
-    <section className="chat-message-queue" aria-label="待处理消息">
+    <section
+      className="chat-message-queue"
+      data-paused={queue.paused}
+      aria-label={t('queue.label')}
+    >
       <div className="chat-message-queue-header">
         <span role="status">
-          待处理消息 · {queue.items.length}
-          {queue.paused ? ' · 已暂停' : ' · 按顺序发送'}
+          {t('queue.summary', {
+            count: queue.items.length,
+            status: t(queue.paused ? 'queue.paused' : 'queue.ordered'),
+          })}
         </span>
         {queue.paused && queue.items.length > 0 ? (
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={archived || !available || actions.busy}
             onClick={actions.onResume}
           >
-            {actions.resuming ? '正在继续…' : '继续队列'}
+            {actions.resuming ? t('queue.resuming') : t('queue.resume')}
           </Button>
         ) : null}
       </div>
       <p id={priorityDescriptionId} className="sr-only">
-        优先执行会停止当前轮，再执行这条消息。
+        {t('queue.priorityHelp')}
       </p>
       {queue.items.length > 0 ? (
         <ol className="chat-message-queue-items">
@@ -54,11 +63,11 @@ export function MessageQueue({
             const deliveryPending = item.delivery === 'waiting' || item.delivery === 'sending';
             const deliveryLabel =
               item.delivery === 'waiting'
-                ? '等待发送'
+                ? t('queue.waiting')
                 : item.delivery === 'sending'
-                  ? '发送中…'
+                  ? t('queue.sending')
                   : item.delivery === 'unknown'
-                    ? '结果待确认'
+                    ? t('queue.unknown')
                     : undefined;
             return (
               <li key={item.id} className="chat-message-queue-item">
@@ -67,7 +76,15 @@ export function MessageQueue({
                 </span>
                 <div className="chat-message-queue-copy">
                   <details>
-                    <summary title={item.text} aria-label={`查看消息 ${index + 1}：${item.text}`}>
+                    <summary
+                      title={item.text}
+                      aria-label={t('queue.viewMessage', { number: index + 1, text: item.text })}
+                    >
+                      <ChevronRight
+                        data-icon="inline-start"
+                        className="chat-message-queue-chevron"
+                        aria-hidden="true"
+                      />
                       <span className="truncate">{item.text}</span>
                     </summary>
                     <p className="chat-message-queue-text">{item.text}</p>
@@ -76,18 +93,27 @@ export function MessageQueue({
                 </div>
                 <div className="chat-message-queue-actions">
                   {deliveryLabel ? (
-                    <span className="chat-message-queue-delivery" role="status">
+                    <span
+                      className="chat-message-queue-delivery"
+                      data-delivery={item.delivery}
+                      role="status"
+                    >
                       {deliveryLabel}
                     </span>
                   ) : null}
                   {item.insertion ? (
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="outline"
                       disabled={
                         archived || !available || actions.busy || !canInsert || !!item.delivery
                       }
-                      aria-label={`${item.insertion === 'live' ? '立即插入' : '优先执行'}消息 ${index + 1}`}
+                      aria-label={t(
+                        item.insertion === 'live'
+                          ? 'queue.insertMessage'
+                          : 'queue.prioritizeMessage',
+                        { number: index + 1 },
+                      )}
                       aria-describedby={
                         item.insertion === 'priority' ? priorityDescriptionId : undefined
                       }
@@ -102,21 +128,23 @@ export function MessageQueue({
                     >
                       {actions.insertingId === item.id
                         ? item.insertion === 'live'
-                          ? '插入中…'
-                          : '正在优先执行…'
+                          ? t('queue.inserting')
+                          : t('queue.prioritizing')
                         : item.insertion === 'live'
-                          ? '立即插入'
-                          : '优先执行'}
+                          ? t('queue.insert')
+                          : t('queue.prioritize')}
                     </Button>
                   ) : null}
                   <Button
-                    size="sm"
+                    size="xs"
                     variant="ghost"
                     disabled={archived || actions.busy || deliveryPending}
-                    aria-label={`撤回消息 ${index + 1}`}
+                    aria-label={t('queue.withdrawMessage', { number: index + 1 })}
                     onClick={() => actions.onWithdraw(item.id)}
                   >
-                    {actions.withdrawingId === item.id ? '撤回中…' : '撤回'}
+                    {actions.withdrawingId === item.id
+                      ? t('queue.withdrawing')
+                      : t('queue.withdraw')}
                   </Button>
                 </div>
               </li>

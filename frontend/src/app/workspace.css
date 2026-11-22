@@ -1,0 +1,361 @@
+/**
+ * @file 定义工作台结构、导航工具栏与面板。
+ * @implementation 管理窗口约束、分隔条、响应式布局及当前会话标题。
+ * @updated 2026-11-23T04:49:37+08:00
+ */
+@layer components {
+  .react-workspace .main {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+  .react-workspace .react-center {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .react-workspace .react-center .conversation-screen {
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .react-workspace .react-conversation-body {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .react-workspace .react-scroll-view {
+    overflow: auto;
+    min-height: 0;
+  }
+  .react-workspace .react-side {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    border-inline-start: 1px solid var(--border-soft);
+    background: var(--surface);
+  }
+  .react-workspace .react-collections {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+  .react-drawer {
+    inset: 0 auto 0 0;
+    transform: none;
+    width: min(360px, 92vw);
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+  .react-drawer .sidebar {
+    height: 100dvh;
+  }
+  @media (max-width: 1120px) {
+    .react-workspace.app {
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    }
+    .react-workspace .react-side {
+      display: none;
+    }
+  }
+  @media (max-width: 767px) {
+    .react-workspace.app {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .react-workspace > .sidebar {
+      display: none;
+    }
+    .react-workspace .topbar {
+      padding-inline: 10px;
+      gap: 6px;
+    }
+    .react-workspace .topbar-actions {
+      gap: 4px;
+    }
+  }
+}
+
+/* Keep the workspace bounded to the viewport. Each pane owns its own scroll. */
+#root {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.react-workspace.app {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workspace-resizable,
+.workspace-pane {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-pane > .sidebar {
+  height: 100%;
+}
+
+.react-workspace .workspace-pane > .react-side {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.workspace-separator {
+  position: relative;
+  flex: 0 0 8px;
+  width: 8px;
+  background: var(--ui-background);
+}
+
+.workspace-separator::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 3px;
+  width: 2px;
+  background: var(--ui-border);
+}
+
+.workspace-separator:hover::after,
+.workspace-separator:focus-visible::after,
+.workspace-separator[data-separator='active']::after {
+  background: var(--ui-ring);
+}
+
+.react-workspace .main {
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  container-type: inline-size;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-inline: var(--space-5);
+  border-block-end: 1px solid var(--ui-border-subtle);
+  background: var(--ui-card);
+}
+
+.breadcrumbs,
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.breadcrumbs {
+  min-width: 0;
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-sm);
+}
+
+.breadcrumbs > span:last-of-type {
+  color: var(--ui-foreground);
+  font-weight: 550;
+}
+
+.breadcrumb-slash {
+  color: var(--ui-input);
+}
+
+.topbar-actions {
+  flex: none;
+}
+
+.connection-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.connection-state[data-connected='true'] {
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+}
+
+.connection-dot {
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.react-workspace .breadcrumbs {
+  flex: 1;
+}
+.react-workspace .breadcrumbs > span:first-of-type {
+  flex: none;
+  max-width: 35%;
+}
+.react-workspace .breadcrumbs > span:last-of-type {
+  flex: 1;
+  min-width: 0;
+}
+
+@container (max-width: 640px) {
+  .react-workspace .topbar {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+  .react-workspace .topbar-actions {
+    gap: 4px;
+  }
+  .react-workspace .topbar :is(.connection-state, .workspace-action-label) {
+    display: none;
+  }
+}
+
+.react-workspace :is(.history-wrap, .react-side, .react-scroll-view, .react-collections) {
+  position: relative;
+  overscroll-behavior: contain;
+}
+
+.react-center:has(.conversation-screen) {
+  background: var(--ui-card);
+}
+
+.react-workspace .conversation-screen {
+  max-width: 1100px;
+  padding-inline: clamp(16px, 4vw, 40px);
+}
+
+.react-workspace .session-header {
+  padding-block: 18px 12px;
+}
+
+.react-workspace .session-title-row {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.react-workspace .session-title-row h1 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(20px, 2vw, 26px);
+}
+
+.react-workspace .session-title-row > [data-slot='button'] {
+  flex: 0 1 auto;
+  max-width: 40%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.react-workspace .session-meta {
+  margin-top: 7px;
+}
+
+.react-workspace .react-center .conversation-screen[data-has-session='false'] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.workspace-welcome {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  align-self: center;
+  gap: var(--space-3);
+  width: min(100%, 32rem);
+  margin-inline: auto;
+  padding: var(--space-8) var(--space-4);
+}
+
+.workspace-welcome-icon {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--space-12);
+  block-size: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--ui-selected);
+  color: var(--ui-selected-foreground);
+}
+
+.workspace-welcome-icon > svg {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+.workspace-welcome h1 {
+  font-size: var(--text-2xl);
+  font-weight: 650;
+  line-height: var(--leading-tight);
+}
+
+.workspace-welcome p {
+  margin-block-end: var(--space-2);
+  color: var(--ui-muted-foreground);
+}
+
+.workspace-notice {
+  position: fixed;
+  z-index: 40;
+  inset-inline-end: var(--space-4);
+  inset-block-end: var(--space-4);
+  max-inline-size: min(25rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-md);
+  background: var(--ui-popover);
+  color: var(--ui-popover-foreground);
+  box-shadow: var(--ui-shadow-overlay);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .react-workspace .main {
+    grid-column: 1;
+    grid-template-rows: 52px minmax(0, 1fr);
+  }
+
+  .react-workspace .conversation-screen {
+    padding-inline: 14px;
+  }
+
+  .react-workspace .session-header {
+    padding-block: 12px 9px;
+  }
+}
+
+.react-chrome-action {
+  display: none;
+}
+.react-drawer .sidebar {
+  display: flex;
+  position: static;
+  width: 100%;
+  box-shadow: none;
+}
+@media (max-width: 767px) {
+  .react-chrome-action.navigation {
+    display: inline-flex;
+  }
+}
+
+.workspace-changes-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, calc(100% - 32px));
+  height: min(760px, calc(100dvh - 32px));
+  overflow: hidden;
+}

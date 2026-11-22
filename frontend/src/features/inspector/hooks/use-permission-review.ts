@@ -8,8 +8,10 @@ import type { Permission } from '@shared/types';
 import { usePermission } from '@/use-query/permissions/use-permission';
 import { usePermissionDiff } from '@/use-query/permissions/use-permission-diff';
 import { useDecidePermission } from '@/use-query/permissions/use-decide-permission';
+import { useUiTranslation } from '@/i18n';
 
 export function usePermissionReview(live: Permission) {
+  useUiTranslation('inspector');
   const detail = usePermission(live);
   const preview = usePermissionDiff(live);
   const decision = useDecidePermission();
@@ -82,8 +84,8 @@ export function usePermissionReview(live: Permission) {
     review,
     permission,
     loading,
-    loadError: loadError?.message,
-    decisionError: currentDecision ? decision.error?.message : undefined,
+    loadError: loadError ?? undefined,
+    decisionError: currentDecision ? (decision.error ?? undefined) : undefined,
     busy,
     expired,
     versionMatches,

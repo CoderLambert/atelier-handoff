@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+/**
+ * @file 提供技能、命令和 MCP 扩展编辑表单。
+ * @implementation 管理扩展内容、调用选项及 MCP 连接和工具配置，并提供技能工具绑定入口。
+ * @updated 2026-11-23T04:52:50+08:00
+ */
+import { getTranslator, useUiTranslation } from '@/i18n';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { Switch } from '@/components/ui/switch';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AllowedMcpTool, DiscoveredTool, Extension, McpTransport } from '@shared/types';
 import { ActionButton, ErrorMessage, FeatureDialog, Field, MarkdownPreview } from './components';
@@ -7,6 +14,7 @@ import {
   allowsAuto,
   autoEnabled,
   extensionKeys,
+  extensionDetail,
   extensionsQuery,
   isConflict,
   kinds,
@@ -19,14 +27,15 @@ import {
 } from './api';
 
 function stringArray(value: string) {
+  const t = getTranslator('extensions');
   let parsed: unknown;
   try {
     parsed = JSON.parse(value || '[]');
   } catch {
-    throw new Error('参数必须是 JSON 字符串数组。');
+    throw new Error(t('extensionEditor.invalidArgs'));
   }
   if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string'))
-    throw new Error('参数必须是 JSON 字符串数组。');
+    throw new Error(t('extensionEditor.invalidArgs'));
   return parsed as string[];
 }
 export function ExtensionEditor({
@@ -48,6 +57,8 @@ export function ExtensionEditor({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
+  const id = useId();
   const client = useQueryClient();
   const save = useExtensionMutation(projectId);
   const test = useExtensionMutation<TestResult>(projectId);
@@ -119,7 +130,7 @@ export function ExtensionEditor({
         !['connected', 'needs-auth', 'failed'].includes(result?.status) ||
         !Array.isArray(result.tools)
       )
-        throw new Error('连接测试响应格式不正确。');
+        throw new Error(t('extensionEditor.invalidTest'));
       const latest =
         client
           .getQueryData<Extension[]>(extensionKeys.list(projectId))
@@ -177,7 +188,7 @@ export function ExtensionEditor({
   function payload() {
     const trimmed = name.trim();
     if (!(kind === 'mcp' ? /^[\p{L}\p{N}_.:-]+$/u : /^[\p{L}\p{N}_:-]+$/u).test(trimmed))
-      throw new Error('名称请使用字母、数字、短横线、下划线或冒号；MCP 名称也可以包含句点。');
+      throw new Error(t('extensionEditor.invalidName'));
     const fields = { kind, name: trimmed, description: description.trim(), enabled };
     if (kind !== 'mcp')
       return {
@@ -192,19 +203,19 @@ export function ExtensionEditor({
       try {
         parsed = new URL(url.trim());
       } catch {
-        throw new Error('请输入完整的 HTTP 或 HTTPS 服务 URL。');
+        throw new Error(t('extensionEditor.invalidUrl'));
       }
       if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
-        throw new Error('服务 URL 需使用 HTTP 或 HTTPS，且不能包含用户名或密码。');
+        throw new Error(t('extensionEditor.unsafeUrl'));
       const variable = tokenEnv.trim();
       if (variable && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable))
-        throw new Error('请填写有效的令牌环境变量名。');
+        throw new Error(t('extensionEditor.invalidToken'));
       transport = { type: 'http', url: url.trim(), ...(variable ? { tokenEnv: variable } : {}) };
     } else {
       const variables = [...new Set(envNames.split(/\s+/).filter(Boolean))];
       if (variables.some((value) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)))
-        throw new Error('环境变量名只能包含字母、数字和下划线，且不能以数字开头。');
-      if (!command.trim()) throw new Error('请填写可执行命令。');
+        throw new Error(t('extensionEditor.invalidEnv'));
+      if (!command.trim()) throw new Error(t('extensionEditor.commandRequired'));
       transport = {
         type: 'stdio',
         command: command.trim(),
@@ -238,7 +249,7 @@ export function ExtensionEditor({
       if (mounted.current && returned) setItem(returned);
       if (!andTest) {
         if (mounted.current) {
-          onSaved('扩展已保存');
+          onSaved(t('extensionEditor.saved'));
           onClose();
         }
         return;
@@ -258,7 +269,7 @@ export function ExtensionEditor({
       if (!saved) {
         if (mounted.current) {
           setStale(true);
-          setError('扩展已保存，但无法确认可用于测试的扩展 ID。请关闭编辑器并重新加载列表。');
+          setError(t('extensionEditor.unknownSavedId'));
         }
         return;
       }
@@ -270,7 +281,7 @@ export function ExtensionEditor({
       if (mounted.current) {
         setStale(isConflict(cause));
         setError(
-          `${messageOf(cause)}${isConflict(cause) ? ' 当前编辑内容已保留，请关闭后重新打开最新版本再保存。' : ''}`,
+          `${messageOf(cause)}${isConflict(cause) ? t('extensionEditor.conflictSuffix') : ''}`,
         );
       }
     } finally {
@@ -283,8 +294,8 @@ export function ExtensionEditor({
     setReadingFile(true);
     try {
       if (!/\.(md|markdown)$/i.test(file.name))
-        throw new Error('请选择 Markdown 文件（.md 或 .markdown）。');
-      if (file.size > 1048576) throw new Error('Markdown 文件不能超过 1 MiB。');
+        throw new Error(t('extensionEditor.markdownRequired'));
+      if (file.size > 1048576) throw new Error(t('extensionEditor.markdownTooLarge'));
       const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
       if (!mounted.current || sequence !== fileSequence.current) return;
       setName((old) =>
@@ -297,7 +308,7 @@ export function ExtensionEditor({
       setError('');
     } catch (cause) {
       if (mounted.current && sequence === fileSequence.current)
-        setError(cause instanceof TypeError ? '文件不是有效的 UTF-8 文本。' : messageOf(cause));
+        setError(cause instanceof TypeError ? t('extensionEditor.invalidUtf8') : messageOf(cause));
     } finally {
       if (mounted.current && sequence === fileSequence.current) setReadingFile(false);
     }
@@ -307,7 +318,7 @@ export function ExtensionEditor({
     if (!toolMap.has(permission.name))
       toolMap.set(permission.name, {
         name: permission.name,
-        description: '已保存的工具；本次尚未发现。',
+        description: t('extensionEditor.savedTool'),
       });
   const permissions = new Map(
     allowedTools.map((permission) => [permission.name, permission.access]),
@@ -324,8 +335,8 @@ export function ExtensionEditor({
   }
   return (
     <FeatureDialog
-      title={`${initialItem ? '编辑' : '新建'} ${kinds[kind]}`}
-      description={`项目 · ${projectName}`}
+      title={`${initialItem ? t('agents.edit') : t('extensionEditor.new')} ${kinds[kind]}`}
+      description={t('extensionEditor.project', { name: projectName })}
       busy={busy || bindingsOpen}
       onClose={onClose}
     >
@@ -333,11 +344,11 @@ export function ExtensionEditor({
         <fieldset className="ext-editor-fields" disabled={busy}>
           <div className="ext-field-pair">
             <Field
-              label="名称"
+              label={t('common.name')}
               help={
                 kind === 'mcp'
-                  ? '在 # 菜单中显示的服务名称'
-                  : '在 / 菜单中显示；使用字母、数字、短横线、下划线或冒号'
+                  ? t('extensionEditor.mcpNameHelp')
+                  : t('extensionEditor.markdownNameHelp')
               }
             >
               <input
@@ -350,34 +361,28 @@ export function ExtensionEditor({
               />
             </Field>
             <label className="ext-enable-field">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(event) => setEnabled(event.target.checked)}
-              />
-              启用此扩展
+              <Switch checked={enabled} disabled={busy} onCheckedChange={setEnabled} />
+              {t('extensionEditor.enable')}
             </label>
           </div>
           {kind === 'skill' ? (
-            <section className="ext-tool-section" aria-label="Skill 工具绑定">
+            <section className="ext-tool-section" aria-label={t('extensionEditor.bindingsLabel')}>
               <div className="ext-tool-heading">
-                <h3>工具绑定</h3>
+                <h3>{t('extensionEditor.bindings')}</h3>
                 <ActionButton
                   ref={bindingsButton}
                   disabled={!item}
                   onClick={() => setBindingsOpen(true)}
                 >
-                  配置工具绑定
+                  {t('extensionEditor.configureBindings')}
                 </ActionButton>
               </div>
               <p className="ext-help">
-                {item
-                  ? '配置 Skill 使用的内置工具、项目 MCP 工具、HTTPS 请求或命令预设，单独保存。'
-                  : '先保存 Skill，再打开详情配置工具绑定。'}
+                {item ? t('extensionEditor.bindingsHelp') : t('extensionEditor.saveSkillFirst')}
               </p>
             </section>
           ) : null}
-          <Field label="描述">
+          <Field label={t('common.description')}>
             <textarea
               rows={2}
               maxLength={2000}
@@ -388,27 +393,29 @@ export function ExtensionEditor({
           {kind === 'mcp' ? (
             <>
               <label className="ext-auto-field">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={autoUseInChat}
-                  onChange={(event) => setAutoUseInChat(event.target.checked)}
+                  disabled={busy}
+                  aria-describedby={`${id}-auto-chat-help`}
+                  onCheckedChange={setAutoUseInChat}
                 />
                 <span>
-                  在项目普通会话中自动提供工具<small>会话模式和已授权工具决定本轮可用范围。</small>
+                  {t('extensionEditor.autoChat')}
+                  <small id={`${id}-auto-chat-help`}>{t('extensionEditor.autoChatHelp')}</small>
                 </span>
               </label>
-              <Field label="连接方式">
+              <Field label={t('extensionEditor.transport')}>
                 <select
                   value={transportType}
                   onChange={(event) => setTransportType(event.target.value as McpTransport['type'])}
                 >
-                  <option value="http">HTTP</option>
-                  <option value="stdio">本地进程 · stdio</option>
+                  <option value="http">{t('common.http')}</option>
+                  <option value="stdio">{t('extensionEditor.stdio')}</option>
                 </select>
               </Field>
               {transportType === 'http' ? (
                 <>
-                  <Field label="服务 URL">
+                  <Field label={t('extensionEditor.serviceUrl')}>
                     <input
                       type="url"
                       required
@@ -418,7 +425,10 @@ export function ExtensionEditor({
                       onChange={(event) => setUrl(event.target.value)}
                     />
                   </Field>
-                  <Field label="令牌环境变量名（可选）" help="填写本地服务端读取的变量名称。">
+                  <Field
+                    label={t('extensionEditor.tokenEnv')}
+                    help={t('extensionEditor.tokenEnvHelp')}
+                  >
                     <input
                       pattern="[A-Za-z_][A-Za-z0-9_]*"
                       autoComplete="off"
@@ -429,7 +439,7 @@ export function ExtensionEditor({
                 </>
               ) : (
                 <>
-                  <Field label="可执行命令">
+                  <Field label={t('extensionEditor.command')}>
                     <input
                       required
                       spellCheck={false}
@@ -438,7 +448,7 @@ export function ExtensionEditor({
                       onChange={(event) => setCommand(event.target.value)}
                     />
                   </Field>
-                  <Field label="参数 · JSON 字符串数组">
+                  <Field label={t('extensionEditor.args')}>
                     <textarea
                       className="ext-code-input"
                       rows={3}
@@ -448,17 +458,20 @@ export function ExtensionEditor({
                     />
                   </Field>
                   <label className="ext-auto-field">
-                    <input
-                      type="checkbox"
+                    <Switch
                       checked={keepAlive}
-                      onChange={(event) => setKeepAlive(event.target.checked)}
+                      disabled={busy}
+                      aria-describedby={`${id}-keep-alive-help`}
+                      onCheckedChange={setKeepAlive}
                     />
                     <span>
-                      跨会话保留进程{' '}
-                      <small>同一项目的聊天共享此 MCP 状态，直到服务停止或配置变更。</small>
+                      {t('extensionEditor.keepAlive')}{' '}
+                      <small id={`${id}-keep-alive-help`}>
+                        {t('extensionEditor.keepAliveHelp')}
+                      </small>
                     </span>
                   </label>
-                  <Field label="环境变量名 · 每行一个" help="仅填写变量名，值由本地服务端提供。">
+                  <Field label={t('extensionEditor.envNames')} help={t('extensionEditor.envHelp')}>
                     <textarea
                       className="ext-code-input"
                       rows={3}
@@ -474,23 +487,22 @@ export function ExtensionEditor({
                   <div className="ext-test-result" data-ext-status={connection.status}>
                     <strong>{testLabels[connection.status]}</strong>
                     <p>
-                      {connection.message ||
-                        connection.statusMessage ||
-                        `发现 ${connection.tools.length} 个工具`}
+                      {extensionDetail(connection.message || connection.statusMessage) ||
+                        t('extensionEditor.discoveredCount', { count: connection.tools.length })}
                     </p>
                   </div>
                 ) : (
-                  <p className="ext-help">连接尚未测试。测试会由本地服务端发起。</p>
+                  <p className="ext-help">{t('extensionEditor.notTested')}</p>
                 )}
               </div>
               <section className="ext-tool-section">
                 <div className="ext-tool-heading">
-                  <h3>允许的工具</h3>
-                  <span className="ext-tool-count">已选择 {allowedTools.length} 个</span>
+                  <h3>{t('extensionEditor.allowedTools')}</h3>
+                  <span className="ext-tool-count">
+                    {t('extensionEditor.selectedCount', { count: allowedTools.length })}
+                  </span>
                 </div>
-                <p className="ext-help">
-                  勾选项目可以使用的工具，并设置访问方式。新发现的工具默认不勾选。
-                </p>
+                <p className="ext-help">{t('extensionEditor.allowedToolsHelp')}</p>
                 <div className="ext-tool-list">
                   {toolMap.size ? (
                     [...toolMap.values()].map((tool) => (
@@ -503,11 +515,11 @@ export function ExtensionEditor({
                           />
                           <span>
                             <strong>{tool.name}</strong>
-                            <small>{tool.description || '暂无描述'}</small>
+                            <small>{tool.description || t('common.noDescription')}</small>
                           </span>
                         </label>
                         <select
-                          aria-label={`${tool.name} 访问方式`}
+                          aria-label={t('extensionEditor.accessLabel', { name: tool.name })}
                           disabled={!permissions.has(tool.name)}
                           value={permissions.get(tool.name) ?? 'approval'}
                           onChange={(event) =>
@@ -523,20 +535,20 @@ export function ExtensionEditor({
                             )
                           }
                         >
-                          <option value="approval">每次审批</option>
-                          <option value="read">只读</option>
+                          <option value="approval">{t('common.approval')}</option>
+                          <option value="read">{t('common.readOnly')}</option>
                         </select>
                       </div>
                     ))
                   ) : (
-                    <p className="ext-tool-empty">保存并测试连接后，在这里选择工具。</p>
+                    <p className="ext-tool-empty">{t('extensionEditor.noTools')}</p>
                   )}
                 </div>
               </section>
             </>
           ) : (
             <>
-              <Field label="来源">
+              <Field label={t('common.source')}>
                 <input
                   maxLength={500}
                   value={source}
@@ -544,14 +556,14 @@ export function ExtensionEditor({
                 />
               </Field>
               <div className="ext-markdown-toolbar">
-                <span>Markdown 指令</span>
+                <span>{t('extensionEditor.markdown')}</span>
                 <label className="ext-file-button">
-                  导入文件
+                  {t('extensionEditor.importFile')}
                   <input
                     ref={fileInput}
                     type="file"
                     accept=".md,.markdown,text/markdown,text/plain"
-                    aria-label="导入 Markdown 文件"
+                    aria-label={t('extensionEditor.importMarkdownLabel')}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.target.value = '';
@@ -565,7 +577,7 @@ export function ExtensionEditor({
                 rows={12}
                 required
                 spellCheck={false}
-                aria-label="Markdown 指令正文"
+                aria-label={t('extensionEditor.bodyLabel')}
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
               />
@@ -573,56 +585,56 @@ export function ExtensionEditor({
               {kind === 'skill' ? (
                 <>
                   <label className="ext-auto-field">
-                    <input
-                      type="checkbox"
+                    <Switch
                       checked={autoInvoke && allowsAuto(markdown)}
-                      disabled={!allowsAuto(markdown)}
-                      onChange={(event) => setAutoInvoke(event.target.checked)}
+                      disabled={busy || !allowsAuto(markdown)}
+                      aria-describedby={`${id}-auto-invoke-help`}
+                      onCheckedChange={setAutoInvoke}
                     />
                     <span>
-                      允许自动调用
-                      <small>
+                      {t('extensions.autoLabel')}
+                      <small id={`${id}-auto-invoke-help`}>
                         {allowsAuto(markdown)
-                          ? '启用后，模型可在当前项目中按需加载。保存后从下一轮对话生效。'
-                          : '上游声明禁止模型调用，当前自动调用已关闭。'}
+                          ? t('extensionEditor.autoHelp')
+                          : t('extensionEditor.autoForbidden')}
                       </small>
                     </span>
                   </label>
                   <p className="ext-help">
-                    手动调用与兼容性由服务端解析 Markdown 元数据。
+                    {t('extensionEditor.metadataHelp')}
                     {markdown?.userInvocable === false
-                      ? '当前不支持 / 手动调用。'
-                      : '关闭自动调用后，仍可使用 / 手动选择兼容的 Skill。'}
+                      ? t('extensionEditor.noManual')
+                      : t('extensionEditor.manualHelp')}
                   </p>
                 </>
               ) : null}
             </>
           )}
           {markdown?.compatibility ? (
-            <p className="ext-compatibility">{markdown.compatibility}</p>
+            <p className="ext-compatibility">{extensionDetail(markdown.compatibility)}</p>
           ) : null}
         </fieldset>
         <ErrorMessage error={error} />
         <div className="ext-dialog-actions">
           <ActionButton disabled={busy} onClick={onClose}>
-            取消
+            {t('common.cancel')}
           </ActionButton>
           <span className="ext-save-state" role="status">
             {busy
               ? test.isPending
-                ? '正在测试连接…'
+                ? t('extensionEditor.testing')
                 : readingFile
-                  ? '正在读取文件…'
-                  : '正在保存…'
+                  ? t('extensionEditor.readingFile')
+                  : t('common.saving')
               : ''}
           </span>
           {kind === 'mcp' ? (
             <ActionButton type="submit" value="test" disabled={busy || stale}>
-              保存并测试
+              {t('extensionEditor.saveTest')}
             </ActionButton>
           ) : null}
-          <ActionButton type="submit" value="save" primary disabled={busy || stale}>
-            保存
+          <ActionButton type="submit" value="save" variant="default" disabled={busy || stale}>
+            {t('common.save')}
           </ActionButton>
         </div>
       </form>
@@ -641,7 +653,7 @@ export function ExtensionEditor({
               .getQueryData<Extension[]>(extensionKeys.list(projectId))
               ?.find((value) => value.id === item.id);
             if (latest) setItem(latest);
-            onSaved('工具绑定已保存');
+            onSaved(t('extensionEditor.bindingsSaved'));
           }}
         />
       ) : null}

@@ -3,8 +3,11 @@
  * @implementation 按项目、会话和状态查询分页数据，展示运行模式并提供打开操作。
  * @updated 2026-11-20T14:44:21+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { useMemo, useState, type FormEvent } from 'react';
+import { Activity, ChevronRight, FileText, Folder, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import type { Project, Run } from '@shared/types';
 import { useRuns } from '@/use-query/runs/use-runs';
 import { useArtifacts } from '@/use-query/artifacts/use-artifacts';
@@ -13,7 +16,6 @@ import { ArtifactAction } from './artifact-action';
 import {
   EmptyState,
   ErrorNotice,
-  Icon,
   Loading,
   StatusBadge,
   fieldClass,
@@ -50,6 +52,7 @@ export function Collections(props: CollectionsProps) {
   return <CollectionView key={`${props.view}:${props.sessionId ?? 'workspace'}`} {...props} />;
 }
 function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsProps) {
+  const { t, locale } = useUiTranslation('inspector');
   const [filters, setFilters] = useState<Filters>({
     projectId: '',
     sessionId: sessionId ?? '',
@@ -97,20 +100,29 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
   }
   return (
     <section
-      aria-label={view === 'runs' ? '执行记录' : '交付物集合'}
-      className={`mx-auto w-full max-w-6xl space-y-6 ${sessionId ? 'p-4 sm:p-6' : 'p-4 sm:p-7 lg:p-10'}`}
+      aria-label={view === 'runs' ? t('collections.runs') : t('collections.artifactCollection')}
+      className={cn(
+        'mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-6 p-4',
+        sessionId ? 'sm:p-6' : 'sm:p-7 lg:p-10',
+      )}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Icon name={view === 'runs' ? 'activity' : 'folder'} className="size-3.5" />
-            {sessionId ? '当前会话' : '工作空间'}
+            {view === 'runs' ? (
+              <Activity aria-hidden="true" className="size-4" />
+            ) : (
+              <Folder aria-hidden="true" className="size-4" />
+            )}
+            {sessionId ? t('collections.currentSession') : t('collections.workspace')}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {view === 'runs' ? '执行记录' : '交付物'}
+            {view === 'runs' ? t('collections.runs') : t('common.artifacts')}
           </h1>
           <p className="mt-2 text-xs leading-6 text-muted-foreground">
-            {view === 'runs' ? '每一轮任务，都有迹可循。' : '在这里，找到每一次工作的成果。'}
+            {view === 'runs'
+              ? t('collections.runsDescription')
+              : t('collections.artifactsDescription')}
           </p>
         </div>
         <Button
@@ -120,39 +132,39 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
           onClick={resource.reload}
           disabled={resource.loading}
         >
-          <Icon name="refresh" />
-          刷新
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
+          {t('common.refresh')}
         </Button>
       </div>
       <form
         onSubmit={submitSession}
-        className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-4"
+        className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card text-card-foreground p-4"
       >
         <label className="grid min-w-36 flex-1 gap-2 text-[11px] font-medium text-muted-foreground">
-          项目
+          {t('common.project')}
           <select
             value={filters.projectId}
             className={fieldClass}
             onChange={(event) => updateFilter({ projectId: event.target.value })}
           >
-            <option value="">全部项目</option>
+            <option value="">{t('collections.allProjects')}</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
-                {!project.available ? '（不可用）' : ''}
+                {!project.available ? t('collections.unavailableSuffix') : ''}
               </option>
             ))}
           </select>
         </label>
         {view === 'runs' ? (
           <label className="grid min-w-32 flex-1 gap-2 text-[11px] font-medium text-muted-foreground">
-            运行状态
+            {t('collections.runStatus')}
             <select
               value={filters.status}
               className={fieldClass}
               onChange={(event) => updateFilter({ status: event.target.value })}
             >
-              <option value="">全部状态</option>
+              <option value="">{t('collections.allStatuses')}</option>
               {runStatuses.map((status) => (
                 <option key={status} value={status}>
                   {statusLabel(status)}
@@ -163,39 +175,41 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
         ) : null}
         {!sessionId ? (
           <label className="grid min-w-40 flex-[1.5] gap-2 text-[11px] font-medium text-muted-foreground">
-            会话 ID
+            {t('collections.sessionId')}
             <input
               className={fieldClass}
               value={sessionInput}
               onChange={(event) => setSessionInput(event.target.value)}
-              placeholder="全部会话"
+              placeholder={t('collections.allSessions')}
               spellCheck={false}
             />
           </label>
         ) : null}
         {!sessionId ? (
           <Button type="submit" variant="secondary">
-            筛选
+            {t('collections.filter')}
           </Button>
         ) : null}
         {filtered ? (
           <Button type="button" variant="ghost" onClick={clear}>
-            重置
+            {t('collections.reset')}
           </Button>
         ) : null}
       </form>
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <p role="status">
           {resource.data
-            ? `共 ${total.toLocaleString()} ${view === 'runs' ? '次运行' : '份交付物'}`
-            : '正在获取记录'}
+            ? t(view === 'runs' ? 'collections.totalRuns' : 'collections.totalArtifacts', {
+                count: total,
+              })
+            : t('collections.fetching')}
         </p>
         <label className="flex items-center gap-2">
-          每页
+          {t('collections.perPage')}
           <select
-            aria-label="每页记录数"
+            aria-label={t('collections.pageSize')}
             value={filters.limit}
-            className={`${fieldClass} h-8 w-20`}
+            className={cn(fieldClass, 'h-8 w-20')}
             onChange={(event) => updateFilter({ limit: Number(event.target.value) })}
           >
             {[20, 50, 100].map((limit) => (
@@ -208,50 +222,56 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
       </div>
       {resource.error ? <ErrorNotice message={resource.error} onRetry={resource.reload} /> : null}
       {resource.loading && !resource.data ? (
-        <Loading>正在加载{view === 'runs' ? '执行记录' : '交付物'}…</Loading>
+        <Loading>
+          {t(view === 'runs' ? 'collections.loadingRuns' : 'collections.loadingArtifacts')}
+        </Loading>
       ) : null}
       {resource.data && count === 0 ? (
         <EmptyState
           title={
             filters.offset > 0
-              ? '这一页已没有记录'
+              ? t('collections.emptyPage')
               : view === 'runs'
-                ? '暂无运行记录'
-                : '暂无交付物'
+                ? t('collections.emptyRuns')
+                : t('collections.emptyArtifacts')
           }
-          icon={view === 'runs' ? 'activity' : 'file'}
+          icon={view === 'runs' ? Activity : FileText}
         >
           {filtered
-            ? '试试调整筛选条件，或清除筛选查看全部记录。'
+            ? t('collections.adjustFilters')
             : view === 'runs'
-              ? '发送任务后，每轮运行会记录在这里。'
-              : '运行生成的文件会收集在这里，方便预览与下载。'}
+              ? t('collections.runsHint')
+              : t('collections.artifactsHint')}
         </EmptyState>
       ) : null}
       {view === 'runs' && runPage.data?.items.length ? (
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card/40">
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
           {runPage.data.items.map((run) => (
             <button
               key={run.id}
               type="button"
               onClick={() => onOpenRun(run)}
-              className="group flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4 sm:px-5"
+              className="group flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-4 sm:px-5"
             >
               <span className="hidden size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground sm:flex">
-                <Icon name="activity" />
+                <Activity aria-hidden="true" className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{run.prompt || '运行'}</span>
+                <span className="block truncate text-sm font-medium">
+                  {run.prompt || t('common.run')}
+                </span>
                 <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-                  <span>{projectNames.get(run.projectId) ?? '项目不可用'}</span>
+                  <span>
+                    {projectNames.get(run.projectId) ?? t('collections.projectUnavailable')}
+                  </span>
                   <time dateTime={run.createdAt}>{formatDate(run.createdAt)}</time>
                   <span>{runModeLabel(run)}</span>
                 </span>
               </span>
               <StatusBadge status={run.status} />
-              <Icon
-                name="arrow"
-                className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
+              <ChevronRight
+                aria-hidden="true"
+                className="hidden size-4 shrink-0 text-muted-foreground sm:block"
               />
             </button>
           ))}
@@ -260,11 +280,11 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
       {view === 'artifacts' && artifactPage.data?.items.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {artifactPage.data.items.map((artifact) => (
-            <article key={artifact.id} className="min-w-0 space-y-2">
+            <article key={artifact.id} className="flex min-w-0 flex-col gap-2">
               <ArtifactAction artifact={artifact} />
               <p className="flex min-w-0 justify-between gap-3 px-1 text-[10px] text-muted-foreground">
                 <span className="truncate">
-                  {projectNames.get(artifact.projectId) ?? '项目不可用'}
+                  {projectNames.get(artifact.projectId) ?? t('collections.projectUnavailable')}
                 </span>
                 <time dateTime={artifact.createdAt} className="shrink-0">
                   {formatDate(artifact.createdAt)}
@@ -276,7 +296,7 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
       ) : null}
       {resource.data && (canPrevious || canNext) ? (
         <nav
-          aria-label="集合分页"
+          aria-label={t('collections.pagination')}
           className="flex items-center justify-between gap-3 border-t border-border pt-5"
         >
           <Button
@@ -291,11 +311,11 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
               }))
             }
           >
-            上一页
+            {t('common.previous')}
           </Button>
           <span className="text-xs text-muted-foreground">
             {count ? `${filters.offset + 1}–${filters.offset + count}` : '0'} /{' '}
-            {total.toLocaleString()}
+            {total.toLocaleString(locale)}
           </span>
           <Button
             type="button"
@@ -306,7 +326,7 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
               setFilters((previous) => ({ ...previous, offset: previous.offset + previous.limit }))
             }
           >
-            下一页
+            {t('common.next')}
           </Button>
         </nav>
       ) : null}

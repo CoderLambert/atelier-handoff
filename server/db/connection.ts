@@ -7,6 +7,9 @@ import SQLite from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { sessionSnapshotRepository } from './repositories/session-snapshot.js';
 import { applySnapshotIndexes } from './migrations/apply-snapshot-indexes.js';
+import { applySubagents } from './migrations/apply-subagents.js';
+import { subagentRepository } from './repositories/subagents.js';
+import { workspaceLayoutRepository } from './repositories/workspace-layout.js';
 
 // The transitional Store only uses scalar bindings and ordinary row-object statements.
 type Scalar = string | number | bigint | Uint8Array | null;
@@ -23,10 +26,14 @@ export interface LegacyDatabase {
 export function openWorkbenchDatabase(path: string) {
   const native = new SQLite(path);
   const db: LegacyDatabase = native;
+  const orm = drizzle({ client: native });
   return {
     db,
     readTransaction: <T>(work: () => T): T => native.transaction(work).deferred(),
-    sessionSnapshots: sessionSnapshotRepository(drizzle({ client: native })),
+    sessionSnapshots: sessionSnapshotRepository(orm),
+    subagents: subagentRepository(orm),
+    workspaceLayout: workspaceLayoutRepository(orm),
     applySnapshotIndexes: () => applySnapshotIndexes(db),
+    applySubagents: () => applySubagents(db),
   };
 }

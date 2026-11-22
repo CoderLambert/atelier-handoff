@@ -56,7 +56,7 @@ async function request(
     const code =
       typeof detail === 'object' && detail !== null && 'code' in detail ? detail.code : undefined;
     throw new ApiError(
-      typeof message === 'string' ? message : `请求失败 (${response.status})`,
+      typeof message === 'string' ? message : `HTTP ${response.status}`,
       response.status,
       typeof code === 'string' ? code : undefined,
     );

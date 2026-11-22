@@ -31,7 +31,10 @@ const nodeVersion = '24.21.0';
 const packagerVersion = '20.3.0';
 const sqlitePackage = 'node_modules/better-sqlite3';
 const linuxSqliteBinding = `resources/runtime/${sqlitePackage}/prebuilds/linux-x64.node`;
-const migrationPath = 'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql';
+const migrationPaths = [
+  'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql',
+  'resources/runtime/server/db/migrations/0007-subagents.sql',
+] as const;
 const targets = {
   'win32-x64': {
     platform: 'win32',
@@ -136,7 +139,10 @@ const release = z
       orm: z.object({ name: z.literal('drizzle-orm'), version: z.literal('0.45.4') }),
       driver: z.object({ name: z.literal('better-sqlite3'), version: z.literal('13.2.0') }),
       nativeBinding: z.object({ path: z.literal(linuxSqliteBinding), sha256: marker }),
-      migrations: z.array(z.object({ path: z.literal(migrationPath), sha256: marker })).length(1),
+      migrations: z
+        .array(z.object({ path: z.enum(migrationPaths), sha256: marker }))
+        .length(migrationPaths.length)
+        .refine((items) => new Set(items.map((item) => item.path)).size === migrationPaths.length),
     }),
     runtimeDependencyRoots: z.array(z.string()),
     runtimeDependencies: z.array(
@@ -449,7 +455,7 @@ for (const name of [
   'runtime/dist/client/index.html',
   'licenses/inventory.json',
   'release.json',
-  migrationPath.slice('resources/'.length),
+  ...migrationPaths.map((path) => path.slice('resources/'.length)),
   `runtime/${sqlitePackage}/${sqliteBinding}`,
 ])
   assert.ok((await stat(join(resources, name))).isFile(), name);

@@ -3,11 +3,18 @@
  * @implementation 文档原件直接上传 File；图片和文本保留 JSON、大小和 UTF-8 校验，串行写入后刷新所属会话。
  * @updated 2026-11-21T00:00:00+08:00
  */
+import { getTranslator } from '@/i18n';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { attachmentImageMime, maxImageAttachmentBytes, type Attachment } from '@shared/types';
 import { documentAttachmentMime } from '@shared/document-attachments';
 import { api } from '@/api/client';
 import { attachmentKeys } from './keys';
+
+export class AttachmentValidationError extends Error {
+  constructor(readonly translationKey: 'attachment.supportedFiles' | 'attachment.requireUtf8') {
+    super(getTranslator('chat')(translationKey));
+  }
+}
 
 export const attachmentAccept =
   '.png,.jpg,.jpeg,.xls,.xlsx,.pdf,.docx,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.css,.html,.yaml,.yml,.log,.py';
@@ -20,16 +27,14 @@ async function legacyAttachmentBody(file: File) {
       ? file.size > maxImageAttachmentBytes
       : file.size > 1024 * 1024 || !textFile.test(file.name)
   )
-    throw new Error(
-      '支持 XLS、XLSX、PDF、DOCX、5 MiB 以内的 PNG、JPEG 或 1 MiB 以内的 UTF-8 文本文件',
-    );
+    throw new AttachmentValidationError('attachment.supportedFiles');
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!image) {
     try {
       new TextDecoder('utf-8', { fatal: true }).decode(bytes);
       if (bytes.includes(0)) throw new Error();
     } catch {
-      throw new Error('请上传 UTF-8 文本文件');
+      throw new AttachmentValidationError('attachment.requireUtf8');
     }
   }
   let binary = '';

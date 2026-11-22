@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-22",
+  "platform": "Linux x64",
+  "sdkVersion": "0.3.326",
+  "desktopSmoke": {
+    "command": "node --import tsx scripts/smoke-native-harness.mts",
+    "transport": "loopback model fixture",
+    "electronWindow": true,
+    "nativeFileChangedOutsideProject": true,
+    "stoppedCommandExited": true,
+    "reopenedSessionWithCheckpoint": true,
+    "sdkContextRebuilt": true,
+    "historicalConstraintsRestored": true,
+    "historicalToolEvidenceRestored": true,
+    "unverifiedSideEffectRestored": true,
+    "toolsReplayed": false,
+    "modelRequests": { "files": 3, "progress": 1, "stop": 1, "recover": 1 }
+  },
+  "historicalReplay": {
+    "type": "offline replay of previously recorded tool results",
+    "minimumOccurrences": 3,
+    "minimumElapsedMs": 60000,
+    "firstAdvisorySeconds": [236, 149],
+    "runs": [
+      { "searchCalls": 58, "recoverableSourceCount": 16 },
+      { "searchCalls": 20, "recoverableSourceCount": 16 }
+    ]
+  },
+  "releaseChecks": ["npm run check", "npm test", "npm run build", "npm run build:desktop"],
+  "liveModelComparison": "requires authorized inference and a compatible loopback gateway; see docs/harness-eval.md"
+}

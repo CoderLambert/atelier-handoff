@@ -1,0 +1,3511 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-23",
+  "kind": "loopback HTTP request composition audit",
+  "configuration": {
+    "node": "24.21.0",
+    "agentSdk": "0.3.326",
+    "claudeCli": "2.1.326",
+    "modelAlias": "codex/gpt-6.2-sol",
+    "requestedEffort": "medium",
+    "realInferenceCalls": 0
+  },
+  "measurements": {
+    "unit": "UTF-8 JSON field bytes; these are not tokenizer output or billing",
+    "workingTreeRuleFilesUtf8Bytes": {
+      "AGENTS.md": 8368,
+      "CLAUDE.md": 671
+    },
+    "workingTreeNativeRuleBlockUtf8Bytes": 8980,
+    "observedLongTestFirstRequestTokens": [
+      {
+        "driver": "atelier-native",
+        "window": 120000,
+        "totalInputTokens": 13515
+      },
+      {
+        "driver": "claude-code",
+        "window": 120000,
+        "totalInputTokens": 9284
+      },
+      {
+        "driver": "atelier-native",
+        "window": 140000,
+        "totalInputTokens": 13516
+      },
+      {
+        "driver": "claude-code",
+        "window": 140000,
+        "totalInputTokens": 9284
+      }
+    ]
+  },
+  "notes": [
+    "The CLI common-tools run matches the previous comparison restrictions. The default-tools run removes only the explicit tool allowlist.",
+    "Synthetic rules contain one marker per file. In native requests, the extra AGENTS.md marker is in a system-reminder block labelled Result of calling the Read tool, distinct from the explicit project instruction block.",
+    "Changing an @AGENTS.md line to literal AGENTS.md removes the extra block. Two equal imports in the same input produced one additional file read; it recurred on the next turn."
+  ],
+  "cases": [
+    {
+      "driver": "atelier-native",
+      "subject": "empty",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 38188,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 38188,
+          "systemBytes": 6690,
+          "toolsBytes": 22411,
+          "messagesBytes": 8739,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "8b30508910252615f25ff189c0793e65e35e869ebda564e634ebd69a6b8f1cdf"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6432,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "ccd962744fd2e4f60c3b0e1898db04369d240117f30019cba9c656e05bbf99a5"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 888,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7848,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 38491,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 38491,
+          "systemBytes": 6690,
+          "toolsBytes": 22411,
+          "messagesBytes": 9042,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "8b30508910252615f25ff189c0793e65e35e869ebda564e634ebd69a6b8f1cdf"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6432,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "ccd962744fd2e4f60c3b0e1898db04369d240117f30019cba9c656e05bbf99a5"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 851,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7848,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 277,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "atelier-native",
+      "subject": "rules-no-import",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 47309,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 47309,
+          "systemBytes": 6710,
+          "toolsBytes": 22411,
+          "messagesBytes": 17840,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6452,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "e612a3f04ad2cc914474be5e7cff2b2323380e59cff6273d2b266380c72338f7"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 9979,
+              "markers": {
+                "agents": 1,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7858,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 56703,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 56703,
+          "systemBytes": 6710,
+          "toolsBytes": 22411,
+          "messagesBytes": 27234,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6452,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "e612a3f04ad2cc914474be5e7cff2b2323380e59cff6273d2b266380c72338f7"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 9942,
+              "markers": {
+                "agents": 1,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7858,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 9368,
+              "markers": {
+                "agents": 1,
+                "claude": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "atelier-native",
+      "subject": "rules",
+      "ruleFileBytes": {
+        "AGENTS.md": 8634,
+        "CLAUDE.md": 652
+      },
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 56831,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 56831,
+          "systemBytes": 6690,
+          "toolsBytes": 22411,
+          "messagesBytes": 27382,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6432,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "5097bae7caa59f342332fd7d38ded55a6edef756ba26579460b60cd44fa4468b"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 206,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 19324,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7848,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 75779,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 75779,
+          "systemBytes": 6690,
+          "toolsBytes": 22411,
+          "messagesBytes": 46330,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6432,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "5097bae7caa59f342332fd7d38ded55a6edef756ba26579460b60cd44fa4468b"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 206,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 19287,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7848,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 206,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 18715,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "atelier-native",
+      "subject": "rules-two-imports",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 56893,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 56893,
+          "systemBytes": 6714,
+          "toolsBytes": 22411,
+          "messagesBytes": 27420,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6456,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "8a277ae8e638bb92ca68fb64b9184546bd456403d8fe9b5b028af97a81305ad3"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 218,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 19338,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7860,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 75867,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 75867,
+          "systemBytes": 6714,
+          "toolsBytes": 22411,
+          "messagesBytes": 46394,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4556,
+              "descriptionBytes": 2907,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            },
+            {
+              "name": "mcp__atelier__publish_artifact",
+              "bytes": 540,
+              "descriptionBytes": 171,
+              "schemaBytes": 297
+            },
+            {
+              "name": "mcp__atelier__read_tool_output",
+              "bytes": 940,
+              "descriptionBytes": 411,
+              "schemaBytes": 457
+            },
+            {
+              "name": "mcp__atelier__update_plan",
+              "bytes": 618,
+              "descriptionBytes": 156,
+              "schemaBytes": 395
+            },
+            {
+              "name": "mcp__atelier__web_search",
+              "bytes": 592,
+              "descriptionBytes": 209,
+              "schemaBytes": 317
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 98,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "c195958353db240127c371aa7541ea9ed61c95ad59523984cc3f13083d04e23d"
+            },
+            {
+              "bytes": 156,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "6c1afcd9232947a1d8f7c44a79316f8fe08d06dcdc6e7453f09e2d78fa858e5e"
+            },
+            {
+              "bytes": 6456,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "8a277ae8e638bb92ca68fb64b9184546bd456403d8fe9b5b028af97a81305ad3"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 218,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 19301,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7860,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 218,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 18729,
+              "markers": {
+                "agents": 2,
+                "claude": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-common-tools",
+      "subject": "empty",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 18403,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 18403,
+          "systemBytes": 5817,
+          "toolsBytes": 10637,
+          "messagesBytes": 1601,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5590,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "34b85788b40ac1cba0b9e4b78f24541c90623219446602d590b31759885e1999"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 857,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 18559,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 18559,
+          "systemBytes": 5817,
+          "toolsBytes": 10637,
+          "messagesBytes": 1757,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5590,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "34b85788b40ac1cba0b9e4b78f24541c90623219446602d590b31759885e1999"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 857,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-common-tools",
+      "subject": "rules",
+      "ruleFileBytes": {
+        "AGENTS.md": 8634,
+        "CLAUDE.md": 652
+      },
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 18403,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 18403,
+          "systemBytes": 5817,
+          "toolsBytes": 10637,
+          "messagesBytes": 1601,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5590,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "9dae58d140a5f3f66c9b82c120cd0e3b8fe428648f320b0f47fe37612fb3fc9c"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 857,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 18559,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 18559,
+          "systemBytes": 5817,
+          "toolsBytes": 10637,
+          "messagesBytes": 1757,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Bash",
+              "bytes": 3141,
+              "descriptionBytes": 1600,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "Glob",
+              "bytes": 731,
+              "descriptionBytes": 146,
+              "schemaBytes": 539
+            },
+            {
+              "name": "Grep",
+              "bytes": 3230,
+              "descriptionBytes": 510,
+              "schemaBytes": 2674
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5590,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "9dae58d140a5f3f66c9b82c120cd0e3b8fe428648f320b0f47fe37612fb3fc9c"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 857,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-default-tools",
+      "subject": "empty",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 71132,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71132,
+          "systemBytes": 5989,
+          "toolsBytes": 56808,
+          "messagesBytes": 7987,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5762,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "70b016202ab49a685314036dcd02e3879b64c6d23962bbf6752762c246402b06"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7243,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 71288,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71288,
+          "systemBytes": 5989,
+          "toolsBytes": 56808,
+          "messagesBytes": 8143,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5762,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "70b016202ab49a685314036dcd02e3879b64c6d23962bbf6752762c246402b06"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7243,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-default-tools",
+      "subject": "rules-no-import",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 71162,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71162,
+          "systemBytes": 6009,
+          "toolsBytes": 56808,
+          "messagesBytes": 7997,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5782,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "39e2bb07f56c1cc46bb6c13e816c6ea8f90aecd4ce085498ab4f79fa5bdad710"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7253,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 71318,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71318,
+          "systemBytes": 6009,
+          "toolsBytes": 56808,
+          "messagesBytes": 8153,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5782,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "39e2bb07f56c1cc46bb6c13e816c6ea8f90aecd4ce085498ab4f79fa5bdad710"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7253,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-default-tools",
+      "subject": "rules",
+      "ruleFileBytes": {
+        "AGENTS.md": 8634,
+        "CLAUDE.md": 652
+      },
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 71132,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71132,
+          "systemBytes": 5989,
+          "toolsBytes": 56808,
+          "messagesBytes": 7987,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5762,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "b416764b4baf5cd87e7d38ac0956eeca4f1d91cd27e8d8ea91855c6658946585"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7243,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 71288,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71288,
+          "systemBytes": 5989,
+          "toolsBytes": 56808,
+          "messagesBytes": 8143,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5762,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "b416764b4baf5cd87e7d38ac0956eeca4f1d91cd27e8d8ea91855c6658946585"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7243,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "driver": "cli-default-tools",
+      "subject": "rules-two-imports",
+      "ruleFileBytes": {},
+      "errors": [],
+      "results": [
+        {
+          "stage": 1,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        },
+        {
+          "stage": 2,
+          "status": "completed",
+          "answer": "ACK",
+          "error": null
+        }
+      ],
+      "requests": [
+        {
+          "stage": 1,
+          "wireBytes": 71168,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71168,
+          "systemBytes": 6013,
+          "toolsBytes": 56808,
+          "messagesBytes": 7999,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5786,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "b939b253a6086d69571ed52f8f158cab9084e12f670a2a8b49402b0bc4b91fbd"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 741,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7255,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        },
+        {
+          "stage": 2,
+          "wireBytes": 71324,
+          "requestModel": "codex/gpt-6.2-sol",
+          "requestedEffort": "medium",
+          "totalBytes": 71324,
+          "systemBytes": 6013,
+          "toolsBytes": 56808,
+          "messagesBytes": 8155,
+          "systemMarkers": {
+            "agents": 0,
+            "claude": 0
+          },
+          "tools": [
+            {
+              "name": "Agent",
+              "bytes": 4606,
+              "descriptionBytes": 2957,
+              "schemaBytes": 1602
+            },
+            {
+              "name": "Bash",
+              "bytes": 3125,
+              "descriptionBytes": 1584,
+              "schemaBytes": 1495
+            },
+            {
+              "name": "CronCreate",
+              "bytes": 4534,
+              "descriptionBytes": 3524,
+              "schemaBytes": 958
+            },
+            {
+              "name": "CronDelete",
+              "bytes": 427,
+              "descriptionBytes": 169,
+              "schemaBytes": 206
+            },
+            {
+              "name": "CronList",
+              "bytes": 277,
+              "descriptionBytes": 108,
+              "schemaBytes": 119
+            },
+            {
+              "name": "Edit",
+              "bytes": 966,
+              "descriptionBytes": 368,
+              "schemaBytes": 552
+            },
+            {
+              "name": "EnterWorktree",
+              "bytes": 4027,
+              "descriptionBytes": 3283,
+              "schemaBytes": 689
+            },
+            {
+              "name": "ExitWorktree",
+              "bytes": 2909,
+              "descriptionBytes": 2202,
+              "schemaBytes": 653
+            },
+            {
+              "name": "ListAgents",
+              "bytes": 1159,
+              "descriptionBytes": 791,
+              "schemaBytes": 316
+            },
+            {
+              "name": "Monitor",
+              "bytes": 7493,
+              "descriptionBytes": 6404,
+              "schemaBytes": 1040
+            },
+            {
+              "name": "NotebookEdit",
+              "bytes": 1627,
+              "descriptionBytes": 633,
+              "schemaBytes": 940
+            },
+            {
+              "name": "Read",
+              "bytes": 1923,
+              "descriptionBytes": 806,
+              "schemaBytes": 1071
+            },
+            {
+              "name": "ReportFindings",
+              "bytes": 2181,
+              "descriptionBytes": 576,
+              "schemaBytes": 1549
+            },
+            {
+              "name": "ScheduleWakeup",
+              "bytes": 4923,
+              "descriptionBytes": 3475,
+              "schemaBytes": 1392
+            },
+            {
+              "name": "SendMessage",
+              "bytes": 5709,
+              "descriptionBytes": 4359,
+              "schemaBytes": 1297
+            },
+            {
+              "name": "Skill",
+              "bytes": 1811,
+              "descriptionBytes": 1437,
+              "schemaBytes": 327
+            },
+            {
+              "name": "TaskStop",
+              "bytes": 789,
+              "descriptionBytes": 373,
+              "schemaBytes": 366
+            },
+            {
+              "name": "WebFetch",
+              "bytes": 1082,
+              "descriptionBytes": 478,
+              "schemaBytes": 554
+            },
+            {
+              "name": "WebSearch",
+              "bytes": 863,
+              "descriptionBytes": 344,
+              "schemaBytes": 468
+            },
+            {
+              "name": "Workflow",
+              "bytes": 5716,
+              "descriptionBytes": 3568,
+              "schemaBytes": 2098
+            },
+            {
+              "name": "Write",
+              "bytes": 639,
+              "descriptionBytes": 244,
+              "schemaBytes": 348
+            }
+          ],
+          "systemBlocks": [
+            {
+              "bytes": 99,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "1642f4814d7971e2cd30a1195e7c40eafe139787754dfb1e2a9e867dd72fea34"
+            },
+            {
+              "bytes": 124,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "0d7062851dd7bd7e66d4be4f12ac4951e3d2f587ec408295333a49963bd3f6b7"
+            },
+            {
+              "bytes": 5786,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              },
+              "hash": "b939b253a6086d69571ed52f8f158cab9084e12f670a2a8b49402b0bc4b91fbd"
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "bytes": 704,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "system",
+              "bytes": 7255,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "assistant",
+              "bytes": 61,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            },
+            {
+              "role": "user",
+              "bytes": 130,
+              "markers": {
+                "agents": 0,
+                "claude": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

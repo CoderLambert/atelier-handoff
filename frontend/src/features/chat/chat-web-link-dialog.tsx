@@ -3,7 +3,9 @@
  * @implementation 复用 Dialog 展示目标地址，通过回调打开网页，隔离已关闭弹窗的异步结果并恢复原链接焦点。
  * @updated 2026-11-20T17:55:38+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
 import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, Globe } from 'lucide-react';
 import { desktopBrowserUrlSchema } from '@shared/desktop-browser';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,10 +30,11 @@ export function ChatWebLinkDialog({
   onOpenLink: ChatLinkOpener;
   onClose: () => void;
 }) {
+  const { t } = useUiTranslation('chat');
   const active = useRef(true);
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<{ cause: unknown }>();
   const valid = desktopBrowserUrlSchema.safeParse(url).success;
 
   useEffect(() => {
@@ -56,9 +59,7 @@ export function ChatWebLinkDialog({
       if (active.current) close();
     } catch (reason) {
       if (active.current) {
-        const message =
-          reason instanceof Error && reason.message ? reason.message : '打开链接失败。';
-        setError(`${message} 请重试，或选择另一种打开方式。`);
+        setError({ cause: reason });
       }
     } finally {
       if (active.current) {
@@ -83,28 +84,34 @@ export function ChatWebLinkDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>打开网页链接</DialogTitle>
-          <DialogDescription>选择打开位置</DialogDescription>
+          <DialogTitle>{t('link.title')}</DialogTitle>
+          <DialogDescription>{t('link.description')}</DialogDescription>
         </DialogHeader>
         <p className="max-h-40 overflow-auto whitespace-pre-wrap wrap-anywhere" dir="ltr">
           {url}
         </p>
         {!valid || error ? (
           <p className="text-sm text-destructive wrap-anywhere" role="alert">
-            {valid ? error : '链接地址无效。请使用不含用户名或密码的 HTTP 或 HTTPS 网页地址。'}
+            {valid
+              ? t('link.openFailedHelp', {
+                  message: translateError(error?.cause, t('link.openFailed')),
+                })
+              : t('link.invalid')}
           </p>
         ) : null}
-        {pending ? <p role="status">正在打开链接…</p> : null}
+        {pending ? <p role="status">{t('link.opening')}</p> : null}
         <DialogFooter className="flex flex-wrap gap-2">
           <Button disabled={pending || !valid} onClick={() => void open('internal')}>
-            在内置浏览器打开
+            <Globe data-icon="inline-start" aria-hidden="true" />
+            {t('link.internal')}
           </Button>
           <Button
             variant="outline"
             disabled={pending || !valid}
             onClick={() => void open('external')}
           >
-            在外部浏览器打开
+            <ExternalLink data-icon="inline-start" aria-hidden="true" />
+            {t('link.external')}
           </Button>
         </DialogFooter>
       </DialogContent>

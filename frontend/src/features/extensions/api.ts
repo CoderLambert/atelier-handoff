@@ -1,6 +1,12 @@
+/**
+ * @file 提供扩展目录和技能工具绑定的数据访问接口。
+ * @implementation 定义查询键、响应和错误辅助方法，通过 React Query 查询、修改数据并刷新相关缓存。
+ * @updated 2026-11-23T04:58:09+08:00
+ */
+import { getTranslator, translateError } from '@/i18n';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Extension, ExtensionSelection, McpTransport, SkillToolBinding } from '@shared/types';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 
 export type ExtensionKind = Extension['kind'];
 export type McpExtension = Extract<Extension, { kind: 'mcp' }>;
@@ -35,14 +41,82 @@ export interface TestResult {
 export type ItemResponse = { item?: Extension; extension?: Extension } | Extension | undefined;
 
 export const kinds: Record<ExtensionKind, string> = {
-  skill: 'Skills',
-  command: 'Commands',
-  mcp: 'MCP',
+  get skill() {
+    return getTranslator('extensions')('common.skills');
+  },
+  get command() {
+    return getTranslator('extensions')('common.commands');
+  },
+  get mcp() {
+    return getTranslator('extensions')('common.mcp');
+  },
 };
-export const marks: Record<ExtensionKind, string> = { skill: '*', command: '/', mcp: '#' };
-export const testLabels = { connected: '已连接', 'needs-auth': '需要认证', failed: '连接失败' };
-export const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : '操作失败，请重试。';
+export const testLabels = {
+  get connected() {
+    return getTranslator('extensions')('extensions.connected');
+  },
+  get 'needs-auth'() {
+    return getTranslator('extensions')('extensions.needsAuth');
+  },
+  get failed() {
+    return getTranslator('extensions')('extensions.connectionFailed');
+  },
+};
+const localResponseErrors = new Map([
+  ['扩展列表响应缺少 items。', 'extensions.missingItems'],
+  ['公开来源响应缺少 items。', 'publicImport.missingItems'],
+  ['智能体列表响应缺少 items，请重新加载。', 'agents.missingList'],
+  ['操作响应缺少智能体信息，请刷新列表确认结果。', 'agents.missingAgent'],
+  ['创建会话响应缺少会话信息，请刷新会话列表确认结果。', 'agents.missingSession'],
+] as const);
+
+export function messageOf(error: unknown) {
+  const t = getTranslator('extensions');
+  if (error instanceof ApiError) return translateError(error, t('common.operationFailed'));
+  if (error instanceof Error) {
+    // These pinned legacy callbacks still throw source messages. Translate them at display time.
+    for (const [source, key] of localResponseErrors) {
+      if (error.message === source) return t(key);
+    }
+    return error.message;
+  }
+  return translateError(error, t('common.operationFailed'));
+}
+const extensionMessages = new Map([
+  ['Markdown frontmatter 格式无效。', 'extensionDetail.invalidFrontmatter'],
+  ['Markdown frontmatter 缺少结束标记。', 'extensionDetail.unclosedFrontmatter'],
+  ['请填写扩展说明正文。', 'extensionDetail.emptyBody'],
+  [
+    '此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。',
+    'extensionDetail.unsupportedPackage',
+  ],
+  [
+    '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。',
+    'extensionDetail.unsupportedMarkdown',
+  ],
+  ['MCP 服务要求有效的凭据。', 'extensionDetail.authRequired'],
+  ['MCP 连接或调用失败。请检查地址、进程参数和服务端日志。', 'extensionDetail.connectionFailed'],
+  ['已打开 8 个常驻 MCP。停用不再使用的服务后重试。', 'extensionDetail.processLimit'],
+  ['MCP 会话已关闭，请重新发起工具调用。', 'extensionDetail.sessionClosedRetry'],
+  ['MCP 会话已关闭。', 'extensionDetail.sessionClosed'],
+  ['请使用桌面内置浏览器工具。', 'extensionDetail.nativeBrowser'],
+  ['MCP 工具描述包含配置中的凭据，请修改服务端工具定义。', 'extensionDetail.secretMetadata'],
+] as const);
+
+/** Translate known application diagnostics; leave upstream text and identifiers intact. */
+export function extensionDetail(message: string | undefined): string {
+  if (!message) return '';
+  const t = getTranslator('extensions');
+  for (const [source, key] of extensionMessages) {
+    if (message === source) return t(key);
+  }
+  const discovered = /^已发现 (\d+) 项工具。$/.exec(message);
+  if (discovered) return t('extensionDetail.discovered', { count: Number(discovered[1]) });
+  const environment = /^请在本机服务环境中设置 ([A-Za-z_][A-Za-z0-9_]*)。$/.exec(message);
+  if (environment?.[1]) return t('extensionDetail.environmentRequired', { name: environment[1] });
+  return message;
+}
+
 export const isConflict = (error: unknown) =>
   Boolean(error && typeof error === 'object' && 'status' in error && error.status === 409);
 export const allowsAuto = (item?: MarkdownExtension) => item?.modelInvocable !== false;
@@ -80,7 +154,8 @@ interface ToolBindingsResponse {
   bindings: SkillToolBinding[];
 }
 function bindingsOf(result: ToolBindingsResponse) {
-  if (!Array.isArray(result?.bindings)) throw new Error('工具绑定响应缺少 bindings。');
+  const t = getTranslator('extensions');
+  if (!Array.isArray(result?.bindings)) throw new Error(t('extensions.missingBindings'));
   return result.bindings;
 }
 const toolBindingsEndpoint = (projectId: string, skillId: string) =>

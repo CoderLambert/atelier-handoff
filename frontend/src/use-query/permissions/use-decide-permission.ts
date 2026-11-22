@@ -6,7 +6,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { Permission } from '@shared/types';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import { permissionKeys } from './keys';
 import { permissionSchema } from './use-permission';
 
@@ -26,7 +26,8 @@ export function useDecidePermission() {
           body: { decision, version },
         }),
       );
-      if (result.permission.id !== id) throw new Error('审批响应不匹配，请重新加载。');
+      if (result.permission.id !== id)
+        throw new ApiError('PERMISSION_RESPONSE_MISMATCH', 502, 'PERMISSION_RESPONSE_MISMATCH');
       return result.permission;
     },
     onSettled: (_data, _error, { id, sessionId, runId }) =>

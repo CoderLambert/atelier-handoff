@@ -7,6 +7,8 @@ import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { openWorkbenchDatabase, type LegacyDatabase } from './db/connection.js';
 import type { SessionSnapshotRepository } from './modules/sessions/session-snapshot-repository.js';
+import type { SubagentRepository } from './modules/sessions/subagent-repository.js';
+import { subagentSchema, type Subagent } from '../shared/subagents.js';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
@@ -32,25 +34,30 @@ export class Store {
   readonly db: LegacyDatabase;
   readonly readTransaction: <T>(work: () => T) => T;
   readonly sessionSnapshots: SessionSnapshotRepository;
+  readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
   readonly events = new EventEmitter();
+  private readonly subagents: SubagentRepository;
+  private pendingEvents: RunEvent[] | undefined;
   constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     chmodSync(directory, 0o700);
     const connection = openWorkbenchDatabase(join(directory, 'atelier.sqlite'));
     this.db = connection.db;
     this.sessionSnapshots = connection.sessionSnapshots;
+    this.workspaceLayout = connection.workspaceLayout;
     this.readTransaction = connection.readTransaction;
+    this.subagents = connection.subagents;
     try {
-      this.initialize(connection.applySnapshotIndexes);
+      this.initialize(connection.applySnapshotIndexes, connection.applySubagents);
     } catch (error) {
       this.db.close();
       throw error;
     }
   }
-  private initialize(applySnapshotIndexes: () => void): void {
+  private initialize(applySnapshotIndexes: () => void, applySubagents: () => void): void {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
     const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 6) throw new Error('Database schema is newer than this application.');
+    if (version > 7) throw new Error('Database schema is newer than this application.');
     if (version === 0)
       this.transaction(() => {
         for (const table of tables)
@@ -122,18 +129,25 @@ export class Store {
       `),
       );
     if (version < 6) this.transaction(applySnapshotIndexes);
+    if (version < 7) this.transaction(applySubagents);
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {
     this.db.exec('BEGIN IMMEDIATE');
+    const pending: RunEvent[] = [];
+    this.pendingEvents = pending;
+    let result: T;
     try {
-      const result = work();
+      result = work();
       this.db.exec('COMMIT');
-      return result;
     } catch (error) {
+      this.pendingEvents = undefined;
       this.db.exec('ROLLBACK');
       throw error;
     }
+    this.pendingEvents = undefined;
+    for (const event of pending) this.events.emit('event', event);
+    return result;
   }
   get<K extends Table>(table: K, id: string): Tables[K] {
     const row = this.db.prepare(`SELECT data FROM ${table} WHERE id=?`).get(id);
@@ -178,7 +192,8 @@ export class Store {
       .prepare('INSERT INTO events(run_id,session_id,seq,type,at,payload) VALUES(?,?,?,?,?,?)')
       .run(runId, sessionId, seq, type, at, JSON.stringify(payload));
     const event = { id: Number(insert.lastInsertRowid), runId, sessionId, seq, type, at, payload };
-    this.events.emit('event', event);
+    if (this.pendingEvents) this.pendingEvents.push(event);
+    else this.events.emit('event', event);
     return event;
   }
   since(cursor: number, limit = 1000): RunEvent[] {
@@ -259,8 +274,33 @@ export class Store {
       )
       .run(JSON.stringify(config));
   }
+  startSubagent(value: Subagent): void {
+    const parsed = subagentSchema.parse(value);
+    if (parsed.status !== 'running' || parsed.endedAt !== null)
+      throw new AppError('INVALID_SUBAGENT_STATE', '子任务必须以运行中状态开始。', 409);
+    this.transaction(() => {
+      if (this.subagents.start(parsed))
+        this.event(parsed.runId, parsed.sessionId, 'subagent.started', { subagent: parsed });
+    });
+  }
+  finishSubagent(
+    id: string,
+    runId: string,
+    status: Exclude<Subagent['status'], 'running'>,
+    summary: string | null,
+  ): void {
+    const terminal = subagentSchema.shape.status.exclude(['running']).parse(status);
+    const result = subagentSchema.shape.summary.parse(summary);
+    this.transaction(() => {
+      const subagent = this.subagents.finish(id, runId, terminal, result, now());
+      if (subagent)
+        this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
+    });
+  }
   recover(): void {
     this.transaction(() => {
+      for (const subagent of this.subagents.interruptRunning(now()))
+        this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
       for (const run of this.list('runs'))
         if (activeStatuses.includes(run.status)) {
           this.update('runs', run.id, {

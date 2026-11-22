@@ -1,13 +1,15 @@
 /**
- * @file 连接会话聊天界面、运行偏好与草稿操作。
- * @implementation 按会话协调模式、模型和推理深度的保存及任务发送；切换模型时清除旧深度，并限制只读智能体的可选模式。
- * @updated 2026-11-20T17:32:12+08:00
+ * @file 连接会话输入、运行偏好与消息发送。
+ * @implementation 按会话保存本机或项目执行偏好和草稿，将快捷插入投递到发送回执指定的队列项。
+ * @updated 2026-11-22T16:28:35+08:00
  */
-import { useCallback, useMemo } from 'react';
+import { useUiTranslation, translateError } from '@/i18n';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { Draft } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import Chat from '@/features/chat';
-import type { ComposerMode } from '@/features/chat/run-mode';
+import { withComposerMode, type ComposerMode } from '@/features/chat/run-mode';
+import { useInsertQueuedMessage } from '@/use-query/sessions/use-insert-queued-message';
 import { useSendSessionMessage } from '@/use-query/sessions/use-send-session-message';
 import { readDraft, submitDraft, updateDraft } from './drafts';
 import { actions, store, useWorkspace } from './store';
@@ -15,66 +17,106 @@ import { actions, store, useWorkspace } from './store';
 export default function SessionChat({
   snapshot,
   defaultModel,
+  nativeExecution = false,
   onOpenLink,
   onSent,
   onError,
   onTrace,
   onStop,
   onRetry,
+  onForkMessage,
+  onRewindMessage,
+  forkingMessageId,
+  focusMessageId,
 }: {
   snapshot: Snapshot;
   defaultModel: string;
+  nativeExecution?: boolean;
   onOpenLink?: (url: string, destination: 'internal' | 'external') => Promise<void>;
   onSent: (id: string) => Promise<void>;
   onError: (message: string) => void;
   onTrace: (id: string) => void;
   onStop: (runId: string) => void;
   onRetry: (runId: string) => void;
+  onForkMessage?: (messageId: string) => void;
+  onRewindMessage?: (messageId: string, expectedHeadId: string) => Promise<void>;
+  forkingMessageId?: string;
+  focusMessageId?: string;
 }) {
+  const { t } = useUiTranslation('chat');
   const { id, draft: serverDraft } = snapshot.session;
+  useEffect(() => {
+    if (!focusMessageId) return;
+    const row = document.querySelector<HTMLElement>(
+      `[data-session-id="${CSS.escape(id)}"] [data-message-id="${CSS.escape(focusMessageId)}"]`,
+    );
+    if (row) {
+      row.tabIndex = -1;
+      row.focus({ preventScroll: true });
+      row.scrollIntoView({ block: 'center' });
+    }
+  }, [focusMessageId, id]);
   const savedDraft = useWorkspace((state) => state.workspace.drafts[id]);
   const searchChargeLimit = useWorkspace((state) => state.workspace.searchChargeLimits[id]);
   const submitting = useWorkspace((state) => state.workspace.submitting[id] === true);
   const message = useSendSessionMessage();
+  const insert = useInsertQueuedMessage(id);
   const fallback = useMemo(() => readDraft(id, serverDraft), [id, serverDraft]);
+  const nativeAvailable = nativeExecution && !snapshot.agent && !snapshot.session.agentRevisionId;
   const changeDraft = useCallback(
-    (next: Draft | ((previous: Draft) => Draft)) => {
-      updateDraft(id, next, serverDraft);
+    (next: Draft | ((previous: Draft) => Draft), immediate = false) => {
+      updateDraft(
+        id,
+        (previous) => {
+          const draft = typeof next === 'function' ? next(previous) : next;
+          return draft.executionPreference === 'native-v1' && !nativeAvailable
+            ? { ...draft, executionPreference: 'project-v1' }
+            : draft;
+        },
+        serverDraft,
+        immediate,
+      );
     },
-    [id, serverDraft],
+    [id, serverDraft, nativeAvailable],
   );
   function changeMode(mode: ComposerMode) {
     if (store.getState().workspace.submitting[id]) return;
     if (snapshot.agent?.mode === 'readonly' && mode !== 'readonly') return;
+    if (mode === 'native' && !nativeAvailable) return;
     if (mode !== 'automatic') store.dispatch(actions.setSearchChargeLimit({ id }));
-    updateDraft(
-      id,
-      (previous) => ({
-        ...previous,
-        mode: mode === 'automatic' ? 'edit' : mode,
-        approvalMode: mode === 'automatic' ? 'automatic' : undefined,
-      }),
-      serverDraft,
-      true,
-    );
+    updateDraft(id, (previous) => withComposerMode(previous, mode), serverDraft, true);
   }
-  async function send() {
+  async function send(insertIntoRunId?: string) {
+    let result;
     try {
-      await submitDraft(
+      result = await submitDraft(
         id,
         serverDraft,
         message.mutateAsync,
         snapshot.agent?.mode === 'readonly',
         defaultModel || undefined,
+        nativeAvailable,
       );
     } catch (error) {
-      onError(`发送未确认，草稿和运行模式已保留。${(error as Error).message}`);
+      onError(translateError(error, t('session.sendUnconfirmed')));
       return;
+    }
+    if (!result) return;
+    if (insertIntoRunId && result.queuedMessage) {
+      try {
+        await insert.mutateAsync({
+          itemId: result.queuedMessage.id,
+          runId: insertIntoRunId,
+          mode: 'live',
+        });
+      } catch {
+        onError(t('session.insertUnconfirmed'));
+      }
     }
     try {
       await onSent(id);
     } catch (error) {
-      onError(`任务已发送，刷新会话失败。${(error as Error).message}`);
+      onError(translateError(error, t('session.refreshFailed')));
     }
   }
   return (
@@ -82,23 +124,22 @@ export default function SessionChat({
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
       defaultModel={defaultModel}
+      nativeExecution={nativeAvailable}
       onOpenLink={onOpenLink}
       onModelChange={(model) => {
         if (store.getState().workspace.submitting[id]) return;
-        updateDraft(
-          id,
+        changeDraft(
           (previous) => ({
             ...previous,
             model,
             effort: previous.model === model ? previous.effort : undefined,
           }),
-          serverDraft,
           true,
         );
       }}
       onEffortChange={(effort) => {
         if (store.getState().workspace.submitting[id]) return;
-        updateDraft(id, (previous) => ({ ...previous, effort }), serverDraft, true);
+        changeDraft((previous) => ({ ...previous, effort }), true);
       }}
       searchChargeLimit={searchChargeLimit}
       onModeChange={changeMode}
@@ -112,6 +153,9 @@ export default function SessionChat({
       onStop={onStop}
       onRetry={onRetry}
       onTrace={onTrace}
+      onForkMessage={onForkMessage}
+      onRewindMessage={onRewindMessage}
+      forkingMessageId={forkingMessageId}
       submitting={submitting}
     />
   );

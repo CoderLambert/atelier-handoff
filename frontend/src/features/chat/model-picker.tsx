@@ -1,11 +1,13 @@
 /**
  * @file 为会话选择网关模型和推理深度。
- * @implementation 复用按需目录查询，在紧凑 Select 中展示模型名称与可选深度，锁定路由固定档位并通过 Dialog 确认手动 ID。
- * @updated 2026-11-20T17:14:57+08:00
+ * @implementation 按来源分组展示模型目录和可选深度，保留路由固定档位。Magpie 关闭时提示既有选择不可用，并在手动输入时校验。
+ * @updated 2026-11-22T13:50:57+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
 import { useId, useRef, useState } from 'react';
-import { reasoningEfforts, type ReasoningEffort } from '@shared/types';
+import { magpieModelPrefix, reasoningEfforts, type ReasoningEffort } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import {
   Dialog,
   DialogClose,
@@ -32,13 +34,13 @@ const manualValue = 'manual-entry';
 const retryValue = 'retry-catalog';
 const modelValue = (id: string) => `model:${id}`;
 
-const effortLabels: Record<ReasoningEffort, string> = {
-  low: '低',
-  medium: '中',
-  high: '高',
-  xhigh: '很高',
-  max: '最高',
-};
+const effortLabels = {
+  low: 'model.effortLow',
+  medium: 'model.effortMedium',
+  high: 'model.effortHigh',
+  xhigh: 'model.effortVeryHigh',
+  max: 'model.effortMax',
+} as const satisfies Record<ReasoningEffort, string>;
 
 export function ModelPicker({
   model,
@@ -55,6 +57,7 @@ export function ModelPicker({
   onModelChange: (model?: string) => void;
   onEffortChange: (effort?: ReasoningEffort) => void;
 }) {
+  const { t } = useUiTranslation('chat');
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -65,6 +68,8 @@ export function ModelPicker({
   const workspaceDefault = catalog.data?.defaultModel ?? defaultModel;
   const models = catalog.data?.models ?? [];
   const currentModel = model ?? workspaceDefault;
+  const magpieDisabled = (id: string) => !catalog.magpieEnabled && id.startsWith(magpieModelPrefix);
+  const modelUnavailable = magpieDisabled(currentModel);
   const currentRoute = models.find((entry) => entry.id === currentModel);
   const fixedEffort = currentRoute?.effort;
   const selectedEffort =
@@ -75,21 +80,44 @@ export function ModelPicker({
   const effortDisabled = disabled || fixedEffort !== undefined;
   const unsupportedEffort = effort !== undefined && !supportedEfforts.includes(effort);
   const effortLabel = selectedEffort
-    ? effortLabels[selectedEffort]
+    ? t(effortLabels[selectedEffort])
     : fixedEffort !== undefined
-      ? '固定'
-      : '默认';
+      ? t('model.fixed')
+      : t('model.default');
   const effortTitle =
     fixedEffort !== undefined
-      ? `网关路由已固定推理深度为 ${fixedEffort}，无法在会话中更改。`
+      ? t('model.fixedEffortHelp', {
+          effort: selectedEffort ? t(effortLabels[selectedEffort]) : fixedEffort,
+        })
       : unsupportedEffort
-        ? '当前模型不支持已保存的推理深度，请选择默认或可用档位。'
+        ? t('model.unsupportedEffort')
         : !supportedEfforts.length
-          ? '此模型不支持调整推理深度，使用默认设置。'
-          : '推理深度随当前会话保存；默认由模型或网关决定。';
+          ? t('model.noEffort')
+          : t('model.effortHelp');
+  const discovery = catalog.data?.discovery;
+  const discoveryMessages = [
+    discovery?.routes.status === 'partial'
+      ? t('model.routesPartial')
+      : discovery?.routes.status === 'unavailable'
+        ? t('model.routesUnavailable')
+        : undefined,
+    discovery?.codex.status === 'stale'
+      ? t('model.supplementStale')
+      : discovery?.codex.status === 'partial'
+        ? t('model.supplementPartial')
+        : discovery?.codex.status === 'unavailable'
+          ? t('model.supplementUnavailable')
+          : undefined,
+    discovery?.magpie?.status === 'partial' ? t('model.magpiePartial') : undefined,
+  ].filter(Boolean);
   const manualId = manualInput.trim();
-  const manualValid = manualId.length <= 200 && /^\S+$/u.test(manualId);
-  const manualError = manualId && !manualValid ? '模型 ID 最多 200 个字符，不能包含空白。' : '';
+  const magpieNotice = t('model.magpieDisabledHelp');
+  const manualError = magpieDisabled(manualId)
+    ? magpieNotice
+    : manualId && (manualId.length > 200 || !/^\S+$/u.test(manualId))
+      ? t('model.invalidId')
+      : '';
+  const manualValid = Boolean(manualId && !manualError);
 
   function select(value?: string) {
     if (disabled) return;
@@ -112,7 +140,7 @@ export function ModelPicker({
             setManualOpen(true);
             setOpen(false);
           } else if (value === retryValue) {
-            void catalog.refetch();
+            void catalog.refresh();
           } else if (value === defaultValue) {
             select();
           } else {
@@ -125,11 +153,23 @@ export function ModelPicker({
           ref={triggerRef}
           size="sm"
           className="min-w-0 max-w-48 [&_[data-slot=select-value]]:min-w-0"
-          aria-label="选择模型"
-          title={`模型 · ${currentModel}${model === undefined ? ' · 跟随工作台默认' : ''}`}
+          aria-label={t('model.choose')}
+          aria-describedby={modelUnavailable ? `${id}-model-help` : undefined}
+          title={
+            modelUnavailable
+              ? magpieNotice
+              : t('model.triggerTitle', {
+                  model: currentModel,
+                  defaultNote: model === undefined ? t('model.defaultNote') : '',
+                })
+          }
         >
           <SelectValue>
-            <span className="truncate">模型 · {currentRoute?.displayName || currentModel}</span>
+            <span className="truncate">
+              {modelUnavailable
+                ? t('model.magpieDisabled')
+                : t('model.current', { model: currentRoute?.displayName || currentModel })}
+            </span>
           </SelectValue>
         </SelectTrigger>
         <SelectContent
@@ -143,13 +183,16 @@ export function ModelPicker({
           }}
         >
           <SelectGroup>
-            <SelectLabel>模型</SelectLabel>
+            <SelectLabel>{t('model.label')}</SelectLabel>
             <SelectItem
               value={defaultValue}
-              textValue={`跟随默认 ${workspaceDefault}`}
-              title={`跟随工作台默认 · ${workspaceDefault}`}
+              textValue={t('model.defaultText', { model: workspaceDefault })}
+              title={t('model.defaultTitle', { model: workspaceDefault })}
+              disabled={magpieDisabled(workspaceDefault)}
             >
-              跟随默认
+              {magpieDisabled(workspaceDefault)
+                ? t('model.defaultDisabled')
+                : t('model.useDefault')}
             </SelectItem>
             {model !== undefined && !models.some((entry) => entry.id === model) ? (
               <SelectItem
@@ -157,50 +200,66 @@ export function ModelPicker({
                 textValue={model}
                 title={model}
                 className="[&>span:last-child]:min-w-0"
+                disabled={modelUnavailable}
               >
-                <span className="truncate">{model}</span>
+                <span className="truncate">
+                  {modelUnavailable ? t('model.disabledEntry', { model }) : model}
+                </span>
               </SelectItem>
             ) : null}
-            {models.map((entry) => (
-              <SelectItem
-                key={entry.id}
-                value={modelValue(entry.id)}
-                textValue={[entry.displayName, entry.id].filter(Boolean).join(' ')}
-                title={entry.id}
-                className="[&>span:last-child]:min-w-0"
-              >
-                <span className="truncate">{entry.displayName || entry.id}</span>
-              </SelectItem>
-            ))}
           </SelectGroup>
+          {(['Shunt', 'Magpie'] as const).map((gateway) => {
+            const entries = models.filter(
+              (entry) => (entry.source === 'magpie' ? 'Magpie' : 'Shunt') === gateway,
+            );
+            if (!entries.length) return null;
+            return (
+              <SelectGroup key={gateway}>
+                <SelectLabel>{gateway}</SelectLabel>
+                {entries.map((entry) => (
+                  <SelectItem
+                    key={entry.id}
+                    value={modelValue(entry.id)}
+                    textValue={[entry.displayName, entry.id].filter(Boolean).join(' ')}
+                    title={entry.id}
+                    className="[&>span:last-child]:min-w-0"
+                  >
+                    <span className="truncate">{entry.displayName || entry.id}</span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            );
+          })}
           {catalog.isFetching ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground" role="status">
-              {catalog.data ? '正在刷新模型列表…' : '正在加载模型列表…'}
+              {catalog.data ? t('model.refreshing') : t('model.loading')}
             </p>
           ) : null}
           {catalog.isError ? (
             <p className="px-2 py-1.5 text-xs text-destructive wrap-anywhere" role="alert">
-              模型列表加载失败：
-              {catalog.error instanceof Error ? catalog.error.message : '请重试。'}
-            </p>
-          ) : catalog.data && !catalog.data.routesAvailable ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground" role="status">
-              网关路由列表暂不可用，仍可跟随默认或手动输入 ID。
+              {t('model.loadFailed', { message: translateError(catalog.error, t('model.retry')) })}
             </p>
           ) : catalog.data && !models.length ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground" role="status">
-              模型列表为空，仍可跟随默认或手动输入 ID。
+              {t('model.empty')}
             </p>
           ) : null}
+          {discoveryMessages.map((message) => (
+            <p key={message} className="px-2 py-1.5 text-xs text-warning" role="status">
+              {message}
+            </p>
+          ))}
           <SelectSeparator />
           <SelectGroup>
-            {catalog.isError ? (
-              <SelectItem value={retryValue} disabled={catalog.isFetching} textValue="重新加载模型">
-                重新加载模型
-              </SelectItem>
-            ) : null}
-            <SelectItem value={manualValue} textValue="手动输入模型 ID">
-              手动输入 ID…
+            <SelectItem
+              value={retryValue}
+              disabled={catalog.isFetching}
+              textValue={t('model.refresh')}
+            >
+              {catalog.isError ? t('model.reload') : t('model.refresh')}
+            </SelectItem>
+            <SelectItem value={manualValue} textValue={t('model.manualTitle')}>
+              {t('model.manual')}
             </SelectItem>
           </SelectGroup>
         </SelectContent>
@@ -222,25 +281,30 @@ export function ModelPicker({
         <SelectTrigger
           size="sm"
           className="shrink-0"
-          aria-label="选择推理深度"
+          aria-label={t('model.chooseEffort')}
           aria-describedby={`${id}-effort-help`}
           aria-invalid={fixedEffort === undefined && unsupportedEffort}
           title={effortTitle}
         >
-          <SelectValue>深度 · {effortLabel}</SelectValue>
+          <SelectValue>{t('model.effortSummary', { effort: effortLabel })}</SelectValue>
         </SelectTrigger>
         <SelectContent position="popper" side="top" align="end" sideOffset={4}>
           <SelectGroup>
-            <SelectLabel>推理深度</SelectLabel>
-            <SelectItem value={defaultValue}>默认</SelectItem>
+            <SelectLabel>{t('model.effort')}</SelectLabel>
+            <SelectItem value={defaultValue}>{t('model.default')}</SelectItem>
             {supportedEfforts.map((level) => (
               <SelectItem key={level} value={level}>
-                {effortLabels[level]}
+                {t(effortLabels[level])}
               </SelectItem>
             ))}
           </SelectGroup>
         </SelectContent>
       </Select>
+      {modelUnavailable ? (
+        <span id={`${id}-model-help`} className="sr-only">
+          {magpieNotice}
+        </span>
+      ) : null}
       <span id={`${id}-effort-help`} className="sr-only">
         {effortTitle}
       </span>
@@ -252,18 +316,18 @@ export function ModelPicker({
           }}
         >
           <DialogHeader>
-            <DialogTitle>手动输入模型 ID</DialogTitle>
-            <DialogDescription>输入完整模型 ID，发送时由网关确认是否可用。</DialogDescription>
+            <DialogTitle>{t('model.manualTitle')}</DialogTitle>
+            <DialogDescription>{t('model.manualDescription')}</DialogDescription>
           </DialogHeader>
           <label className="flex flex-col gap-1" data-invalid={Boolean(manualError)}>
-            <span className="text-sm">模型 ID</span>
+            <span className="text-sm">{t('model.id')}</span>
             <input
               id={`${id}-manual`}
               value={manualInput}
               disabled={disabled}
               autoComplete="off"
               spellCheck={false}
-              className="field m-0!"
+              className="chat-field"
               aria-invalid={Boolean(manualError)}
               aria-describedby={`${id}-manual-help`}
               onChange={(event) => setManualInput(event.target.value)}
@@ -277,17 +341,17 @@ export function ModelPicker({
           </label>
           <p
             id={`${id}-manual-help`}
-            className="mt-2 text-sm text-muted-foreground"
+            className={cn('text-sm', manualError ? 'text-destructive' : 'text-muted-foreground')}
             role={manualError ? 'alert' : undefined}
           >
-            {manualError || '最多 200 个字符，不包含空白。'}
+            {manualError || t('model.idHelp')}
           </p>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">取消</Button>
+              <Button variant="outline">{t('model.cancel')}</Button>
             </DialogClose>
             <Button disabled={disabled || !manualValid} onClick={() => select(manualId)}>
-              使用此模型
+              {t('model.use')}
             </Button>
           </DialogFooter>
         </DialogContent>

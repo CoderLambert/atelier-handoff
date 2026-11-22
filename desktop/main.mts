@@ -30,6 +30,9 @@ import {
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
 import { AppError } from '../shared/types.js';
+import { DesktopUiLanguagePreferences } from './host/ui-language.mjs';
+import { bindUiLanguage } from './host/ui-language-ipc.mjs';
+import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The development bundle lives in dist/desktop; source execution lives in desktop.
@@ -105,12 +108,12 @@ async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<v
 }
 
 const lifecycle = new AbortController();
-const shuntBinary = join(process.resourcesPath, 'shunt', 'shunt');
+const shuntResources = app.isPackaged
+  ? process.resourcesPath
+  : join(root, 'dist', 'linux', 'atelier', 'resources');
+const shuntBinary = join(shuntResources, 'shunt', 'shunt');
 const managedShunt =
-  app.isPackaged &&
-  process.platform === 'linux' &&
-  !process.env.ATELIER_GATEWAY &&
-  existsSync(shuntBinary)
+  process.platform === 'linux' && !process.env.ATELIER_GATEWAY && existsSync(shuntBinary)
     ? new ManagedShunt(shuntBinary, dataDir)
     : undefined;
 let unbindPairing: (() => void) | undefined;
@@ -158,15 +161,15 @@ async function start(): Promise<void> {
   owner.webContents.on('render-process-gone', rendererGone);
   unbindPairing = bindPairing(owner, origin, connection.pairing);
   await loadWindow(owner, origin);
-  if (!supervisor.connected || stopping) throw new Error('工作台服务连接已断开。');
+  if (!supervisor.connected || stopping) throw new DesktopHostError('host.failure.disconnected');
   focusWindow(owner);
 }
 
 function rendererGone(): void {
-  void recover('工作台窗口意外退出。');
+  void recover(new DesktopHostError('host.failure.rendererGone'));
 }
 
-function recover(reason: string): Promise<void> {
+function recover(reason: DesktopHostError): Promise<void> {
   if (stopping) return Promise.resolve();
   return (recovery ??= (async () => {
     while (!stopping) {
@@ -180,9 +183,9 @@ function recover(reason: string): Promise<void> {
       try {
         await start();
         if (origin || stopping) return;
-        reason = '工作台服务连接已断开。';
+        reason = new DesktopHostError('host.failure.disconnected');
       } catch (error) {
-        reason = error instanceof Error ? error.message : '工作台启动失败。';
+        reason = asDesktopHostError(error);
       }
     }
   })()
@@ -197,21 +200,26 @@ app.setName('atelier');
 // not share Chromium partitions, and disposable smoke profiles must stay isolated.
 const requestedProfile = app.commandLine.getSwitchValue('user-data-dir');
 const migrationMode = app.commandLine.hasSwitch('import-data');
+// The wizard reads the destination profile's language without opening its Chromium data.
+const regularProfile = requestedProfile
+  ? requireAbsolutePath(requestedProfile, '--user-data-dir')
+  : app.isPackaged || process.env.ATELIER_DATA_DIR
+    ? join(dataDir, 'desktop-profile')
+    : app.getPath('userData');
 const temporaryProfile = migrationMode
   ? mkdtempSync(join(app.getPath('temp'), 'atelier-migration-profile-'))
   : undefined;
 if (temporaryProfile || requestedProfile || app.isPackaged || process.env.ATELIER_DATA_DIR) {
-  const profile =
-    temporaryProfile ??
-    (requestedProfile
-      ? requireAbsolutePath(requestedProfile, '--user-data-dir')
-      : join(dataDir, 'desktop-profile'));
+  const profile = temporaryProfile ?? regularProfile;
   mkdirSync(profile, { recursive: true, mode: 0o700 });
   app.setPath('userData', profile);
   app.setPath('sessionData', profile);
 }
 if (temporaryProfile)
   app.once('will-quit', () => rmSync(temporaryProfile, { recursive: true, force: true }));
+const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) =>
+  desktopI18n.changeLanguage(locale),
+);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -221,7 +229,17 @@ else {
   void app
     .whenReady()
     .then(async () => {
-      if (!migrationMode) return start();
+      await uiLanguage.load();
+      if (!migrationMode) {
+        const unbindUiLanguage = bindUiLanguage(
+          uiLanguage,
+          () => window,
+          () => runtimeConnection,
+          () => stopping,
+        );
+        app.once('will-quit', unbindUiLanguage);
+        return start();
+      }
       if (
         await importWorkspace({
           runtimeRoot: root,
@@ -240,7 +258,7 @@ else {
         app.quit();
         return;
       }
-      void recover(error instanceof Error ? error.message : '工作台启动失败。');
+      void recover(asDesktopHostError(error));
     });
 }
 app.on('window-all-closed', () => app.quit());

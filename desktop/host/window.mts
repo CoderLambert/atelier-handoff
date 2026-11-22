@@ -5,6 +5,7 @@
  */
 import { BrowserWindow, dialog } from 'electron';
 import { desktopHostDeadlines, desktopPairingHeader } from '../../shared/desktop-host.js';
+import { desktopT, DesktopHostError, diagnosticText } from './i18n.mjs';
 
 export function createWindow(preload: string, getOrigin: () => string | undefined): BrowserWindow {
   const owner = new BrowserWindow({
@@ -68,7 +69,7 @@ export async function loadWindow(owner: BrowserWindow, origin: string): Promise<
       owner.loadURL(origin),
       new Promise<never>((_resolve, reject) => {
         deadline = setTimeout(() => {
-          reject(new Error('工作台窗口加载超时。'));
+          reject(new DesktopHostError('host.failure.windowTimeout'));
         }, desktopHostDeadlines.window);
       }),
     ]);
@@ -84,13 +85,20 @@ export function focusWindow(owner: BrowserWindow): void {
   owner.focus();
 }
 
-export async function retryRuntime(reason: string, signal: AbortSignal): Promise<boolean> {
+export async function retryRuntime(
+  reason: DesktopHostError,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const diagnostic = diagnosticText(reason.cause);
+  const detail = desktopT('host.recovery.detail');
   const result = await dialog.showMessageBox({
     type: 'warning',
     title: 'atelier',
-    message: reason,
-    detail: '重新启动服务后可查看历史。中断的任务不会自动重跑。',
-    buttons: ['重新启动服务', '退出'],
+    message: desktopT(reason.key),
+    detail: diagnostic
+      ? `${detail}\n\n${desktopT('host.recovery.diagnostic', { diagnostic })}`
+      : detail,
+    buttons: [desktopT('host.recovery.restart'), desktopT('host.action.exit')],
     defaultId: 0,
     cancelId: 1,
     signal,

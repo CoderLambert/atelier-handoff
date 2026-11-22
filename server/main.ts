@@ -52,7 +52,14 @@ try {
   if (!/^(0|[1-9]\d{0,4})$/.test(portSetting) || port > 65535 || (port === 0 && !host))
     throw new Error('ATELIER_PORT must be a valid port; 0 requires desktop IPC.');
   release = acquireDataOwner(data);
-  const app = await createApp({ root, data, desktopPairing: host?.pairing });
+  const app = await createApp({
+    root,
+    data,
+    desktopPairing: host?.pairing,
+    nativeExecution:
+      Boolean(host) && process.platform === 'linux' && process.env.ATELIER_NATIVE_EXECUTION !== '0',
+    magpie: process.env.ATELIER_MAGPIE_URL ?? 'http://127.0.0.1:3425',
+  });
   running = app;
   process.once('SIGINT', exit);
   process.once('SIGTERM', exit);

@@ -22,8 +22,10 @@
 
 - 产品和发行工具的可执行源码使用严格 TypeScript。React 使用 `.tsx`，模块按运行时选 `.ts`、`.mts`、`.cts`。发行目录里的 `.js`、`.mjs`、`.cjs` 由构建生成。平台规定的清单、桌面入口、样式及 PKGBUILD 使用各自格式。
 - 桌面、打包和安装态测试都纳入 `npm run check`，开启 `strict` 和 `noUncheckedIndexedAccess`。新边界从 `unknown` 解析，JSON、IPC、模型工具参数和子进程消息均做运行时校验。核心契约从一份 schema 推导。类型断言只用于已经收窄且可说明的事实。禁止用 `any`、`@ts-nocheck`、无依据的 `!` 或关闭编译选项使检查变绿。
+- 新功能的应用自有界面文案使用类型化 i18n 词条，同一改动补齐简体中文和英文，覆盖可见提示、无障碍名称和原生对话框。`npm run check` 会运行 `check:i18n`。验收受影响的交互时，在两种语言下核对操作提示和错误状态，特别检查由服务端数据或第三方控件决定的文案。具体规则见[前端](.claude/rules/frontend.md)和[桌面端](.claude/rules/desktop.md)。
 - React 服务端状态统一走 TanStack Query。按 API 操作在 `frontend/src/use-query/<领域>/` 建立独立 hook，复杂交互编排归同域业务 hook，组件消费数据与动作。
 - 把一次用户操作追到真正拥有状态的层。跨边界传 ID 和数据，不传框架对象、任意频道或未验证路径。废弃实现随经过验证的替代一起清理。
+- Agent 执行行为以 Claude CLI 与项目锁定的原生 Claude Agent SDK 为对齐基准，包括同批前台子代理的调度。任何偏离原生行为的限制或语义变更，都必须先向用户说明差异并获得明确确认；不得自行决定，也不得从已有例外推定后续偏离已获授权。
 - 使用隔离项目和临时数据根测试，桌面测试另隔离 `userData`。实施结束运行 `npm run check`、`npm test`、`npm run build`。桌面改动从真实 Electron 窗口验证，发行改动从实际安装件验证。报告明确区分替身、真实 SDK、实际模型和系统包测试，有失败则留下复现步骤。
 
 ## 开发过程 review
@@ -41,3 +43,20 @@
 - 桌面更新验收通过后，直接切换用户正在使用的桌面实例。正常退出旧窗口，等待运行时写盘并释放数据锁，再沿用同一 `ATELIER_DATA_DIR`、浏览器 profile 和本机网关配置打开新版。确认项目、会话和设置仍可读取，再报告切换完成。涉及数据格式升级时先保留可恢复的副本。
 - 主会话负责取舍、跨模块契约、最终验收与 Git。委派需说明范围、负责人、交付物与证据，并按全局规则选模型。调查、创作、审查 brief 加入「禁止执行任何 git 命令（不 commit、不建分支、不 add），git 由主会话按项目规则统一安排。」
 - 阶段结束时更新执行日志及对应说明。架构决策影响进程边界、控制权、数据根或发布承诺时，在同一变更中记录决策和回退路径。历史证据留在 `docs/evidence/`，`prototype/` 保留作为设计参考。
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository has a generated `openwiki/` evidence index. It is optional just-in-time context, not required startup reading.
+
+- Do not enumerate, preload, or search wikis at task start. Use retrieval when the user asks for it, when unfamiliar architecture or dependency behavior materially affects the task, or when source inspection leaves an important uncertainty. Stop once the question is grounded.
+- When those conditions apply and OpenWiki retrieval tools are available, use `openwiki_search` for just-in-time context and `openwiki_read` for the relevant complete sections. If search returns `workspace_required`, ask which listed workspace to use and retry with its ID.
+- Use `openwiki_list_workspaces` or `openwiki_list_wikis` when workspace membership itself needs to be discovered.
+- If the retrieval tools are unavailable, read `openwiki/quickstart.md` and follow its links to the relevant pages.
+- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+
+Use the repository's documented maintenance process to refresh generated pages after source changes. Check its configuration and completed runs before relying on automatic updates. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->

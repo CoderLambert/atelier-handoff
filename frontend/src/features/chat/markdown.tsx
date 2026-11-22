@@ -3,6 +3,7 @@
  * @implementation 复用流式渲染组件，应用聊天样式并转发可选的链接打开入口。
  * @updated 2026-11-20T17:57:00+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { Markdown as RichMarkdown, type MarkdownProps } from '@atelier/markdown';
 import '@atelier/markdown/style.css';
 
@@ -11,8 +12,10 @@ export function Markdown({
   streaming,
   onLinkClick,
 }: Pick<MarkdownProps, 'text' | 'streaming' | 'onLinkClick'>) {
+  const { locale } = useUiTranslation('chat');
   return (
     <RichMarkdown
+      locale={locale}
       text={text}
       streaming={streaming}
       onLinkClick={onLinkClick}

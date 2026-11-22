@@ -61,6 +61,7 @@ export class PermissionService {
       runId: run.id,
       sessionId: run.sessionId,
       toolCallId: operation.toolCallId,
+      subagentId: this.store.get('tools', operation.toolCallId).subagentId,
       kind: operation.kind,
       path: operation.path ?? null,
       command: operation.command ?? null,

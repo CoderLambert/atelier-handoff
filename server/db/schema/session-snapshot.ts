@@ -3,14 +3,16 @@
  * @implementation 映射既有 JSON 记录、派生归属列和事件表，实际 DDL 由版本化迁移负责。
  * @updated 2026-11-21T01:00:00+08:00
  */
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const recordColumns = () => ({ id: text('id').primaryKey(), data: text('data').notNull() });
 const scopedColumns = () => ({ ...recordColumns(), sessionId: text('session_id') });
 
 export const projects = sqliteTable('projects', recordColumns());
 export const sessions = sqliteTable('sessions', recordColumns());
-export const runs = sqliteTable('runs', scopedColumns());
+export const runs = sqliteTable('runs', scopedColumns(), (table) => [
+  uniqueIndex('runs_subagent_scope').on(table.id, table.sessionId),
+]);
 export const messages = sqliteTable('messages', scopedColumns());
 export const tools = sqliteTable('tools', scopedColumns());
 export const permissions = sqliteTable('permissions', scopedColumns());

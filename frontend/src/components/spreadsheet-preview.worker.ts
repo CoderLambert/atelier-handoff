@@ -14,8 +14,11 @@ export type SpreadsheetSheet = {
   textTruncated: boolean;
 };
 
+export type SpreadsheetErrorCode = 'tooLarge' | 'noSheets' | 'tooManySheets' | 'parseFailed';
+
 export type SpreadsheetWorkerResponse =
-  { status: 'success'; sheets: SpreadsheetSheet[] } | { status: 'error'; message: string };
+  | { status: 'success'; sheets: SpreadsheetSheet[] }
+  | { status: 'error'; code: SpreadsheetErrorCode };
 
 const MAX_FILE_BYTES = documentPreviewBytes;
 const MAX_SHEETS = 20;
@@ -80,7 +83,7 @@ self.onmessage = (event: MessageEvent<unknown>) => {
       throw new Error('Empty or invalid spreadsheet input');
     }
     if (event.data.byteLength > MAX_FILE_BYTES) {
-      response = { status: 'error', message: '文件超过 20 MB，暂不支持应用内表格预览。' };
+      response = { status: 'error', code: 'tooLarge' };
     } else {
       const options = {
         type: 'array' as const,
@@ -97,11 +100,11 @@ self.onmessage = (event: MessageEvent<unknown>) => {
       // XLS ignores the sheets option. Check metadata first so extra sheets are never parsed.
       const metadata = read(event.data, { ...options, bookSheets: true });
       if (!metadata.SheetNames.length) {
-        response = { status: 'error', message: '工作簿中没有可预览的工作表。' };
+        response = { status: 'error', code: 'noSheets' };
       } else if (metadata.SheetNames.length > MAX_SHEETS) {
         response = {
           status: 'error',
-          message: '工作簿超过 20 个工作表，请使用系统应用打开原文件。',
+          code: 'tooManySheets',
         };
       } else {
         const workbook = read(event.data, options);
@@ -122,7 +125,7 @@ self.onmessage = (event: MessageEvent<unknown>) => {
   } catch {
     response = {
       status: 'error',
-      message: '无法读取此工作簿。文件可能已损坏、受密码保护，或不是支持的 XLS/XLSX 文件。',
+      code: 'parseFailed',
     };
   }
   self.postMessage(response);

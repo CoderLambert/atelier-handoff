@@ -1,14 +1,14 @@
 /**
  * @file 提供会话消息发送操作。
- * @implementation 发送带幂等键及可选单次自动审批配置的草稿，接收新运行或排队消息并刷新发起会话快照。
- * @updated 2026-11-20T23:09:03+08:00
+ * @implementation 提交已组合的正文及幂等键，接收新运行或排队回执并使发起会话的快照失效。
+ * @updated 2026-11-22T14:31:19+08:00
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Draft, SendSessionMessageResult } from '@shared/types';
 import { api } from '@/api/client';
 import { sessionKeys } from './keys';
 
-export type SessionMessageBody = Draft & {
+export type SessionMessageBody = Omit<Draft, 'messageQuotes'> & {
   idempotencyKey: string;
   approvalMode?: 'automatic';
   maxSearchChargeFen?: number;

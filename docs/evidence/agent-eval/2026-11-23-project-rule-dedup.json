@@ -1,0 +1,918 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-23",
+  "kind": "bounded project instruction import deduplication",
+  "node": "v24.21.0",
+  "sourceHashes": {
+    "before": "acb3ca6c9c933087ac00ddd381fd6674d8c7f04b34be937a6439d167288d671e",
+    "after": "3093d9b52816f69d2277c3bb9b5e69db13e4d5c8bef5bcdf554bb2692efff197"
+  },
+  "offline": {
+    "method": "same isolated project fixture, genuine Agent SDK, local synthetic ACK, no real inference",
+    "before": [
+      {
+        "turn": 1,
+        "messageBytes": 27382,
+        "wholeRequestBytes": 56831,
+        "agentsCopies": 2,
+        "claudeCopies": 1
+      },
+      {
+        "turn": 2,
+        "messageBytes": 46330,
+        "wholeRequestBytes": 75779,
+        "agentsCopies": 4,
+        "claudeCopies": 2
+      }
+    ],
+    "after": [
+      {
+        "turn": 1,
+        "messageBytes": 18233,
+        "wholeRequestBytes": 47684,
+        "agentsCopies": 1,
+        "claudeCopies": 1
+      },
+      {
+        "turn": 2,
+        "messageBytes": 28029,
+        "wholeRequestBytes": 57480,
+        "agentsCopies": 2,
+        "claudeCopies": 2
+      }
+    ]
+  },
+  "regression": {
+    "checks": [
+      "npm run check",
+      "npm test",
+      "npm run build"
+    ],
+    "backendPassed": 286,
+    "frontendPassed": 104,
+    "skipped": 1
+  },
+  "live": {
+    "model": "codex/gpt-6.2-sol",
+    "effort": "medium",
+    "agentSdk": "0.3.326",
+    "cli": "2.1.326",
+    "autoCompactWindow": 120000,
+    "protocol": "Both variants used the same atelier application API. The old rule assembly was restored only in a read-only overlay for that trial. The fixture has an AGENTS.md that crosses 8 KiB, a repeated @AGENTS.md import, and a required field specified solely at the end of AGENTS.md. After raw SDK compaction the runtime reopens the original session and writes the final handoff from a short resume prompt.",
+    "verdictNote": "One paired synthetic test. Total input token counts include uncached, cache read, and cache creation fields. Actual charges were not measured.",
+    "scoringCorrection": "The original runner checked the largest wire request in the prefeeding rounds for the 80000-token requirement. That excluded the true pre-compaction size after native stripping for the summary. The final check uses the actual SDK boundary preTokens for both variants. Original runner scores are retained.",
+    "results": [
+      {
+        "variant": "old",
+        "seed": "compaction-eval-v1:long:1",
+        "pass": true,
+        "rawRunnerPass": false,
+        "rawRunnerLongContextCheck": false,
+        "exactDeliverable": true,
+        "checks": {
+          "priorEvidenceRead": true,
+          "partialWorkExactlyOnce": true,
+          "explicitCompactionBoundary": true,
+          "sameSdkSessionAfterRestart": true,
+          "earlierEvidence": true,
+          "midConversationCorrection": true,
+          "completeProjectRulesReachedDelivery": true,
+          "earlySafetyConstraints": true,
+          "freshState": true,
+          "originalFormat": true,
+          "noReplay": true,
+          "projectPreserved": true,
+          "substantialContextReduction": true,
+          "longContextReached": true,
+          "modelAndEffort": true
+        },
+        "error": null,
+        "cleanupError": null,
+        "totalRequests": 20,
+        "firstInputTokens": 16455,
+        "totalInputTokens": 960505,
+        "totalUncachedInputTokens": 186617,
+        "activeStageDurationMs": 124464.86326999997,
+        "resumeDurationMs": 18141.775288999997,
+        "boundaries": [
+          {
+            "stage": "before-restart",
+            "trigger": "auto",
+            "preTokens": 86827,
+            "postTokens": 17531,
+            "durationMs": 29383
+          },
+          {
+            "stage": "before-restart",
+            "trigger": "auto",
+            "preTokens": 83821,
+            "postTokens": 17456,
+            "durationMs": 32992
+          }
+        ],
+        "expected": [
+          "reference=INC-2529AB06048C",
+          "source=evidence-v1.txt:7",
+          "policy=review-9AB06048C",
+          "frozen_actions=publish,notify,delete",
+          "approvals=supervisor+owner",
+          "live_state=LIVE-649DA1BFDA39",
+          "receipt=prepared",
+          "review_signature=RULE-2529AB"
+        ],
+        "actual": "reference=INC-2529AB06048C\nsource=evidence-v1.txt:7\npolicy=review-9AB06048C\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-649DA1BFDA39\nreceipt=prepared\nreview_signature=RULE-2529AB\n",
+        "requests": [
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 27936,
+            "usage": {
+              "input_tokens": 6727,
+              "output_tokens": 75,
+              "cache_read_input_tokens": 9728,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16455
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 28584,
+            "usage": {
+              "input_tokens": 468,
+              "output_tokens": 44,
+              "cache_read_input_tokens": 16128,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16596
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 29021,
+            "usage": {
+              "input_tokens": 294,
+              "output_tokens": 30,
+              "cache_read_input_tokens": 16384,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16678
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 29392,
+            "usage": {
+              "input_tokens": 342,
+              "output_tokens": 43,
+              "cache_read_input_tokens": 16384,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16726
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 29739,
+            "usage": {
+              "input_tokens": 401,
+              "output_tokens": 5,
+              "cache_read_input_tokens": 16384,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16785
+          },
+          {
+            "stage": "batch-01",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 75595,
+            "usage": {
+              "input_tokens": 18698,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 16640,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 35338
+          },
+          {
+            "stage": "batch-02",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 121468,
+            "usage": {
+              "input_tokens": 18869,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 35072,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 53941
+          },
+          {
+            "stage": "batch-03",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 167341,
+            "usage": {
+              "input_tokens": 18766,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 53760,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 72526
+          },
+          {
+            "stage": "correction",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 185995,
+            "usage": {
+              "input_tokens": 3430,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 72192,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 75622
+          },
+          {
+            "stage": "batch-04",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 193131,
+            "usage": {
+              "input_tokens": 1527,
+              "output_tokens": 1383,
+              "cache_read_input_tokens": 75520,
+              "cache_creation_input_tokens": 0,
+              "output_tokens_details": {
+                "thinking_tokens": 28
+              }
+            },
+            "inputTokens": 77047
+          },
+          {
+            "stage": "batch-04",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 72566,
+            "usage": {
+              "input_tokens": 25575,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 9728,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 35303
+          },
+          {
+            "stage": "batch-05",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 118439,
+            "usage": {
+              "input_tokens": 18919,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 35072,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 53991
+          },
+          {
+            "stage": "batch-06",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 164312,
+            "usage": {
+              "input_tokens": 18852,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 53760,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 72612
+          },
+          {
+            "stage": "batch-07",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 171455,
+            "usage": {
+              "input_tokens": 1593,
+              "output_tokens": 1568,
+              "cache_read_input_tokens": 72448,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 74041
+          },
+          {
+            "stage": "batch-07",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 72061,
+            "usage": {
+              "input_tokens": 25513,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 9728,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 35241
+          },
+          {
+            "stage": "batch-08",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 117934,
+            "usage": {
+              "input_tokens": 18780,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 35072,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 53852
+          },
+          {
+            "stage": "compact-trigger",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 136388,
+            "usage": {
+              "input_tokens": 3145,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 53760,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 56905
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 154796,
+            "usage": {
+              "input_tokens": 3366,
+              "output_tokens": 214,
+              "cache_read_input_tokens": 56576,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 59942
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 156007,
+            "usage": {
+              "input_tokens": 586,
+              "output_tokens": 353,
+              "cache_read_input_tokens": 59648,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 60234
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 157561,
+            "usage": {
+              "input_tokens": 766,
+              "output_tokens": 106,
+              "cache_read_input_tokens": 59904,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 60670
+          }
+        ],
+        "stages": [
+          {
+            "stage": "setup",
+            "status": "completed",
+            "inputHash": "e6fe98aaa56dad83ba0b66e548ed10ae61cfe6bf2caa7c18061893fff0827d47",
+            "durationMs": 16172.891238
+          },
+          {
+            "stage": "batch-01",
+            "status": "completed",
+            "inputHash": "895c91f9343d398ebe3ce409608c9c2c64951866ad3a04643eb75b11a9ed00bb",
+            "durationMs": 2011.9400540000024
+          },
+          {
+            "stage": "batch-02",
+            "status": "completed",
+            "inputHash": "fbf2280a32f5b11e0a040a0556e40aefb246f9cbb30847d6576908fc5fde41eb",
+            "durationMs": 2344.23963
+          },
+          {
+            "stage": "batch-03",
+            "status": "completed",
+            "inputHash": "a1493e07d24338360148a778eb239a0a038ae0cbd6b23708cfb1363451614dab",
+            "durationMs": 2568.455272000003
+          },
+          {
+            "stage": "correction",
+            "status": "completed",
+            "inputHash": "a41621f46ba090b645e5b40ea3d1b9538ac2de3f50d7a54fb7f0aea0734a0875",
+            "durationMs": 2353.157798999997
+          },
+          {
+            "stage": "batch-04",
+            "status": "completed",
+            "inputHash": "bc414ed511d18893eced47bb824ce438dd8ba672ac996d1b31cbbc4fa65d7f3b",
+            "durationMs": 33286.76180199999
+          },
+          {
+            "stage": "batch-05",
+            "status": "completed",
+            "inputHash": "add219387ad8b6ca52397afc848bf9849a53905f0c09203cf7ee0b15314a5a5e",
+            "durationMs": 2474.2502989999994
+          },
+          {
+            "stage": "batch-06",
+            "status": "completed",
+            "inputHash": "81b96d2c98fe5911d40a12e8fdcf81d83fd292920d57b6f96e84ce376922f366",
+            "durationMs": 3021.8493859999944
+          },
+          {
+            "stage": "batch-07",
+            "status": "completed",
+            "inputHash": "6a5c55f4f81a4095a300398a46829030fe4fc42331fcaf2e80dca5900ade284a",
+            "durationMs": 36506.357655
+          },
+          {
+            "stage": "batch-08",
+            "status": "completed",
+            "inputHash": "77df93523e33dc4e66648d9f1b37782558ac23d2a17f26bb6b64ea4c5688a6aa",
+            "durationMs": 3674.848801999993
+          },
+          {
+            "stage": "compact-trigger",
+            "status": "completed",
+            "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+            "durationMs": 1908.336043999996
+          },
+          {
+            "stage": "resume",
+            "status": "completed",
+            "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+            "durationMs": 18141.775288999997
+          }
+        ]
+      },
+      {
+        "variant": "new",
+        "seed": "compaction-eval-v1:long:1",
+        "pass": true,
+        "rawRunnerPass": true,
+        "rawRunnerLongContextCheck": true,
+        "exactDeliverable": true,
+        "checks": {
+          "priorEvidenceRead": true,
+          "partialWorkExactlyOnce": true,
+          "explicitCompactionBoundary": true,
+          "sameSdkSessionAfterRestart": true,
+          "earlierEvidence": true,
+          "midConversationCorrection": true,
+          "completeProjectRulesReachedDelivery": true,
+          "earlySafetyConstraints": true,
+          "freshState": true,
+          "originalFormat": true,
+          "noReplay": true,
+          "projectPreserved": true,
+          "substantialContextReduction": true,
+          "longContextReached": true,
+          "modelAndEffort": true
+        },
+        "error": null,
+        "cleanupError": null,
+        "totalRequests": 18,
+        "firstInputTokens": 14888,
+        "totalInputTokens": 881247,
+        "totalUncachedInputTokens": 223583,
+        "activeStageDurationMs": 117057.34690100001,
+        "resumeDurationMs": 52161.22928500001,
+        "boundaries": [
+          {
+            "stage": "before-restart",
+            "trigger": "auto",
+            "preTokens": 93666,
+            "postTokens": 12836,
+            "durationMs": 28705
+          },
+          {
+            "stage": "resume",
+            "trigger": "auto",
+            "preTokens": 86850,
+            "postTokens": 6073,
+            "durationMs": 32533
+          }
+        ],
+        "expected": [
+          "reference=INC-2529AB06048C",
+          "source=evidence-v1.txt:7",
+          "policy=review-9AB06048C",
+          "frozen_actions=publish,notify,delete",
+          "approvals=supervisor+owner",
+          "live_state=LIVE-649DA1BFDA39",
+          "receipt=prepared",
+          "review_signature=RULE-2529AB"
+        ],
+        "actual": "reference=INC-2529AB06048C\nsource=evidence-v1.txt:7\npolicy=review-9AB06048C\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-649DA1BFDA39\nreceipt=prepared\nreview_signature=RULE-2529AB\n",
+        "requests": [
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 18879,
+            "usage": {
+              "input_tokens": 14888,
+              "output_tokens": 78,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 14888
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 19539,
+            "usage": {
+              "input_tokens": 440,
+              "output_tokens": 30,
+              "cache_read_input_tokens": 14592,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 15032
+          },
+          {
+            "stage": "setup",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 19912,
+            "usage": {
+              "input_tokens": 232,
+              "output_tokens": 5,
+              "cache_read_input_tokens": 14848,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 15080
+          },
+          {
+            "stage": "batch-01",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 56709,
+            "usage": {
+              "input_tokens": 32064,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 32064
+          },
+          {
+            "stage": "batch-02",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 93498,
+            "usage": {
+              "input_tokens": 17354,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 31744,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 49098
+          },
+          {
+            "stage": "batch-03",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 130287,
+            "usage": {
+              "input_tokens": 17218,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 48896,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 66114
+          },
+          {
+            "stage": "correction",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 139857,
+            "usage": {
+              "input_tokens": 1849,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 65792,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 67641
+          },
+          {
+            "stage": "batch-04",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 176639,
+            "usage": {
+              "input_tokens": 17321,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 67328,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 84649
+          },
+          {
+            "stage": "batch-05",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 183757,
+            "usage": {
+              "input_tokens": 1598,
+              "output_tokens": 1361,
+              "cache_read_input_tokens": 84480,
+              "cache_creation_input_tokens": 0,
+              "output_tokens_details": {
+                "thinking_tokens": 54
+              }
+            },
+            "inputTokens": 86078
+          },
+          {
+            "stage": "batch-05",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 53073,
+            "usage": {
+              "input_tokens": 31998,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 31998
+          },
+          {
+            "stage": "batch-06",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 89887,
+            "usage": {
+              "input_tokens": 17306,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 31744,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 49050
+          },
+          {
+            "stage": "batch-07",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 126676,
+            "usage": {
+              "input_tokens": 17172,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 48896,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 66068
+          },
+          {
+            "stage": "batch-08",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 163465,
+            "usage": {
+              "input_tokens": 17318,
+              "output_tokens": 14,
+              "cache_read_input_tokens": 65792,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 83110
+          },
+          {
+            "stage": "compact-trigger",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 172835,
+            "usage": {
+              "input_tokens": 1650,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 82944,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 84594
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 179948,
+            "usage": {
+              "input_tokens": 1539,
+              "output_tokens": 1423,
+              "cache_read_input_tokens": 84480,
+              "cache_creation_input_tokens": 0,
+              "output_tokens_details": {
+                "thinking_tokens": 24
+              }
+            },
+            "inputTokens": 86019
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 25543,
+            "usage": {
+              "input_tokens": 16311,
+              "output_tokens": 179,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16311
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 26490,
+            "usage": {
+              "input_tokens": 398,
+              "output_tokens": 359,
+              "cache_read_input_tokens": 16128,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16526
+          },
+          {
+            "stage": "resume",
+            "status": 200,
+            "requestModel": "codex/gpt-6.2-sol",
+            "responseModel": "codex/gpt-6.2-sol",
+            "requestEffort": "medium",
+            "historyBytes": 27950,
+            "usage": {
+              "input_tokens": 16927,
+              "output_tokens": 80,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0
+            },
+            "inputTokens": 16927
+          }
+        ],
+        "stages": [
+          {
+            "stage": "setup",
+            "status": "completed",
+            "inputHash": "e6fe98aaa56dad83ba0b66e548ed10ae61cfe6bf2caa7c18061893fff0827d47",
+            "durationMs": 9278.057902
+          },
+          {
+            "stage": "batch-01",
+            "status": "completed",
+            "inputHash": "895c91f9343d398ebe3ce409608c9c2c64951866ad3a04643eb75b11a9ed00bb",
+            "durationMs": 2361.8539870000004
+          },
+          {
+            "stage": "batch-02",
+            "status": "completed",
+            "inputHash": "fbf2280a32f5b11e0a040a0556e40aefb246f9cbb30847d6576908fc5fde41eb",
+            "durationMs": 2803.9100770000005
+          },
+          {
+            "stage": "batch-03",
+            "status": "completed",
+            "inputHash": "a1493e07d24338360148a778eb239a0a038ae0cbd6b23708cfb1363451614dab",
+            "durationMs": 2472.788969000001
+          },
+          {
+            "stage": "correction",
+            "status": "completed",
+            "inputHash": "a41621f46ba090b645e5b40ea3d1b9538ac2de3f50d7a54fb7f0aea0734a0875",
+            "durationMs": 2139.759740999998
+          },
+          {
+            "stage": "batch-04",
+            "status": "completed",
+            "inputHash": "bc414ed511d18893eced47bb824ce438dd8ba672ac996d1b31cbbc4fa65d7f3b",
+            "durationMs": 2247.947877999999
+          },
+          {
+            "stage": "batch-05",
+            "status": "completed",
+            "inputHash": "add219387ad8b6ca52397afc848bf9849a53905f0c09203cf7ee0b15314a5a5e",
+            "durationMs": 32063.692289000002
+          },
+          {
+            "stage": "batch-06",
+            "status": "completed",
+            "inputHash": "81b96d2c98fe5911d40a12e8fdcf81d83fd292920d57b6f96e84ce376922f366",
+            "durationMs": 2023.9432809999998
+          },
+          {
+            "stage": "batch-07",
+            "status": "completed",
+            "inputHash": "6a5c55f4f81a4095a300398a46829030fe4fc42331fcaf2e80dca5900ade284a",
+            "durationMs": 2232.5125249999983
+          },
+          {
+            "stage": "batch-08",
+            "status": "completed",
+            "inputHash": "77df93523e33dc4e66648d9f1b37782558ac23d2a17f26bb6b64ea4c5688a6aa",
+            "durationMs": 2688.4937319999954
+          },
+          {
+            "stage": "compact-trigger",
+            "status": "completed",
+            "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+            "durationMs": 4583.157235000006
+          },
+          {
+            "stage": "resume",
+            "status": "completed",
+            "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+            "durationMs": 52161.22928500001
+          }
+        ]
+      }
+    ]
+  }
+}

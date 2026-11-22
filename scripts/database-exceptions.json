@@ -4,5 +4,11 @@
     "key": "driver-call:f536f29bc9a57547",
     "decision": "docs/decisions/2026-11-21-orm-architecture.md",
     "test": "tests/session-snapshot-orm.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-subagents.ts",
+    "key": "driver-call:32f79dd292f5d6e4",
+    "decision": "docs/decisions/2026-11-21-subagents.md",
+    "test": "tests/session-snapshot-orm.test.ts"
   }
 ]

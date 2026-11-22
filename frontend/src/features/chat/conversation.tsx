@@ -1,8 +1,9 @@
 /**
  * @file 展示会话消息、运行结果、浏览器异常及网页链接选择入口。
- * @implementation 组织消息、交付物和审批入口，根据工具记录展示浏览器失败与后续进展，并提供执行轨迹和网页打开位置选择。
- * @updated 2026-11-20T22:16:28+08:00
+ * @implementation 按运行组织消息、主助手执行明细和子任务，提供审批、完整输出及历史操作入口，并按会话状态启用助手正文选区引用。
+ * @updated 2026-11-23T01:27:45+08:00
  */
+import { useUiTranslation, getTranslator } from '@/i18n';
 import {
   lazy,
   Suspense,
@@ -23,53 +24,89 @@ import type {
   RunEvent,
   ToolCall,
 } from '@shared/types';
+import { Activity, ArrowDown, RotateCcw, Shield } from 'lucide-react';
 import { activeStatuses } from '@shared/types';
+import { cn } from '@/components/ui/utils';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
-import { ArtifactAction } from '@/features/inspector';
+import {
+  ArtifactAction,
+  SubagentProgress,
+  groupRunWork,
+  permissionSubagentSource,
+} from '@/features/inspector';
 import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
 import { AttachmentPreview } from './attachment-preview';
 import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
+import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from './message-actions';
 import { runModeLabel } from './run-mode';
+import { RunToolActivity } from './run-tool-activity';
+import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
+const ToolOutputDialog = lazy(() => import('@/features/inspector/tool-output-dialog'));
 
 const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
 
 export const isActive = (run: Run) => activeStatuses.includes(run.status);
 const recoverable = (run: Run) => ['failed', 'stopped', 'interrupted'].includes(run.status);
-const timeFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
-const toolLabels: Record<string, string> = {
-  Read: '读取文件',
-  Skill: '加载 Skill',
-  list_files: '列出文件',
-  search_files: '搜索项目',
-  edit_file: '编辑文件',
-  write_file: '写入文件',
-  delete_file: '删除文件',
-  run_command: '运行命令',
-  weather_lookup: '查询天气',
-  update_plan: '更新计划',
-  publish_artifact: '发布交付物',
-  browser_navigate: '打开网页',
-  browser_snapshot: '读取网页',
-  browser_take_screenshot: '截取网页',
-  browser_click: '点击网页',
-  browser_type: '输入网页文本',
+const toolLabels: Readonly<
+  Record<
+    string,
+    | 'tool.read'
+    | 'tool.skill'
+    | 'tool.list'
+    | 'tool.search'
+    | 'tool.edit'
+    | 'tool.write'
+    | 'tool.delete'
+    | 'tool.command'
+    | 'tool.weather'
+    | 'tool.plan'
+    | 'tool.publish'
+    | 'tool.navigate'
+    | 'tool.snapshot'
+    | 'tool.screenshot'
+    | 'tool.click'
+    | 'tool.type'
+  >
+> = {
+  Read: 'tool.read',
+  Skill: 'tool.skill',
+  list_files: 'tool.list',
+  search_files: 'tool.search',
+  edit_file: 'tool.edit',
+  write_file: 'tool.write',
+  delete_file: 'tool.delete',
+  run_command: 'tool.command',
+  weather_lookup: 'tool.weather',
+  update_plan: 'tool.plan',
+  publish_artifact: 'tool.publish',
+  browser_navigate: 'tool.navigate',
+  browser_snapshot: 'tool.snapshot',
+  browser_take_screenshot: 'tool.screenshot',
+  browser_click: 'tool.click',
+  browser_type: 'tool.type',
 };
-const toolStatuses: Record<ToolCall['status'], string> = {
-  running: '进行中',
-  awaiting_permission: '等待审批',
-  succeeded: '成功',
-  failed: '失败',
-  denied: '已拒绝',
-  canceled: '已取消',
-};
-const planStatuses = { pending: '待执行', in_progress: '进行中', completed: '已完成' };
+const toolStatuses = {
+  running: 'tool.running',
+  awaiting_permission: 'tool.awaitingPermission',
+  succeeded: 'tool.succeeded',
+  failed: 'tool.failed',
+  denied: 'tool.denied',
+  canceled: 'tool.canceled',
+} as const satisfies Record<ToolCall['status'], string>;
+const planStatuses = {
+  pending: 'plan.pending',
+  in_progress: 'plan.inProgress',
+  completed: 'plan.completed',
+} as const;
 const modelEvents = new Set([
   'sdk.initialized',
   'sdk.api_retry',
   'tool.started',
   'tool.finished',
+  'subagent.started',
+  'subagent.finished',
   'message.delta',
 ]);
 const EMPTY_TOOLS: ToolCall[] = [];
@@ -78,9 +115,10 @@ const EMPTY_ARTIFACTS: Artifact[] = [];
 
 function toolLabel(name: string) {
   const short = name.replace(/^mcp__atelier__/, '');
-  return toolLabels[short] || short;
+  const key = toolLabels[short];
+  return key ? getTranslator('chat')(key) : short;
 }
-function date(value: string) {
+function date(value: string, timeFormat: Intl.DateTimeFormat) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : timeFormat.format(parsed);
 }
@@ -95,6 +133,7 @@ function groupByRun<T extends { runId: string }>(items: T[]) {
 }
 
 function ProgressClock({ at }: { at: string }) {
+  const { t } = useUiTranslation('chat');
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -103,9 +142,13 @@ function ProgressClock({ at }: { at: string }) {
   const milliseconds = now - Date.parse(at);
   if (!Number.isFinite(milliseconds)) return null;
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const duration =
-    seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
-  return <span>上次更新于 {duration}前</span>;
+  return (
+    <span>
+      {seconds < 60
+        ? t('progress.secondsAgo', { count: seconds })
+        : t('progress.minutesAgo', { count: Math.floor(seconds / 60), seconds: seconds % 60 })}
+    </span>
+  );
 }
 
 function RunProgress({
@@ -113,12 +156,27 @@ function RunProgress({
   tools,
   events,
   hasText,
+  snapshot,
+  onPermission,
+  onOutput,
+  onTrace,
 }: {
   run: Run;
   tools: ToolCall[];
   events: RunEvent[];
   hasText: boolean;
+  snapshot: Snapshot;
+  onPermission: (permission: Permission) => void;
+  onOutput: (tool: ToolCall) => void;
+  onTrace: () => void;
 }) {
+  const { t } = useUiTranslation('chat');
+  const work = useMemo(
+    () => groupRunWork(snapshot, run),
+    [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
+  );
+  const active = isActive(run);
+  const runningSubagents = work.subagents.filter(({ subagent }) => subagent?.status === 'running');
   const ongoing = tools.find((tool) => tool.status === 'running');
   const finished = tools.filter((tool) => tool.endedAt);
   const last = finished.reduce<ToolCall | undefined>(
@@ -126,46 +184,90 @@ function RunProgress({
     undefined,
   );
   const activity = events.findLast((event) => modelEvents.has(event.type));
-  let stage = '正在等待模型回复';
-  if (run.status === 'queued') stage = '等待执行';
-  else if (run.status === 'awaiting_permission') stage = '等待操作审批';
-  else if (run.status === 'stopping') stage = '正在停止';
-  else if (ongoing) stage = `正在调用工具 · ${toolLabel(ongoing.name)}`;
-  else if (activity?.type === 'sdk.api_retry') stage = '等待模型重试结果';
-  else if (activity?.type === 'message.delta' && hasText) stage = '正在接收回复';
-  else if (!activity && !tools.length && !hasText) stage = '正在启动模型会话';
+  let stage: string = t('progress.waitingModel');
+  if (run.status === 'queued') stage = t('progress.queued');
+  else if (run.status === 'awaiting_permission') stage = t('progress.awaitingApproval');
+  else if (run.status === 'stopping') stage = t('progress.stopping');
+  else if (ongoing) stage = t('progress.callingTool', { name: toolLabel(ongoing.name) });
+  else if (runningSubagents.length)
+    stage = t('progress.runningSubtasks', { count: runningSubagents.length });
+  else if (activity?.type === 'sdk.api_retry') stage = t('progress.retryingModel');
+  else if (activity?.type === 'message.delta' && hasText) stage = t('progress.receiving');
+  else if (!activity && !tools.length && !hasText) stage = t('progress.starting');
+  const approved = useMemo(
+    () =>
+      new Set(
+        work.permissions.filter((p) => p.decisionSource === 'automatic').map((p) => p.toolCallId),
+      ),
+    [work],
+  );
+  if (!active && !work.tools.length && !work.subagents.length && !run.plan.length) return null;
   return (
-    <section className="run-progress" aria-label="本轮执行进度">
-      <div className="run-progress-head">
-        <strong role="status">{stage}</strong>
-        <ProgressClock at={events.at(-1)?.at || last?.endedAt || run.startedAt || run.createdAt} />
-      </div>
-      {tools.length > 0 ? (
+    <section
+      className="run-progress"
+      data-status={run.status}
+      aria-label={active ? t('progress.label') : t('progress.history')}
+    >
+      {active ? (
+        <div className="run-progress-head">
+          <strong role="status">{stage}</strong>
+          <ProgressClock
+            at={events.at(-1)?.at || last?.endedAt || run.startedAt || run.createdAt}
+          />
+        </div>
+      ) : null}
+      {active && tools.length > 0 ? (
         <p className="run-progress-tools">
-          工具调用 {finished.length} / {tools.length} 已结束
-          {last ? ` · 最近工具 ${toolLabel(last.name)}（${toolStatuses[last.status]}）` : ''}
+          {t('progress.toolsFinished', {
+            finished: finished.length,
+            count: tools.length,
+            recent: last
+              ? t('progress.recentTool', {
+                  name: toolLabel(last.name),
+                  status: t(toolStatuses[last.status]),
+                })
+              : '',
+          })}
         </p>
+      ) : null}
+      {work.tools.length ? (
+        <RunToolActivity
+          tools={work.tools}
+          active={active}
+          approved={approved}
+          onOutput={onOutput}
+        />
       ) : null}
       {run.plan.length > 0 ? (
         <details className="run-progress-plan">
           <summary>
-            任务计划 · {run.plan.filter((step) => step.status === 'completed').length} /{' '}
-            {run.plan.length} 已完成
+            {t('progress.planSummary', {
+              completed: run.plan.filter((step) => step.status === 'completed').length,
+              count: run.plan.length,
+            })}
           </summary>
           <ol>
             {run.plan.map((step, index) => (
               <li key={index}>
-                {step.content} <small>{planStatuses[step.status]}</small>
+                {step.content} <small>{t(planStatuses[step.status])}</small>
               </li>
             ))}
           </ol>
         </details>
       ) : null}
+      <SubagentProgress
+        groups={work.subagents}
+        run={run}
+        onPermission={onPermission}
+        onToolOutput={onOutput}
+        onTrace={onTrace}
+      />
     </section>
   );
 }
 
 function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () => void }) {
+  const { t } = useUiTranslation('chat');
   const browserTools = tools.filter((tool) => tool.name.startsWith('mcp__atelier__browser_'));
   const last = browserTools.findLast((tool) => tool.status === 'failed');
   if (!last) return null;
@@ -173,15 +275,20 @@ function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () 
     (tool) => tool.status === 'succeeded' && last.endedAt && tool.startedAt >= last.endedAt,
   );
   return (
-    <section className="run-recovery" aria-label="浏览器操作异常">
+    <section
+      className="run-recovery"
+      data-status="failed"
+      aria-label={t('conversation.browserIssue')}
+    >
       <div role="status">
-        <strong>{toolLabel(last.name)}失败</strong>
-        <p className="break-words">{last.output.slice(0, 550) || '请查看执行轨迹了解原因。'}</p>
-        {continued ? <p>后续浏览器操作已成功执行。</p> : null}
+        <strong>{t('conversation.toolFailed', { name: toolLabel(last.name) })}</strong>
+        <p className="break-words">{last.output.slice(0, 550) || t('conversation.traceHelp')}</p>
+        {continued ? <p>{t('conversation.browserContinued')}</p> : null}
       </div>
       <div className="run-recovery-actions">
         <Button type="button" variant="outline" size="sm" onClick={onTrace}>
-          查看浏览器执行轨迹
+          <Activity data-icon="inline-start" aria-hidden="true" />
+          {t('conversation.browserTrace')}
         </Button>
       </div>
     </section>
@@ -205,65 +312,77 @@ function RunResult({
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
 }) {
+  const { t } = useUiTranslation('chat');
   if (isActive(run)) return null;
   const canRetry = recoverable(run);
   if (!canRetry && !hasArtifacts && (hasText || !tools.length)) return null;
-  const title = canRetry ? (hasText ? '已保留部分回复' : '回复未完成') : '本轮执行结果';
+  const title = canRetry
+    ? hasText
+      ? t('conversation.partialReply')
+      : t('conversation.incompleteReply')
+    : t('conversation.executionResult');
   return (
-    <section className="run-recovery" aria-label="本轮运行结果">
+    <section
+      className="run-recovery"
+      data-status={run.status}
+      aria-label={t('conversation.runResult')}
+    >
       <strong>{title}</strong>
       {run.error || run.reason ? <p>{run.error || run.reason}</p> : null}
       {tools.length > 0 ? (
         <p>
-          已完成 {tools.filter((tool) => tool.status === 'succeeded').length} / {tools.length}{' '}
-          次工具调用。
+          {t('conversation.toolsCompleted', {
+            completed: tools.filter((tool) => tool.status === 'succeeded').length,
+            count: tools.length,
+          })}
         </p>
       ) : null}
       <div className="run-recovery-actions">
-        <Button
-          type="button"
-          variant="outline"
-          className="btn btn-secondary"
-          onClick={() => onTrace(run.id)}
-        >
-          查看执行轨迹
+        <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
+          <Activity data-icon="inline-start" aria-hidden="true" />
+          {t('conversation.viewTrace')}
         </Button>
         {canRetry ? (
-          <Button
-            type="button"
-            className="btn btn-primary"
-            disabled={retryDisabled}
-            onClick={() => onRetry(run.id)}
-          >
-            只读续接
+          <Button type="button" size="sm" disabled={retryDisabled} onClick={() => onRetry(run.id)}>
+            <RotateCcw data-icon="inline-start" aria-hidden="true" />
+            {t('conversation.checkProgress')}
           </Button>
         ) : null}
       </div>
+      {canRetry ? <p>{t('conversation.retryHelp')}</p> : null}
     </section>
   );
 }
 
 function MessageContext({ run, attachments }: { run: Run; attachments: Map<string, Attachment> }) {
+  const { t } = useUiTranslation('chat');
   const references = [
     ...run.contextPaths.map((path) => ({
       key: `file:${path}`,
-      label: `已读取 · 项目文件 · ${path}`,
+      label: t('conversation.readProjectFile', { path }),
     })),
     ...(run.extensions || []).map((extension) => ({
       key: `extension:${extension.id}`,
-      label: `${extension.kind === 'mcp' ? 'MCP' : extension.kind === 'skill' ? 'Skill' : 'Command'} · ${extension.name}`,
+      label: t('conversation.extension', {
+        kind: extension.kind === 'mcp' ? 'MCP' : extension.kind === 'skill' ? 'Skill' : 'Command',
+        name: extension.name,
+      }),
     })),
   ];
   return references.length || run.attachmentIds.length ? (
-    <ul className="message-context" aria-label="本轮已读取的上下文">
+    <ul className="message-context" aria-label={t('conversation.context')}>
       {run.attachmentIds.map((id) => {
         const item = attachments.get(id);
         return item && !item.removed ? (
           <li key={`attachment:${id}`} className="message-attachment">
-            <AttachmentPreview attachment={item}>附件 · {item.name}</AttachmentPreview>
+            <AttachmentPreview attachment={item}>
+              {t('conversation.attachment', { name: item.name })}
+            </AttachmentPreview>
           </li>
         ) : (
-          <li key={`attachment:${id}`}>附件 · {item?.name ?? id} · 已不可用</li>
+          <li key={`attachment:${id}`}>
+            {t('conversation.attachmentUnavailable', { name: item?.name ?? id })}
+          </li>
         );
       })}
       {references.map((reference) => (
@@ -274,12 +393,16 @@ function MessageContext({ run, attachments }: { run: Run; attachments: Map<strin
 }
 
 function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: () => void }) {
+  const { t } = useUiTranslation('chat');
   const pending = permission.status === 'pending';
   return (
     <section className="chat-approval" data-pending={pending}>
       <div className="chat-approval-copy">
         <div className="chat-approval-title" role="status">
-          <strong>{pending ? '需要你的审批' : permissionOperation(permission)}</strong>
+          <strong>
+            <Shield data-icon="inline-start" aria-hidden="true" />
+            {pending ? t('conversation.approvalRequired') : permissionOperation(permission)}
+          </strong>
           {pending ? (
             <span>{permissionOperation(permission)}</span>
           ) : (
@@ -294,7 +417,7 @@ function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: 
         ) : null}
       </div>
       <Button type="button" size="sm" variant={pending ? 'default' : 'outline'} onClick={onOpen}>
-        {pending ? '查看并审批' : '查看审批记录'}
+        {pending ? t('conversation.reviewApproval') : t('conversation.approvalHistory')}
       </Button>
     </section>
   );
@@ -305,19 +428,44 @@ export function Conversation({
   onRetry,
   onTrace,
   onOpenLink,
+  onEditMessage,
+  onQuoteMessage,
+  onQuoteSelection,
+  onForkMessage,
+  onRewindMessage,
+  rewindDisabledReason,
+  forkingMessageId,
   submitting,
 }: {
   snapshot: Snapshot;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
   onOpenLink?: ChatLinkOpener;
+  onEditMessage?: MessageDraftAction;
+  onQuoteMessage?: MessageDraftAction;
+  onQuoteSelection?: QuoteSelectionAction;
+  onForkMessage?: (messageId: string) => void;
+  onRewindMessage?: MessageDraftAction;
+  rewindDisabledReason?: string;
+  forkingMessageId?: string;
   submitting: boolean;
 }) {
+  const { t, locale } = useUiTranslation('chat');
+  const timeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }),
+    [locale],
+  );
   const viewport = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const [unseen, setUnseen] = useState(false);
   const [permissionId, setPermissionId] = useState<string>();
+  const [outputToolId, setOutputToolId] = useState<string>();
+  const outputTool = outputToolId
+    ? snapshot.tools.find(
+        (tool) => tool.sessionId === snapshot.session.id && tool.id === outputToolId,
+      )
+    : undefined;
   const [webLink, setWebLink] = useState<{ url: string; trigger: HTMLAnchorElement }>();
   const chooseWebLink = useCallback((url: string, event: MouseEvent<HTMLAnchorElement>) => {
     setWebLink({ url, trigger: event.currentTarget });
@@ -371,6 +519,16 @@ export function Conversation({
     for (const run of missing.values()) result.push(placeholder(run));
     return result;
   }, [snapshot.messages, snapshot.runs]);
+  const subsequentMessageCounts = useMemo(
+    () =>
+      new Map(
+        snapshot.messages.map((message, index) => [
+          message.id,
+          snapshot.messages.length - index - 1,
+        ]),
+      ),
+    [snapshot.messages],
+  );
   const runFooterOwners = useMemo(
     () =>
       new Map(
@@ -390,7 +548,14 @@ export function Conversation({
     if (!element) return;
     if (nearBottom.current) element.scrollTop = element.scrollHeight;
     else setUnseen(true);
-  }, [snapshot.messages, snapshot.runs, snapshot.tools, snapshot.artifacts, snapshot.permissions]);
+  }, [
+    snapshot.messages,
+    snapshot.runs,
+    snapshot.tools,
+    snapshot.subagents,
+    snapshot.artifacts,
+    snapshot.permissions,
+  ]);
   useEffect(() => {
     if (!thread.current || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
@@ -407,8 +572,15 @@ export function Conversation({
       id="conversation-content"
       className="conversation-content chat-conversation"
       role="region"
-      aria-label="当前会话内容"
+      aria-label={t('conversation.label')}
       tabIndex={0}
+      onClickCapture={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('.run-progress summary, .run-tool-activity button')
+        )
+          nearBottom.current = false;
+      }}
       onScroll={() => {
         const element = viewport.current;
         if (!element) return;
@@ -417,6 +589,36 @@ export function Conversation({
       }}
     >
       <div ref={thread} className="message-thread" data-session-id={snapshot.session.id}>
+        {snapshot.inheritedMessages?.length ? (
+          <section className="inherited-messages" aria-label={t('conversation.inheritedLabel')}>
+            <header>
+              <h3>{t('conversation.inheritedTitle')}</h3>
+              <p>
+                {t('conversation.inheritedDescription', {
+                  title: snapshot.session.fork?.sourceTitle ?? t('conversation.sourceSession'),
+                })}
+              </p>
+            </header>
+            {snapshot.inheritedMessages.map((message) => (
+              <article key={message.id} className="inherited-message">
+                <div className="message-meta">
+                  <strong>
+                    {message.role === 'assistant' ? 'atelier' : t('conversation.you')}
+                  </strong>
+                  <time dateTime={message.createdAt}>{date(message.createdAt, timeFormat)}</time>
+                </div>
+                {message.role === 'assistant' ? (
+                  <Markdown
+                    text={message.text}
+                    onLinkClick={onOpenLink ? chooseWebLink : undefined}
+                  />
+                ) : (
+                  <div className="message-text">{message.text}</div>
+                )}
+              </article>
+            ))}
+          </section>
+        ) : null}
         {messages.length ? (
           messages.map((message) => {
             const assistant = message.role === 'assistant';
@@ -428,29 +630,42 @@ export function Conversation({
             return (
               <article
                 key={message.id}
-                className={`message ${assistant ? 'assistant-message' : 'user-message'}`}
+                className={cn('message', assistant ? 'assistant-message' : 'user-message')}
                 data-message-id={message.id}
                 data-run-id={message.runId}
               >
                 <div
-                  className={`avatar ${assistant ? 'ai-avatar' : 'user-avatar'}`}
+                  className={cn('avatar', assistant ? 'ai-avatar' : 'user-avatar')}
                   aria-hidden="true"
                 >
-                  {assistant ? 'A' : '我'}
+                  {assistant ? 'A' : t('conversation.me')}
                 </div>
                 <div className="message-body">
                   <div className="message-meta">
-                    <strong>{assistant ? 'atelier' : '你'}</strong>
-                    <time dateTime={message.createdAt}>{date(message.createdAt)}</time>
+                    <strong>{assistant ? 'atelier' : t('conversation.you')}</strong>
+                    <time dateTime={message.createdAt}>{date(message.createdAt, timeFormat)}</time>
                     {!assistant && run ? <span>{runModeLabel(run)}</span> : null}
                   </div>
-                  {assistant && run && isActive(run) ? (
-                    <RunProgress run={run} tools={tools} events={events} hasText={hasText} />
+                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
+                    <RunProgress
+                      run={run}
+                      tools={tools}
+                      events={events}
+                      hasText={hasText}
+                      snapshot={snapshot}
+                      onPermission={(item) => setPermissionId(item.id)}
+                      onOutput={(tool) => setOutputToolId(tool.id)}
+                      onTrace={() => onTrace(run.id)}
+                    />
                   ) : null}
                   {assistant && runFooterOwners.get(message.runId) === message.id
                     ? indexes.permissions
                         .get(message.runId)
-                        ?.filter((item) => item.decisionSource !== 'automatic')
+                        ?.filter(
+                          (item) =>
+                            item.decisionSource !== 'automatic' &&
+                            !permissionSubagentSource(snapshot, item),
+                        )
                         .map((item) => (
                           <ChatApproval
                             key={item.id}
@@ -467,13 +682,34 @@ export function Conversation({
                         onLinkClick={onOpenLink ? chooseWebLink : undefined}
                       />
                     ) : run && isActive(run) ? null : (
-                      <p className="message-placeholder">本轮没有文字回复</p>
+                      <p className="message-placeholder">{t('conversation.noReply')}</p>
                     )
                   ) : (
                     <div className="message-text">{message.text}</div>
                   )}
                   {!assistant && run ? (
                     <MessageContext run={run} attachments={indexes.attachments} />
+                  ) : null}
+                  {!assistant &&
+                  snapshot.session.fork &&
+                  events.some((event) => event.type === 'sdk.context_restarted') ? (
+                    <p className="message-placeholder">{t('conversation.branchRestored')}</p>
+                  ) : null}
+                  {hasText ||
+                  (hasMessageForkAnchor(message) && (onForkMessage || onRewindMessage)) ? (
+                    <MessageActions
+                      key={`${snapshot.session.id}:${message.id}`}
+                      message={message}
+                      disabled={submitting || snapshot.session.status === 'archived'}
+                      onEdit={onEditMessage}
+                      onQuote={onQuoteMessage}
+                      onFork={onForkMessage}
+                      onRewind={onRewindMessage}
+                      subsequentMessageCount={subsequentMessageCounts.get(message.id)}
+                      rewindDisabledReason={rewindDisabledReason}
+                      forking={forkingMessageId === message.id}
+                      forkDisabled={submitting || Boolean(forkingMessageId)}
+                    />
                   ) : null}
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
@@ -494,8 +730,11 @@ export function Conversation({
                   !isActive(run) &&
                   runFooterOwners.get(message.runId) === message.id &&
                   artifacts.length > 0 ? (
-                    <section className="chat-deliverables" aria-label="本轮交付物">
-                      <h3>本轮交付物</h3>
+                    <section
+                      className="chat-deliverables"
+                      aria-label={t('conversation.deliverables')}
+                    >
+                      <h3>{t('conversation.deliverables')}</h3>
                       <ul>
                         {artifacts.map((artifact) => (
                           <li key={artifact.id}>
@@ -509,18 +748,27 @@ export function Conversation({
               </article>
             );
           })
-        ) : (
+        ) : !snapshot.inheritedMessages?.length ? (
           <div className="welcome">
-            <h2>这次想做什么？</h2>
-            <p>描述任务，或先添加要讨论的项目文件。</p>
+            <h2>{t('conversation.welcomeTitle')}</h2>
+            <p>{t('conversation.welcomeHelp')}</p>
           </div>
-        )}
+        ) : null}
       </div>
+      {onQuoteSelection &&
+      !submitting &&
+      snapshot.session.status !== 'archived' &&
+      !webLink &&
+      !outputTool &&
+      !permission ? (
+        <SelectionQuote viewport={viewport} onQuote={onQuoteSelection} />
+      ) : null}
       {unseen ? (
         <Button
           type="button"
           variant="outline"
-          className="new-messages btn btn-secondary"
+          size="sm"
+          className="new-messages"
           onClick={() => {
             const element = viewport.current;
             nearBottom.current = true;
@@ -528,7 +776,8 @@ export function Conversation({
             setUnseen(false);
           }}
         >
-          {hasPendingApproval ? '有待审批操作 ↓' : '查看新消息 ↓'}
+          <ArrowDown data-icon="inline-start" aria-hidden="true" />
+          {hasPendingApproval ? t('conversation.pendingApproval') : t('conversation.newMessages')}
         </Button>
       ) : null}
       {webLink && onOpenLink ? (
@@ -540,11 +789,23 @@ export function Conversation({
           onClose={() => setWebLink(undefined)}
         />
       ) : null}
+      {outputTool ? (
+        <Suspense fallback={<p role="status">{t('conversation.openingOutput')}</p>}>
+          <ToolOutputDialog
+            key={outputTool.id}
+            tool={outputTool}
+            onOpenChange={(open) => {
+              if (!open) setOutputToolId(undefined);
+            }}
+          />
+        </Suspense>
+      ) : null}
       {permission ? (
-        <Suspense fallback={<p role="status">正在打开审批…</p>}>
+        <Suspense fallback={<p role="status">{t('conversation.openingApproval')}</p>}>
           <PermissionDialog
             key={permission.id}
             permission={permission}
+            subagent={permissionSubagentSource(snapshot, permission)}
             onOpenChange={(open) => {
               if (!open) setPermissionId(undefined);
             }}

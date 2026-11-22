@@ -12,7 +12,15 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { createApp } from '../server/app.js';
 import { gatewayModels } from '../server/gateway-models.js';
-import { now } from '../shared/types.js';
+import { now, type AppConfig } from '../shared/types.js';
+
+const catalogConfig = (gateway: string, managedGateway = false): AppConfig => ({
+  gateway,
+  managedGateway,
+  model: 'workspace-default',
+  maxTurns: 1,
+  timeoutMs: 1000,
+});
 
 async function listen(server: Server) {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -20,6 +28,120 @@ async function listen(server: Server) {
   assert.ok(address && typeof address === 'object');
   return `http://127.0.0.1:${address.port}`;
 }
+
+test('duplicate routes preserve execution metadata and explicit refresh keeps its source identity', async () => {
+  const gateway = createServer((_req, res) =>
+    res.end(
+      JSON.stringify({
+        routers: [{ model: 'router', effort: 'medium' }],
+        data: [
+          { model: 'shared', provider: 'chatgpt-plan', effort: 'high', service_tier: 'priority' },
+          { model: 'shared' },
+          { model: 'router', provider: 'chatgpt-plan' },
+          { model: 'invalid id' },
+        ],
+      }),
+    ),
+  );
+  const origin = await listen(gateway);
+  const sources: string[] = [];
+  try {
+    const result = await gatewayModels(
+      catalogConfig(origin),
+      async (request) => {
+        assert.equal(request.refresh, true);
+        sources.push(request.source);
+        return {
+          models: [
+            {
+              id: 'shared',
+              displayName: 'Shared',
+              supportedEfforts: ['low', 'high'],
+              provider: 'chatgpt-plan',
+            },
+          ],
+          discovery: { status: 'partial', reason: 'pagination-limit', modelCount: 1 },
+        };
+      },
+      { refresh: true },
+    );
+    assert.deepEqual(
+      result.models.find((model) => model.id === 'shared'),
+      {
+        id: 'shared',
+        displayName: 'Shared',
+        supportedEfforts: ['low', 'high'],
+        provider: 'chatgpt-plan',
+        effort: 'high',
+        serviceTier: 'priority',
+      },
+    );
+    assert.deepEqual(
+      result.models.find((model) => model.id === 'router'),
+      {
+        id: 'router',
+        effort: 'medium',
+        provider: 'chatgpt-plan',
+      },
+    );
+    assert.equal(result.discovery.routes.status, 'partial');
+    assert.equal(result.discovery.codex.status, 'partial');
+    assert.equal(result.models.filter((model) => model.id === 'shared').length, 1);
+    const switched = createServer((_req, res) =>
+      res.end(JSON.stringify({ data: [{ model: 'shared', provider: 'chatgpt-plan' }] })),
+    );
+    try {
+      const otherOrigin = await listen(switched);
+      await gatewayModels(catalogConfig(otherOrigin), async (request) => {
+        assert.notEqual(request.source, sources[0]);
+        return {
+          models: [],
+          discovery: { status: 'unavailable', reason: 'process', modelCount: 0 },
+        };
+      });
+    } finally {
+      await new Promise<void>((resolve) => switched.close(() => resolve()));
+    }
+  } finally {
+    await new Promise<void>((resolve) => gateway.close(() => resolve()));
+  }
+});
+
+test('managed gateways discover with empty routes and failure remains explicitly degraded', async () => {
+  let failing = false;
+  const gateway = createServer((_req, res) =>
+    failing ? res.writeHead(503).end() : res.end('{"data":[]}'),
+  );
+  const origin = await listen(gateway);
+  let loads = 0;
+  try {
+    const load = async () => {
+      loads++;
+      return {
+        models: [{ id: 'supplemental' }],
+        discovery: { status: 'ready' as const, modelCount: 1 },
+      };
+    };
+    const ready = await gatewayModels(catalogConfig(origin, true), load);
+    assert.equal(ready.discovery.codex.status, 'ready');
+    assert.deepEqual(
+      ready.models.map((entry) => entry.id),
+      ['workspace-default', 'supplemental'],
+    );
+    failing = true;
+    const degraded = await gatewayModels(catalogConfig(origin, true), async () => {
+      throw new Error('fixture');
+    });
+    assert.equal(degraded.routesAvailable, false);
+    assert.equal(degraded.discovery.routes.status, 'unavailable');
+    assert.equal(degraded.discovery.codex.status, 'unavailable');
+    assert.deepEqual(degraded.models, [{ id: 'workspace-default' }]);
+    await gatewayModels(catalogConfig(origin), load);
+    assert.equal(loads, 1);
+  } finally {
+    await new Promise<void>((resolve) => gateway.close(() => resolve()));
+  }
+});
 
 test('configured routes, session model overrides, and readonly retry keep their own model IDs', async () => {
   const temp = await mkdtemp(join(tmpdir(), 'atelier-gateway-models-'));
@@ -74,6 +196,10 @@ test('configured routes, session model overrides, and readonly retry keep their 
     assert.deepEqual(await api('/api/models'), {
       defaultModel: 'fixture-default',
       routesAvailable: true,
+      discovery: {
+        routes: { status: 'partial', modelCount: 2, rejectedCount: 1, reason: 'protocol' },
+        codex: { status: 'skipped', reason: 'not-applicable', modelCount: 0 },
+      },
       models: [
         { id: 'fixture-default' },
         { id: 'fixture-auto' },
@@ -86,10 +212,13 @@ test('configured routes, session model overrides, and readonly retry keep their 
       ],
     });
     provider = 'chatgpt-plan';
-    const merged = await gatewayModels(app.store.config(), async () => [
-      { id: 'fixture-alternate', displayName: 'Alternate', provider: 'chatgpt-plan' },
-      { id: 'fixture-codex', displayName: 'Codex catalog model', provider: 'chatgpt-plan' },
-    ]);
+    const merged = await gatewayModels(app.store.config(), async () => ({
+      models: [
+        { id: 'fixture-alternate', displayName: 'Alternate', provider: 'chatgpt-plan' },
+        { id: 'fixture-codex', displayName: 'Codex catalog model', provider: 'chatgpt-plan' },
+      ],
+      discovery: { status: 'ready', modelCount: 2 },
+    }));
     assert.deepEqual(
       merged.models.find((entry) => entry.id === 'fixture-alternate'),
       {
@@ -105,6 +234,10 @@ test('configured routes, session model overrides, and readonly retry keep their 
     assert.deepEqual(await api('/api/models'), {
       defaultModel: 'fixture-default',
       routesAvailable: false,
+      discovery: {
+        routes: { status: 'unavailable', reason: 'http', modelCount: 0 },
+        codex: { status: 'skipped', reason: 'not-applicable', modelCount: 0 },
+      },
       models: [{ id: 'fixture-default' }],
     });
     const { project } = await api('/api/projects', 'POST', { path: projectPath }, 201);

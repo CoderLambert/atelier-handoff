@@ -1,0 +1,248 @@
+/**
+ * @file 定义网页面板、工具栏和下载界面。
+ * @implementation 按工作区主题组织浏览器控件，保持槽位几何和弹窗内部滚动。
+ * @updated 2026-11-23T04:49:37+08:00
+ */
+.workspace-browser-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-browser-heading {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.workspace-browser-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.workspace-browser-heading h2 svg {
+  flex: none;
+  inline-size: var(--ui-icon-size);
+  block-size: var(--ui-icon-size);
+  color: var(--ui-muted-foreground);
+}
+.workspace-browser-panel > .workspace-browser {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-browser-address {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-warm);
+  border-bottom: 1px solid var(--border-soft);
+}
+.workspace-browser-address svg {
+  flex: none;
+  inline-size: var(--ui-icon-size);
+  block-size: var(--ui-icon-size);
+  color: var(--ui-muted-foreground);
+}
+.workspace-browser-address div {
+  min-width: 0;
+}
+.workspace-browser-address :is(strong, span) {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-browser-address strong {
+  font-size: var(--text-sm);
+}
+.workspace-browser-address span {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.workspace-browser-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--ui-card);
+}
+
+.desktop-browser {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+.desktop-browser-tabbar,
+.desktop-browser-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.desktop-browser-tabbar {
+  background: var(--surface-warm);
+}
+.desktop-browser-tabs {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-inline: 2px;
+  scrollbar-width: none;
+}
+.desktop-browser-tab {
+  display: flex;
+  flex: 0 0 128px;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.desktop-browser-tab[data-active='true'] {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.desktop-browser .desktop-browser-tab-select {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 5px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+.desktop-browser .desktop-browser-tab-select svg {
+  flex: none;
+}
+.desktop-browser-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-browser-toolbar input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: var(--ui-size-xs);
+  padding: 4px 8px;
+  border: 1px solid var(--ui-input);
+  border-radius: var(--radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  font-size: var(--text-sm);
+}
+.desktop-browser-control {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.desktop-browser-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-width: 0;
+  min-height: 27px;
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.desktop-browser-status > [data-slot='button'] {
+  justify-content: flex-start;
+  gap: 5px;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0 3px;
+  font-size: inherit;
+}
+.desktop-browser-status[role='alert'],
+.desktop-browser-settings-error {
+  color: var(--danger);
+}
+.desktop-browser-settings-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.desktop-browser-settings-section h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.desktop-browser-settings-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.desktop-browser-download-trigger {
+  flex-shrink: 0;
+}
+.react-dialog.desktop-browser-downloads {
+  width: min(680px, calc(100% - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+.desktop-browser-download-list-pane[hidden] {
+  display: none;
+}
+.desktop-browser-downloads .dialog-actions {
+  padding-top: 0;
+}
+.react-dialog.desktop-browser-downloads-preview {
+  width: min(1120px, calc(100% - 32px));
+  height: min(820px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+}
+.desktop-browser-download-preview {
+  background: var(--surface);
+}
+.desktop-browser-download-preview > :first-child {
+  min-height: 100%;
+}
+.desktop-browser-download-progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--border-soft);
+  accent-color: var(--accent);
+}
+.desktop-browser-download-progress::-webkit-progress-bar {
+  background: var(--border-soft);
+}
+.desktop-browser-download-progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.desktop-browser-download-progress::-moz-progress-bar {
+  background: var(--accent);
+}
+.desktop-browser-slot {
+  flex: 1;
+  min-height: 0;
+  background: var(--surface-warm);
+}

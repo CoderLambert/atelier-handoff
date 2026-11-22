@@ -1,3 +1,9 @@
+/**
+ * @file 提供技能工具绑定编辑对话框。
+ * @implementation 加载绑定及扩展信息，维护可选择和编辑的绑定草稿，并提交保存。
+ * @updated 2026-11-23T04:51:57+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import type { SkillToolBinding } from '@shared/types';
@@ -28,6 +34,7 @@ export function SkillToolBindingsDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const query = useSkillToolBindings(projectId, skillId);
   const extensions = useExtensions(projectId);
   const save = useSaveSkillToolBindings(projectId, skillId);
@@ -77,7 +84,7 @@ export function SkillToolBindingsDialog({
       await save.mutateAsync(validated);
       if (mounted.current) {
         setDraft(undefined);
-        setNotice('工具绑定已保存。');
+        setNotice(t('bindings.saved'));
         onSaved();
       }
     } catch (cause) {
@@ -87,7 +94,7 @@ export function SkillToolBindingsDialog({
 
   return (
     <FeatureDialog
-      title="工具绑定"
+      title={t('extensionEditor.bindings')}
       className="ext-binding-dialog"
       description={`${skillName} · ${projectName}`}
       busy={busy}
@@ -95,7 +102,7 @@ export function SkillToolBindingsDialog({
     >
       <form className="ext-binding-form" onSubmit={(event) => void submit(event)}>
         <div className="ext-binding-body">
-          {query.isPending ? <p role="status">正在读取工具绑定…</p> : null}
+          {query.isPending ? <p role="status">{t('bindings.loading')}</p> : null}
           {query.error ? (
             <div className="ext-error" role="alert">
               {messageOf(query.error)}
@@ -103,7 +110,7 @@ export function SkillToolBindingsDialog({
                 disabled={query.isFetching || busy}
                 onClick={() => void query.refetch()}
               >
-                重新加载绑定
+                {t('bindings.reload')}
               </ActionButton>
             </div>
           ) : null}
@@ -112,7 +119,7 @@ export function SkillToolBindingsDialog({
               <fieldset className="ext-binding-layout" disabled={busy}>
                 <div className="ext-binding-list">
                   <div className="ext-binding-list-title">
-                    <h3>已绑定工具</h3>
+                    <h3>{t('bindings.boundTools')}</h3>
                     <span>
                       {bindings.length} / {maxBindings}
                     </span>
@@ -124,7 +131,7 @@ export function SkillToolBindingsDialog({
                         : undefined;
                     const target =
                       binding.kind === 'mcp' && binding.tool
-                        ? `${service?.name ?? 'MCP'} / ${binding.tool}`
+                        ? `${service?.name ?? t('common.mcp')} / ${binding.tool}`
                         : binding.kind === 'builtin'
                           ? builtinTools[binding.tool]
                           : binding.kind === 'command'
@@ -138,7 +145,7 @@ export function SkillToolBindingsDialog({
                         key={index}
                         onClick={() => setActiveIndex(index)}
                       >
-                        <strong>{binding.name || '未命名工具'}</strong>
+                        <strong>{binding.name || t('bindings.unnamed')}</strong>
                         <span>{target}</span>
                       </button>
                     );
@@ -153,7 +160,8 @@ export function SkillToolBindingsDialog({
                       change([...bindings, newBinding('builtin')]);
                     }}
                   >
-                    <Plus size={16} aria-hidden="true" /> 添加工具
+                    <Plus data-icon="inline-start" aria-hidden="true" />
+                    {t('bindings.add')}
                   </ActionButton>
                   {hasMcp ? (
                     <div className="ext-binding-mcp-status">
@@ -163,18 +171,20 @@ export function SkillToolBindingsDialog({
                         disabled={extensions.isFetching || busy}
                         onClick={() => void extensions.refetch()}
                       >
-                        <RefreshCw size={14} aria-hidden="true" />
-                        {extensions.isFetching ? '正在刷新…' : '刷新 MCP 工具'}
+                        <RefreshCw data-icon="inline-start" aria-hidden="true" />
+                        {extensions.isFetching
+                          ? t('bindings.refreshing')
+                          : t('bindings.refreshMcp')}
                       </ActionButton>
                     </div>
                   ) : null}
                 </div>
                 {!bindings.length ? (
-                  <p className="ext-binding-empty">添加工具后，可以在这里设置调用名称和来源。</p>
+                  <p className="ext-binding-empty">{t('bindings.empty')}</p>
                 ) : null}
                 {bindings.map((binding, index) => {
                   if (index !== activeIndex) return null;
-                  const label = binding.name || `第 ${index + 1} 个绑定`;
+                  const label = binding.name || t('bindings.numberedLabel', { number: index + 1 });
                   const server =
                     binding.kind === 'mcp'
                       ? servers.find((item) => item.id === binding.extensionId)
@@ -189,10 +199,7 @@ export function SkillToolBindingsDialog({
                       <legend>{label}</legend>
                       <div className="ext-binding-fields">
                         <div className="ext-binding-pair">
-                          <Field
-                            label="工具名称"
-                            help="小写字母开头，可含数字和下划线，最多 32 个字符。"
-                          >
+                          <Field label={t('bindings.nameLabel')} help={t('bindings.nameHelp')}>
                             <input
                               ref={(element) => {
                                 nameInputs.current[index] = element;
@@ -209,7 +216,7 @@ export function SkillToolBindingsDialog({
                               }
                             />
                           </Field>
-                          <Field label="工具来源">
+                          <Field label={t('bindings.sourceLabel')}>
                             <select
                               value={binding.kind}
                               onChange={(event) =>
@@ -231,7 +238,7 @@ export function SkillToolBindingsDialog({
                           </Field>
                         </div>
                         {binding.kind === 'builtin' ? (
-                          <Field label="内置工具">
+                          <Field label={t('bindings.builtin')}>
                             <select
                               value={binding.tool}
                               onChange={(event) =>
@@ -251,7 +258,7 @@ export function SkillToolBindingsDialog({
                         ) : binding.kind === 'mcp' ? (
                           <>
                             <div className="ext-binding-pair">
-                              <Field label="项目 MCP 服务">
+                              <Field label={t('bindings.mcpService')}>
                                 <select
                                   required
                                   value={binding.extensionId}
@@ -269,10 +276,10 @@ export function SkillToolBindingsDialog({
                                     });
                                   }}
                                 >
-                                  <option value="">请选择 MCP 服务</option>
+                                  <option value="">{t('bindings.chooseMcp')}</option>
                                   {binding.extensionId && !server ? (
                                     <option value={binding.extensionId} disabled>
-                                      已移除 · {binding.extensionId}
+                                      {t('bindings.removedTarget', { name: binding.extensionId })}
                                     </option>
                                   ) : null}
                                   {servers.map((item) => {
@@ -280,13 +287,13 @@ export function SkillToolBindingsDialog({
                                     return (
                                       <option key={item.id} value={item.id} disabled={!available}>
                                         {item.name}
-                                        {available ? '' : ' · 暂无可用工具'}
+                                        {available ? '' : t('bindings.noToolsSuffix')}
                                       </option>
                                     );
                                   })}
                                 </select>
                               </Field>
-                              <Field label="项目已允许的工具">
+                              <Field label={t('bindings.allowedTools')}>
                                 <select
                                   required
                                   value={binding.tool}
@@ -296,16 +303,19 @@ export function SkillToolBindingsDialog({
                                     update(index, { ...binding, tool: event.target.value })
                                   }
                                 >
-                                  <option value="">请选择工具</option>
+                                  <option value="">{t('bindings.chooseTool')}</option>
                                   {binding.tool &&
                                   !tools.some((tool) => tool.name === binding.tool) ? (
                                     <option value={binding.tool} disabled>
-                                      不可用 · {binding.tool}
+                                      {t('bindings.unavailableTarget', { name: binding.tool })}
                                     </option>
                                   ) : null}
                                   {tools.map((tool) => (
                                     <option key={tool.name} value={tool.name}>
-                                      {tool.name} · {tool.access === 'read' ? '只读' : '每次审批'}
+                                      {tool.name} ·{' '}
+                                      {tool.access === 'read'
+                                        ? t('common.readOnly')
+                                        : t('common.approval')}
                                     </option>
                                   ))}
                                 </select>
@@ -316,11 +326,8 @@ export function SkillToolBindingsDialog({
                               id={`${id}-mcp-${index}`}
                             >
                               {extensions.isPending
-                                ? '正在读取项目 MCP 服务…'
-                                : mcpIssue ||
-                                  (!servers.length
-                                    ? '请在项目扩展的 MCP 标签添加并授权工具。'
-                                    : '')}
+                                ? t('bindings.loadingMcp')
+                                : mcpIssue || (!servers.length ? t('bindings.addMcpHelp') : '')}
                             </p>
                             {server?.tools.find((tool) => tool.name === binding.tool)
                               ?.description ? (
@@ -334,10 +341,7 @@ export function SkillToolBindingsDialog({
                           </>
                         ) : binding.kind === 'http' ? (
                           <>
-                            <Field
-                              label="固定 HTTPS URL"
-                              help="使用公开域名和默认端口，不包含账号、密码或 # 片段。"
-                            >
+                            <Field label={t('bindings.fixedUrl')} help={t('bindings.urlHelp')}>
                               <input
                                 required
                                 type="url"
@@ -352,8 +356,8 @@ export function SkillToolBindingsDialog({
                               />
                             </Field>
                             <Field
-                              label="输入参数名"
-                              help="作为查询参数键；也可在 URL 的完整路径段中使用同名占位符。"
+                              label={t('bindings.parameterLabel')}
+                              help={t('bindings.parameterHelp')}
                             >
                               <input
                                 required
@@ -368,43 +372,36 @@ export function SkillToolBindingsDialog({
                               />
                             </Field>
                             <Field
-                              label="输入描述"
-                              help="说明唯一字符串输入的用途，最多 300 个字符。"
+                              label={t('bindings.inputDescription')}
+                              help={t('bindings.inputDescriptionHelp')}
                             >
                               <textarea
                                 required
                                 rows={2}
                                 maxLength={300}
-                                placeholder="要查询天气的城市名称，例如 Beijing"
+                                placeholder={t('bindings.weatherPlaceholder')}
                                 value={binding.description}
                                 onChange={(event) =>
                                   update(index, { ...binding, description: event.target.value })
                                 }
                               />
                             </Field>
-                            <p className="ext-help">
-                              只接受一个 1–200 个字符的字符串输入。例：参数 location 可填入
-                              {' https://wttr.in/{location}?format=j1 '}
-                              的路径；没有占位符时会添加为查询参数。
-                            </p>
+                            <p className="ext-help">{t('bindings.httpsHelp')}</p>
                           </>
                         ) : (
                           <>
-                            <Field label="命令预设">
+                            <Field label={t('bindings.command')}>
                               <select value={binding.preset} disabled>
-                                <option value="pdftotext">pdftotext · PDF 转文本</option>
+                                <option value="pdftotext">{t('bindings.pdfPreset')}</option>
                               </select>
                             </Field>
-                            <p className="ext-help">
-                              需要编辑模式、本地已安装 pdftotext，并逐次审批。仅处理项目内不超过 16
-                              MiB 的 PDF，提取前 10 页。
-                            </p>
+                            <p className="ext-help">{t('bindings.pdfHelp')}</p>
                           </>
                         )}
                         <div className="ext-binding-actions">
                           <ActionButton
-                            danger
-                            aria-label={`移除绑定 ${label}`}
+                            variant="destructive"
+                            aria-label={t('bindings.removeLabel', { name: label })}
                             onClick={() => {
                               const next = Math.max(0, index - 1);
                               setActiveIndex(next);
@@ -412,7 +409,7 @@ export function SkillToolBindingsDialog({
                               change(bindings.filter((_, position) => position !== index));
                             }}
                           >
-                            移除绑定
+                            {t('bindings.remove')}
                           </ActionButton>
                         </div>
                       </div>
@@ -426,17 +423,17 @@ export function SkillToolBindingsDialog({
         </div>
         <div className="ext-dialog-actions">
           <span className="ext-save-state" role="status" aria-live="polite">
-            {busy ? '正在保存工具绑定…' : dirty ? '有未保存的工具绑定，关闭后将丢弃更改。' : notice}
+            {busy ? t('bindings.saving') : dirty ? t('bindings.unsaved') : notice}
           </span>
           <ActionButton disabled={busy} onClick={onClose}>
-            关闭
+            {t('common.close')}
           </ActionButton>
           <ActionButton
             type="submit"
-            primary
+            variant="default"
             disabled={busy || !query.data || !dirty || (hasMcp && !extensions.data)}
           >
-            保存工具绑定
+            {t('bindings.save')}
           </ActionButton>
         </div>
       </form>

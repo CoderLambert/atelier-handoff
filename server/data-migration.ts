@@ -17,12 +17,14 @@ import {
   realpath,
   rename,
   rm,
+  writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 import { acquireDataOwner } from './data-owner.js';
 import { Store } from './store.js';
 import { fingerprint } from './files.js';
+import { readCapturedBashLog } from './bash-log-capture.js';
 
 const databases = 'atelier.sqlite';
 const fileLibraries = ['attachments', 'artifacts', 'sdk', 'tool-output'] as const;
@@ -60,7 +62,14 @@ async function copyLibrary(source: string, target: string): Promise<number> {
     if (entry.isDirectory()) {
       copied += await copyLibrary(from, to);
     } else if (entry.isFile()) {
-      await copyFile(from, to, constants.COPYFILE_EXCL);
+      if (entry.nlink !== 1) throw new Error('数据目录包含硬链接文件。');
+      if (basename(source) === 'tool-output' && /^[a-f0-9]{64}\.log$/.test(name)) {
+        const text = await readCapturedBashLog(dirname(source), name.slice(0, -4), {
+          status: 'complete',
+          bytes: entry.size,
+        });
+        await writeFile(to, text, { flag: 'wx', mode: 0o600 });
+      } else await copyFile(from, to, constants.COPYFILE_EXCL);
       await chmod(to, 0o600);
       if ((await hashFile(from)) !== (await hashFile(to)))
         throw new Error('文件校验失败，数据没有迁入。');
@@ -132,6 +141,20 @@ async function validateStaged(path: string) {
     for (const tool of store.list('tools')) {
       if (tool.outputTruncated)
         await access(join(path, 'tool-output', fingerprint(tool.id)), constants.R_OK);
+      if (tool.bashLog && ['complete', 'partial'].includes(tool.bashLog.status)) {
+        if (
+          tool.name !== 'Bash' ||
+          !sessionIds.has(tool.sessionId) ||
+          !runIds.has(tool.runId) ||
+          runs.find((run) => run.id === tool.runId)?.sessionId !== tool.sessionId
+        )
+          throw new Error('命令日志引用的会话或运行不匹配。');
+        try {
+          await readCapturedBashLog(path, fingerprint(tool.id), tool.bashLog);
+        } catch {
+          throw new Error('命令日志文件校验失败。');
+        }
+      }
     }
     return {
       projects: projects.length,
@@ -163,7 +186,7 @@ export async function migrateWorkspace(oldPath: string, newPath: string) {
     try {
       integrity(db);
       const version = Number(db.prepare('PRAGMA user_version').get()?.user_version);
-      if (version < 1 || version > 6) throw new Error('旧版工作台数据库版本不支持。');
+      if (version < 1 || version > 7) throw new Error('旧版工作台数据库版本不支持。');
       const copy = join(backupPath, databases);
       await backup(db, copy);
       await chmod(copy, 0o600);

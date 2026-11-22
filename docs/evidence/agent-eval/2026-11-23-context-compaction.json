@@ -1,0 +1,2989 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-23",
+  "type": "paired real model automatic SDK compaction and restart",
+  "configuration": {
+    "node": "v24.21.0",
+    "agentSdk": "0.3.326",
+    "claudeCli": "2.1.326",
+    "model": "codex/gpt-6.2-sol",
+    "effort": "medium",
+    "upstream": "local Magpie /v1/messages",
+    "compactionWindowSetting": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+    "finalPrompt": "Continue the incident handoff and write the final deliverable. Check current local state first."
+  },
+  "sourceHashes": {
+    "server/agent.ts": "869656bbc24b43818e39e0d1622b26463442d70e2993b027313f8bf20b6e7708",
+    "server/app.ts": "462fae8233b954779a1c2507e35f7daa27c1120b5bee1259abb8118538068c7c",
+    "server/native-harness.ts": "acb3ca6c9c933087ac00ddd381fd6674d8c7f04b34be937a6439d167288d671e",
+    "server/session-checkpoint.ts": "1a65b0837ff79594857c81364541584ca925debc2fca9ab869d0794785852529"
+  },
+  "probes": [
+    {
+      "driver": "atelier-native",
+      "manualBoundary": false,
+      "error": "Atelier HTTP 400: {\"error\":{\"code\":\"EXTENSION_UNKNOWN\",\"message\":\"找不到 /compact，可在扩展页导入或从输入框选择。\",\"retryable\":false}}",
+      "rawRunnerPass": false,
+      "rawRunnerFailedChecks": [
+        "substantialContextReduction"
+      ],
+      "resumeProducedExactFile": false
+    },
+    {
+      "driver": "claude-code",
+      "manualBoundary": true,
+      "error": null,
+      "rawRunnerPass": false,
+      "rawRunnerFailedChecks": [
+        "substantialContextReduction"
+      ],
+      "resumeProducedExactFile": true
+    }
+  ],
+  "scoringCorrection": "The first runner required the initial request after restart to be smaller than half of the largest pre-compaction request. That restart occurred after two new large diagnostic batches. The same replacement rule is applied to both drivers and both windows: SDK auto boundary for a pre-context of at least 80000 tokens, post-tokens below 50% of the SDK pre-tokens, and a still-reduced first request after restart. Exact deliverable and state checks are unchanged.",
+  "probesCountTowardScore": false,
+  "scope": "Native SDK auto-compaction within the same persisted SDK session, followed by a clean runtime restart, using synthetic data and two thresholds. Does not test app checkpoint reconstruction after forced stop/crash, default window, or remote side effects.",
+  "trials": [
+    {
+      "driver": "atelier-native",
+      "attempt": 1,
+      "window": 120000,
+      "chunks": 8,
+      "seed": "compaction-eval-v1:long:1",
+      "rawRunnerPass": false,
+      "rawRunnerFailedChecks": [
+        "substantialContextReduction"
+      ],
+      "pass": true,
+      "error": null,
+      "cleanupError": null,
+      "checks": {
+        "priorEvidenceRead": true,
+        "partialWorkExactlyOnce": true,
+        "explicitCompactionBoundary": true,
+        "sameSdkSessionAfterRestart": true,
+        "earlierEvidence": true,
+        "midConversationCorrection": true,
+        "earlySafetyConstraints": true,
+        "freshState": true,
+        "originalFormat": true,
+        "noReplay": true,
+        "projectPreserved": true,
+        "substantialContextReduction": true,
+        "longContextReached": true,
+        "modelAndEffort": true
+      },
+      "expectedExact": true,
+      "expected": [
+        "reference=INC-2529AB06048C",
+        "source=evidence-v1.txt:7",
+        "policy=review-9AB06048C",
+        "frozen_actions=publish,notify,delete",
+        "approvals=supervisor+owner",
+        "live_state=LIVE-649DA1BFDA39",
+        "receipt=prepared"
+      ],
+      "actual": "reference=INC-2529AB06048C\nsource=evidence-v1.txt:7\npolicy=review-9AB06048C\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-649DA1BFDA39\nreceipt=prepared\n",
+      "sdkCompactionBoundaries": [
+        {
+          "type": "system",
+          "trigger": "auto",
+          "preTokens": 99131,
+          "postTokens": 10342,
+          "durationMs": 23703
+        }
+      ],
+      "largestPreCompactionRequest": {
+        "inputTokens": 93703,
+        "historyBytes": 159222,
+        "batches": 5
+      },
+      "firstRequestAfterReopen": {
+        "inputTokens": 61953,
+        "historyBytes": 100272,
+        "batches": 8,
+        "usesRecoveryCheckpoint": false
+      },
+      "resumeDurationMs": 15373.374224000007,
+      "stages": [
+        {
+          "stage": "setup",
+          "status": "completed",
+          "durationMs": 9616.170101,
+          "maxInputTokens": 13698,
+          "maxHistoryBytes": 11094,
+          "requests": 3,
+          "inputChars": 1133,
+          "inputHash": "c38351654fc2faf03f376cfb0851398246f82d1187b1ded530cddb75471ff0ad",
+          "tools": [
+            {
+              "name": "Read",
+              "status": "succeeded"
+            },
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            }
+          ],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": false
+            }
+          ]
+        },
+        {
+          "stage": "batch-01",
+          "status": "completed",
+          "durationMs": 2917.1786379999994,
+          "maxInputTokens": 29330,
+          "maxHistoryBytes": 39140,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "895c91f9343d398ebe3ce409608c9c2c64951866ad3a04643eb75b11a9ed00bb",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-02",
+          "status": "completed",
+          "durationMs": 2245.7668520000007,
+          "maxInputTokens": 45012,
+          "maxHistoryBytes": 67178,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "fbf2280a32f5b11e0a040a0556e40aefb246f9cbb30847d6576908fc5fde41eb",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-03",
+          "status": "completed",
+          "durationMs": 2696.1188439999987,
+          "maxInputTokens": 60676,
+          "maxHistoryBytes": 95216,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "a1493e07d24338360148a778eb239a0a038ae0cbd6b23708cfb1363451614dab",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "correction",
+          "status": "completed",
+          "durationMs": 3074.3944850000007,
+          "maxInputTokens": 60851,
+          "maxHistoryBytes": 96035,
+          "requests": 1,
+          "inputChars": 335,
+          "inputHash": "a41621f46ba090b645e5b40ea3d1b9538ac2de3f50d7a54fb7f0aea0734a0875",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-04",
+          "status": "completed",
+          "durationMs": 3584.490294000003,
+          "maxInputTokens": 76507,
+          "maxHistoryBytes": 124066,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "bc414ed511d18893eced47bb824ce438dd8ba672ac996d1b31cbbc4fa65d7f3b",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-05",
+          "status": "completed",
+          "durationMs": 2363.892251000001,
+          "maxInputTokens": 92274,
+          "maxHistoryBytes": 152104,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "add219387ad8b6ca52397afc848bf9849a53905f0c09203cf7ee0b15314a5a5e",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-06",
+          "status": "completed",
+          "durationMs": 27499.926722999997,
+          "maxInputTokens": 93703,
+          "maxHistoryBytes": 159222,
+          "requests": 2,
+          "inputChars": 27125,
+          "inputHash": "81b96d2c98fe5911d40a12e8fdcf81d83fd292920d57b6f96e84ce376922f366",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            },
+            {
+              "type": "sdk.notice",
+              "subtype": "compact_boundary"
+            }
+          ]
+        },
+        {
+          "stage": "batch-07",
+          "status": "completed",
+          "durationMs": 2678.415181999997,
+          "maxInputTokens": 46015,
+          "maxHistoryBytes": 71042,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "6a5c55f4f81a4095a300398a46829030fe4fc42331fcaf2e80dca5900ade284a",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-08",
+          "status": "completed",
+          "durationMs": 2906.4974619999994,
+          "maxInputTokens": 61705,
+          "maxHistoryBytes": 99080,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "77df93523e33dc4e66648d9f1b37782558ac23d2a17f26bb6b64ea4c5688a6aa",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "compact-trigger",
+          "status": "completed",
+          "durationMs": 2138.185415,
+          "maxInputTokens": 61837,
+          "maxHistoryBytes": 99699,
+          "requests": 1,
+          "inputChars": 136,
+          "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "resume",
+          "status": "completed",
+          "durationMs": 15373.374224000007,
+          "maxInputTokens": 62410,
+          "maxHistoryBytes": 102239,
+          "requests": 3,
+          "inputChars": 95,
+          "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            },
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            }
+          ],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 10059,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": false,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 13515,
+            "output_tokens": 69,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 10720,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 13650,
+            "output_tokens": 30,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 11094,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 386,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 13312,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-01",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 39140,
+          "fillerBatches": 1,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15762,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 13568,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-02",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 67178,
+          "fillerBatches": 2,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15828,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 29184,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-03",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 95216,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15876,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 44800,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "correction",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 96035,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 435,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 60416,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-04",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 124066,
+          "fillerBatches": 4,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15835,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 60672,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-05",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 152104,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15986,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 76288,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 159222,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 1543,
+            "output_tokens": 1090,
+            "cache_read_input_tokens": 92160,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 42979,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 30349,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 71042,
+          "fillerBatches": 7,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15807,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 30208,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-08",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 99080,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15881,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 45824,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "compact-trigger",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 99699,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 397,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 61440,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 100272,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 257,
+            "output_tokens": 196,
+            "cache_read_input_tokens": 61696,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 101283,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 488,
+            "output_tokens": 211,
+            "cache_read_input_tokens": 61696,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 102239,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 458,
+            "output_tokens": 73,
+            "cache_read_input_tokens": 61952,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        }
+      ]
+    },
+    {
+      "driver": "claude-code",
+      "attempt": 1,
+      "window": 120000,
+      "chunks": 8,
+      "seed": "compaction-eval-v1:long:1",
+      "rawRunnerPass": false,
+      "rawRunnerFailedChecks": [
+        "substantialContextReduction"
+      ],
+      "pass": true,
+      "error": null,
+      "cleanupError": null,
+      "checks": {
+        "priorEvidenceRead": true,
+        "partialWorkExactlyOnce": true,
+        "explicitCompactionBoundary": true,
+        "sameSdkSessionAfterRestart": true,
+        "earlierEvidence": true,
+        "midConversationCorrection": true,
+        "earlySafetyConstraints": true,
+        "freshState": true,
+        "originalFormat": true,
+        "noReplay": true,
+        "projectPreserved": true,
+        "substantialContextReduction": true,
+        "longContextReached": true,
+        "modelAndEffort": true
+      },
+      "expectedExact": true,
+      "expected": [
+        "reference=INC-2529AB06048C",
+        "source=evidence-v1.txt:7",
+        "policy=review-9AB06048C",
+        "frozen_actions=publish,notify,delete",
+        "approvals=supervisor+owner",
+        "live_state=LIVE-649DA1BFDA39",
+        "receipt=prepared"
+      ],
+      "actual": "reference=INC-2529AB06048C\nsource=evidence-v1.txt:7\npolicy=review-9AB06048C\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-649DA1BFDA39\nreceipt=prepared\n",
+      "sdkCompactionBoundaries": [
+        {
+          "type": "system",
+          "trigger": "auto",
+          "preTokens": 94354,
+          "postTokens": 8723,
+          "durationMs": 25895
+        }
+      ],
+      "largestPreCompactionRequest": {
+        "inputTokens": 88988,
+        "historyBytes": 149632,
+        "batches": 5
+      },
+      "firstRequestAfterReopen": {
+        "inputTokens": 57478,
+        "historyBytes": 92145,
+        "batches": 8,
+        "usesRecoveryCheckpoint": false
+      },
+      "resumeDurationMs": 18902.132732000005,
+      "stages": [
+        {
+          "stage": "setup",
+          "status": "completed",
+          "durationMs": 8378.507146,
+          "maxInputTokens": 9470,
+          "maxHistoryBytes": 3732,
+          "requests": 3,
+          "inputChars": 1133,
+          "inputHash": "c38351654fc2faf03f376cfb0851398246f82d1187b1ded530cddb75471ff0ad",
+          "tools": [
+            {
+              "name": "Read"
+            },
+            {
+              "name": "Bash"
+            }
+          ]
+        },
+        {
+          "stage": "batch-01",
+          "status": "completed",
+          "durationMs": 2160.285050999999,
+          "maxInputTokens": 25021,
+          "maxHistoryBytes": 31407,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "895c91f9343d398ebe3ce409608c9c2c64951866ad3a04643eb75b11a9ed00bb",
+          "tools": []
+        },
+        {
+          "stage": "batch-02",
+          "status": "completed",
+          "durationMs": 2254.441428,
+          "maxInputTokens": 40622,
+          "maxHistoryBytes": 59074,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "fbf2280a32f5b11e0a040a0556e40aefb246f9cbb30847d6576908fc5fde41eb",
+          "tools": []
+        },
+        {
+          "stage": "batch-03",
+          "status": "completed",
+          "durationMs": 2938.489651,
+          "maxInputTokens": 56205,
+          "maxHistoryBytes": 86741,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "a1493e07d24338360148a778eb239a0a038ae0cbd6b23708cfb1363451614dab",
+          "tools": []
+        },
+        {
+          "stage": "correction",
+          "status": "completed",
+          "durationMs": 1952.475045000001,
+          "maxInputTokens": 56298,
+          "maxHistoryBytes": 87187,
+          "requests": 1,
+          "inputChars": 335,
+          "inputHash": "a41621f46ba090b645e5b40ea3d1b9538ac2de3f50d7a54fb7f0aea0734a0875",
+          "tools": []
+        },
+        {
+          "stage": "batch-04",
+          "status": "completed",
+          "durationMs": 2099.797709999999,
+          "maxInputTokens": 71873,
+          "maxHistoryBytes": 114847,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "bc414ed511d18893eced47bb824ce438dd8ba672ac996d1b31cbbc4fa65d7f3b",
+          "tools": []
+        },
+        {
+          "stage": "batch-05",
+          "status": "completed",
+          "durationMs": 3404.4603069999976,
+          "maxInputTokens": 87559,
+          "maxHistoryBytes": 142514,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "add219387ad8b6ca52397afc848bf9849a53905f0c09203cf7ee0b15314a5a5e",
+          "tools": []
+        },
+        {
+          "stage": "batch-06",
+          "status": "completed",
+          "durationMs": 28986.816408000002,
+          "maxInputTokens": 88988,
+          "maxHistoryBytes": 149632,
+          "requests": 2,
+          "inputChars": 27125,
+          "inputHash": "81b96d2c98fe5911d40a12e8fdcf81d83fd292920d57b6f96e84ce376922f366",
+          "tools": []
+        },
+        {
+          "stage": "batch-07",
+          "status": "completed",
+          "durationMs": 1908.1256470000008,
+          "maxInputTokens": 41785,
+          "maxHistoryBytes": 64032,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "6a5c55f4f81a4095a300398a46829030fe4fc42331fcaf2e80dca5900ade284a",
+          "tools": []
+        },
+        {
+          "stage": "batch-08",
+          "status": "completed",
+          "durationMs": 2558.3293540000013,
+          "maxInputTokens": 57394,
+          "maxHistoryBytes": 91699,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "77df93523e33dc4e66648d9f1b37782558ac23d2a17f26bb6b64ea4c5688a6aa",
+          "tools": []
+        },
+        {
+          "stage": "compact-trigger",
+          "status": "completed",
+          "durationMs": 1649.327102999996,
+          "maxInputTokens": 57444,
+          "maxHistoryBytes": 91945,
+          "requests": 1,
+          "inputChars": 136,
+          "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+          "tools": []
+        },
+        {
+          "stage": "resume",
+          "status": "completed",
+          "durationMs": 18902.132732000005,
+          "maxInputTokens": 58187,
+          "maxHistoryBytes": 94834,
+          "requests": 3,
+          "inputChars": 95,
+          "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+          "tools": [
+            {
+              "name": "Bash"
+            },
+            {
+              "name": "Bash"
+            }
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 2690,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": false,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 9284,
+            "output_tokens": 72,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 3361,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 462,
+            "output_tokens": 30,
+            "cache_read_input_tokens": 8960,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 3732,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 254,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 9216,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-01",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 31407,
+          "fillerBatches": 1,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15805,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 9216,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-02",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 59074,
+          "fillerBatches": 2,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15790,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 24832,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-03",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 86741,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15757,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 40448,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "correction",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 87187,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 234,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 56064,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-04",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 114847,
+          "fillerBatches": 4,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15809,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 56064,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-05",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 142514,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15879,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 71680,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 149632,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 1692,
+            "output_tokens": 1196,
+            "cache_read_input_tokens": 87296,
+            "cache_creation_input_tokens": 0,
+            "output_tokens_details": {
+              "thinking_tokens": 35
+            }
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 36340,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 26200,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 64032,
+          "fillerBatches": 7,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15929,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 25856,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-08",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 91699,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15922,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 41472,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "compact-trigger",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 91945,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 356,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 57088,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 92145,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 134,
+            "output_tokens": 179,
+            "cache_read_input_tokens": 57344,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 93088,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 351,
+            "output_tokens": 418,
+            "cache_read_input_tokens": 57344,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 94834,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 587,
+            "output_tokens": 96,
+            "cache_read_input_tokens": 57600,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        }
+      ]
+    },
+    {
+      "driver": "atelier-native",
+      "attempt": 2,
+      "window": 140000,
+      "chunks": 10,
+      "seed": "compaction-eval-v1:long:2",
+      "rawRunnerPass": true,
+      "rawRunnerFailedChecks": [],
+      "pass": true,
+      "error": null,
+      "cleanupError": null,
+      "checks": {
+        "priorEvidenceRead": true,
+        "partialWorkExactlyOnce": true,
+        "explicitCompactionBoundary": true,
+        "sameSdkSessionAfterRestart": true,
+        "earlierEvidence": true,
+        "midConversationCorrection": true,
+        "earlySafetyConstraints": true,
+        "freshState": true,
+        "originalFormat": true,
+        "noReplay": true,
+        "projectPreserved": true,
+        "substantialContextReduction": true,
+        "longContextReached": true,
+        "modelAndEffort": true
+      },
+      "expectedExact": true,
+      "expected": [
+        "reference=INC-513D4F63ECB2",
+        "source=evidence-v1.txt:7",
+        "policy=review-D4F63ECB2",
+        "frozen_actions=publish,notify,delete",
+        "approvals=supervisor+owner",
+        "live_state=LIVE-23ABA86B3C1E",
+        "receipt=prepared"
+      ],
+      "actual": "reference=INC-513D4F63ECB2\nsource=evidence-v1.txt:7\npolicy=review-D4F63ECB2\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-23ABA86B3C1E\nreceipt=prepared\n",
+      "sdkCompactionBoundaries": [
+        {
+          "type": "system",
+          "trigger": "auto",
+          "preTokens": 114929,
+          "postTokens": 10447,
+          "durationMs": 23829
+        }
+      ],
+      "largestPreCompactionRequest": {
+        "inputTokens": 109501,
+        "historyBytes": 187228,
+        "batches": 6
+      },
+      "firstRequestAfterReopen": {
+        "inputTokens": 77592,
+        "historyBytes": 128732,
+        "batches": 10,
+        "usesRecoveryCheckpoint": false
+      },
+      "resumeDurationMs": 17591.48877399999,
+      "stages": [
+        {
+          "stage": "setup",
+          "status": "completed",
+          "durationMs": 8281.126693,
+          "maxInputTokens": 13694,
+          "maxHistoryBytes": 11062,
+          "requests": 3,
+          "inputChars": 1133,
+          "inputHash": "c38351654fc2faf03f376cfb0851398246f82d1187b1ded530cddb75471ff0ad",
+          "tools": [
+            {
+              "name": "Read",
+              "status": "succeeded"
+            },
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            }
+          ],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": false
+            }
+          ]
+        },
+        {
+          "stage": "batch-01",
+          "status": "completed",
+          "durationMs": 2580.2378549999994,
+          "maxInputTokens": 29303,
+          "maxHistoryBytes": 39108,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "751b64a189e66ee52e4564c060c67d6403cf49386f421928d9b901695b367291",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-02",
+          "status": "completed",
+          "durationMs": 2138.851745,
+          "maxInputTokens": 44999,
+          "maxHistoryBytes": 67146,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "c6a1c2ae4c38d6bae18e69d64d80bb9f669ca47c01030451eb48930605065b88",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-03",
+          "status": "completed",
+          "durationMs": 2025.0847159999994,
+          "maxInputTokens": 60693,
+          "maxHistoryBytes": 95184,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "b91d557f2ee54e01908db5cfc8994f0529167a41afc39530427a15103a8327fd",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "correction",
+          "status": "completed",
+          "durationMs": 2020.816041,
+          "maxInputTokens": 60868,
+          "maxHistoryBytes": 96003,
+          "requests": 1,
+          "inputChars": 335,
+          "inputHash": "102e92b8334347ef4a87696cf7fb636dfe8f7479a66d5a60531bd99c18ad9fd6",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-04",
+          "status": "completed",
+          "durationMs": 2252.230204000003,
+          "maxInputTokens": 76561,
+          "maxHistoryBytes": 124034,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "8cf74abfb9e312f23f06847199acff265eed09bf290bcbf8377e5eaeb061bd44",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-05",
+          "status": "completed",
+          "durationMs": 2134.5084779999997,
+          "maxInputTokens": 92336,
+          "maxHistoryBytes": 152072,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "9f14ce41cfd68c2d1ef072d2e460fa884d37d2350f3b6e6d8d3333b823489e77",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-06",
+          "status": "completed",
+          "durationMs": 2142.2453029999997,
+          "maxInputTokens": 108072,
+          "maxHistoryBytes": 180110,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "10092e39ec9a46080c3345623d7ab3ae4349886f31c8234a9aa3e79b11798781",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-07",
+          "status": "completed",
+          "durationMs": 28075.410506,
+          "maxInputTokens": 109501,
+          "maxHistoryBytes": 187228,
+          "requests": 2,
+          "inputChars": 27125,
+          "inputHash": "2568eaae4a1333190acd0244b5e2289de5b70662b739f6f8e07ed7f8a1c2b15b",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            },
+            {
+              "type": "sdk.notice",
+              "subtype": "compact_boundary"
+            }
+          ]
+        },
+        {
+          "stage": "batch-08",
+          "status": "completed",
+          "durationMs": 3028.815574,
+          "maxInputTokens": 46009,
+          "maxHistoryBytes": 71464,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "f0d7dca7775c5548f22ce7dd687e6b43b4480f5392bd45f7b5f6adf7a56d1294",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-09",
+          "status": "completed",
+          "durationMs": 3358.5133849999984,
+          "maxInputTokens": 61713,
+          "maxHistoryBytes": 99502,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "0e5f41037de750295deebd8fa48e29e68e074cc3391e25a77344164bbaefff07",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "batch-10",
+          "status": "completed",
+          "durationMs": 2249.742989999999,
+          "maxInputTokens": 77344,
+          "maxHistoryBytes": 127540,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "c12c579d28c9c97ef389d4795fe458b4a0f825afad1ccc13601ed54f79d66aaa",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "compact-trigger",
+          "status": "completed",
+          "durationMs": 2692.152083000001,
+          "maxInputTokens": 77476,
+          "maxHistoryBytes": 128159,
+          "requests": 1,
+          "inputChars": 136,
+          "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+          "tools": [],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        },
+        {
+          "stage": "resume",
+          "status": "completed",
+          "durationMs": 17591.48877399999,
+          "maxInputTokens": 78099,
+          "maxHistoryBytes": 130772,
+          "requests": 3,
+          "inputChars": 95,
+          "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            },
+            {
+              "name": "Bash",
+              "status": "succeeded"
+            }
+          ],
+          "sdkEventTypes": [
+            {
+              "type": "sdk.initialized",
+              "resumed": true
+            }
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 10059,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": false,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 13516,
+            "output_tokens": 63,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 10688,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 334,
+            "output_tokens": 30,
+            "cache_read_input_tokens": 13312,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 11062,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 382,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 13312,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-01",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 39108,
+          "fillerBatches": 1,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15735,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 13568,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-02",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 67146,
+          "fillerBatches": 2,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15815,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 29184,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-03",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 95184,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15893,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 44800,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "correction",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 96003,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 452,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 60416,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-04",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 124034,
+          "fillerBatches": 4,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15889,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 60672,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-05",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 152072,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 16048,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 76288,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 180110,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15912,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 92160,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 187228,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 1725,
+            "output_tokens": 1118,
+            "cache_read_input_tokens": 107776,
+            "cache_creation_input_tokens": 0,
+            "output_tokens_details": {
+              "thinking_tokens": 42
+            }
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 43401,
+          "fillerBatches": 7,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 20666,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 9728,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-08",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 71464,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15801,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 30208,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-09",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 99502,
+          "fillerBatches": 9,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15889,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 45824,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-10",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 127540,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15904,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 61440,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "compact-trigger",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 128159,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 420,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 77056,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 128732,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 280,
+            "output_tokens": 161,
+            "cache_read_input_tokens": 77312,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 129617,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 478,
+            "output_tokens": 289,
+            "cache_read_input_tokens": 77312,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 130772,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 531,
+            "output_tokens": 84,
+            "cache_read_input_tokens": 77568,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        }
+      ]
+    },
+    {
+      "driver": "claude-code",
+      "attempt": 2,
+      "window": 140000,
+      "chunks": 10,
+      "seed": "compaction-eval-v1:long:2",
+      "rawRunnerPass": true,
+      "rawRunnerFailedChecks": [],
+      "pass": true,
+      "error": null,
+      "cleanupError": null,
+      "checks": {
+        "priorEvidenceRead": true,
+        "partialWorkExactlyOnce": true,
+        "explicitCompactionBoundary": true,
+        "sameSdkSessionAfterRestart": true,
+        "earlierEvidence": true,
+        "midConversationCorrection": true,
+        "earlySafetyConstraints": true,
+        "freshState": true,
+        "originalFormat": true,
+        "noReplay": true,
+        "projectPreserved": true,
+        "substantialContextReduction": true,
+        "longContextReached": true,
+        "modelAndEffort": true
+      },
+      "expectedExact": true,
+      "expected": [
+        "reference=INC-513D4F63ECB2",
+        "source=evidence-v1.txt:7",
+        "policy=review-D4F63ECB2",
+        "frozen_actions=publish,notify,delete",
+        "approvals=supervisor+owner",
+        "live_state=LIVE-23ABA86B3C1E",
+        "receipt=prepared"
+      ],
+      "actual": "reference=INC-513D4F63ECB2\nsource=evidence-v1.txt:7\npolicy=review-D4F63ECB2\nfrozen_actions=publish,notify,delete\napprovals=supervisor+owner\nlive_state=LIVE-23ABA86B3C1E\nreceipt=prepared\n",
+      "sdkCompactionBoundaries": [
+        {
+          "type": "system",
+          "trigger": "auto",
+          "preTokens": 110074,
+          "postTokens": 8622,
+          "durationMs": 24058
+        }
+      ],
+      "largestPreCompactionRequest": {
+        "inputTokens": 104708,
+        "historyBytes": 177277,
+        "batches": 6
+      },
+      "firstRequestAfterReopen": {
+        "inputTokens": 72924,
+        "historyBytes": 119395,
+        "batches": 10,
+        "usesRecoveryCheckpoint": false
+      },
+      "resumeDurationMs": 17107.513757000008,
+      "stages": [
+        {
+          "stage": "setup",
+          "status": "completed",
+          "durationMs": 7956.697158,
+          "maxInputTokens": 9469,
+          "maxHistoryBytes": 3710,
+          "requests": 3,
+          "inputChars": 1133,
+          "inputHash": "c38351654fc2faf03f376cfb0851398246f82d1187b1ded530cddb75471ff0ad",
+          "tools": [
+            {
+              "name": "Read"
+            },
+            {
+              "name": "Bash"
+            }
+          ]
+        },
+        {
+          "stage": "batch-01",
+          "status": "completed",
+          "durationMs": 1930.2175819999993,
+          "maxInputTokens": 24997,
+          "maxHistoryBytes": 31385,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "751b64a189e66ee52e4564c060c67d6403cf49386f421928d9b901695b367291",
+          "tools": []
+        },
+        {
+          "stage": "batch-02",
+          "status": "completed",
+          "durationMs": 2389.4876220000006,
+          "maxInputTokens": 40612,
+          "maxHistoryBytes": 59052,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "c6a1c2ae4c38d6bae18e69d64d80bb9f669ca47c01030451eb48930605065b88",
+          "tools": []
+        },
+        {
+          "stage": "batch-03",
+          "status": "completed",
+          "durationMs": 2045.2118800000007,
+          "maxInputTokens": 56225,
+          "maxHistoryBytes": 86719,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "b91d557f2ee54e01908db5cfc8994f0529167a41afc39530427a15103a8327fd",
+          "tools": []
+        },
+        {
+          "stage": "correction",
+          "status": "completed",
+          "durationMs": 2156.339376,
+          "maxInputTokens": 56318,
+          "maxHistoryBytes": 87165,
+          "requests": 1,
+          "inputChars": 335,
+          "inputHash": "102e92b8334347ef4a87696cf7fb636dfe8f7479a66d5a60531bd99c18ad9fd6",
+          "tools": []
+        },
+        {
+          "stage": "batch-04",
+          "status": "completed",
+          "durationMs": 2337.662909999999,
+          "maxInputTokens": 71930,
+          "maxHistoryBytes": 114825,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "8cf74abfb9e312f23f06847199acff265eed09bf290bcbf8377e5eaeb061bd44",
+          "tools": []
+        },
+        {
+          "stage": "batch-05",
+          "status": "completed",
+          "durationMs": 2548.329533,
+          "maxInputTokens": 87624,
+          "maxHistoryBytes": 142492,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "9f14ce41cfd68c2d1ef072d2e460fa884d37d2350f3b6e6d8d3333b823489e77",
+          "tools": []
+        },
+        {
+          "stage": "batch-06",
+          "status": "completed",
+          "durationMs": 2702.5890260000015,
+          "maxInputTokens": 103279,
+          "maxHistoryBytes": 170159,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "10092e39ec9a46080c3345623d7ab3ae4349886f31c8234a9aa3e79b11798781",
+          "tools": []
+        },
+        {
+          "stage": "batch-07",
+          "status": "completed",
+          "durationMs": 28198.056196999998,
+          "maxInputTokens": 104708,
+          "maxHistoryBytes": 177277,
+          "requests": 2,
+          "inputChars": 27125,
+          "inputHash": "2568eaae4a1333190acd0244b5e2289de5b70662b739f6f8e07ed7f8a1c2b15b",
+          "tools": []
+        },
+        {
+          "stage": "batch-08",
+          "status": "completed",
+          "durationMs": 2868.527070999997,
+          "maxInputTokens": 41667,
+          "maxHistoryBytes": 63615,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "f0d7dca7775c5548f22ce7dd687e6b43b4480f5392bd45f7b5f6adf7a56d1294",
+          "tools": []
+        },
+        {
+          "stage": "batch-09",
+          "status": "completed",
+          "durationMs": 3673.471826999994,
+          "maxInputTokens": 57290,
+          "maxHistoryBytes": 91282,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "0e5f41037de750295deebd8fa48e29e68e074cc3391e25a77344164bbaefff07",
+          "tools": []
+        },
+        {
+          "stage": "batch-10",
+          "status": "completed",
+          "durationMs": 3330.222667000002,
+          "maxInputTokens": 72840,
+          "maxHistoryBytes": 118949,
+          "requests": 1,
+          "inputChars": 27125,
+          "inputHash": "c12c579d28c9c97ef389d4795fe458b4a0f825afad1ccc13601ed54f79d66aaa",
+          "tools": []
+        },
+        {
+          "stage": "compact-trigger",
+          "status": "completed",
+          "durationMs": 1867.4165859999994,
+          "maxInputTokens": 72890,
+          "maxHistoryBytes": 119195,
+          "requests": 1,
+          "inputChars": 136,
+          "inputHash": "752175dc6b2544b63fd9f1716151baee3e94baec2a4f65f68f403d4a8ba0354f",
+          "tools": []
+        },
+        {
+          "stage": "resume",
+          "status": "completed",
+          "durationMs": 17107.513757000008,
+          "maxInputTokens": 73484,
+          "maxHistoryBytes": 121788,
+          "requests": 3,
+          "inputChars": 95,
+          "inputHash": "2de0ee1bc4d511b473c657029fcc6426b6af0d9ee7c87b6f04f2694c7f9b3800",
+          "tools": [
+            {
+              "name": "Bash"
+            },
+            {
+              "name": "Bash"
+            }
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 2690,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": false,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 2116,
+            "output_tokens": 70,
+            "cache_read_input_tokens": 7168,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 3341,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 9421,
+            "output_tokens": 30,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "setup",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 3710,
+          "fillerBatches": 0,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 253,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 9216,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-01",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 31385,
+          "fillerBatches": 1,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15781,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 9216,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-02",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 59052,
+          "fillerBatches": 2,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 31652,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 8960,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-03",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 86719,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": false,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 31393,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 24832,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "correction",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 87165,
+          "fillerBatches": 3,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 254,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 56064,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-04",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 114825,
+          "fillerBatches": 4,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15866,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 56064,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-05",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 142492,
+          "fillerBatches": 5,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 47176,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 40448,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-06",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 170159,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15983,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 87296,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 177277,
+          "fillerBatches": 6,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 1540,
+            "output_tokens": 1120,
+            "cache_read_input_tokens": 103168,
+            "cache_creation_input_tokens": 0,
+            "output_tokens_details": {
+              "thinking_tokens": 22
+            }
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-07",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 35923,
+          "fillerBatches": 7,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 26133,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-08",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 63615,
+          "fillerBatches": 8,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15811,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 25856,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-09",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 91282,
+          "fillerBatches": 9,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15818,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 41472,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "batch-10",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 118949,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 15752,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 57088,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "compact-trigger",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 119195,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 186,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 72704,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 119395,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": false,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 220,
+            "output_tokens": 210,
+            "cache_read_input_tokens": 72704,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 120479,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 468,
+            "output_tokens": 295,
+            "cache_read_input_tokens": 72704,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "tool_use"
+        },
+        {
+          "stage": "resume",
+          "status": 200,
+          "requestModel": "codex/gpt-6.2-sol",
+          "responseModel": "codex/gpt-6.2-sol",
+          "requestEffort": "medium",
+          "historyBytes": 121788,
+          "fillerBatches": 10,
+          "hasEarlierEvidence": true,
+          "hasRevisedPolicy": true,
+          "hasFreshState": true,
+          "hasRecoveryCheckpoint": false,
+          "startUsage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          },
+          "endUsage": {
+            "input_tokens": 524,
+            "output_tokens": 86,
+            "cache_read_input_tokens": 72960,
+            "cache_creation_input_tokens": 0
+          },
+          "stopReason": "end_turn"
+        }
+      ]
+    }
+  ]
+}

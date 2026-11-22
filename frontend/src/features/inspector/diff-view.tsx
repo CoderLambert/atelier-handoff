@@ -1,5 +1,12 @@
+/**
+ * @file 展示文件预览补丁、摘要和完整快照。
+ * @implementation 在当前界面语言下渲染差异统计、布局选项和无法预览时的替代内容。
+ * @updated 2026-11-22T22:58:24+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import type { Permission } from '@shared/types';
 import { preClass } from './shared';
 
@@ -89,43 +96,50 @@ function splitRows(lines: DiffLine[]) {
   return rows;
 }
 const tones = {
-  added: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200',
-  removed: 'bg-destructive/10 text-destructive',
+  added: 'bg-success-soft text-success',
+  removed: 'bg-destructive-soft text-destructive',
   context: '',
 };
 const numberClass =
   'w-10 select-none border-r border-border/50 px-2 text-right align-top text-muted-foreground';
 function LineContent({ line }: { line: DiffLine }) {
+  const { t } = useUiTranslation('inspector');
   const bom = line.text.startsWith('﻿');
   const crlf = line.text.endsWith('\r');
   const code = line.text.slice(bom ? 1 : 0, crlf ? -1 : undefined);
   return (
     <>
       <td
-        className={`w-6 select-none px-1 text-center align-top ${tones[line.kind]}`}
-        aria-label={line.kind === 'added' ? '新增' : line.kind === 'removed' ? '删除' : '上下文'}
+        className={cn('w-6 select-none px-1 text-center align-top', tones[line.kind])}
+        aria-label={
+          line.kind === 'added'
+            ? t('diff.added')
+            : line.kind === 'removed'
+              ? t('diff.removed')
+              : t('diff.context')
+        }
       >
         {line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : ' '}
       </td>
-      <td className={`min-w-56 whitespace-pre px-2 align-top ${tones[line.kind]}`}>
+      <td className={cn('min-w-56 whitespace-pre px-2 align-top', tones[line.kind])}>
         <code>
           {bom ? (
             <span
               className="mr-1 rounded bg-muted px-1 text-[10px] text-muted-foreground"
-              title="UTF-8 字节顺序标记"
+              title={t('diff.bom')}
             >
               BOM
             </span>
           ) : null}
           {code}
           {crlf ? (
-            <span className="ml-1 text-muted-foreground" title="CRLF 换行">
+            <span className="ml-1 text-muted-foreground" title={t('diff.crlf')}>
               ␍
             </span>
           ) : null}
           {line.noFinalNewline ? (
             <span className="ml-3 rounded bg-muted px-1 text-[10px] text-muted-foreground">
-              文件末尾无换行
+              {t('diff.noFinalNewline')}
             </span>
           ) : null}
         </code>
@@ -134,10 +148,10 @@ function LineContent({ line }: { line: DiffLine }) {
   );
 }
 function SplitSide({ line, side }: { line?: DiffLine; side: 'old' | 'new' }) {
-  if (!line) return <td colSpan={3} className="bg-muted/40" />;
+  if (!line) return <td colSpan={3} className="bg-muted" />;
   return (
     <>
-      <td className={`${numberClass} ${tones[line.kind]}`}>
+      <td className={cn(numberClass, tones[line.kind])}>
         {side === 'old' ? line.oldLine : line.newLine}
       </td>
       <LineContent line={line} />
@@ -148,26 +162,30 @@ function lineRange(start: number, count: number) {
   return count === 0 ? '—' : count === 1 ? String(start) : `${start}–${start + count - 1}`;
 }
 function Snapshot({ title, text }: { title: string; text: string | null }) {
+  const { t } = useUiTranslation('inspector');
   if (text === null) return null;
   return (
     <details className="rounded-lg border border-border">
       <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{title}</summary>
-      <pre className={`${preClass} rounded-t-none border-0 border-t`}>{text || '（空文件）'}</pre>
+      <pre className={cn(preClass, 'rounded-t-none border-0 border-t')}>
+        {text || t('common.emptyFile')}
+      </pre>
     </details>
   );
 }
 
 export function DiffView({ preview }: { preview: PermissionDiff }) {
+  const { t } = useUiTranslation('inspector');
   const [split, setSplit] = useState(false);
   const patch = useMemo(() => parsePermissionPatch(preview.diff), [preview.diff]);
   if (!patch?.hunks.length && (preview.before ?? '') === (preview.after ?? '')) {
     return (
-      <p className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+      <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
         {preview.before === null
-          ? '将新建一个空文件。'
+          ? t('diff.createEmpty')
           : preview.after === null
-            ? '将删除一个空文件。'
-            : '文件内容没有变化。'}
+            ? t('diff.deleteEmpty')
+            : t('diff.unchanged')}
       </p>
     );
   }
@@ -175,36 +193,38 @@ export function DiffView({ preview }: { preview: PermissionDiff }) {
   if (!patch?.hunks.length || lineCount > 2400) {
     const limit = preview.diff.split('\n').find((line) => line.startsWith('差异规模超过预览限制'));
     return (
-      <section aria-label="完整差异内容" className="space-y-3">
+      <section aria-label={t('diff.fullContent')} className="flex min-w-0 flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          {limit || '无法逐行展示这份差异，请核对原始补丁或前后内容。'}
+          {limit ? t('diff.limitExceeded') : t('diff.unrenderable')}
         </p>
-        <Snapshot title="查看修改前内容" text={preview.before} />
-        <Snapshot title="查看修改后内容" text={preview.after} />
-        <Snapshot title="查看原始补丁" text={preview.diff} />
+        <Snapshot title={t('diff.beforeAction')} text={preview.before} />
+        <Snapshot title={t('diff.afterAction')} text={preview.after} />
+        <Snapshot title={t('diff.rawPatch')} text={preview.diff} />
       </section>
     );
   }
   return (
     <section
-      aria-label="文件差异"
+      aria-label={t('diff.fileDiff')}
       className="min-w-0 overflow-hidden rounded-xl border border-border"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted text-muted-foreground px-4 py-2.5">
         <p className="flex items-center gap-3 font-mono text-xs">
-          <span
-            className="text-emerald-700 dark:text-emerald-300"
-            aria-label={`新增 ${patch.added} 行`}
-          >
+          <span className="text-success" aria-label={t('diff.addedLines', { count: patch.added })}>
             +{patch.added}
           </span>
-          <span className="text-destructive" aria-label={`删除 ${patch.removed} 行`}>
+          <span
+            className="text-destructive"
+            aria-label={t('diff.removedLines', { count: patch.removed })}
+          >
             −{patch.removed}
           </span>
-          <span className="text-muted-foreground">{patch.hunks.length} 处变更</span>
+          <span className="text-muted-foreground">
+            {t('diff.changes', { count: patch.hunks.length })}
+          </span>
         </p>
         {preview.before !== null && preview.after !== null ? (
-          <div role="group" aria-label="差异布局" className="flex gap-1">
+          <div role="group" aria-label={t('diff.layout')} className="flex gap-1">
             <Button
               type="button"
               size="sm"
@@ -212,7 +232,7 @@ export function DiffView({ preview }: { preview: PermissionDiff }) {
               aria-pressed={!split}
               onClick={() => setSplit(false)}
             >
-              统一视图
+              {t('diff.unified')}
             </Button>
             <Button
               type="button"
@@ -221,38 +241,41 @@ export function DiffView({ preview }: { preview: PermissionDiff }) {
               aria-pressed={split}
               onClick={() => setSplit(true)}
             >
-              并排对照
+              {t('diff.split')}
             </Button>
           </div>
         ) : null}
       </div>
       <div
         role="region"
-        aria-label="带行号的文件差异"
+        aria-label={t('diff.withLineNumbers')}
         tabIndex={0}
         className="max-h-[52vh] overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <table
-          className={`w-full border-collapse font-mono text-xs leading-6 ${split ? 'min-w-[760px]' : ''}`}
+          className={cn(
+            'w-full border-collapse font-mono text-xs leading-6',
+            split && 'min-w-[760px]',
+          )}
         >
           <thead className="sticky top-0 bg-muted text-left text-[10px] text-muted-foreground">
             {split ? (
               <tr>
                 <th colSpan={3} className="border-r border-border px-3 py-1">
-                  修改前
+                  {t('diff.before')}
                 </th>
                 <th colSpan={3} className="px-3 py-1">
-                  修改后
+                  {t('diff.after')}
                 </th>
               </tr>
             ) : (
               <tr>
-                <th className="px-2 py-1">原行</th>
-                <th className="px-2 py-1">新行</th>
+                <th className="px-2 py-1">{t('diff.oldLine')}</th>
+                <th className="px-2 py-1">{t('diff.newLine')}</th>
                 <th>
-                  <span className="sr-only">变更类型</span>
+                  <span className="sr-only">{t('diff.changeType')}</span>
                 </th>
-                <th className="px-2 py-1">文件内容</th>
+                <th className="px-2 py-1">{t('diff.fileContent')}</th>
               </tr>
             )}
           </thead>
@@ -262,10 +285,12 @@ export function DiffView({ preview }: { preview: PermissionDiff }) {
                 <th
                   scope="rowgroup"
                   colSpan={split ? 6 : 4}
-                  className="bg-primary/5 px-3 py-1 text-left font-normal text-muted-foreground"
+                  className="bg-muted px-3 py-1 text-left font-normal text-muted-foreground"
                 >
-                  原 {lineRange(hunk.oldStart, hunk.oldCount)} · 新{' '}
-                  {lineRange(hunk.newStart, hunk.newCount)}
+                  {t('diff.lineRange', {
+                    old: lineRange(hunk.oldStart, hunk.oldCount),
+                    new: lineRange(hunk.newStart, hunk.newCount),
+                  })}
                 </th>
               </tr>
               {split

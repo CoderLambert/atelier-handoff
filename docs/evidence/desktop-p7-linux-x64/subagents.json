@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-21",
+  "platform": "Linux x64",
+  "agentSdk": "0.3.326",
+  "agentCli": "2.1.326",
+  "electron": "45.4.1",
+  "databaseVersion": 7,
+  "portableArchiveSha256": "05b41b32ca356a260bbb4049d5fb391252b2615f64ca5bfaf61d8c689e5bfe8b",
+  "checks": {
+    "check": "passed",
+    "build": "passed",
+    "backendTestsPassed": 150,
+    "frontendTestsPassed": 62,
+    "skippedTests": 0,
+    "installedSmoke": "passed",
+    "installedSmokeCommand": "node --import tsx scripts/smoke-subagents.mts dist/linux/atelier/atelier",
+    "transport": "local deterministic SSE fixture, real SDK CLI",
+    "modelRequests": 6,
+    "paidCalls": 0,
+    "verified": [
+      "Two independent child approvals were pending simultaneously",
+      "Each task expanded independently and displayed its own tools",
+      "The approval dialog named the child that requested the edit",
+      "Approved edit reached disk and denied edit preserved original content",
+      "The parent received both results and returned one summary",
+      "Closed and reopened Electron with the same test data and no new model calls",
+      "A saved child report expanded in history after reopen"
+    ]
+  },
+  "screenshots": [
+    "/tmp/atelier-subagent-desktop-wSkpWG/completed.png",
+    "/tmp/atelier-subagent-desktop-wSkpWG/reopened.png"
+  ],
+  "followup": {
+    "portableArchiveSha256": "692a6dc39dfb41e4550b25eb643757b53331b281283696f9877e09d82f97d496",
+    "backendTestsPassed": 151,
+    "frontendTestsPassed": 62,
+    "installedSmoke": "passed",
+    "loopbackRequests": 16,
+    "verified": [
+      "Three child requests reached the real SDK fixture before any response was released",
+      "All three child tasks were visible with independently pending approvals",
+      "Two network searches appear under separate child tasks in the installed app"
+    ],
+    "screenshots": [
+      "/tmp/atelier-subagent-desktop-hqnsi6/completed.png",
+      "/tmp/atelier-subagent-desktop-hqnsi6/site-search.png"
+    ],
+    "liveGateway": {
+      "model": "gpt-6.1-sol",
+      "runStatus": "completed",
+      "distinctChildAgents": 2,
+      "verifiedSourceCounts": { "baidu.com": 4, "toutiao.com": 5 },
+      "fixture": "Public Moon encyclopedia and lunar exploration searches in an isolated workspace"
+    }
+  }
+}

@@ -1,3 +1,9 @@
+/**
+ * @file 编辑智能体的技能与 MCP 依赖。
+ * @implementation 根据扩展列表展示可选项和依赖状态，通过受控配置回调增删选择及调整工具。
+ * @updated 2026-11-23T04:51:34+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import type { AgentConfig, Extension } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { mcpReason, selectableTools, skillReason } from './api';
@@ -11,6 +17,7 @@ export function AgentDependencies({
   items: Extension[];
   onChange: (config: AgentConfig) => void;
 }) {
+  const { t } = useUiTranslation('extensions');
   const skills = items.filter((item) => item.kind === 'skill');
   const servers = items.filter((item) => item.kind === 'mcp');
   const skillsById = new Map(config.skills.map((selection) => [selection.id, selection]));
@@ -29,11 +36,11 @@ export function AgentDependencies({
   }
   return (
     <>
-      <section className="agent-editor-section" aria-label="Skill 配置">
-        <h3>Skills</h3>
-        <p className="agent-help">选择项目已安装的 Skill，并为每个 Skill 设置调用方式。</p>
+      <section className="agent-editor-section" aria-label={t('dependency.skillsLabel')}>
+        <h3>{t('common.skills')}</h3>
+        <p className="agent-help">{t('dependency.skillsHelp')}</p>
         {!skills.length && !missingSkills.length ? (
-          <p className="agent-empty-inline">暂无 Skill，可先在「项目扩展」中安装并启用。</p>
+          <p className="agent-empty-inline">{t('dependency.noSkills')}</p>
         ) : null}
         <div className="agent-dependency-list">
           {skills.map((item) => {
@@ -68,15 +75,17 @@ export function AgentDependencies({
                     />
                     <span>
                       <strong>{item.name}</strong>
-                      <small>{item.description || '暂无描述'}</small>
+                      <small>{item.description || t('common.noDescription')}</small>
                     </span>
                   </label>
                   <span className="agent-version">v{selection?.version ?? item.version}</span>
                   {selection ? (
                     <label className="agent-activation">
-                      <span className="sr-only">{item.name} 调用方式</span>
+                      <span className="sr-only">
+                        {t('dependency.activationLabel', { name: item.name })}
+                      </span>
                       <select
-                        aria-label={`${item.name} 调用方式`}
+                        aria-label={t('dependency.activationLabel', { name: item.name })}
                         value={selection.activation}
                         disabled={stale}
                         onChange={(event) => {
@@ -90,10 +99,10 @@ export function AgentDependencies({
                         }}
                       >
                         <option value="auto" disabled={Boolean(autoReason)}>
-                          自动调用
+                          {t('dependency.auto')}
                         </option>
                         <option value="manual" disabled={Boolean(manualReason)}>
-                          手动调用
+                          {t('dependency.manual')}
                         </option>
                       </select>
                     </label>
@@ -101,7 +110,7 @@ export function AgentDependencies({
                 </div>
                 {stale ? (
                   <p className="agent-dependency-warning">
-                    项目版本已更新至 v{item.version}，请刷新依赖并确认。
+                    {t('dependency.updatedVersion', { version: item.version })}
                   </p>
                 ) : null}
                 {selection ? (
@@ -114,19 +123,21 @@ export function AgentDependencies({
                   >
                     {skillReason(item, selection.activation) ||
                       (selection.activation === 'auto'
-                        ? '智能体可以按任务需要自动加载。'
-                        : '在会话中输入 / 手动选择后加载。')}
+                        ? t('dependency.autoHelp')
+                        : t('dependency.manualHelp'))}
                   </p>
                 ) : unavailable ? (
                   <p className="agent-dependency-warning">
-                    {autoReason}；{manualReason}
+                    {autoReason}
+                    {t('common.reasonSeparator')}
+                    {manualReason}
                   </p>
                 ) : null}
                 {selection && !unavailable && (autoReason || manualReason) ? (
                   <p className="agent-help">
                     {autoReason
-                      ? `自动调用不可用：${autoReason}。`
-                      : `手动调用不可用：${manualReason}。`}
+                      ? t('dependency.autoUnavailable', { reason: autoReason })
+                      : t('dependency.manualUnavailable', { reason: manualReason })}
                   </p>
                 ) : null}
               </div>
@@ -135,20 +146,20 @@ export function AgentDependencies({
           {missingSkills.map((selection) => (
             <div className="agent-dependency agent-missing" key={selection.id}>
               <span>
-                {selection.id} · v{selection.version} · Skill 已移除
+                {t('dependency.removedSkill', { name: selection.id, version: selection.version })}
               </span>
-              <Button variant="ghost" onClick={() => removeSkill(selection.id)}>
-                移除引用
+              <Button variant="ghost" size="sm" onClick={() => removeSkill(selection.id)}>
+                {t('dependency.removeReference')}
               </Button>
             </div>
           ))}
         </div>
       </section>
-      <section className="agent-editor-section" aria-label="MCP 工具配置">
-        <h3>MCP 工具</h3>
-        <p className="agent-help">逐项选择智能体可用的工具。新发现或新允许的工具需要再次勾选。</p>
+      <section className="agent-editor-section" aria-label={t('dependency.mcpLabel')}>
+        <h3>{t('common.mcpTools')}</h3>
+        <p className="agent-help">{t('dependency.mcpHelp')}</p>
         {!servers.length && !missingMcp.length ? (
-          <p className="agent-empty-inline">暂无 MCP，可先在「项目扩展」中连接服务并允许工具。</p>
+          <p className="agent-empty-inline">{t('dependency.noMcp')}</p>
         ) : null}
         <div className="agent-dependency-list">
           {servers.map((item) => {
@@ -169,23 +180,23 @@ export function AgentDependencies({
                 <div className="agent-dependency-heading">
                   <div className="agent-dependency-copy">
                     <strong>{item.name}</strong>
-                    <p className="agent-help">{item.description || '暂无描述'}</p>
+                    <p className="agent-help">{item.description || t('common.noDescription')}</p>
                   </div>
                   <span className="agent-version">v{selection?.version ?? item.version}</span>
                   {selection ? (
-                    <Button variant="ghost" onClick={() => removeMcp(item.id)}>
-                      移除此 MCP
+                    <Button variant="ghost" size="sm" onClick={() => removeMcp(item.id)}>
+                      {t('dependency.removeMcp')}
                     </Button>
                   ) : null}
                 </div>
                 {reason ? <p className="agent-dependency-warning">{reason}</p> : null}
                 {stale ? (
                   <p className="agent-dependency-warning">
-                    项目版本已更新至 v{item.version}，请刷新依赖并确认。
+                    {t('dependency.updatedVersion', { version: item.version })}
                   </p>
                 ) : null}
                 {!names.length ? (
-                  <p className="agent-help">尚无允许的工具，请先在项目扩展中配置。</p>
+                  <p className="agent-help">{t('dependency.noAllowedTools')}</p>
                 ) : null}
                 <div className="agent-tools">
                   {names.map((name) => {
@@ -195,11 +206,11 @@ export function AgentDependencies({
                     const toolReason =
                       reason ||
                       (!discovered.has(name)
-                        ? '工具已不在发现结果中'
+                        ? t('dependency.toolMissing')
                         : !accessByName.has(name)
-                          ? '项目已撤销允许'
+                          ? t('dependency.permissionRevoked')
                           : approval && config.mode === 'readonly'
-                            ? '需要编辑模式'
+                            ? t('dependency.editRequired')
                             : '');
                     return (
                       <label className="agent-check agent-tool" key={name}>
@@ -229,9 +240,12 @@ export function AgentDependencies({
                         />
                         <span>
                           <strong>{name}</strong>
-                          <small>{discovered.get(name)?.description || '暂无工具描述'}</small>
+                          <small>
+                            {discovered.get(name)?.description || t('dependency.noToolDescription')}
+                          </small>
                           <small className={!allowed ? 'agent-dependency-warning' : ''}>
-                            {toolReason || (approval ? '每次执行需确认' : '只读工具')}
+                            {toolReason ||
+                              (approval ? t('dependency.approvalHelp') : t('common.readonlyTool'))}
                           </small>
                         </span>
                       </label>
@@ -244,12 +258,12 @@ export function AgentDependencies({
           {missingMcp.map((selection) => (
             <div className="agent-dependency agent-missing" key={selection.id}>
               <span>
-                {selection.id} · v{selection.version} · MCP 已移除
+                {t('dependency.removedMcp', { name: selection.id, version: selection.version })}
                 <br />
-                {selection.tools.join('、')}
+                {selection.tools.join(t('common.separator'))}
               </span>
-              <Button variant="ghost" onClick={() => removeMcp(selection.id)}>
-                移除引用
+              <Button variant="ghost" size="sm" onClick={() => removeMcp(selection.id)}>
+                {t('dependency.removeReference')}
               </Button>
             </div>
           ))}

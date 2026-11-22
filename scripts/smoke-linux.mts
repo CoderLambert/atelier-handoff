@@ -206,7 +206,10 @@ async function verifyResources(
     'Acceptance driver must not be distributed',
   );
   const nativeBinding = 'resources/runtime/node_modules/better-sqlite3/prebuilds/linux-x64.node';
-  const migration = 'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql';
+  const migrations = [
+    'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql',
+    'resources/runtime/server/db/migrations/0007-subagents.sql',
+  ];
   assert.deepEqual(
     [...seen].filter(
       (name) =>
@@ -215,7 +218,8 @@ async function verifyResources(
     [nativeBinding],
     'SQLite must ship exactly the Linux x64 native prebuild',
   );
-  assert.ok(seen.has(migration), 'Session snapshot migration must be distributed');
+  for (const migration of migrations)
+    assert.ok(seen.has(migration), `${migration} must be distributed`);
   const release = record(
     JSON.parse(await readFile(join(install, 'resources/release.json'), 'utf8')) as unknown,
   );
@@ -223,9 +227,12 @@ async function verifyResources(
   const binding = record(sqlite.nativeBinding);
   assert.equal(binding.path, nativeBinding);
   assert.equal(binding.sha256, await hashFile(join(install, nativeBinding)));
-  assert.deepEqual(array(sqlite.migrations), [
-    { path: migration, sha256: await hashFile(join(install, migration)) },
-  ]);
+  assert.deepEqual(
+    array(sqlite.migrations),
+    await Promise.all(
+      migrations.map(async (path) => ({ path, sha256: await hashFile(join(install, path)) })),
+    ),
+  );
   const runtimePackage = record(
     JSON.parse(await readFile(join(install, 'resources/runtime/package.json'), 'utf8')) as unknown,
   );

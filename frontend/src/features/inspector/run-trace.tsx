@@ -1,22 +1,27 @@
 /**
  * @file 展示单次运行的执行轨迹。
- * @implementation 合并快照和轨迹事件，展示工具、运行模式、自动批准记录及付费搜索上限。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 以工具 ID 关联运行事件、命令、输出和审批，按运行展示用量、子任务与诊断信息。
+ * @updated 2026-11-22T18:50:51+08:00
  */
+import { useUiTranslation } from '@/i18n';
 import { lazy, Suspense, useMemo, useState } from 'react';
+import { Activity, Download, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import { useRunTrace } from '@/use-query/runs/use-run-trace';
 import { runModeLabel } from '@/features/chat/run-mode';
+import { SubagentProgress, groupRunWork, permissionSubagentSource } from './subagent-progress';
+import { ToolDetail, ToolDetailBody, toolCallSummary } from './tool-detail';
 import type { Snapshot } from '@/api/types';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
 import {
   EmptyState,
   ErrorNotice,
-  Icon,
+  DetailField,
   Loading,
   StatusBadge,
-  actionLinkClass,
-  eventNames,
+  eventName,
   fieldClass,
   formatDate,
   formatDuration,
@@ -25,19 +30,28 @@ import {
 } from './shared';
 
 const ToolOutputDialog = lazy(() => import('./tool-output-dialog'));
+const PermissionDialog = lazy(() => import('./permission-dialog'));
 const EVENT_PAGE_SIZE = 50;
 export type RunTraceProps = { snapshot: Snapshot; runId?: string; onSelect: (id: string) => void };
 
 export function RunTrace({ snapshot, runId, onSelect }: RunTraceProps) {
+  const { t } = useUiTranslation('inspector');
   const run =
     (runId ? snapshot.runs.find((item) => item.id === runId) : undefined) ?? snapshot.runs.at(-1);
   if (!run)
     return (
-      <EmptyState title="还没有执行轨迹" icon="activity">
-        发送任务后，这里会记录每轮运行的工具调用与事件。
+      <EmptyState title={t('trace.empty')} icon={Activity}>
+        {t('trace.emptyHint')}
       </EmptyState>
     );
-  return <TraceDetail key={run.id} snapshot={snapshot} run={run} onSelect={onSelect} />;
+  return (
+    <TraceDetail
+      key={`${snapshot.session.id}:${run.id}`}
+      snapshot={snapshot}
+      run={run}
+      onSelect={onSelect}
+    />
+  );
 }
 
 function TraceDetail({
@@ -49,14 +63,35 @@ function TraceDetail({
   run: Run;
   onSelect: (id: string) => void;
 }) {
+  const { t, locale } = useUiTranslation('inspector');
   const [eventFilter, setEventFilter] = useState('');
   const [eventOffset, setEventOffset] = useState(0);
   const [outputTool, setOutputTool] = useState<ToolCall>();
+  const [permissionId, setPermissionId] = useState<string>();
   const trace = useRunTrace(run.id);
-  const permissions = snapshot.permissions.filter((permission) => permission.runId === run.id);
-  const tools = useMemo(
-    () => snapshot.tools.filter((tool) => tool.runId === run.id),
-    [snapshot.tools, run.id],
+  const work = useMemo(
+    () => groupRunWork(snapshot, run),
+    [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
+  );
+  const permissions = snapshot.permissions.filter(
+    (permission) => permission.runId === run.id && permission.sessionId === run.sessionId,
+  );
+  const permission = permissions.find((item) => item.id === permissionId);
+  const tools = work.tools;
+  const toolById = useMemo(
+    () =>
+      new Map(
+        [...work.tools, ...work.subagents.flatMap((item) => item.tools)].map((tool) => [
+          tool.id,
+          tool,
+        ]),
+      ),
+    [work],
+  );
+  const automaticallyApproved = new Set(
+    permissions
+      .filter((item) => item.decisionSource === 'automatic')
+      .map((item) => item.toolCallId),
   );
   const events = useMemo(() => {
     const records = new Map<number, RunEvent>();
@@ -84,49 +119,71 @@ function TraceDetail({
     /* Historic configuration may be invalid. */
   }
   const facts: [string, unknown][] = [
-    ['模型', init?.model ?? run.config.model],
-    ['请求推理深度', run.config.effort],
-    ['网关', gateway],
-    ['智能体', run.agent ? `${run.agent.name} · v${run.agent.version}` : null],
-    ['可用内置能力', run.agent?.capabilities.join('、')],
-    ['权限模式', runModeLabel(run)],
+    [t('trace.model'), init?.model ?? run.config.model],
+    [t('trace.requestedEffort'), run.config.effort],
+    [t('trace.gateway'), gateway],
+    [t('trace.agent'), run.agent ? `${run.agent.name} · v${run.agent.version}` : null],
+    [t('trace.capabilities'), run.agent?.capabilities.join('、')],
+    [t('trace.permissionMode'), runModeLabel(run)],
+    [t('trace.executor'), run.executor ?? 'project-v1'],
     [
-      '付费搜索单次上限',
+      t('trace.searchLimit'),
       run.approvalMode === 'automatic'
-        ? `${run.maxSearchChargeFen ?? 0} 分（仅已知付费搜索）`
+        ? t('trace.searchLimitValue', {
+            amount: (run.maxSearchChargeFen ?? 0).toLocaleString(locale),
+          })
         : null,
     ],
     [
-      '自动批准记录',
+      t('trace.automaticApprovals'),
       permissions.filter((permission) => permission.decisionSource === 'automatic').length,
     ],
     ['SDK CLI', init?.version],
-    ['开始时间', formatDate(run.startedAt)],
-    ['结束时间', formatDate(run.endedAt)],
+    [t('trace.started'), formatDate(run.startedAt)],
+    [t('trace.ended'), formatDate(run.endedAt)],
     [
-      '总耗时',
+      t('trace.duration'),
       formatDuration(
         run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : null,
       ),
     ],
     [
-      '首段文本',
+      t('trace.firstText'),
       formatDuration(typeof firstText?.elapsedMs === 'number' ? firstText.elapsedMs : null),
     ],
     [
-      'API 耗时',
+      t('trace.apiDuration'),
       formatDuration(typeof result?.apiDurationMs === 'number' ? result.apiDurationMs : null),
     ],
-    ['SDK 轮次', result?.turns],
-    ['HTTP 状态', result?.httpStatus],
-    ['停止原因', result?.terminalReason || result?.stopReason || run.reason],
-    ['进程退出', exit ? exit.signal || exit.code : null],
-    ['已记录重试', events.filter((event) => event.type === 'sdk.api_retry').length],
+    [t('trace.turns'), result?.turns],
+    [t('trace.httpStatus'), result?.httpStatus],
+    [t('trace.stopReason'), result?.terminalReason || result?.stopReason || run.reason],
+    [t('trace.processExit'), exit ? exit.signal || exit.code : null],
+    [t('trace.retries'), events.filter((event) => event.type === 'sdk.api_retry').length],
     [
-      '输入 / 输出 tokens',
+      t('trace.tokens'),
       run.usage ? `${run.usage.inputTokens ?? '—'} / ${run.usage.outputTokens ?? '—'}` : null,
     ],
-    ['运行 ID', run.id],
+    ...(run.usage
+      ? ([
+          [
+            t('trace.cacheTokens'),
+            `${run.usage.cacheReadTokens ?? '—'} / ${run.usage.cacheCreationTokens ?? '—'}`,
+          ],
+          [
+            t('trace.estimate'),
+            run.usage.sdkEstimateUsd == null
+              ? t('trace.unknown')
+              : t('trace.estimateValue', {
+                  amount: run.usage.sdkEstimateUsd.toLocaleString(locale, {
+                    minimumFractionDigits: 6,
+                    maximumFractionDigits: 6,
+                  }),
+                }),
+          ],
+        ] satisfies [string, unknown][])
+      : []),
+    [t('trace.runId'), run.id],
   ];
   const invoked = [
     ...new Set(
@@ -141,13 +198,13 @@ function TraceDetail({
   const discovered = events.findLast((event) => event.type === 'skills.discovered')?.payload;
   if (discovered)
     facts.push([
-      '自动调用候选',
-      `${String(discovered.count ?? 0)} 个可用 · ${String(discovered.missingCount ?? 0)} 个未加载`,
+      t('trace.skillCandidates'),
+      `${t('trace.skillAvailable', { count: typeof discovered.count === 'number' ? discovered.count : 0 })} · ${t('trace.skillMissing', { count: typeof discovered.missingCount === 'number' ? discovered.missingCount : 0 })}`,
     ]);
-  if (invoked.length) facts.push(['已自动调用 Skill', invoked.join(' / ')]);
+  if (invoked.length) facts.push([t('trace.invokedSkills'), invoked.join(' / ')]);
   if (run.extensions?.length)
     facts.push([
-      '本轮扩展',
+      t('trace.extensions'),
       run.extensions
         .map(
           (item) =>
@@ -158,66 +215,64 @@ function TraceDetail({
 
   return (
     <section
-      aria-label="运行执行轨迹"
-      className="mx-auto w-full max-w-5xl space-y-7 p-4 sm:p-6 lg:p-8"
+      aria-label={t('trace.ariaLabel')}
+      className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-7 p-4 sm:p-6 lg:p-8"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold tracking-tight">执行轨迹</h2>
-          <p className="mt-1 text-xs text-muted-foreground">本轮运行的调用、用量与诊断记录</p>
+          <h2 className="text-lg font-semibold tracking-tight">{t('trace.title')}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('trace.description')}</p>
         </div>
-        <a
-          className={actionLinkClass}
-          href={`/api/runs/${encodeURIComponent(run.id)}/diagnostics.json`}
-          download
-        >
-          <Icon name="download" />
-          下载诊断 JSON
-        </a>
+        <Button asChild variant="outline" size="sm">
+          <a href={`/api/runs/${encodeURIComponent(run.id)}/diagnostics.json`} download>
+            <Download data-icon="inline-start" aria-hidden="true" />
+            {t('trace.downloadDiagnostics')}
+          </a>
+        </Button>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <label htmlFor="inspector-trace-run" className="text-xs font-medium text-muted-foreground">
-          运行
+          {t('common.run')}
         </label>
         <select
           id="inspector-trace-run"
           value={run.id}
           onChange={(event) => onSelect(event.target.value)}
-          className={`${fieldClass} min-w-0 flex-1 sm:max-w-xl`}
+          className={cn(fieldClass, 'flex-1 sm:max-w-xl')}
         >
           {snapshot.runs
             .slice()
             .reverse()
             .map((item) => (
               <option key={item.id} value={item.id}>
-                {formatDate(item.createdAt)} · {item.prompt.slice(0, 60) || '运行'}
+                {formatDate(item.createdAt)} · {item.prompt.slice(0, 60) || t('common.run')}
               </option>
             ))}
         </select>
         <StatusBadge status={run.status} />
       </div>
-      {run.error ? <ErrorNotice message={run.error} /> : null}
-      <dl className="grid grid-cols-1 gap-x-7 gap-y-4 rounded-xl border border-border bg-card/50 p-5 sm:grid-cols-2 lg:grid-cols-3">
+      {run.error ? <ErrorNotice message={errorMessage(new Error(run.error))} /> : null}
+      <dl className="grid grid-cols-1 gap-x-7 gap-y-4 rounded-xl border border-border bg-card p-5 text-card-foreground sm:grid-cols-2 lg:grid-cols-3">
         {facts.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <dt className="text-[11px] text-muted-foreground">{label}</dt>
-            <dd className="mt-1 break-words text-xs leading-5 [overflow-wrap:anywhere]">
-              {value === null || value === undefined || value === '' ? '—' : String(value)}
-            </dd>
-          </div>
+          <DetailField key={label} label={label}>
+            {value == null ? null : String(value)}
+          </DetailField>
         ))}
       </dl>
       <section aria-labelledby="inspector-tools-heading">
         <div className="mb-3 flex items-center gap-2">
           <h3 id="inspector-tools-heading" className="text-sm font-semibold">
-            工具调用
+            {t('trace.tools')}
           </h3>
-          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {tools.length}
-          </span>
+          <Badge variant="secondary">
+            {tools.length + work.subagents.reduce((count, item) => count + item.tools.length, 0)}
+          </Badge>
         </div>
+        {work.subagents.length && tools.length ? (
+          <h4 className="mb-2 text-xs font-medium text-muted-foreground">{t('trace.mainTools')}</h4>
+        ) : null}
         {tools.length ? (
-          <div className="space-y-2">
+          <div className="flex min-w-0 flex-col gap-2">
             {tools.map((tool) => (
               <ToolDetail
                 key={tool.id}
@@ -230,23 +285,61 @@ function TraceDetail({
               />
             ))}
           </div>
-        ) : (
-          <EmptyState title="本轮还没有调用工具" icon="activity" />
+        ) : work.subagents.length ? null : (
+          <EmptyState title={t('trace.emptyTools')} icon={Activity} />
         )}
+        <div className="mt-3">
+          <SubagentProgress
+            groups={work.subagents}
+            run={run}
+            onPermission={(item) => setPermissionId(item.id)}
+            onToolOutput={setOutputTool}
+          />
+        </div>
       </section>
+      {work.permissions.length ? (
+        <section aria-label={t('trace.approvals')}>
+          <h3 className="mb-2 text-sm font-semibold">{t('trace.approvals')}</h3>
+          {work.permissions.map((item) => (
+            <div
+              className="flex items-center gap-3 border-b border-border py-2 text-xs"
+              key={item.id}
+            >
+              <span
+                className="min-w-0 flex-1 truncate"
+                title={item.path ?? item.command ?? item.reason}
+              >
+                {item.path ?? item.command ?? item.reason}
+              </span>
+              {item.decisionSource === 'automatic' ? (
+                <span>{t('common.approvalAutomatic')}</span>
+              ) : null}
+              <StatusBadge status={item.status} />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPermissionId(item.id)}
+              >
+                {item.status === 'pending'
+                  ? t('common.reviewAndApprove')
+                  : t('common.reviewApproval')}
+              </Button>
+            </div>
+          ))}
+        </section>
+      ) : null}
       <section aria-labelledby="inspector-events-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <h3 id="inspector-events-heading" className="text-sm font-semibold">
-              运行事件
+              {t('trace.events')}
             </h3>
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {events.length}
-            </span>
+            <Badge variant="secondary">{events.length}</Badge>
           </div>
           <div className="flex items-center gap-2">
             <label htmlFor="inspector-event-type" className="sr-only">
-              筛选事件类型
+              {t('trace.filterEventType')}
             </label>
             <select
               id="inspector-event-type"
@@ -255,21 +348,23 @@ function TraceDetail({
                 setEventFilter(event.target.value);
                 setEventOffset(0);
               }}
-              className={`${fieldClass} w-36`}
+              className={cn(fieldClass, 'w-36')}
             >
-              <option value="">全部事件</option>
+              <option value="">{t('trace.allEvents')}</option>
               {[
-                ['run', '运行'],
+                ['run', t('common.run')],
                 ['sdk', 'SDK'],
-                ['tool', '工具'],
-                ['permission', '审批'],
+                ['harness', t('trace.progress')],
+                ['tool', t('trace.tool')],
+                ['subagent', t('trace.subtask')],
+                ['permission', t('trace.approval')],
                 ['mcp', 'MCP'],
                 ['skill', 'Skill'],
-                ['artifact', '交付物'],
-                ['process', '进程'],
-                ['usage', '用量'],
-                ['plan', '计划'],
-                ['extensions', '扩展'],
+                ['artifact', t('common.artifacts')],
+                ['process', t('trace.process')],
+                ['usage', t('trace.usage')],
+                ['plan', t('trace.plan')],
+                ['extensions', t('trace.extension')],
               ].map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -279,62 +374,42 @@ function TraceDetail({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               disabled={trace.isFetching}
               onClick={() => void trace.refetch()}
-              aria-label="刷新执行轨迹"
+              aria-label={t('trace.refresh')}
             >
-              <Icon name="refresh" />
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
             </Button>
           </div>
         </div>
         {trace.error ? (
           <ErrorNotice message={errorMessage(trace.error)} onRetry={() => void trace.refetch()} />
         ) : null}
-        {trace.isFetching && !trace.data ? <Loading>正在获取完整执行轨迹…</Loading> : null}
+        {trace.isFetching && !trace.data ? <Loading>{t('trace.loading')}</Loading> : null}
         <p className="mb-3 text-xs leading-5 text-muted-foreground">
-          {trace.data ? `共 ${trace.data.eventCount} 条原始事件。` : ''}已折叠文本增量，最多展示最近
-          600 条诊断事件。
+          {trace.data ? t('trace.rawEvents', { count: trace.data.eventCount }) : ''}
+          {t('trace.eventsHint')}
         </p>
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           {visibleEvents.length ? (
-            visibleEvents.map((event) => (
-              <details key={event.id} className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-xs hover:bg-muted/40">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="size-1.5 shrink-0 rounded-full bg-primary/50"
-                    />
-                    <span className="truncate">
-                      {event.type === 'permission.resolved' &&
-                      event.payload.decisionSource === 'automatic'
-                        ? '自动批准操作'
-                        : (eventNames[event.type] ?? event.type)}
-                    </span>
-                  </span>
-                  <time dateTime={event.at} className="shrink-0 text-[10px] text-muted-foreground">
-                    {formatDate(event.at)}
-                  </time>
-                </summary>
-                <div className="px-4 pb-4">
-                  <pre className={preClass}>
-                    {JSON.stringify(
-                      {
-                        type: event.type,
-                        sequence: event.seq,
-                        timestamp: event.at,
-                        payload: event.payload,
-                      },
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </div>
-              </details>
-            ))
+            visibleEvents.map((event) => {
+              const tool =
+                event.type.startsWith('tool.') && typeof event.payload.toolCallId === 'string'
+                  ? toolById.get(event.payload.toolCallId)
+                  : undefined;
+              return (
+                <TraceEvent
+                  key={event.id}
+                  event={event}
+                  tool={tool}
+                  automaticallyApproved={tool ? automaticallyApproved.has(tool.id) : false}
+                  onOutput={setOutputTool}
+                />
+              );
+            })
           ) : (
-            <p className="p-5 text-sm text-muted-foreground">暂无符合条件的事件</p>
+            <p className="p-5 text-sm text-muted-foreground">{t('trace.noMatchingEvents')}</p>
           )}
         </div>
         {filtered.length > EVENT_PAGE_SIZE ? (
@@ -345,7 +420,7 @@ function TraceDetail({
               disabled={offset === 0}
               onClick={() => setEventOffset(Math.max(0, offset - EVENT_PAGE_SIZE))}
             >
-              上一页
+              {t('common.previous')}
             </Button>
             <span>
               {offset + 1}–{Math.min(offset + EVENT_PAGE_SIZE, filtered.length)} / {filtered.length}
@@ -356,13 +431,25 @@ function TraceDetail({
               disabled={offset + EVENT_PAGE_SIZE >= filtered.length}
               onClick={() => setEventOffset(offset + EVENT_PAGE_SIZE)}
             >
-              下一页
+              {t('common.next')}
             </Button>
           </div>
         ) : null}
       </section>
+      {permission ? (
+        <Suspense fallback={<Loading>{t('common.openingApproval')}</Loading>}>
+          <PermissionDialog
+            key={permission.id}
+            permission={permission}
+            subagent={permissionSubagentSource(snapshot, permission)}
+            onOpenChange={(open) => {
+              if (!open) setPermissionId(undefined);
+            }}
+          />
+        </Suspense>
+      ) : null}
       {outputTool ? (
-        <Suspense fallback={<Loading>正在打开完整输出…</Loading>}>
+        <Suspense fallback={<Loading>{t('trace.openingOutput')}</Loading>}>
           <ToolOutputDialog
             tool={outputTool}
             onOpenChange={(open) => {
@@ -374,51 +461,75 @@ function TraceDetail({
     </section>
   );
 }
-function ToolDetail({
+
+function TraceEvent({
+  event,
   tool,
   automaticallyApproved,
   onOutput,
 }: {
-  tool: ToolCall;
+  event: RunEvent;
+  tool?: ToolCall;
   automaticallyApproved: boolean;
-  onOutput: () => void;
+  onOutput: (tool: ToolCall) => void;
 }) {
+  const { t } = useUiTranslation('inspector');
+  const [open, setOpen] = useState(false);
+  const name = eventName(event.type);
+  let label = name;
+  if (tool) label = `${name} · ${toolCallSummary(tool)}`;
+  else if (event.type === 'permission.resolved' && event.payload.decisionSource === 'automatic')
+    label = t('trace.approvedOperation');
+  else if (event.type.startsWith('harness.') && typeof event.payload.summary === 'string')
+    label = `${event.payload.kind === 'stalled' || event.type === 'harness.stalled' ? t('trace.stalled') : t('trace.progress')} · ${event.payload.summary}`;
+  else if (event.type === 'sdk.initialized' && typeof event.payload.model === 'string')
+    label = `${name} · ${event.payload.model}`;
+  else if (event.type === 'skills.discovered' && typeof event.payload.count === 'number')
+    label = `${name} · ${t('trace.skillAvailable', { count: event.payload.count })}`;
+  else if (event.type === 'tool.blocked' && typeof event.payload.tool === 'string')
+    label = `${name} · ${event.payload.tool}`;
+  else if (event.type === 'run.finished' && typeof event.payload.reason === 'string')
+    label = `${name} · ${event.payload.reason}`;
   return (
-    <details className="rounded-xl border border-border bg-card/40">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30">
-        <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
-          <Icon name="activity" className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{tool.name.replace(/^mcp__atelier__/, '')}</span>
-          {automaticallyApproved ? (
-            <span className="shrink-0 text-muted-foreground">自动批准</span>
-          ) : null}
+    <details
+      className="group"
+      data-event-type={event.type}
+      onToggle={(e) => {
+        if (e.target === e.currentTarget) setOpen(e.currentTarget.open);
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <span className="min-w-0 truncate" title={label}>
+          {label}
         </span>
-        <StatusBadge status={tool.status} />
+        <time dateTime={event.at} className="shrink-0 text-[10px] text-muted-foreground">
+          {formatDate(event.at)}
+        </time>
       </summary>
-      <div className="space-y-3 border-t border-border p-4">
-        <p className="break-all font-mono text-[10px] text-muted-foreground">
-          {tool.id} · {formatDate(tool.startedAt)} ·{' '}
-          {formatDuration(
-            tool.endedAt ? Date.parse(tool.endedAt) - Date.parse(tool.startedAt) : null,
+      {open ? (
+        <div className="min-w-0 px-4 pb-4">
+          {tool ? (
+            <ToolDetailBody
+              tool={tool}
+              automaticallyApproved={automaticallyApproved}
+              onOutput={() => onOutput(tool)}
+            />
+          ) : (
+            <pre className={preClass}>
+              {JSON.stringify(
+                {
+                  type: event.type,
+                  sequence: event.seq,
+                  timestamp: event.at,
+                  payload: event.payload,
+                },
+                null,
+                2,
+              )}
+            </pre>
           )}
-        </p>
-        <div>
-          <p className="mb-2 text-[11px] font-medium text-muted-foreground">参数</p>
-          <pre className={preClass}>{tool.inputSummary || '（无参数）'}</pre>
         </div>
-        {tool.output ? (
-          <div>
-            <p className="mb-2 text-[11px] font-medium text-muted-foreground">输出</p>
-            <pre className={`${preClass} max-h-72`}>{tool.output}</pre>
-          </div>
-        ) : null}
-        {tool.outputTruncated ? (
-          <Button type="button" variant="outline" size="sm" onClick={onOutput}>
-            查看完整输出
-            {tool.outputLength != null ? ` · ${tool.outputLength.toLocaleString()} 字符` : ''}
-          </Button>
-        ) : null}
-      </div>
+      ) : null}
     </details>
   );
 }

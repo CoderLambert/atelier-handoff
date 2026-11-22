@@ -1,3 +1,4 @@
+import { getTranslator } from '@/i18n';
 import type { Draft, Extension, ExtensionSelection, Mode } from '@shared/types';
 
 export interface CompletionTrigger {
@@ -77,6 +78,7 @@ export function choices(
   text: string,
   mode: Mode,
 ): CompletionChoice[] {
+  const t = getTranslator('extensions');
   const rows: CompletionChoice[] = [];
   for (const item of items) {
     if (!item.enabled || (item.kind !== 'mcp' && !item.supported)) continue;
@@ -92,7 +94,7 @@ export function choices(
         item,
         label: `/${item.name}`,
         description: item.description,
-        kind: item.kind === 'skill' ? 'Skills' : 'Commands',
+        kind: item.kind === 'skill' ? t('common.skills') : t('common.commands'),
       });
     } else if (item.kind === 'mcp') {
       const allowed = allowedTools(item, mode);
@@ -100,8 +102,8 @@ export function choices(
       rows.push({
         item,
         label: `#${item.name}`,
-        description: `${allowed.length} 个已允许的工具`,
-        kind: 'MCP',
+        description: t('picker.allowedToolsCount', { count: allowed.length }),
+        kind: t('common.mcp'),
         tools: allowed.map((tool) => tool.name),
       });
       const descriptions = new Map(item.tools.map((tool) => [tool.name, tool.description]));
@@ -110,7 +112,7 @@ export function choices(
           item,
           label: `#${item.name}/${tool.name}`,
           description: descriptions.get(tool.name) ?? '',
-          kind: tool.access === 'read' ? '只读工具' : '需审批工具',
+          kind: tool.access === 'read' ? t('common.readonlyTool') : t('picker.approvalTool'),
           tools: [tool.name],
         });
     }
@@ -163,15 +165,17 @@ export function selectionReason(
   mode: Mode,
   loaded: boolean,
 ) {
-  if (!item) return loaded ? '已不可用' : '';
-  if (!item.enabled) return '已停用';
-  if (item.kind !== 'mcp' && !item.supported) return '暂不兼容';
-  if (item.version !== selection.version) return '版本已变化，请重新选择';
-  if (item.kind === 'skill' && item.userInvocable === false) return '不支持手动调用';
+  const t = getTranslator('extensions');
+  if (!item) return loaded ? t('picker.unavailable') : '';
+  if (!item.enabled) return t('common.disabled');
+  if (item.kind !== 'mcp' && !item.supported) return t('picker.incompatible');
+  if (item.version !== selection.version) return t('picker.changed');
+  if (item.kind === 'skill' && item.userInvocable === false)
+    return t('extensions.manualUnsupported');
   if (item.kind === 'mcp') {
     const available = new Set(allowedTools(item, mode).map((tool) => tool.name));
     if (!available.size || selection.tools?.some((name) => !available.has(name)))
-      return '请测试连接或重新选择工具';
+      return t('picker.reselect');
   }
   return '';
 }

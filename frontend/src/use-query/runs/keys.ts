@@ -15,5 +15,6 @@ export const runKeys = {
   list: (filters: RunListFilters | undefined) => ['runs', filters] as const,
   trace: (id: string) => ['trace', id] as const,
   stop: (id: string) => ['runs', id, 'stop'] as const,
+  stopSubagent: (id: string) => ['runs', id, 'subagents', 'stop'] as const,
   retry: (id: string) => ['runs', id, 'retry'] as const,
 };

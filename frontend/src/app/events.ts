@@ -79,7 +79,16 @@ export function useRunEvents(client: QueryClient, cursor?: number) {
         schedule(keys.sessions, keys.runs);
       }
       if (event.type === 'artifact.created') schedule(keys.artifacts);
-      if (event.type === 'project.bound') schedule(keys.bootstrap);
+      if (
+        event.type === 'project.bound' ||
+        event.type === 'session.created' ||
+        event.type === 'session.updated' ||
+        event.type === 'session.deleted' ||
+        event.type === 'run.created' ||
+        event.type === 'run.finished'
+      ) {
+        schedule(keys.bootstrap);
+      }
     };
     return () => {
       disposed = true;

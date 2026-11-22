@@ -13,6 +13,8 @@ import {
   type DesktopBrowserDownload,
   type DesktopBrowserState,
 } from '@shared/desktop-browser';
+import type { browser } from '@shared/i18n/catalogs/browser';
+import type { UiLocale } from '@shared/i18n/locale';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -24,6 +26,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/components/ui/utils';
+import { getTranslator, translateError, useUiTranslation } from '@/i18n';
 import {
   BrowserDownloadPreview,
   type BrowserDownloadPreviewState,
@@ -33,38 +36,53 @@ type DownloadAction = Extract<
   DesktopBrowserAction,
   'reveal-download' | 'cancel-download' | 'open-download-directory' | 'open-download'
 >;
-const statusLabels: Record<DesktopBrowserDownload['status'], string> = {
-  progressing: '正在下载',
-  completed: '下载完成',
-  cancelled: '已取消',
-  interrupted: '下载失败',
-};
+type DownloadNotice =
+  | { kind: 'finished'; downloads: DesktopBrowserDownload[] }
+  | { kind: 'command'; action: Exclude<DownloadAction, 'cancel-download'> };
+const statusKeys = {
+  progressing: 'downloads.status.progressing',
+  completed: 'downloads.status.completed',
+  cancelled: 'downloads.status.cancelled',
+  interrupted: 'downloads.status.interrupted',
+} as const satisfies Record<DesktopBrowserDownload['status'], keyof typeof browser>;
+const commandNoticeKeys = {
+  'reveal-download': 'downloads.revealed',
+  'open-download': 'downloads.openRequested',
+  'open-download-directory': 'downloads.directoryOpened',
+} as const satisfies Record<Exclude<DownloadAction, 'cancel-download'>, keyof typeof browser>;
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
+function formatBytes(bytes: number, locale: UiLocale) {
+  if (bytes < 1024) return `${bytes.toLocaleString(locale)} B`;
   const units = ['KiB', 'MiB', 'GiB', 'TiB'];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)) - 1, units.length - 1);
   const amount = bytes / 1024 ** (index + 1);
-  return `${amount.toLocaleString('zh-CN', { maximumFractionDigits: 1 })} ${units[index]}`;
+  return `${amount.toLocaleString(locale, { maximumFractionDigits: 1 })} ${units[index]}`;
 }
 
 function downloadName(download: DesktopBrowserDownload) {
   return download.path.split(/[\\/]/).at(-1) || download.filename;
 }
 
-function downloadProgress(download: DesktopBrowserDownload) {
-  const received = formatBytes(download.receivedBytes);
-  if (download.totalBytes <= 0) return `已接收 ${received}，总大小未知`;
+function downloadProgress(download: DesktopBrowserDownload, locale: UiLocale) {
+  const t = getTranslator('browser');
+  const received = formatBytes(download.receivedBytes, locale);
+  if (download.totalBytes <= 0) return t('downloads.progressUnknown', { received });
   const percent = Math.min(100, Math.floor((download.receivedBytes / download.totalBytes) * 100));
-  return `${percent}% · ${received} / ${formatBytes(download.totalBytes)}`;
+  return t('downloads.progress', {
+    percent: (percent / 100).toLocaleString(locale, { style: 'percent', maximumFractionDigits: 0 }),
+    received,
+    total: formatBytes(download.totalBytes, locale),
+  });
 }
 
 function DownloadPath({ path }: { path: string }) {
-  const label = path || '正在确定保存位置…';
+  const { t } = useUiTranslation('browser');
+  const label = path || t('downloads.pathPending');
   return (
     <details className="min-w-0 text-xs text-muted-foreground">
       <summary className="cursor-pointer truncate" title={label}>
-        保存路径：<bdi>{label}</bdi>
+        {t('downloads.pathLabel')}
+        <bdi>{label}</bdi>
       </summary>
       <p className="mt-1 select-text wrap-anywhere" dir="auto">
         {label}
@@ -86,6 +104,7 @@ export function BrowserDownloads({
   state?: DesktopBrowserState;
   bridge: DesktopBrowserBridge;
 }) {
+  const { t, locale } = useUiTranslation('browser');
   const downloads = state?.downloads;
   const activeCount =
     downloads?.filter((download) => download.status === 'progressing').length ?? 0;
@@ -102,13 +121,37 @@ export function BrowserDownloads({
     state: BrowserDownloadPreviewState;
   } | null>(null);
   const [pending, setPending] = useState<{ action: DownloadAction; id?: string } | null>(null);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [failure, setFailure] = useState('');
+  const [actionError, setActionError] = useState<{ cause: unknown } | null>(null);
+  const [lastNotice, setNotice] = useState<DownloadNotice | null>(null);
+  const [failedDownloads, setFailures] = useState<DesktopBrowserDownload[]>([]);
   const [lastResult, setLastResult] = useState<DesktopBrowserDownload['status']>();
+  const error = actionError ? translateError(actionError.cause, t('downloads.actionFailed')) : '';
+  const notice = lastNotice
+    ? lastNotice.kind === 'command'
+      ? t(commandNoticeKeys[lastNotice.action])
+      : lastNotice.downloads
+          .map((download) =>
+            t('downloads.finished', {
+              name: downloadName(download),
+              status: t(statusKeys[download.status]),
+            }),
+          )
+          .join(' ')
+    : '';
+  const failure = failedDownloads
+    .map((download) =>
+      t('downloads.failed', {
+        name: downloadName(download),
+        error: translateError(download.error, t('downloads.retryDownload')),
+      }),
+    )
+    .join(' ');
   const summary = activeCount
-    ? `${activeCount} 个下载进行中`
-    : error || failure || notice || '查看下载记录与保存位置';
+    ? t('downloads.activeSummary', {
+        count: activeCount,
+        formattedCount: activeCount.toLocaleString(locale),
+      })
+    : error || failure || notice || t('downloads.summary');
 
   useEffect(() => {
     mounted.current = true;
@@ -129,21 +172,11 @@ export function BrowserDownloads({
       : [];
     previous.current = new Map(downloads.map((download) => [download.id, download.status]));
     if (!finished.length) return;
-    setNotice(
-      finished
-        .filter((download) => download.status !== 'interrupted')
-        .map((download) => `${downloadName(download)}：${statusLabels[download.status]}。`)
-        .join(' '),
-    );
-    setFailure(
-      finished
-        .filter((download) => download.status === 'interrupted')
-        .map(
-          (download) =>
-            `${downloadName(download)}：下载失败。${download.error || '请返回网页重新下载。'}`,
-        )
-        .join(' '),
-    );
+    setNotice({
+      kind: 'finished',
+      downloads: finished.filter((download) => download.status !== 'interrupted'),
+    });
+    setFailures(finished.filter((download) => download.status === 'interrupted'));
     setLastResult(
       finished.some((download) => download.status === 'interrupted')
         ? 'interrupted'
@@ -174,21 +207,18 @@ export function BrowserDownloads({
     const attempt = ++previewRequest.current;
     const selection = { download, attempt };
     const name = downloadName(download);
-    setError('');
+    setActionError(null);
     if (!browserDownloadPreviewMime(name)) {
       setPreview({
         ...selection,
-        state: { kind: 'unavailable', reason: '此文件格式暂无内置预览。' },
+        state: { kind: 'unavailable', reason: 'unsupportedFormat' },
       });
       return;
     }
     if (Math.max(download.receivedBytes, download.totalBytes) > browserDownloadPreviewMaxBytes) {
       setPreview({
         ...selection,
-        state: {
-          kind: 'unavailable',
-          reason: `文件超过 ${formatBytes(browserDownloadPreviewMaxBytes)} 的预览上限。`,
-        },
+        state: { kind: 'unavailable', reason: 'tooLarge' },
       });
       return;
     }
@@ -199,16 +229,7 @@ export function BrowserDownloads({
       setPreview({ ...selection, state: { kind: 'ready', file } });
     } catch (cause) {
       if (!mounted.current || previewRequest.current !== attempt) return;
-      setPreview({
-        ...selection,
-        state: {
-          kind: 'error',
-          message:
-            cause instanceof Error && cause.message
-              ? cause.message
-              : '无法读取下载文件，请重试或用系统应用打开。',
-        },
-      });
+      setPreview({ ...selection, state: { kind: 'error', error: cause } });
     }
   }
 
@@ -216,23 +237,15 @@ export function BrowserDownloads({
     if (!state || !mounted.current || inFlight.current) return;
     inFlight.current = true;
     setPending({ action, id });
-    setError('');
+    setActionError(null);
     try {
       await bridge.command(projectId, action, id);
       if (mounted.current && action !== 'cancel-download') {
-        setNotice(
-          action === 'reveal-download'
-            ? '已在文件夹中显示下载文件。'
-            : action === 'open-download'
-              ? '已请求用系统应用打开下载文件。'
-              : '已打开下载文件夹。',
-        );
+        setNotice({ kind: 'command', action });
       }
     } catch (cause) {
       if (mounted.current) {
-        setError(
-          cause instanceof Error && cause.message ? cause.message : '下载操作失败，请重试。',
-        );
+        setActionError({ cause });
       }
     } finally {
       inFlight.current = false;
@@ -246,20 +259,24 @@ export function BrowserDownloads({
         <DialogTrigger asChild>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant={activeCount ? 'secondary' : 'ghost'}
             className="desktop-browser-download-trigger"
-            aria-label="浏览器下载"
+            aria-label={t('downloads.label')}
             aria-describedby={summaryId}
-            title={`浏览器下载：${summary}`}
+            title={t('downloads.triggerTitle', { summary })}
           >
-            <Download size={16} data-icon="inline-start" />
+            <Download data-icon="inline-start" aria-hidden="true" />
             {activeCount ? (
-              <span aria-hidden="true">{activeCount > 99 ? '99+' : activeCount}</span>
+              <span aria-hidden="true">
+                {activeCount > 99
+                  ? t('downloads.badgeOverflow', { limit: (99).toLocaleString(locale) })
+                  : activeCount.toLocaleString(locale)}
+              </span>
             ) : error || lastResult === 'interrupted' ? (
-              <CircleAlert size={16} data-icon="inline-end" aria-hidden="true" />
+              <CircleAlert data-icon="inline-end" aria-hidden="true" />
             ) : lastResult === 'completed' ? (
-              <Check size={16} data-icon="inline-end" aria-hidden="true" />
+              <Check data-icon="inline-end" aria-hidden="true" />
             ) : null}
           </Button>
         </DialogTrigger>
@@ -281,23 +298,29 @@ export function BrowserDownloads({
                     className="shrink-0"
                     onClick={returnToDownloads}
                   >
-                    <ArrowLeft size={16} data-icon="inline-start" />
-                    返回下载列表
+                    <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+                    {t('downloads.back')}
                   </Button>
                   <DialogTitle className="truncate" title={downloadName(preview.download)}>
                     <bdi>{downloadName(preview.download)}</bdi>
                   </DialogTitle>
                 </div>
                 <DialogDescription>
-                  文件预览 · {formatBytes(preview.download.receivedBytes)}
+                  {t('downloads.previewSize', {
+                    size: formatBytes(preview.download.receivedBytes, locale),
+                  })}
                 </DialogDescription>
               </>
             ) : (
               <>
-                <DialogTitle>下载</DialogTitle>
+                <DialogTitle>{t('downloads.title')}</DialogTitle>
                 <DialogDescription>
-                  {activeCount ? `${activeCount} 个文件正在下载 · ` : ''}
-                  当前项目的近期下载及文件保存位置。
+                  {activeCount
+                    ? t('downloads.activeDescription', {
+                        count: activeCount,
+                        formattedCount: activeCount.toLocaleString(locale),
+                      })
+                    : t('downloads.description')}
                 </DialogDescription>
               </>
             )}
@@ -312,35 +335,34 @@ export function BrowserDownloads({
             className="desktop-browser-download-list-pane flex min-h-0 flex-1 flex-col gap-4"
             hidden={Boolean(preview)}
           >
-            <section className="min-w-0 shrink-0" aria-label="下载保存位置">
-              <h3 className="text-xs font-medium">下载文件夹</h3>
+            <section className="min-w-0 shrink-0" aria-label={t('downloads.locationLabel')}>
+              <h3 className="text-xs font-medium">{t('downloads.directory')}</h3>
               <p
                 className="mt-1 truncate text-xs text-muted-foreground"
                 title={state?.downloadDirectory}
                 dir="auto"
               >
-                {state?.downloadDirectory || (state ? '下载目录暂不可用' : '正在读取保存位置…')}
+                {state?.downloadDirectory ||
+                  t(state ? 'downloads.directoryUnavailable' : 'downloads.readingLocation')}
               </p>
             </section>
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
               {!state ? (
                 <p className="py-6 text-sm text-muted-foreground" role="status">
-                  正在读取下载记录…
+                  {t('downloads.loading')}
                 </p>
               ) : !downloads ? (
-                <p className="py-6 text-sm text-muted-foreground">当前桌面版本尚未提供下载记录。</p>
+                <p className="py-6 text-sm text-muted-foreground">{t('downloads.unsupported')}</p>
               ) : downloads.length === 0 ? (
-                <p className="py-6 text-sm text-muted-foreground">
-                  还没有下载记录。从网页下载的文件会显示在这里。
-                </p>
+                <p className="py-6 text-sm text-muted-foreground">{t('downloads.empty')}</p>
               ) : (
-                <ul className="divide-y divide-border" aria-label="下载记录">
+                <ul className="divide-y divide-border" aria-label={t('downloads.historyLabel')}>
                   {downloads.map((download) => {
                     const name = downloadName(download);
                     return (
                       <li className="flex min-w-0 gap-3 py-3" key={download.id}>
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                          <File size={19} aria-hidden="true" />
+                          <File className="size-(--ui-icon-size-emphasis)" aria-hidden="true" />
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                           <div className="flex min-w-0 flex-col gap-1">
@@ -353,21 +375,25 @@ export function BrowserDownloads({
                                   download.status === 'interrupted' && 'text-destructive',
                                 )}
                               >
-                                {statusLabels[download.status]}
+                                {t(statusKeys[download.status])}
                               </span>
                               <span aria-hidden="true">·</span>
                               <span className="tabular-nums">
                                 {download.status === 'progressing'
-                                  ? downloadProgress(download)
-                                  : `${download.status === 'completed' ? '' : '已接收 '}${formatBytes(download.receivedBytes)}`}
+                                  ? downloadProgress(download, locale)
+                                  : download.status === 'completed'
+                                    ? formatBytes(download.receivedBytes, locale)
+                                    : t('downloads.received', {
+                                        size: formatBytes(download.receivedBytes, locale),
+                                      })}
                               </span>
                             </p>
                           </div>
                           {download.status === 'progressing' ? (
                             <progress
                               className="desktop-browser-download-progress"
-                              aria-label={`${name} 下载进度`}
-                              aria-valuetext={downloadProgress(download)}
+                              aria-label={t('downloads.progressLabel', { name })}
+                              aria-valuetext={downloadProgress(download, locale)}
                               max={download.totalBytes > 0 ? download.totalBytes : undefined}
                               value={
                                 download.totalBytes > 0
@@ -379,7 +405,7 @@ export function BrowserDownloads({
                           <DownloadPath path={download.path} />
                           {download.status === 'interrupted' ? (
                             <p className="text-xs text-destructive wrap-anywhere">
-                              {download.error || '下载已中断，请返回网页重新下载。'}
+                              {translateError(download.error, t('downloads.interrupted'))}
                             </p>
                           ) : null}
                           {download.status === 'completed' ? (
@@ -391,7 +417,7 @@ export function BrowserDownloads({
                                 disabled={Boolean(pending) || !download.path}
                                 onClick={(event) => void openPreview(download, event.currentTarget)}
                               >
-                                预览
+                                {t('downloads.preview')}
                               </Button>
                               <Button
                                 type="button"
@@ -400,9 +426,11 @@ export function BrowserDownloads({
                                 disabled={Boolean(pending) || !download.path}
                                 onClick={() => void command('open-download', download.id)}
                               >
-                                {pending?.action === 'open-download' && pending.id === download.id
-                                  ? '正在打开…'
-                                  : '用系统应用打开'}
+                                {t(
+                                  pending?.action === 'open-download' && pending.id === download.id
+                                    ? 'downloads.opening'
+                                    : 'downloads.openWithApp',
+                                )}
                               </Button>
                               <Button
                                 type="button"
@@ -411,9 +439,12 @@ export function BrowserDownloads({
                                 disabled={Boolean(pending) || !download.path}
                                 onClick={() => void command('reveal-download', download.id)}
                               >
-                                {pending?.action === 'reveal-download' && pending.id === download.id
-                                  ? '正在定位…'
-                                  : '在文件夹中显示'}
+                                {t(
+                                  pending?.action === 'reveal-download' &&
+                                    pending.id === download.id
+                                    ? 'downloads.revealing'
+                                    : 'downloads.reveal',
+                                )}
                               </Button>
                             </div>
                           ) : download.status === 'progressing' ? (
@@ -425,9 +456,12 @@ export function BrowserDownloads({
                                 disabled={Boolean(pending)}
                                 onClick={() => void command('cancel-download', download.id)}
                               >
-                                {pending?.action === 'cancel-download' && pending.id === download.id
-                                  ? '正在取消…'
-                                  : '取消下载'}
+                                {t(
+                                  pending?.action === 'cancel-download' &&
+                                    pending.id === download.id
+                                    ? 'downloads.cancelling'
+                                    : 'downloads.cancel',
+                                )}
                               </Button>
                             </div>
                           ) : null}
@@ -465,7 +499,11 @@ export function BrowserDownloads({
                   disabled={Boolean(pending)}
                   onClick={() => void command('open-download', preview.download.id)}
                 >
-                  {pending?.action === 'open-download' ? '正在打开…' : '用系统应用打开'}
+                  {t(
+                    pending?.action === 'open-download'
+                      ? 'downloads.opening'
+                      : 'downloads.openWithApp',
+                  )}
                 </Button>
                 <Button
                   type="button"
@@ -474,7 +512,11 @@ export function BrowserDownloads({
                   disabled={Boolean(pending)}
                   onClick={() => void command('reveal-download', preview.download.id)}
                 >
-                  {pending?.action === 'reveal-download' ? '正在定位…' : '在文件夹中显示'}
+                  {t(
+                    pending?.action === 'reveal-download'
+                      ? 'downloads.revealing'
+                      : 'downloads.reveal',
+                  )}
                 </Button>
               </>
             ) : null}
@@ -485,8 +527,12 @@ export function BrowserDownloads({
               disabled={!state?.downloadDirectory || Boolean(pending)}
               onClick={() => void command('open-download-directory')}
             >
-              <FolderOpen size={16} data-icon="inline-start" />
-              {pending?.action === 'open-download-directory' ? '正在打开…' : '打开下载文件夹'}
+              <FolderOpen data-icon="inline-start" aria-hidden="true" />
+              {t(
+                pending?.action === 'open-download-directory'
+                  ? 'downloads.opening'
+                  : 'downloads.openDirectory',
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

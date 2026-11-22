@@ -91,3 +91,25 @@ const files: DesktopFilesBridge = {
   },
 };
 contextBridge.exposeInMainWorld('atelierDesktopFiles', files);
+
+import {
+  desktopUiLanguageChannels,
+  desktopUiLanguageGetSchema,
+  desktopUiLanguageSetSchema,
+  desktopUiLanguageResultSchema,
+  type DesktopUiLanguageBridge,
+} from '../shared/desktop-ui-language.js';
+
+const uiLanguage: DesktopUiLanguageBridge = {
+  async get() {
+    const request = desktopUiLanguageGetSchema.parse(undefined);
+    const response: unknown = await ipcRenderer.invoke(desktopUiLanguageChannels.get, request);
+    return desktopUiLanguageResultSchema.parse(response);
+  },
+  async set(locale) {
+    const request = desktopUiLanguageSetSchema.parse(locale);
+    const response: unknown = await ipcRenderer.invoke(desktopUiLanguageChannels.set, request);
+    return desktopUiLanguageResultSchema.parse(response);
+  },
+};
+contextBridge.exposeInMainWorld('atelierUiLanguage', uiLanguage);

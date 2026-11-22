@@ -21,7 +21,17 @@ import { PermissionService } from '../server/permissions.js';
 import { applyText, readProjectText, textDiff } from '../server/files.js';
 import { applyPatch } from 'diff';
 import { commandsAvailable, runCommand } from '../server/commands.js';
-import { now, type Run } from '../shared/types.js';
+import {
+  now,
+  type Run,
+  type Session,
+  type SendSessionMessageResult,
+  type SessionMessageQueue,
+} from '../shared/types.js';
+import type { LiveInput } from '../server/agent.js';
+import { MessageQueue } from '../server/message-queue.js';
+import { desktopPairingHeader } from '../shared/desktop-host.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const source = fileURLToPath(new URL('../', import.meta.url));
 async function fixture(work: (base: string, project: string) => Promise<void>) {
@@ -56,6 +66,484 @@ function runData(sessionId = 'session', projectId = 'project'): Run {
     config: { gateway: 'http://127.0.0.1:3001', model: 'test-only', maxTurns: 4, timeoutMs: 10000 },
   };
 }
+
+async function appClient(app: Awaited<ReturnType<typeof createApp>>, pairing?: string) {
+  await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  const address = app.server.address();
+  assert.ok(address && typeof address === 'object');
+  const url = `http://127.0.0.1:${address.port}`;
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (pairing) headers[desktopPairingHeader] = pairing;
+  const boot = (await fetch(url + '/api/bootstrap', { headers }).then((res) => res.json())) as {
+    csrfToken: string;
+    capabilities: { nativeExecution: boolean };
+  };
+  headers['x-atelier-token'] = boot.csrfToken;
+  async function request<T>(
+    path: string,
+    method = 'GET',
+    body?: unknown,
+    expected = 200,
+  ): Promise<T> {
+    const res = await fetch(url + path, {
+      method,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const value: unknown = await res.json();
+    assert.equal(res.status, expected, JSON.stringify(value));
+    return value as T;
+  }
+  return { request, boot, url, headers };
+}
+
+for (const settings of [
+  {
+    nativeExecution: true,
+    desktopPairing: 'paired-fixture',
+    enabled: process.platform === 'linux',
+  },
+  { nativeExecution: true, desktopPairing: undefined, enabled: false },
+  { nativeExecution: false, desktopPairing: 'paired-fixture', enabled: false },
+]) {
+  test(`native execution is authoritative with enabled=${settings.nativeExecution} paired=${Boolean(settings.desktopPairing)}`, async () =>
+    fixture(async (base, project) => {
+      const app = await createApp({
+        root: source,
+        data: join(base, 'data'),
+        ...settings,
+        runnerFactory: (store) => ({
+          start(run) {
+            store.update('runs', run.id, { status: 'stopped', endedAt: now() });
+          },
+          stop() {},
+          async shutdown() {},
+        }),
+      });
+      try {
+        const { request, boot, url, headers } = await appClient(app, settings.desktopPairing);
+        assert.equal(boot.capabilities.nativeExecution, settings.enabled);
+        if (settings.desktopPairing) {
+          const unpaired = await fetch(url + '/api/sessions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-atelier-token': boot.csrfToken },
+            body: JSON.stringify({ nativeExecution: true }),
+          });
+          assert.equal(unpaired.status, 403);
+          assert.equal(
+            ((await unpaired.json()) as { error: { code: string } }).error.code,
+            'DESKTOP_PAIRING_REQUIRED',
+          );
+          assert.equal(headers[desktopPairingHeader], settings.desktopPairing);
+        }
+        const { project: bound } = await request<{ project: { id: string } }>(
+          '/api/projects',
+          'POST',
+          { path: project },
+          201,
+        );
+        const { session } = await request<{ session: Session }>(
+          '/api/sessions',
+          'POST',
+          { projectId: bound.id },
+          201,
+        );
+        assert.equal(session.draft.mode, settings.enabled ? 'edit' : 'readonly');
+        assert.equal(session.draft.executionPreference, settings.enabled ? 'native-v1' : undefined);
+        const route = `/api/sessions/${session.id}/messages`;
+        const native = {
+          text: 'local task',
+          mode: 'edit',
+          executionPreference: 'native-v1',
+          idempotencyKey: randomUUID(),
+        };
+        if (!settings.enabled) {
+          await request(route, 'POST', native, 403);
+          await request(
+            `/api/sessions/${session.id}`,
+            'PATCH',
+            { draft: { ...session.draft, mode: 'edit', executionPreference: 'native-v1' } },
+            403,
+          );
+        } else {
+          const first = await request<{ run: Run }>(route, 'POST', native, 202);
+          assert.equal(first.run.executor, 'native-v1');
+          assert.equal(
+            (await request<{ run: Run }>(route, 'POST', native, 202)).run.id,
+            first.run.id,
+          );
+          await request(route, 'POST', { ...native, executionPreference: 'project-v1' }, 409);
+          for (const invalid of [{ mode: 'readonly' }, { approvalMode: 'automatic' }])
+            await request(
+              route,
+              'POST',
+              { ...native, ...invalid, idempotencyKey: randomUUID() },
+              400,
+            );
+          const retried = await request<{ run: Run }>(
+            `/api/runs/${first.run.id}/retry`,
+            'POST',
+            { idempotencyKey: randomUUID() },
+            202,
+          );
+          assert.equal(retried.run.mode, 'readonly');
+          assert.equal(retried.run.executor, 'project-v1');
+          assert.equal(
+            app.store.get('sessions', session.id).draft.executionPreference,
+            'native-v1',
+          );
+        }
+        for (const explicit of [
+          { mode: 'readonly' },
+          { mode: 'edit' },
+          { mode: 'edit', approvalMode: 'automatic' },
+          {
+            mode: 'edit',
+            executionPreference: 'project-v1',
+            executor: 'native-v1',
+            nativeExecution: true,
+          },
+        ]) {
+          const { run } = await request<{ run: Run }>(
+            route,
+            'POST',
+            { text: 'explicit policy', ...explicit, idempotencyKey: randomUUID() },
+            202,
+          );
+          assert.equal(run.executor, 'project-v1');
+          assert.equal(run.mode, explicit.mode);
+        }
+        if (settings.enabled) {
+          // A lost draft PATCH must not preserve a previous automatic choice after an explicit send.
+          for (const preference of ['native-v1', 'project-v1'] as const) {
+            app.store.update('sessions', session.id, {
+              draft: { ...emptyDraft(), mode: 'edit', approvalMode: 'automatic' },
+            });
+            await request(
+              route,
+              'POST',
+              { ...native, executionPreference: preference, idempotencyKey: randomUUID() },
+              202,
+            );
+            const saved = app.store.get('sessions', session.id).draft;
+            assert.equal(saved.mode, 'edit');
+            assert.equal(saved.approvalMode, undefined);
+            assert.equal(saved.executionPreference, preference);
+          }
+          const { agent } = await request<{ agent: { revisionId: string } }>(
+            `/api/projects/${bound.id}/agents`,
+            'POST',
+            {
+              name: 'Restricted fixture',
+              description: 'fixture',
+              instructions: 'Only read the project.',
+              starters: [],
+              mode: 'readonly',
+              capabilities: ['read'],
+              skills: [],
+              mcp: [],
+            },
+            201,
+          );
+          const boundSession = await request<{ session: Session }>(
+            '/api/sessions',
+            'POST',
+            {
+              projectId: bound.id,
+              agentRevisionId: agent.revisionId,
+            },
+            201,
+          );
+          assert.equal(boundSession.session.draft.executionPreference, undefined);
+          assert.equal(boundSession.session.draft.mode, 'readonly');
+          await request(
+            `/api/sessions/${boundSession.session.id}/messages`,
+            'POST',
+            { ...native, idempotencyKey: randomUUID() },
+            403,
+          );
+          // An old or forked session can opt in only through an explicit saved choice.
+          app.store.update('sessions', session.id, {
+            draft: emptyDraft(),
+            fork: {
+              sourceSessionId: randomUUID(),
+              sourceMessageId: randomUUID(),
+              sourceTitle: 'fixture origin',
+            },
+          });
+          const nativeDraft = { ...emptyDraft(), mode: 'edit', executionPreference: 'native-v1' };
+          await request(`/api/sessions/${session.id}`, 'PATCH', { draft: nativeDraft });
+          assert.equal(
+            app.store.get('sessions', session.id).draft.executionPreference,
+            'native-v1',
+          );
+          await request(`/api/sessions/${session.id}`, 'PATCH', {
+            draft: { ...emptyDraft(), mode: 'edit', executionPreference: 'project-v1' },
+          });
+          assert.equal(
+            app.store.get('sessions', session.id).draft.executionPreference,
+            'project-v1',
+          );
+          app.store.update('sessions', session.id, { agentRevisionId: randomUUID() });
+          await request(route, 'POST', { ...native, idempotencyKey: randomUUID() }, 403);
+          await request(`/api/sessions/${session.id}`, 'PATCH', { draft: nativeDraft }, 403);
+        }
+      } finally {
+        await app.close();
+      }
+    }));
+}
+
+test('native executor is pinned across queued turns, live dispatch and reopening; missing intent stays project', async () =>
+  fixture(async (base, project) => {
+    const starts: Run[] = [];
+    let live: LiveInput | undefined;
+    const pairing = 'queue-fixture';
+    const launch = async () => {
+      const app = await createApp({
+        root: source,
+        data: join(base, 'data'),
+        desktopPairing: pairing,
+        nativeExecution: true,
+        runnerFactory: (store) => ({
+          start(run) {
+            starts.push(run);
+            store.update('runs', run.id, { status: 'running', startedAt: now() });
+          },
+          insert(_id, input) {
+            live = input;
+          },
+          stop(id) {
+            store.update('runs', id, { status: 'stopped', endedAt: now() });
+          },
+          async shutdown() {},
+        }),
+      });
+      return { app, ...(await appClient(app, pairing)) };
+    };
+    let running = await launch();
+    try {
+      const { project: bound } = await running.request<{ project: { id: string } }>(
+        '/api/projects',
+        'POST',
+        { path: project },
+        201,
+      );
+      const { session } = await running.request<{ session: Session }>(
+        '/api/sessions',
+        'POST',
+        { projectId: bound.id },
+        201,
+      );
+      const path = `/api/sessions/${session.id}`;
+      const send = (text: string, executor: 'native-v1' | 'project-v1') => ({
+        text,
+        mode: 'edit',
+        executionPreference: executor,
+        idempotencyKey: randomUUID(),
+      });
+      const firstBody = send('native first', 'native-v1');
+      const first = await running.request<{ run: Run }>(path + '/messages', 'POST', firstBody, 202);
+      assert.equal(first.run.executor, 'native-v1');
+      const controlled = await running.request<SendSessionMessageResult>(
+        path + '/messages',
+        'POST',
+        send('controlled queued', 'project-v1'),
+        202,
+      );
+      const nativeBody = send('native queued', 'native-v1');
+      const native = await running.request<SendSessionMessageResult>(
+        path + '/messages',
+        'POST',
+        nativeBody,
+        202,
+      );
+      assert.ok(controlled.queuedMessage && native.queuedMessage);
+      const snapshot = await running.request<{ messageQueue: SessionMessageQueue }>(path);
+      assert.equal(
+        snapshot.messageQueue.items.find((item) => item.id === controlled.queuedMessage.id)
+          ?.insertion,
+        'priority',
+      );
+      assert.equal(
+        snapshot.messageQueue.items.find((item) => item.id === native.queuedMessage.id)?.insertion,
+        'live',
+      );
+      await running.request(
+        `${path}/message-queue/${controlled.queuedMessage.id}/insert`,
+        'POST',
+        { runId: first.run.id, mode: 'live' },
+        409,
+      );
+      await running.request(`${path}/message-queue/${native.queuedMessage.id}/insert`, 'POST', {
+        runId: first.run.id,
+        mode: 'live',
+      });
+      assert.ok(live);
+      assert.equal(live.canDispatch?.(), true);
+      running.app.store.update('runs', first.run.id, { executor: 'project-v1' });
+      assert.equal(live.canDispatch?.(), false);
+      running.app.store.update('runs', first.run.id, { executor: 'native-v1' });
+      live.released();
+      // Build a historical intent using the exact old scope, without either new field.
+      const queue = new MessageQueue(running.app.store);
+      const pending = queue.pending(session.id, controlled.queuedMessage.id);
+      assert.ok(pending);
+      const oldIntent = pending.intent as {
+        request: Record<string, unknown>;
+        scope: string;
+        model: string;
+      };
+      const { executionPreference: _preference, ...oldRequest } = oldIntent.request;
+      const legacy = queue.enqueue(
+        session.id,
+        `${session.id}:${randomUUID()}`,
+        'legacy-hash',
+        { text: 'legacy queued' },
+        {
+          request: { ...oldRequest, text: 'legacy queued', idempotencyKey: randomUUID() },
+          model: oldIntent.model,
+          scope: oldIntent.scope,
+        },
+      );
+      await running.request(path, 'PATCH', {
+        draft: { ...session.draft, executionPreference: 'native-v1' },
+      });
+      await running.app.close();
+      running = await launch();
+      assert.equal(running.app.store.get('runs', first.run.id).executor, 'native-v1');
+      assert.equal(
+        running.app.store.get('sessions', session.id).draft.executionPreference,
+        'native-v1',
+      );
+      assert.equal(
+        (await running.request<{ run: Run }>(path + '/messages', 'POST', firstBody, 202)).run.id,
+        first.run.id,
+      );
+      const finish = (id: string) => {
+        running.app.store.update('runs', id, { status: 'completed', endedAt: now() });
+        running.app.store.event(id, session.id, 'run.finished', {});
+      };
+      await running.request(`${path}/message-queue/resume`, 'POST', {});
+      const awaitStarts = async (count: number) => {
+        const end = Date.now() + 3000;
+        while (starts.length < count) {
+          assert.ok(Date.now() < end);
+          await delay(10);
+        }
+      };
+      await awaitStarts(2);
+      const second = starts[1];
+      assert.ok(second);
+      assert.equal(second.executor, 'project-v1');
+      finish(second.id);
+      await awaitStarts(3);
+      const third = starts[2];
+      assert.ok(third);
+      assert.equal(third.executor, 'native-v1');
+      finish(third.id);
+      await awaitStarts(4);
+      const fourth = starts[3];
+      assert.ok(fourth);
+      assert.equal(fourth.executor, 'project-v1');
+      assert.equal(fourth.prompt, legacy.text);
+      assert.equal(
+        (
+          await running.request<SendSessionMessageResult>(
+            path + '/messages',
+            'POST',
+            nativeBody,
+            202,
+          )
+        ).run?.id,
+        third.id,
+      );
+    } finally {
+      await running.app.close();
+    }
+  }));
+
+test('manual subtask stop checks token, pairing and ownership and remains idempotent after completion', async () =>
+  fixture(async (base, project) => {
+    const stopped: string[] = [];
+    const app = await createApp({
+      root: source,
+      data: join(base, 'data'),
+      desktopPairing: 'stop-fixture',
+      runnerFactory: (store) => ({
+        start(run) {
+          store.update('runs', run.id, { status: 'running' });
+        },
+        stop() {},
+        async stopSubagent(runId, id) {
+          stopped.push(id);
+          store.finishSubagent(id, runId, 'stopped', '用户停止');
+        },
+        async shutdown() {},
+      }),
+    });
+    try {
+      const { request, url, headers } = await appClient(app, 'stop-fixture');
+      const { project: bound } = await request<{ project: { id: string } }>(
+        '/api/projects',
+        'POST',
+        { path: project },
+        201,
+      );
+      const { session } = await request<{ session: Session }>(
+        '/api/sessions',
+        'POST',
+        { projectId: bound.id },
+        201,
+      );
+      const { run } = await request<{ run: Run }>(
+        `/api/sessions/${session.id}/messages`,
+        'POST',
+        { text: 'task', idempotencyKey: randomUUID() },
+        202,
+      );
+      const child = (id: string, runId = run.id, sessionId = session.id) => ({
+        id,
+        runId,
+        sessionId,
+        title: id,
+        kind: 'worker' as const,
+        status: 'running' as const,
+        summary: null,
+        startedAt: now(),
+        endedAt: null,
+      });
+      app.store.startSubagent(child('worker'));
+      app.store.startSubagent(child('peer'));
+      const foreignRun = { ...runData(session.id, bound.id), mode: 'readonly' as const };
+      app.store.put('runs', foreignRun);
+      app.store.startSubagent(child('foreign', foreignRun.id));
+      const route = `/api/runs/${run.id}/subagents/worker/stop`;
+      const { 'x-atelier-token': _token, ...missingToken } = headers;
+      assert.equal(
+        (await fetch(url + route, { method: 'POST', headers: missingToken, body: '{}' })).status,
+        403,
+      );
+      const { [desktopPairingHeader]: _pairing, ...missingPair } = headers;
+      assert.equal(
+        (await fetch(url + route, { method: 'POST', headers: missingPair, body: '{}' })).status,
+        403,
+      );
+      await request(`/api/runs/${run.id}/subagents/foreign/stop`, 'POST', {}, 404);
+      await request(route, 'POST', { runId: foreignRun.id }, 400);
+      await request(route, 'POST', {});
+      await request(route, 'POST', {});
+      assert.deepEqual(stopped, ['worker']);
+      const work = app.store.sessionSnapshots.read(session.id).subagents;
+      assert.equal(work.find((item) => item.id === 'worker')?.status, 'stopped');
+      assert.equal(work.find((item) => item.id === 'peer')?.status, 'running');
+      assert.equal(app.store.get('runs', run.id).status, 'running');
+      app.store.update('runs', run.id, { status: 'completed' });
+      await request(`/api/runs/${run.id}/subagents/peer/stop`, 'POST', {}, 409);
+    } finally {
+      await app.close();
+    }
+  }));
 
 test('long tasks are the default and legacy custom limits are preserved', async () =>
   fixture(async (base) => {
@@ -273,6 +761,26 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
         ).text(),
         longOutput,
       );
+      const shellId = run.id + ':shell-output';
+      const stdout = 'line\n'.repeat(7000);
+      const stderr = '末行错误详情';
+      const receipt = JSON.stringify({ stdout, stderr, interrupted: false });
+      app.store.put('tools', {
+        ...app.store.get('tools', toolId),
+        id: shellId,
+        name: 'Bash',
+        output: receipt.slice(0, 32000),
+        outputLength: receipt.length,
+      });
+      app.files.saveOutput(shellId, receipt);
+      const display = `stdout\n${stdout}\n\nstderr\n${stderr}`;
+      const urlBase = `/api/tools/${encodeURIComponent(shellId)}/output?view=display`;
+      const one = await request(`${urlBase}&limit=20000`);
+      const two = await request(`${urlBase}&limit=20000&offset=${one.nextOffset}`);
+      assert.equal(one.total, display.length);
+      assert.equal(one.text + two.text, display);
+      assert.equal(two.nextOffset, null);
+      assert.equal(await app.files.toolOutput(shellId), receipt);
       const artifact = await app.files.publish(
         app.store.get('runs', run.id),
         'report.md',

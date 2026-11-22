@@ -1,33 +1,51 @@
 /**
- * @file 提供聊天任务输入、上下文与附件编辑界面。
- * @implementation 保留输入、IME 和附件提交路径，允许活跃运行中加入队列，结合队列状态呈现发送和停止当前轮动作。
- * @updated 2026-11-20T23:09:03+08:00
+ * @file 提供任务输入、引用卡片、上下文与附件编辑。
+ * @implementation 在正文上方展示可移除的引用卡片，沿用草稿校验和队列发送路径，在可插入时显示 Alt+Enter 提示。
+ * @updated 2026-11-22T14:41:36+08:00
  */
-import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUp, Paperclip, Plus, X } from 'lucide-react';
+import { useUiTranslation, translateError } from '@/i18n';
+import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { ArrowUp, Paperclip, Plus, Quote, Square, X } from 'lucide-react';
+import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
 import type { Draft, ReasoningEffort } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/components/ui/utils';
 import { ExtensionPicker } from '@/features/extensions/picker';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
+import { selectContextUsage } from './context-usage-model';
+import { ContextUsagePopover } from './context-usage-popover';
 import { isActive } from './conversation';
 import { ComposerModeSelector } from './mode-selector';
 import { ModelPicker } from './model-picker';
-import { parseSearchChargeLimit, runModeLabel, type ComposerMode } from './run-mode';
+import { composerMode, parseSearchChargeLimit, runModeLabel, type ComposerMode } from './run-mode';
 
-import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
+import {
+  useComposerAttachments,
+  type AttachmentActionError,
+  type DraftChange,
+} from './hooks/use-composer-attachments';
 
 export type { DraftChange } from './hooks/use-composer-attachments';
-const errorText = (error: unknown) => (error instanceof Error ? error.message : '操作失败，请重试');
+type ComposerError =
+  | { type: 'attachment'; error: AttachmentActionError }
+  | { type: 'send'; cause: unknown }
+  | {
+      type: 'notice';
+      key: 'composer.attachmentsDisabled' | 'composer.dropBusy' | 'composer.pasteBusy';
+    };
 
 export function Composer({
   snapshot,
   draft,
+  inputRef: externalInputRef,
+  editingMessage = false,
+  draftActionError = '',
+  onRemoveQuote,
   searchChargeLimit = '0',
   defaultModel,
+  nativeExecution = false,
   onModelChange,
   onEffortChange,
   onModeChange,
@@ -39,38 +57,50 @@ export function Composer({
 }: {
   snapshot: Snapshot;
   draft: Draft;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
+  editingMessage?: boolean;
+  draftActionError?: string;
+  onRemoveQuote: (id: string) => void;
   searchChargeLimit?: string;
   defaultModel: string;
+  nativeExecution?: boolean;
   onModelChange: (model?: string) => void;
   onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
   onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
-  onSend: () => Promise<void>;
+  onSend: (insertIntoRunId?: string) => Promise<void>;
   onStop: (runId: string) => void;
   submitting: boolean;
 }) {
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { t } = useUiTranslation('chat');
+  const localInputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = externalInputRef ?? localInputRef;
   const fileInput = useRef<HTMLInputElement>(null);
   const sendLock = useRef(false);
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ComposerError>();
+  const errorText = error
+    ? error.type === 'notice'
+      ? t(error.key)
+      : error.type === 'send'
+        ? translateError(error.cause, t('composer.sendUnconfirmed'))
+        : error.error.type === 'limit'
+          ? t('attachment.limit')
+          : translateError(error.error.cause, t('attachment.removeFailed'))
+    : '';
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
-  const mode: ComposerMode =
-    agent?.mode === 'readonly'
-      ? 'readonly'
-      : draft.mode === 'edit' && draft.approvalMode === 'automatic'
-        ? 'automatic'
-        : draft.mode;
+  const nativeAvailable = nativeExecution && !agent && !snapshot.session.agentRevisionId;
+  const mode = composerMode(draft, agent?.mode === 'readonly', nativeAvailable);
   let searchChargeError = '';
   if (mode === 'automatic') {
     try {
       parseSearchChargeLimit(searchChargeLimit);
     } catch (failure) {
-      searchChargeError = errorText(failure);
+      searchChargeError = translateError(failure, t('mode.invalidSearchLimit'));
     }
   }
   const contextAllowed = !agent || agent.capabilities.includes('context');
@@ -79,7 +109,14 @@ export function Composer({
   const run = snapshot.runs.find(isActive);
   const hasQueuedMessages = Boolean(snapshot.messageQueue?.items.length);
   const queueing = Boolean(run || hasQueuedMessages || snapshot.messageQueue?.paused);
-  const sendLabel = queueing ? '加入队列' : '发送任务';
+  const sendLabel = queueing ? t('composer.queue') : t('composer.sendTask');
+  const insertRunId =
+    !archived && (run?.status === 'running' || run?.status === 'awaiting_permission')
+      ? run.id
+      : undefined;
+  const quoteTooLong =
+    Boolean(draft.messageQuotes?.length) &&
+    formatMessageText(draft.text, draft.messageQuotes).length > composerTextLimit;
   const {
     uploads,
     removing,
@@ -96,7 +133,7 @@ export function Composer({
     attachmentsAllowed,
     archived,
     submitting,
-    onError: setError,
+    onError: (error) => setError({ type: 'attachment', error }),
   });
   const dropAllowed = canUpload && draft.attachmentIds.length < 20;
   const canSend =
@@ -106,6 +143,7 @@ export function Composer({
     !busy &&
     !agent?.issues.length &&
     !searchChargeError &&
+    !quoteTooLong &&
     Boolean(draft.text.trim());
   const attachments = new Map(
     snapshot.attachments.map((attachment) => [attachment.id, attachment]),
@@ -119,15 +157,15 @@ export function Composer({
     input.style.overflowY = input.scrollHeight > 240 ? 'auto' : 'hidden';
   }, [draft.text]);
 
-  async function submit(event?: FormEvent<HTMLFormElement>) {
+  async function submit(event?: FormEvent<HTMLFormElement>, insertIntoRunId?: string) {
     event?.preventDefault();
     if (!canSend || pendingOperations.current || sendLock.current) return;
     sendLock.current = true;
-    setError('');
+    setError(undefined);
     try {
-      await onSend();
+      await onSend(insertIntoRunId);
     } catch (failure) {
-      setError(`发送未确认，可使用相同内容重试：${errorText(failure)}`);
+      setError({ type: 'send', cause: failure });
     } finally {
       sendLock.current = false;
     }
@@ -136,7 +174,7 @@ export function Composer({
   return (
     <form
       className="composer chat-composer"
-      aria-label="撰写任务"
+      aria-label={t('composer.writeTask')}
       data-file-drag={dragging}
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes('Files')) return;
@@ -161,11 +199,10 @@ export function Composer({
         dragDepth.current = 0;
         setDragging(false);
         if (!canUpload || pendingOperations.current) {
-          setError(
-            !attachmentsAllowed
-              ? '当前智能体未启用附件。'
-              : '当前无法添加附件，请等操作结束后重试。',
-          );
+          setError({
+            type: 'notice',
+            key: !attachmentsAllowed ? 'composer.attachmentsDisabled' : 'composer.dropBusy',
+          });
           return;
         }
         queueUpload(event.dataTransfer.files);
@@ -173,14 +210,16 @@ export function Composer({
       onSubmit={(event) => void submit(event)}
     >
       <div className="context-row">
-        <div className="context-chips" aria-label="草稿上下文和附件">
+        <div className="context-chips" aria-label={t('composer.draftContext')}>
           {draft.contextPaths.map((path) => (
-            <button
+            <Button
               key={path}
               type="button"
+              variant="secondary"
+              size="xs"
               className="context-chip"
               disabled={archived || submitting}
-              aria-label={`移除上下文 ${path}`}
+              aria-label={t('composer.removeContext', { path })}
               title={path}
               onClick={() =>
                 onDraftChange((previous) => ({
@@ -189,8 +228,9 @@ export function Composer({
                 }))
               }
             >
-              上下文 · {path} ×
-            </button>
+              <span className="truncate">{path}</span>
+              <X data-icon="inline-end" aria-hidden="true" />
+            </Button>
           ))}
           {draft.attachmentIds.map((id) => {
             const item = attachments.get(id);
@@ -200,53 +240,63 @@ export function Composer({
               <div key={id} className="context-chip attachment-chip">
                 {item ? (
                   <AttachmentPreview attachment={item}>
-                    <Paperclip size={13} aria-hidden="true" />
-                    {name}
+                    <Paperclip data-icon="inline-start" aria-hidden="true" />
+                    <span className="truncate" title={name}>
+                      {name}
+                    </span>
                   </AttachmentPreview>
                 ) : (
                   <span>{name}</span>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   className="attachment-remove"
                   disabled={archived || submitting || isRemoving}
-                  aria-label={`移除附件 ${name}`}
-                  title={isRemoving ? '移除中…' : '移除附件'}
+                  aria-label={t('composer.removeAttachment', { name })}
+                  title={isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')}
                   onClick={() => removeAttachment(id)}
                 >
-                  <X size={14} aria-hidden="true" />
-                </button>
+                  <X data-icon="inline-start" aria-hidden="true" />
+                </Button>
               </div>
             );
           })}
           {uploads.map((entry) =>
             entry.error ? (
-              <button
+              <Button
                 key={entry.id}
                 type="button"
+                variant="outline"
+                size="xs"
                 className="context-chip chat-upload-error"
-                aria-label={`移除失败的上传 ${entry.name}：${entry.error}`}
+                aria-label={t('composer.dismissUpload', { name: entry.name, error: entry.error })}
                 onClick={() => dismissUpload(entry.id)}
               >
-                {entry.name} · 失败：{entry.error} ×
-              </button>
+                {t('composer.failedUpload', { name: entry.name, error: entry.error })}
+                <X data-icon="inline-end" aria-hidden="true" />
+              </Button>
             ) : (
               <span key={entry.id} className="context-chip" role="status">
-                {entry.name} · 上传中…
+                {t('composer.uploadingFile', { name: entry.name })}
               </span>
             ),
           )}
         </div>
-        <button
+        <Button
           type="button"
-          className="add-context"
+          variant="ghost"
+          size="xs"
           disabled={!contextAllowed || archived || submitting || !snapshot.project.available}
           onClick={() => setContextOpen(true)}
         >
-          <Plus size={14} aria-hidden="true" /> 上下文
-        </button>
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          {t('composer.context')}
+        </Button>
         <ComposerModeSelector
           mode={mode}
+          nativeExecution={nativeAvailable}
           readonlyProfile={agent?.mode === 'readonly'}
           disabled={archived || submitting}
           searchChargeLimit={searchChargeLimit}
@@ -257,21 +307,25 @@ export function Composer({
       </div>
       <p id="composer-mode-help" className="sr-only">
         {agent?.mode === 'readonly'
-          ? '当前智能体仅支持只读。'
-          : mode === 'automatic'
-            ? '自动批准可用工具操作。运行模式随当前会话保存。'
-            : mode === 'edit'
-              ? '需要审批的工具操作逐次确认。'
-              : '只读讨论。'}
+          ? t('composer.readonlyAgentHelp')
+          : mode === 'native'
+            ? t('composer.nativeHelp')
+            : mode === 'automatic'
+              ? t('composer.automaticHelp')
+              : mode === 'edit'
+                ? t('composer.controlledHelp')
+                : t('composer.readonlyHelp')}
       </p>
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
-          {agent.issues.join('；')}。
-          {agent.canUpgrade ? '可从会话顶部使用新版智能体。' : '在智能体管理中检查依赖并发布新版。'}
+          {t('composer.agentIssues', {
+            issues: agent.issues.join(t('composer.issueSeparator')),
+          })}
+          {agent.canUpgrade ? t('composer.upgradeAgent') : t('composer.checkAgent')}
         </p>
       ) : null}
       {agent?.starters.length && !snapshot.messages.length && !archived ? (
-        <div className="mb-2 flex flex-wrap gap-2" aria-label="开场任务">
+        <div className="mb-2 flex flex-wrap gap-2" aria-label={t('composer.starters')}>
           {agent.starters.map((starter) => (
             <Button
               key={starter}
@@ -289,17 +343,57 @@ export function Composer({
       ) : null}
       <div className="composer-box">
         <label className="composer-label" htmlFor="prompt-input">
-          {archived ? '已归档的会话' : '继续对话'}
+          {archived
+            ? t('composer.archivedLabel')
+            : editingMessage
+              ? t('composer.editingLabel')
+              : t('composer.continue')}
         </label>
+        {editingMessage ? (
+          <p id="composer-edit-help" className="composer-edit-help">
+            {t('composer.editHelp')}
+          </p>
+        ) : null}
+        {draft.messageQuotes?.length ? (
+          <ul className="composer-quotes" aria-label={t('composer.quotes')}>
+            {draft.messageQuotes.map((item, index) => (
+              <li key={item.id} className="composer-quote">
+                <Quote
+                  data-icon="inline-start"
+                  className="composer-quote-mark"
+                  aria-hidden="true"
+                />
+                <span className="composer-quote-excerpt">{item.text}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={archived || submitting}
+                  aria-label={t('composer.removeQuoteNumber', { number: index + 1 })}
+                  title={t('composer.removeQuote')}
+                  onClick={() => onRemoveQuote(item.id)}
+                >
+                  <X data-icon="inline-start" aria-hidden="true" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <textarea
           ref={inputRef}
           id="prompt-input"
           rows={2}
-          maxLength={32000}
+          maxLength={composerTextLimit}
           value={draft.text}
           disabled={archived}
-          aria-describedby="input-help chat-composer-error"
-          placeholder="输入消息…（/ 调用 Command 或 Skill，# 选择 MCP）"
+          aria-invalid={quoteTooLong || undefined}
+          aria-keyshortcuts={insertRunId ? 'Alt+Enter' : undefined}
+          aria-describedby={
+            editingMessage
+              ? 'input-help chat-composer-error composer-edit-help'
+              : 'input-help chat-composer-error'
+          }
+          placeholder={t('composer.placeholder')}
           onPaste={(event) => {
             const files = Array.from(event.clipboardData.files)
               .filter((file) => file.type === 'image/png' || file.type === 'image/jpeg')
@@ -307,7 +401,11 @@ export function Composer({
                 (file, index) =>
                   new File(
                     [file],
-                    `截图-${Date.now()}-${index + 1}.${file.type === 'image/png' ? 'png' : 'jpg'}`,
+                    t('composer.screenshotName', {
+                      timestamp: Date.now(),
+                      number: index + 1,
+                      extension: file.type === 'image/png' ? 'png' : 'jpg',
+                    }),
                     { type: file.type },
                   ),
               );
@@ -320,11 +418,10 @@ export function Composer({
               busy ||
               pendingOperations.current
             ) {
-              setError(
-                !attachmentsAllowed
-                  ? '当前智能体未启用附件。'
-                  : '当前无法粘贴截图，请等操作结束后重试。',
-              );
+              setError({
+                type: 'notice',
+                key: !attachmentsAllowed ? 'composer.attachmentsDisabled' : 'composer.pasteBusy',
+              });
               return;
             }
             queueUpload(files);
@@ -335,36 +432,42 @@ export function Composer({
           }}
         />
         <fieldset className="chat-extension-fieldset" disabled={archived || submitting}>
-          <legend className="sr-only">任务扩展</legend>
+          <legend className="sr-only">{t('composer.extensions')}</legend>
           <ExtensionPicker
             projectId={archived ? undefined : snapshot.project.id}
             agent={agent}
             draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
             onChange={(next: Draft) => {
               if (!archived && !submitting)
-                onDraftChange({ ...next, mode: draft.mode, approvalMode: draft.approvalMode });
+                onDraftChange({
+                  ...next,
+                  mode: draft.mode,
+                  approvalMode: draft.approvalMode,
+                  executionPreference: draft.executionPreference,
+                });
             }}
             inputRef={inputRef}
             onSubmit={() => void submit()}
+            onQuickInsert={insertRunId ? () => void submit(undefined, insertRunId) : undefined}
           />
         </fieldset>
         <div className="composer-toolbar justify-end">
-          <span className="composer-run-status" role="status">
+          <span className="composer-run-status" data-status={run?.status} role="status">
             {dragging
               ? dropAllowed
-                ? '松开以添加附件'
-                : '当前无法添加附件'
+                ? t('composer.dropToAdd')
+                : t('composer.cannotAdd')
               : submitting
-                ? '正在发送…'
+                ? t('composer.sending')
                 : busy
-                  ? '正在处理附件…'
+                  ? t('composer.processingAttachments')
                   : run
                     ? (
                         {
-                          queued: '排队中',
-                          running: '执行中',
-                          awaiting_permission: '等待审批',
-                          stopping: '正在停止',
+                          queued: t('composer.queued'),
+                          running: t('composer.running'),
+                          awaiting_permission: t('composer.awaitingPermission'),
+                          stopping: t('composer.stoppingStatus'),
                         } as Record<string, string>
                       )[run.status]
                     : ''}
@@ -374,16 +477,23 @@ export function Composer({
             <Button
               type="button"
               variant="outline"
-              className="btn btn-secondary composer-stop"
+              size="sm"
               disabled={run.status === 'stopping'}
               onClick={() => onStop(run.id)}
             >
-              {run.status === 'stopping' ? '正在停止…' : hasQueuedMessages ? '停止当前轮' : '停止'}
+              <Square data-icon="inline-start" aria-hidden="true" />
+              {run.status === 'stopping'
+                ? t('composer.stopping')
+                : hasQueuedMessages
+                  ? t('composer.stopTurn')
+                  : t('composer.stop')}
             </Button>
           ) : null}
-          <button
+          <Button
             type="button"
-            className="icon-button attach-button"
+            variant="ghost"
+            size="icon-sm"
+            className="attach-button"
             disabled={
               !attachmentsAllowed ||
               archived ||
@@ -391,12 +501,22 @@ export function Composer({
               busy ||
               draft.attachmentIds.length >= 20
             }
-            aria-label="上传附件"
-            title="上传 XLS、XLSX、PDF、DOCX、文本或 PNG、JPEG 图片"
+            aria-label={t('composer.upload')}
+            title={t('composer.uploadHint')}
             onClick={() => fileInput.current?.click()}
           >
-            <Paperclip size={18} aria-hidden="true" />
-          </button>
+            <Paperclip data-icon="inline-start" aria-hidden="true" />
+          </Button>
+          <ContextUsagePopover
+            sample={selectContextUsage(
+              snapshot.runs,
+              snapshot.session.sdkSessionId,
+              run?.id,
+              draft.model ?? defaultModel,
+            )}
+            running={Boolean(run)}
+            hasRuns={snapshot.runs.length > 0}
+          />
           <ModelPicker
             model={draft.model}
             effort={draft.effort}
@@ -408,32 +528,43 @@ export function Composer({
           <Button
             type="submit"
             size={queueing ? 'sm' : 'icon'}
-            className={cn(!queueing && 'send-button')}
+            className="shrink-0"
             disabled={!canSend}
             aria-label={sendLabel}
             title={sendLabel}
           >
-            {queueing ? '加入队列' : <ArrowUp size={20} aria-hidden="true" />}
+            {queueing ? (
+              t('composer.queue')
+            ) : (
+              <ArrowUp data-icon="inline-start" aria-hidden="true" />
+            )}
           </Button>
         </div>
       </div>
-      <div className="composer-footer">
-        <span id="input-help">Enter {queueing ? '加入队列' : '发送'} · Shift + Enter 换行</span>
+      <div className="composer-footer" data-quick-insert={insertRunId ? '' : undefined}>
+        <span id="input-help">
+          {t('composer.keyboardHelp', {
+            action: t(queueing ? 'composer.queueAction' : 'composer.sendAction'),
+            insertHelp: insertRunId ? t('composer.insertShortcut') : '',
+          })}
+        </span>
         <span>
           {mode === 'automatic'
-            ? '全工具自动化 · 随会话保存'
+            ? t('composer.automaticFooter')
             : mode === 'edit'
-              ? '受控修改 · 每次操作逐次审批'
-              : '只读 · 先讨论，再决定'}
+              ? t('composer.controlledFooter')
+              : t('composer.readonlyFooter')}
         </span>
       </div>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
-        {searchChargeError ||
-          error ||
+        {draftActionError ||
+          searchChargeError ||
+          (quoteTooLong ? t('composer.quoteTooLong') : '') ||
+          errorText ||
           (archived
-            ? '会话已归档，无法发送或修改草稿。'
+            ? t('composer.archivedError')
             : !snapshot.project.available
-              ? '项目目录当前不可用，暂时无法发送任务。'
+              ? t('composer.projectUnavailable')
               : '')}
       </p>
       <input

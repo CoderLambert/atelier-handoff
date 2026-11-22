@@ -4,6 +4,8 @@
  * @updated 2026-11-21T01:00:00+08:00
  */
 import { z } from 'zod';
+import { contextUsageSchema } from '../../../shared/context-usage.js';
+import { messageQuotesSchema } from '../../../shared/message-quotes.js';
 import {
   AppError,
   agentCapabilities,
@@ -19,6 +21,7 @@ const obj = z.looseObject;
 const mode = z.enum(['readonly', 'edit']);
 const effort = z.enum(reasoningEfforts).optional();
 const approvalMode = z.literal('automatic').optional();
+const executor = z.enum(['native-v1', 'project-v1']).optional();
 const identity = { id: str };
 const scoped = { ...identity, sessionId: str };
 const toolScope = { ...scoped, runId: str };
@@ -29,6 +32,7 @@ const config = obj({
   maxTurns: num,
   timeoutMs: num,
   managedGateway: z.boolean().optional(),
+  magpieEnabled: z.boolean().optional(),
   limitExecution: z.boolean().optional(),
   effort,
 });
@@ -64,14 +68,33 @@ export const records = {
     sdkMode: mode.optional(),
     sdkCostTotal: num.optional(),
     sdkConfigKey: str.optional(),
+    fork: obj({
+      sourceSessionId: str,
+      sourceMessageId: str,
+      sourceTitle: str,
+      kind: z.literal('rewind').optional(),
+    }).optional(),
+    inheritedMessages: z
+      .array(
+        obj({
+          ...identity,
+          role: z.enum(['user', 'assistant']),
+          text: str,
+          createdAt: str,
+        }),
+      )
+      .optional(),
+    creatingFork: z.literal(true).optional(),
     createdAt: str,
     updatedAt: str,
     draft: obj({
       text: str,
+      messageQuotes: messageQuotesSchema.optional(),
       mode,
       contextPaths: strings,
       attachmentIds: strings,
       approvalMode,
+      executionPreference: executor,
       effort,
       model: str.optional(),
       extensionSelections: z.array(obj(selection)).optional(),
@@ -103,7 +126,9 @@ export const records = {
     plan: z.array(obj({ content: str, status: z.enum(['pending', 'in_progress', 'completed']) })),
     config,
     usage: usage.nullable(),
+    contextUsage: contextUsageSchema.optional().catch(undefined),
     approvalMode,
+    executor,
     maxSearchChargeFen: num.optional(),
     browserRevision: str.optional(),
     inputScope: str.optional(),
@@ -118,17 +143,29 @@ export const records = {
       capabilities: z.array(z.enum(agentCapabilities)),
     }).optional(),
   }),
-  messages: obj({ ...toolScope, role: z.enum(['user', 'assistant']), text: str, createdAt: str }),
+  messages: obj({
+    ...toolScope,
+    role: z.enum(['user', 'assistant']),
+    text: str,
+    createdAt: str,
+    forkAnchor: obj({ sdkSessionId: str, messageId: str, configKey: str.optional() }).optional(),
+  }),
   tools: obj({
     ...toolScope,
     name: str,
     inputSummary: str,
+    command: str.optional(),
     status: z.enum(['running', 'awaiting_permission', 'succeeded', 'failed', 'denied', 'canceled']),
     output: str,
     startedAt: str,
     endedAt: nullable,
     outputLength: num.optional(),
     outputTruncated: z.boolean().optional(),
+    bashLog: obj({
+      status: z.enum(['complete', 'partial', 'unavailable', 'receipt-only']),
+      bytes: z.int().nonnegative().optional(),
+      sourceBytes: z.int().nonnegative().optional(),
+    }).optional(),
     permissionId: str.optional(),
   }),
   permissions: obj({

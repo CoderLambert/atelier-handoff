@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
 import { MessageQueue } from '../server/message-queue.js';
 import { Store } from '../server/store.js';
+import type { Subagent } from '../shared/subagents.js';
 import {
   AppError,
   emptyDraft,
@@ -56,6 +57,7 @@ type LegacySnapshot = {
   project: Project;
   events: RunEvent[];
   cursor: number;
+  subagents: Subagent[];
 } & { [K in ScopedTable]: Tables[K][] };
 const config: AppConfig = {
   gateway: 'http://127.0.0.1:1',
@@ -99,6 +101,7 @@ function legacySnapshot(db: Database, sessionId: string): LegacySnapshot {
   return {
     session,
     project,
+    subagents: [],
     runs: scoped('runs'),
     messages: scoped('messages'),
     tools: scoped('tools'),
@@ -519,7 +522,7 @@ test('a genuine v5 database migrates without changing JSON, rowids or snapshots 
     for (let opening = 0; opening < 2; opening++) {
       const store = new Store(data);
       try {
-        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 6);
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 7);
         for (const table of jsonTables)
           assert.deepEqual(
             rows(store.db, `SELECT rowid,id,data FROM ${table} ORDER BY rowid`),
@@ -657,25 +660,344 @@ test('actual snapshot session queries use indexed SEARCH rather than table SCAN'
       });
       store.sessionSnapshots.read(first.id);
       mocked.mock.restore();
-      for (const table of scopedTables) {
+      for (const table of [...scopedTables, 'subagents']) {
         const query = queries.find((item) =>
           new RegExp(`\\bfrom\\s+["\x60]?${table}["\x60]?\\b`, 'iu').test(item.query),
         );
         assert.ok(query, `Capture the repository query for ${table}`);
         assert.match(query.query, /session_id/iu);
-        assert.match(query.query, /order by.*rowid/iu);
+        assert.match(
+          query.query,
+          table === 'subagents' ? /order by.*started_at.*id/iu : /order by.*rowid/iu,
+        );
         const plan = prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.bindings) as {
           detail: string;
         }[];
         const details = plan.map((item) => item.detail).join('\n');
-        assert.match(
-          details,
-          new RegExp(`SEARCH ${table} USING INDEX ${table}_snapshot_session`, 'iu'),
-        );
+        const index = table === 'subagents' ? 'subagents_session' : `${table}_snapshot_session`;
+        assert.match(details, new RegExp(`SEARCH ${table} USING INDEX ${index}`, 'iu'));
         assert.doesNotMatch(details, /\bSCAN\b/iu, table);
       }
     } finally {
       t.mock.restoreAll();
       store.close();
+    }
+  }));
+
+function subagent(session: Session, position: number, startedAt = at): Subagent {
+  return {
+    id: `${session.id}-task-${position}`,
+    runId: records(session, position % 4).runs.id,
+    sessionId: session.id,
+    kind: position % 2 ? 'worker' : 'explore',
+    title: `Task ${position}`,
+    status: 'running',
+    summary: null,
+    startedAt,
+    endedAt: null,
+  };
+}
+
+test('subagent snapshots retain ordered session history and terminal summaries across reopen', async () =>
+  temporary(async (directory) => {
+    const data = join(directory, 'data');
+    const { app, get } = await serve(data);
+    let sessionId: string;
+    let expected: Subagent[];
+    try {
+      const { first, second, outside, empty } = seed(app.store.put.bind(app.store), directory);
+      sessionId = first.id;
+      const tasks = [subagent(first, 3), subagent(first, 2), subagent(first, 1, earlier)];
+      for (const item of tasks) app.store.startSubagent(item);
+      const foreign = subagent(second, 0);
+      app.store.startSubagent(foreign);
+      app.store.startSubagent(subagent(outside, 0));
+      const done = tasks[1];
+      assert.ok(done);
+      app.store.finishSubagent(done.id, done.runId, 'completed', 'Found the relevant records.');
+      expected = app.store.sessionSnapshots.read(first.id).subagents;
+      assert.deepEqual(
+        expected.map((item) => item.id),
+        [tasks[2]?.id, tasks[1]?.id, tasks[0]?.id],
+      );
+      assert.equal(expected[1]?.summary, 'Found the relevant records.');
+      assert.ok(expected[1]?.endedAt);
+      const body = await get(first.id);
+      assert.ok(body && typeof body === 'object' && 'subagents' in body);
+      assert.deepEqual(body.subagents, expected);
+      assert.deepEqual(app.store.sessionSnapshots.read(second.id).subagents, [foreign]);
+      assert.deepEqual(app.store.sessionSnapshots.read(empty.id).subagents, []);
+    } finally {
+      await app.close();
+    }
+    const reopened = new Store(data);
+    try {
+      assert.deepEqual(reopened.sessionSnapshots.read(sessionId).subagents, expected);
+    } finally {
+      reopened.close();
+    }
+  }));
+
+test('subagent start and finish are idempotent and reject conflicting identities and wrong run completions', async () =>
+  temporary(async (directory) => {
+    const store = new Store(join(directory, 'data'));
+    try {
+      const { first, second } = seed(store.put.bind(store), directory);
+      const task = subagent(first, 0);
+      store.startSubagent(task);
+      store.startSubagent(task);
+      const cursor = store.cursor();
+      assert.throws(() => store.startSubagent({ ...task, sessionId: second.id }), {
+        code: 'SUBAGENT_CONFLICT',
+      });
+      assert.throws(
+        () => store.startSubagent({ ...task, id: randomUUID(), sessionId: second.id }),
+        /FOREIGN KEY/iu,
+      );
+      assert.throws(
+        () => store.startSubagent({ ...task, id: randomUUID(), runId: 'missing' }),
+        /FOREIGN KEY/iu,
+      );
+      assert.throws(() => store.startSubagent({ ...task, status: 'completed', endedAt: at }), {
+        code: 'INVALID_SUBAGENT_STATE',
+      });
+      store.finishSubagent(task.id, records(second, 0).runs.id, 'completed', 'Wrong run');
+      store.finishSubagent('missing', task.runId, 'failed', null);
+      assert.equal(store.cursor(), cursor);
+      assert.deepEqual(store.sessionSnapshots.read(first.id).subagents, [task]);
+      const terminal = ['completed', 'failed', 'stopped', 'interrupted'] as const;
+      for (const [index, status] of terminal.entries()) {
+        const item = index === 0 ? task : subagent(first, index);
+        if (index !== 0) store.startSubagent(item);
+        const summary = index % 2 ? null : `Result ${index}`;
+        store.finishSubagent(item.id, item.runId, status, summary);
+        const before = store.sessionSnapshots.read(first.id).subagents;
+        const finished = before.find((value) => value.id === item.id);
+        assert.equal(finished?.status, status);
+        assert.equal(finished?.summary, summary);
+        assert.ok(finished?.endedAt);
+        const endCursor = store.cursor();
+        store.finishSubagent(item.id, item.runId, 'failed', 'Late result');
+        store.startSubagent(item);
+        assert.equal(store.cursor(), endCursor);
+        assert.deepEqual(store.sessionSnapshots.read(first.id).subagents, before);
+      }
+      assert.equal(
+        store.history(first.id).filter((event) => event.type === 'subagent.started').length,
+        4,
+      );
+      assert.equal(
+        store.history(first.id).filter((event) => event.type === 'subagent.finished').length,
+        4,
+      );
+    } finally {
+      store.close();
+    }
+  }));
+
+test('subagent records and events roll back together and notifications observe committed SQLite data', async (t) =>
+  temporary(async (directory) => {
+    const data = join(directory, 'data');
+    const store = new Store(data);
+    const observer = new DatabaseSync(join(data, 'atelier.sqlite'), { readOnly: true });
+    try {
+      const { first } = seed(store.put.bind(store), directory);
+      const task = subagent(first, 0);
+      const notifications: RunEvent[] = [];
+      store.events.on('event', (event: RunEvent) => {
+        notifications.push(event);
+        assert.equal(
+          rows(observer, 'SELECT id FROM events WHERE id=?', String(event.id)).length,
+          1,
+        );
+        if (event.type.startsWith('subagent.')) {
+          const persisted = rows(observer, 'SELECT status FROM subagents WHERE id=?', task.id)[0];
+          assert.ok(persisted);
+          const payload = event.payload.subagent;
+          assert.ok(payload && typeof payload === 'object' && 'status' in payload);
+          assert.equal(persisted.status, payload.status);
+        }
+      });
+      const abort = new Error('Fail after event insertion');
+      const failEvent = () => {
+        const original = store.event.bind(store);
+        return t.mock.method(store, 'event', (...args: Parameters<Store['event']>) => {
+          original(...args);
+          throw abort;
+        });
+      };
+      let fault = failEvent();
+      assert.throws(
+        () => store.startSubagent(task),
+        (error) => error === abort,
+      );
+      fault.mock.restore();
+      assert.deepEqual(store.sessionSnapshots.read(first.id).subagents, []);
+      assert.deepEqual(store.history(first.id), []);
+      assert.equal(notifications.length, 0);
+      store.startSubagent(task);
+      assert.equal(notifications.length, 1);
+      const before = store.sessionSnapshots.read(first.id);
+      fault = failEvent();
+      assert.throws(
+        () => store.finishSubagent(task.id, task.runId, 'completed', 'Uncommitted summary'),
+        (error) => error === abort,
+      );
+      fault.mock.restore();
+      assert.deepEqual(store.sessionSnapshots.read(first.id), before);
+      assert.equal(notifications.length, 1);
+      store.finishSubagent(task.id, task.runId, 'completed', 'Committed summary');
+      assert.equal(notifications.length, 2);
+    } finally {
+      t.mock.restoreAll();
+      observer.close();
+      store.close();
+    }
+  }));
+
+test('recover interrupts all running subagents atomically, retains terminal tasks and ignores late results', async (t) =>
+  temporary(async (directory) => {
+    const data = join(directory, 'data');
+    let store = new Store(data);
+    try {
+      const { first, second } = seed(store.put.bind(store), directory);
+      const active = subagent(first, 0);
+      const orphaned = subagent(second, 0);
+      const done = subagent(first, 1);
+      store.update('runs', active.runId, { status: 'running' });
+      store.startSubagent(active);
+      store.startSubagent(orphaned);
+      store.startSubagent(done);
+      store.finishSubagent(done.id, done.runId, 'completed', 'Keep this result');
+      const completed = store.sessionSnapshots
+        .read(first.id)
+        .subagents.find((item) => item.id === done.id);
+      store.close();
+      store = new Store(data);
+      const before = store.sessionSnapshots.read(first.id);
+      const original = store.event.bind(store);
+      const abort = new Error('Abort recovery event');
+      const notifications: RunEvent[] = [];
+      store.events.on('event', (event: RunEvent) => notifications.push(event));
+      const fault = t.mock.method(store, 'event', (...args: Parameters<Store['event']>) => {
+        original(...args);
+        throw abort;
+      });
+      assert.throws(
+        () => store.recover(),
+        (error) => error === abort,
+      );
+      fault.mock.restore();
+      assert.deepEqual(store.sessionSnapshots.read(first.id), before);
+      assert.equal(store.sessionSnapshots.read(second.id).subagents[0]?.status, 'running');
+      assert.equal(notifications.length, 0);
+      store.recover();
+      const after = store.sessionSnapshots.read(first.id);
+      const interrupted = after.subagents.find((item) => item.id === active.id);
+      assert.equal(interrupted?.status, 'interrupted');
+      assert.ok(interrupted?.endedAt);
+      assert.equal(interrupted?.summary, null);
+      assert.deepEqual(
+        after.subagents.find((item) => item.id === done.id),
+        completed,
+      );
+      assert.equal(store.sessionSnapshots.read(second.id).subagents[0]?.status, 'interrupted');
+      assert.equal(store.get('runs', active.runId).status, 'interrupted');
+      assert.deepEqual(after.tools, before.tools);
+      assert.deepEqual(after.artifacts, before.artifacts);
+      assert.equal(notifications.filter((event) => event.type === 'subagent.finished').length, 2);
+      const cursor = store.cursor();
+      store.recover();
+      store.finishSubagent(active.id, active.runId, 'completed', 'Late SDK result');
+      assert.equal(store.cursor(), cursor);
+      assert.deepEqual(store.sessionSnapshots.read(first.id), after);
+    } finally {
+      t.mock.restoreAll();
+      store.close();
+    }
+  }));
+
+test('v7 subagent migration upgrades v6, preserves records and enforces cascades and query indexes', async () =>
+  temporary(async (directory) => {
+    const data = join(directory, 'data');
+    await mkdir(data);
+    const legacy = new DatabaseSync(join(data, 'atelier.sqlite'));
+    let fixture: ReturnType<typeof seed>;
+    try {
+      createV5(legacy);
+      fixture = seed(
+        (table, item) =>
+          legacy
+            .prepare(`INSERT INTO ${table}(id,data) VALUES(?,?)`)
+            .run(item.id, JSON.stringify(item)),
+        directory,
+      );
+      legacy.exec(
+        await readFile(
+          new URL('../server/db/migrations/0006-session-snapshot-indexes.sql', import.meta.url),
+          'utf8',
+        ),
+      );
+      assert.equal(rows(legacy, 'PRAGMA user_version')[0]?.user_version, 6);
+    } finally {
+      legacy.close();
+    }
+    for (let opening = 0; opening < 2; opening++) {
+      const store = new Store(data);
+      try {
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 7);
+        assert.deepEqual(
+          store.sessionSnapshots.read(fixture.first.id),
+          legacySnapshot(store.db, fixture.first.id),
+        );
+        if (opening === 0) continue;
+        const first = subagent(fixture.first, 0);
+        const second = subagent(fixture.first, 1);
+        const foreign = subagent(fixture.second, 0);
+        store.startSubagent(first);
+        store.startSubagent(second);
+        store.startSubagent(foreign);
+        assert.throws(
+          () => store.db.prepare('UPDATE subagents SET status=? WHERE id=?').run('bogus', first.id),
+          /CHECK constraint/iu,
+        );
+        assert.throws(
+          () =>
+            store.db.prepare('UPDATE subagents SET status=? WHERE id=?').run('completed', first.id),
+          /CHECK constraint/iu,
+        );
+        for (const [query, value, index] of [
+          [
+            'SELECT * FROM subagents WHERE session_id=? ORDER BY started_at,id',
+            fixture.first.id,
+            'subagents_session',
+          ],
+          [
+            "SELECT * FROM subagents WHERE run_id=? AND status='running'",
+            first.runId,
+            'subagents_run',
+          ],
+        ]) {
+          assert.ok(query && value && index);
+          const plan = rows(store.db, `EXPLAIN QUERY PLAN ${query}`, value)
+            .map((item) => item.detail)
+            .join('\n');
+          assert.match(plan, new RegExp(`SEARCH subagents USING INDEX ${index}`, 'iu'));
+          assert.doesNotMatch(plan, /\bSCAN\b|TEMP B-TREE/iu);
+        }
+        store.delete('runs', first.runId);
+        assert.deepEqual(store.sessionSnapshots.read(fixture.first.id).subagents, [second]);
+        store.delete('sessions', fixture.first.id);
+        assert.deepEqual(
+          rows(store.db, 'SELECT id FROM subagents').map((row) => row.id),
+          [foreign.id],
+        );
+        store.delete('sessions', fixture.second.id);
+        assert.deepEqual(rows(store.db, 'SELECT id FROM subagents'), []);
+        assert.deepEqual(rows(store.db, 'PRAGMA foreign_key_check'), []);
+        assert.equal(rows(store.db, 'PRAGMA quick_check')[0]?.quick_check, 'ok');
+      } finally {
+        store.close();
+      }
     }
   }));

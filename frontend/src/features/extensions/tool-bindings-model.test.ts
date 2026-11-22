@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import type { Extension, SkillToolBinding } from '@shared/types';
+import { uiI18n } from '@/i18n';
+import { ApiError } from '@/api/client';
+import { extensionDetail, messageOf } from './api';
+import { agentIssueMessage } from '@/features/agents/api';
 import { mcpBindingIssue, newBinding, validateBindings } from './tool-bindings-model';
 
 const mcp: Extract<Extension, { kind: 'mcp' }> = {
@@ -108,6 +112,54 @@ test('HTTPS validation rejects unsafe URL shapes and empty or oversized input de
   for (const description of ['', '   ', 'x'.repeat(301)])
     assert.throws(() => validateBindings([{ ...http, description }], []), /输入描述/);
   assert.throws(() => validateBindings([{ ...http, parameter: 'Query' }], []), /参数名/);
+});
+
+test('binding validation and API summaries translate while upstream details stay verbatim', async () => {
+  try {
+    await uiI18n.changeLanguage('en');
+    assert.throws(
+      () => validateBindings([newBinding('builtin', '')], []),
+      /Binding 1: Names must start with a lowercase letter/,
+    );
+    assert.throws(
+      () => validateBindings([{ ...http, url: 'https://example.com/{other}' }], []),
+      /The URL may use the \{location\} placeholder once/,
+    );
+    assert.equal(
+      messageOf(new ApiError('服务端原文', 500, 'UNKNOWN_CODE')),
+      'The operation failed. Please try again.',
+    );
+    assert.equal(messageOf(new Error('上游细节 / upstream detail')), '上游细节 / upstream detail');
+    assert.equal(extensionDetail('已发现 1 项工具。'), 'Discovered 1 tool.');
+    assert.equal(extensionDetail('已发现 2 项工具。'), 'Discovered 2 tools.');
+    assert.equal(
+      extensionDetail('Markdown frontmatter 格式无效。'),
+      'The Markdown frontmatter format is invalid.',
+    );
+    assert.equal(extensionDetail('上游连接详情'), '上游连接详情');
+    assert.equal(
+      agentIssueMessage('MCP 文档 的工具 read 已移除或撤销授权。'),
+      'Tool read in MCP 文档 was removed or its permission was revoked.',
+    );
+    assert.equal(
+      agentIssueMessage('Skill 整理 已停用或更新，请重新选择。'),
+      'Skill 整理 was disabled or updated. Select it again.',
+    );
+    assert.equal(agentIssueMessage('上游依赖详情'), '上游依赖详情');
+    assert.equal(
+      messageOf(new Error('扩展列表响应缺少 items。')),
+      'The extension list response is missing items.',
+    );
+    assert.notEqual(
+      messageOf(new ApiError('服务端原文', 409, 'CONFLICT')),
+      'The operation failed. Please try again.',
+    );
+    await uiI18n.changeLanguage('zh-CN');
+    assert.throws(() => validateBindings([newBinding('builtin', '')], []), /第 1 个绑定：名称/);
+    assert.equal(messageOf(new Error('扩展列表响应缺少 items。')), '扩展列表响应缺少 items。');
+  } finally {
+    await uiI18n.changeLanguage('zh-CN');
+  }
 });
 
 test('MCP binding targets need a connected enabled service, discovery and a project grant', () => {

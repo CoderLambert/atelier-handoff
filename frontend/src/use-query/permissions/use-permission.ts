@@ -1,12 +1,12 @@
 /**
  * @file 获取单次审批的最新完整内容。
- * @implementation 按审批版本和状态查询，校验响应与请求身份，向审批复核用例提供可取消的快照。
- * @updated 2026-11-20T11:51:19+08:00
+ * @implementation 按审批版本和状态查询，校验响应身份并保留可选子代理来源，向审批复核提供可取消的快照。
+ * @updated 2026-11-21T02:17:11+08:00
  */
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { Permission } from '@shared/types';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import { permissionKeys, type PermissionIdentity } from './keys';
 
 export const permissionSchema = z.object({
@@ -14,6 +14,7 @@ export const permissionSchema = z.object({
   runId: z.string(),
   sessionId: z.string(),
   toolCallId: z.string(),
+  subagentId: z.string().optional(),
   kind: z.enum(['write', 'edit', 'delete', 'command', 'mcp', 'browser']),
   path: z.string().nullable(),
   command: z.string().nullable(),
@@ -42,7 +43,8 @@ export const permissionQuery = (identity: PermissionIdentity) =>
         .parse(
           await api<unknown>(`/api/permissions/${encodeURIComponent(identity.id)}`, { signal }),
         );
-      if (result.permission.id !== identity.id) throw new Error('审批响应不匹配，请重新加载。');
+      if (result.permission.id !== identity.id)
+        throw new ApiError('PERMISSION_RESPONSE_MISMATCH', 502, 'PERMISSION_RESPONSE_MISMATCH');
       return result.permission;
     },
   });

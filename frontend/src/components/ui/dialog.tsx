@@ -1,6 +1,13 @@
+/**
+ * @file 提供共享对话框及其可访问关闭操作。
+ * @implementation 组合 Radix 控件，并在工作台渲染时读取关闭文案。
+ * @updated 2026-11-22T22:58:24+08:00
+ */
+import { useUiTranslation } from '@/i18n';
 import * as Primitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ComponentProps } from 'react';
+import { Button } from './button';
 import { cn } from './utils';
 
 export const Dialog = Primitive.Root;
@@ -14,14 +21,22 @@ export function DialogContent({
   showCloseButton = true,
   ...props
 }: ComponentProps<typeof Primitive.Content> & { showCloseButton?: boolean }) {
+  const { t } = useUiTranslation('inspector');
   return (
     <DialogPortal>
       <Primitive.Overlay className="react-dialog-overlay fixed inset-0 z-50" />
       <Primitive.Content className={cn('react-dialog fixed z-50', className)} {...props}>
         {children}
         {showCloseButton ? (
-          <DialogClose className="react-dialog-dismiss icon-button" aria-label="关闭详情">
-            <X size={17} />
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="react-dialog-dismiss"
+              aria-label={t('dialog.close')}
+            >
+              <X aria-hidden="true" />
+            </Button>
           </DialogClose>
         ) : null}
       </Primitive.Content>

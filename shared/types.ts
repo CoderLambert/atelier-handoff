@@ -3,6 +3,10 @@
  * @implementation 描述项目、会话、运行、扩展及文件等数据结构，并提供状态、错误和常用数据处理方法。
  * @updated 2026-11-20T03:13:21+08:00
  */
+import { z } from 'zod';
+import type { MessageQuote } from './message-quotes.js';
+import type { ContextUsage } from './context-usage.js';
+
 export type RunStatus =
   | 'queued'
   | 'running'
@@ -184,18 +188,29 @@ export type ReasoningEffort = (typeof reasoningEfforts)[number];
 
 export interface Draft {
   text: string;
+  messageQuotes?: MessageQuote[];
   contextPaths: string[];
   attachmentIds: string[];
   mode: Mode;
   approvalMode?: 'automatic';
+  executionPreference?: 'native-v1' | 'project-v1';
   model?: string;
   effort?: ReasoningEffort;
   extensionSelections?: ExtensionSelection[];
+}
+export interface SessionForkOrigin {
+  sourceSessionId: string;
+  sourceMessageId: string;
+  sourceTitle: string;
+  kind?: 'rewind';
 }
 export interface Session {
   id: string;
   projectId: string;
   agentRevisionId?: string;
+  fork?: SessionForkOrigin;
+  inheritedMessages?: InheritedMessage[];
+  creatingFork?: true;
   title: string;
   status: 'active' | 'archived';
   sdkSessionId: string | null;
@@ -222,6 +237,7 @@ export interface Usage {
   complete: boolean;
 }
 export interface Run {
+  executor?: 'native-v1' | 'project-v1';
   approvalMode?: 'automatic';
   maxSearchChargeFen?: number;
   browserRevision?: string;
@@ -242,6 +258,7 @@ export interface Run {
   attachmentIds: string[];
   plan: Step[];
   usage: Usage | null;
+  contextUsage?: ContextUsage;
   config: AppConfig;
   extensions?: UsedExtension[];
   agent?: AgentRunInfo;
@@ -269,17 +286,28 @@ export interface Message {
   role: 'user' | 'assistant';
   text: string;
   createdAt: string;
+  forkAnchor?: { sdkSessionId: string; messageId: string; configKey?: string };
 }
+export type InheritedMessage = Pick<Message, 'id' | 'role' | 'text' | 'createdAt'>;
 export interface ToolCall {
   id: string;
   runId: string;
   sessionId: string;
+  subagentId?: string;
   name: string;
   inputSummary: string;
+  /** Original command when the general input preview would truncate it. */
+  command?: string;
   status: 'running' | 'awaiting_permission' | 'succeeded' | 'failed' | 'denied' | 'canceled';
   output: string;
   outputLength?: number;
   outputTruncated?: boolean;
+  /** Scope of the separately retained native Bash log. Sizes are UTF-8 bytes. */
+  bashLog?: {
+    status: 'complete' | 'partial' | 'unavailable' | 'receipt-only';
+    bytes?: number;
+    sourceBytes?: number;
+  };
   startedAt: string;
   endedAt: string | null;
   permissionId?: string;
@@ -288,6 +316,7 @@ export interface Permission {
   id: string;
   runId: string;
   sessionId: string;
+  subagentId?: string;
   toolCallId: string;
   kind: 'write' | 'edit' | 'delete' | 'command' | 'mcp' | 'browser';
   path: string | null;
@@ -342,21 +371,48 @@ export interface RunEvent {
   at: string;
   payload: Record<string, unknown>;
 }
-export interface GatewayModelCatalog {
-  defaultModel: string;
-  routesAvailable: boolean;
-  models: Array<{
-    id: string;
-    displayName?: string;
-    supportedEfforts?: ReasoningEffort[];
-    provider?: string;
-    effort?: string;
-    serviceTier?: string;
-  }>;
-}
+export const magpieModelPrefix = 'magpie:';
+
+export const gatewayModelSchema = z.object({
+  id: z.string().trim().max(200).regex(/^\S+$/u),
+  displayName: z.string().min(1).max(200).optional(),
+  supportedEfforts: z.array(z.enum(reasoningEfforts)).optional(),
+  source: z.literal('magpie').optional(),
+  provider: z.string().max(200).optional(),
+  effort: z.string().max(40).optional(),
+  serviceTier: z.string().max(40).optional(),
+});
+export const modelDiscoverySourceSchema = z.object({
+  status: z.enum(['ready', 'partial', 'unavailable', 'stale', 'skipped']),
+  reason: z
+    .enum([
+      'timeout',
+      'process',
+      'protocol',
+      'http',
+      'identity',
+      'pagination-limit',
+      'not-applicable',
+    ])
+    .optional(),
+  modelCount: z.number().int().nonnegative(),
+  rejectedCount: z.number().int().nonnegative().optional(),
+});
+export const gatewayModelCatalogSchema = z.object({
+  defaultModel: gatewayModelSchema.shape.id,
+  routesAvailable: z.boolean(),
+  models: z.array(gatewayModelSchema),
+  discovery: z.object({
+    routes: modelDiscoverySourceSchema,
+    codex: modelDiscoverySourceSchema,
+    magpie: modelDiscoverySourceSchema.optional(),
+  }),
+});
+export type GatewayModelCatalog = z.infer<typeof gatewayModelCatalogSchema>;
 export interface AppConfig {
   gateway: string;
   managedGateway?: boolean;
+  magpieEnabled?: boolean;
   model: string;
   effort?: ReasoningEffort;
   limitExecution?: boolean;

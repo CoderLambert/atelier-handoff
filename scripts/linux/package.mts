@@ -47,7 +47,10 @@ const ORM_LICENSE = {
 };
 const SQLITE_DRIVER_VERSION = '13.2.0';
 const SQLITE_NATIVE_BINDING = 'prebuilds/linux-x64.node';
-const RUNTIME_MIGRATIONS = ['server/db/migrations/0006-session-snapshot-indexes.sql'];
+const RUNTIME_MIGRATIONS = [
+  'server/db/migrations/0006-session-snapshot-indexes.sql',
+  'server/db/migrations/0007-subagents.sql',
+];
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
 // Audited Cargo install: shunt-gateway 0.64.0, x86_64-unknown-linux-gnu.

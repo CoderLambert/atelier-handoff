@@ -1,0 +1,49 @@
+/**
+ * @file 定义文件预览的 Markdown 元数据布局。
+ * @implementation 应用工作台的内嵌表面与文字样式，控制长字段和窄窗。
+ * @updated 2026-11-23T04:49:37+08:00
+ */
+.markdown-metadata {
+  margin-block-end: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-warm);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.markdown-metadata h2 {
+  margin: 0 0 8px;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.markdown-metadata :is(dl, dd, pre) {
+  margin: 0;
+}
+
+.markdown-metadata dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 12px;
+  padding-block: 5px;
+  overflow-wrap: anywhere;
+}
+
+.markdown-metadata dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.markdown-metadata :is(dd, pre) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .markdown-metadata dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

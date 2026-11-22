@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "pages": {
+    "/openwiki/architecture/agent-runtime.md": {
+      "pageVersion": "sha256:b2eb06f129f1e8cff200a9bc2e3e591fe6a6fe7ee1cb57126d03cafebc16c5a3",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/architecture/database-storage.md": {
+      "pageVersion": "sha256:6bb1ee0737cfa8f8fc0521656fa6b51cbaf990ed6586598495268a8afcb0a885",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/architecture/overview.md": {
+      "pageVersion": "sha256:afdff865f357dd628943ff0adb7cddc9ab5fa4c099f7bcafa5448eea28a96d2b",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/concepts/security-permissions.md": {
+      "pageVersion": "sha256:4385707607c236cf03ef44130370d7e74da4a18371a09a96434b205c1c28ce0c",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/concepts/subagents.md": {
+      "pageVersion": "sha256:d90a08081ca4185dcd11130359eb105c1e6ed5bc8bb4ce826bc07266559be99e",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/concepts/workspace-navigation.md": {
+      "pageVersion": "sha256:7f3613d8bd3530166cb664d3236947e24e9609f6a64ae907aa25b2dbc55f7229",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/integrations/extensions-mcp.md": {
+      "pageVersion": "sha256:8da64b939c2c5617ca6285980826394ef897438415e04e93ad9c2c1b87168d32",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/integrations/model-gateways.md": {
+      "pageVersion": "sha256:c783b13c75bf1550ef4a8a8d8572b68d14be7bde8409fadcaadc86005824f868",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/operations/desktop-build.md": {
+      "pageVersion": "sha256:7a6433d918a3c1fea8b8c41356b7bddd783b81cd9400cadf8cbfd69cb4fb53a4",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    },
+    "/openwiki/quickstart.md": {
+      "pageVersion": "sha256:7a690227e4070862e292b1ec08d2722ff5a9957c92b5581fd9b9043a485baa6b",
+      "completedBy": "claude-code",
+      "completedRunId": "0baf4e9a-a819-476e-98b5-060ac03046f8",
+      "gitHead": "8eaf436c995b7301cda53e635724a29d273cc31c",
+      "sourceFingerprint": "sha256:c6b2246bb4b3d8b2adf6e806d043cd060b7c2bb9f449252a13d6bb6121fffdac"
+    }
+  }
+}

@@ -3,10 +3,11 @@
  * @implementation 管理项目智能体查询与变更，定义能力说明和初始配置，并检查及刷新扩展依赖版本。
  * @updated 2026-11-20T12:10:16+08:00
  */
+import { getTranslator } from '@/i18n';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentCapability, AgentCard, AgentConfig, Extension } from '@shared/types';
 import { api } from '@/api/client';
-import { autoEnabled, extensionKeys } from '@/features/extensions/api';
+import { autoEnabled, extensionDetail, extensionKeys } from '@/features/extensions/api';
 
 export const agentKeys = {
   list: (projectId: string) => ['agents', projectId, 'list'] as const,
@@ -71,17 +72,77 @@ export function useAgentMutation(projectId: string) {
 }
 
 export const capabilityLabels: Record<AgentCapability, { label: string; description: string }> = {
-  read: { label: '读取文件', description: '读取项目内的文件内容' },
-  search: { label: '搜索项目', description: '查找文件与文本' },
-  context: { label: '项目上下文', description: '使用会话中选择的项目文件' },
-  attachments: { label: '读取附件', description: '使用会话中上传的资料' },
-  plan: { label: '任务计划', description: '维护任务步骤与进度' },
-  artifact: { label: '生成交付物', description: '生成可查看和下载的结果' },
-  write: { label: '修改文件', description: '经确认后修改项目文件' },
-  command: { label: '执行命令', description: '经确认后执行项目命令' },
+  read: {
+    get label() {
+      return getTranslator('extensions')('capability.readLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.readDescription');
+    },
+  },
+  search: {
+    get label() {
+      return getTranslator('extensions')('capability.searchLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.searchDescription');
+    },
+  },
+  context: {
+    get label() {
+      return getTranslator('extensions')('capability.contextLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.contextDescription');
+    },
+  },
+  attachments: {
+    get label() {
+      return getTranslator('extensions')('capability.attachmentsLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.attachmentsDescription');
+    },
+  },
+  plan: {
+    get label() {
+      return getTranslator('extensions')('capability.planLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.planDescription');
+    },
+  },
+  artifact: {
+    get label() {
+      return getTranslator('extensions')('capability.artifactLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.artifactDescription');
+    },
+  },
+  write: {
+    get label() {
+      return getTranslator('extensions')('capability.writeLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.writeDescription');
+    },
+  },
+  command: {
+    get label() {
+      return getTranslator('extensions')('capability.commandLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.commandDescription');
+    },
+  },
   browser: {
-    label: '内置浏览器',
-    description: '项目启用后可读取网页和截图，点击、输入需逐次审批；网页内容可能发送给模型',
+    get label() {
+      return getTranslator('extensions')('capability.browserLabel');
+    },
+    get description() {
+      return getTranslator('extensions')('capability.browserDescription');
+    },
   },
 };
 export const capabilityOptions = Object.keys(capabilityLabels) as AgentCapability[];
@@ -109,17 +170,21 @@ export function initialConfig(template = false): AgentConfig {
   };
 }
 export function skillReason(item: Extension | undefined, activation: 'auto' | 'manual') {
-  if (!item || item.kind !== 'skill') return 'Skill 已移除或类型已改变';
-  if (!item.enabled) return 'Skill 已停用';
-  if (!item.supported) return item.compatibility || 'Skill 暂不兼容';
-  if (activation === 'auto' && !autoEnabled(item)) return '项目未允许自动调用';
-  if (activation === 'manual' && item.userInvocable === false) return 'Skill 不支持手动调用';
+  const t = getTranslator('extensions');
+  if (!item || item.kind !== 'skill') return t('dependency.skillMissing');
+  if (!item.enabled) return t('dependency.skillDisabled');
+  if (!item.supported)
+    return extensionDetail(item.compatibility) || t('dependency.skillUnsupported');
+  if (activation === 'auto' && !autoEnabled(item)) return t('dependency.autoNotAllowed');
+  if (activation === 'manual' && item.userInvocable === false)
+    return t('dependency.manualUnsupported');
   return '';
 }
 export function mcpReason(item: Extension | undefined) {
-  if (!item || item.kind !== 'mcp') return 'MCP 已移除或类型已改变';
-  if (!item.enabled) return 'MCP 已停用';
-  if (item.status !== 'connected') return '请先在项目扩展中测试并连接 MCP';
+  const t = getTranslator('extensions');
+  if (!item || item.kind !== 'mcp') return t('dependency.mcpMissing');
+  if (!item.enabled) return t('dependency.mcpDisabled');
+  if (item.status !== 'connected') return t('dependency.mcpNotConnected');
   return '';
 }
 export function selectableTools(item: Extension, mode: AgentConfig['mode']) {
@@ -132,41 +197,99 @@ export function selectableTools(item: Extension, mode: AgentConfig['mode']) {
       all.findIndex((other) => other.name === tool.name) === index,
   );
 }
+const agentIssueMessages = new Map([
+  ['智能体已归档。', 'agentIssue.archived'],
+  ['智能体依赖的历史快照无效，请重新发布配置。', 'agentIssue.invalidSnapshot'],
+  ['智能体依赖的历史快照与配置不一致，请重新发布配置。', 'agentIssue.snapshotMismatch'],
+  [
+    '桌面端已改用原生浏览器，请移除 Playwright 依赖并在新版本启用浏览器能力。',
+    'agentIssue.legacyBrowser',
+  ],
+] as const);
+
+/** Translate the server's known diagnostics while retaining dependency names as data. */
+export function agentIssueMessage(message: string): string {
+  const t = getTranslator('extensions');
+  for (const [source, key] of agentIssueMessages) {
+    if (message === source) return t(key);
+  }
+  const dependencies = [
+    [/^(Skill|MCP) (.+) 的内容或授权已变化，请重新选择并发布新版本。$/, 'agentIssue.changed'],
+    [/^(Skill|MCP) (.+) 已移除或不属于当前项目。$/, 'agentIssue.missing'],
+    [/^(Skill|MCP) (.+) 已停用或更新，请重新选择。$/, 'agentIssue.disabled'],
+  ] as const;
+  for (const [pattern, key] of dependencies) {
+    const match = pattern.exec(message);
+    if (match?.[1] && match[2]) return t(key, { kind: match[1], name: match[2] });
+  }
+  const skills = [
+    [/^Skill (.+) 的内容不兼容，请检查扩展配置。$/, 'agentIssue.incompatible'],
+    [/^Skill (.+) 不允许手动调用。$/, 'agentIssue.manualForbidden'],
+    [/^Skill (.+) 当前不允许按需调用或缺少用途描述。$/, 'agentIssue.autoForbidden'],
+  ] as const;
+  for (const [pattern, key] of skills) {
+    const match = pattern.exec(message);
+    if (match?.[1]) return t(key, { name: match[1] });
+  }
+  const tools = [
+    [/^MCP (.+) 的工具 (.+) 已移除或撤销授权。$/, 'agentIssue.toolUnavailable'],
+    [/^MCP (.+) 的工具 (.+) 需要受控修改模式。$/, 'agentIssue.toolRequiresEdit'],
+  ] as const;
+  for (const [pattern, key] of tools) {
+    const match = pattern.exec(message);
+    if (match?.[1] && match[2]) return t(key, { name: match[1], tool: match[2] });
+  }
+  return message;
+}
+
 export function dependencyIssues(config: AgentConfig, items: Extension[]) {
+  const t = getTranslator('extensions');
   const byId = new Map(items.map((item) => [item.id, item]));
   const issues: string[] = [];
   for (const selection of config.skills) {
     const item = byId.get(selection.id);
     const label = item?.name || selection.id;
     const reason = skillReason(item, selection.activation);
-    if (reason) issues.push(`${label}：${reason}。`);
+    if (reason) issues.push(t('dependency.reason', { name: label, reason: reason }));
     if (item && item.version !== selection.version)
       issues.push(
-        `${label}：已从 v${selection.version} 更新至 v${item.version}，请刷新依赖并确认。`,
+        t('dependency.versionChanged', {
+          name: label,
+          previousVersion: selection.version,
+          version: item.version,
+        }),
       );
   }
   for (const selection of config.mcp) {
     const item = byId.get(selection.id);
     const label = item?.name || selection.id;
     const reason = mcpReason(item);
-    if (reason) issues.push(`${label}：${reason}。`);
+    if (reason) issues.push(t('dependency.reason', { name: label, reason: reason }));
     if (item && item.version !== selection.version)
       issues.push(
-        `${label}：已从 v${selection.version} 更新至 v${item.version}，请刷新依赖并确认。`,
+        t('dependency.versionChanged', {
+          name: label,
+          previousVersion: selection.version,
+          version: item.version,
+        }),
       );
     if (item?.kind === 'mcp' && !reason) {
       const allowed = new Set(selectableTools(item, config.mode).map((tool) => tool.name));
       const unavailable = selection.tools.filter((tool) => !allowed.has(tool));
       if (unavailable.length)
         issues.push(
-          `${label}：${unavailable.join('、')} 当前不可用，请移除或调整模式与项目工具权限。`,
+          t('dependency.toolsUnavailable', {
+            name: label,
+            tools: unavailable.join(t('common.separator')),
+          }),
         );
     }
-    if (!selection.tools.length) issues.push(`${label}：请至少选择一个工具，或移除此 MCP。`);
+    if (!selection.tools.length) issues.push(t('dependency.toolRequired', { name: label }));
   }
   return issues;
 }
 export function dependencyRefresh(config: AgentConfig, items: Extension[]) {
+  const t = getTranslator('extensions');
   const byId = new Map(items.map((item) => [item.id, item]));
   const changes: string[] = [];
   const update = <T extends { id: string; version: number }>(
@@ -175,7 +298,13 @@ export function dependencyRefresh(config: AgentConfig, items: Extension[]) {
   ) => {
     const item = byId.get(selection.id);
     if (!item || item.kind !== kind || item.version === selection.version) return selection;
-    changes.push(`${item.name}：v${selection.version} → v${item.version}`);
+    changes.push(
+      t('dependency.versionUpdate', {
+        name: item.name,
+        previousVersion: selection.version,
+        version: item.version,
+      }),
+    );
     return { ...selection, version: item.version };
   };
   return {

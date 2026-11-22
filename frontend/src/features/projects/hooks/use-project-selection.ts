@@ -3,6 +3,8 @@
  * @implementation 组合绑定与目录选择请求，处理取消、忙碌和错误状态。
  * @updated 2026-11-20T02:00+08:00
  */
+import { useUiTranslation, translateError } from '@/i18n';
+import { ApiError } from '@/api/client';
 import { useEffect, useRef, useState } from 'react';
 import { useBindProject } from '@/use-query/projects/use-bind-project';
 import { usePickProjectDirectory } from '@/use-query/projects/use-pick-project-directory';
@@ -11,6 +13,7 @@ export function useProjectSelection(
   onChoose: (id: string) => Promise<void>,
   onOpenChange: (open: boolean) => void,
 ) {
+  const { t } = useUiTranslation('extensions');
   const [path, setPath] = useState('');
   const [choosing, setChoosing] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +37,14 @@ export function useProjectSelection(
       if (!controller.signal.aborted && result.path) setPath(result.path);
     } catch (cause) {
       if (!controller.signal.aborted)
-        setError(cause instanceof Error ? cause.message : '无法打开目录选择器。');
+        setError(
+          translateError(
+            cause,
+            cause instanceof Error && !(cause instanceof ApiError)
+              ? cause.message
+              : t('projectSelection.pickFailed'),
+          ),
+        );
     } finally {
       picker.current = null;
     }
@@ -48,7 +58,14 @@ export function useProjectSelection(
       await onChoose(projectId);
       close(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '无法打开项目。');
+      setError(
+        translateError(
+          cause,
+          cause instanceof Error && !(cause instanceof ApiError)
+            ? cause.message
+            : t('projectSelection.openFailed'),
+        ),
+      );
     } finally {
       setChoosing(false);
     }

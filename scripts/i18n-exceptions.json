@@ -1,0 +1,87 @@
+[
+  {
+    "file": "desktop/host/window.mts",
+    "fingerprint": "5a1fcfd756d7c67befa8",
+    "reason": "应用品牌在原生窗口标题中保持固定拼写"
+  },
+  {
+    "file": "frontend/src/features/agents/api.tsx",
+    "fingerprint": "8c73f4418d2408550246",
+    "reason": "创建时可保存为 Agent 配置的示例模板正文"
+  },
+  {
+    "file": "frontend/src/features/agents/dependencies.tsx",
+    "fingerprint": "544f45186af3a1119127",
+    "reason": "软件版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/agents/dependencies.tsx",
+    "fingerprint": "544f45186af3a1119127",
+    "reason": "依赖版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/agents/index.tsx",
+    "fingerprint": "544f45186af3a1119127",
+    "reason": "Agent 版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/chat/conversation.tsx",
+    "fingerprint": "b81f6e004bb81cfba73f",
+    "reason": "历史消息中缺少客户端名称时显示应用品牌"
+  },
+  {
+    "file": "frontend/src/features/chat/conversation.tsx",
+    "fingerprint": "b81f6e004bb81cfba73f",
+    "reason": "会话消息中的默认助手品牌保持固定拼写"
+  },
+  {
+    "file": "frontend/src/features/chat/conversation.tsx",
+    "fingerprint": "8da96668382a0933f51c",
+    "reason": "应用品牌的单字母头像占位符"
+  },
+  {
+    "file": "frontend/src/features/extensions/editor.tsx",
+    "fingerprint": "9e9d9d4bdf068e5c2369",
+    "reason": "URL 协议格式的技术占位符"
+  },
+  {
+    "file": "frontend/src/features/extensions/index.tsx",
+    "fingerprint": "544f45186af3a1119127",
+    "reason": "软件版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/extensions/skillhub-market.tsx",
+    "fingerprint": "544f45186af3a1119127",
+    "reason": "扩展版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/extensions/skillhub-market.tsx",
+    "fingerprint": "1caa58c5624553a29f1c",
+    "reason": "扩展版本号的技术标识前缀"
+  },
+  {
+    "file": "frontend/src/features/extensions/tool-bindings.tsx",
+    "fingerprint": "0c62407ad61d1c0ae717",
+    "reason": "工具配置中的机器标识示例"
+  },
+  {
+    "file": "frontend/src/features/extensions/tool-bindings.tsx",
+    "fingerprint": "21759a15e8585ed4aeaa",
+    "reason": "工具配置中的 URL 模板示例"
+  },
+  {
+    "file": "frontend/src/features/inspector/diff-view.tsx",
+    "fingerprint": "914cb3eeb0bf48f346d2",
+    "reason": "UTF 编码的 BOM 标记名称"
+  },
+  {
+    "file": "frontend/src/features/inspector/settings-page.tsx",
+    "fingerprint": "9a5dc986f8669a3f0615",
+    "reason": "网关 URL 格式的本机占位符"
+  },
+  {
+    "file": "frontend/src/features/inspector/settings-page.tsx",
+    "fingerprint": "16a48c1fa89444de2c1e",
+    "reason": "内置服务品牌在设置中固定拼写"
+  }
+]

@@ -411,7 +411,7 @@ async function launch(
         state: 'visible',
         timeout: Math.max(1, cfg.startupMs - (performance.now() - started)),
       });
-      await initialProjectDialog.getByRole('button', { name: '关闭详情', exact: true }).click();
+      await initialProjectDialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
     }
     await page
       .getByRole('button', { name: '模型与网关设置', exact: true })
@@ -475,14 +475,15 @@ async function save(): Promise<void> {
 }
 
 async function settings(page: Page, offline: boolean): Promise<void> {
+  const from = page.url();
   await page.getByRole('button', { name: '模型与网关设置', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog
+  await page.waitForURL(/#\/settings\/models$/u);
+  await page
     .getByText(offline ? '本机网关未连接' : '本机网关可访问', { exact: true })
     .waitFor({ state: 'visible' });
-  await dialog.getByText('命令执行：当前环境不可用', { exact: true }).waitFor({ state: 'visible' });
-  await page.keyboard.press('Escape');
-  await dialog.waitFor({ state: 'hidden' });
+  await page.getByText('命令执行：当前环境不可用', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: '工作台后退', exact: true }).click();
+  await page.waitForURL(from);
 }
 
 async function compactBrowserHeader(page: Page) {
@@ -510,18 +511,47 @@ async function compactBrowserHeader(page: Page) {
     return {
       tabbar: box('.desktop-browser-tabbar'),
       toolbar: box('.desktop-browser-toolbar'),
+      status: box('.desktop-browser-status'),
       slot: box('.desktop-browser-slot'),
       viewport: { width: innerWidth, height: innerHeight },
     };
   });
-  assert.ok(bounds.tabbar.height > 0 && bounds.toolbar.height > 0 && bounds.slot.height > 0);
-  assert.ok(Math.abs(bounds.toolbar.y - bounds.tabbar.bottom) <= 1, 'Header rows must be adjacent');
-  assert.ok(Math.abs(bounds.slot.y - bounds.toolbar.bottom) <= 1, 'No third browser header row');
-  return { rows: 2, height: bounds.slot.y - bounds.tabbar.y, ...bounds };
+  const rows = [bounds.tabbar, bounds.toolbar, bounds.status, bounds.slot];
+  assert.ok(rows.every(({ height }) => height > 0));
+  for (const [index, row] of rows.slice(1).entries()) {
+    assert.ok(
+      Math.abs(row.y - (rows[index]?.bottom ?? 0)) <= 1,
+      'Browser rows and slot must be adjacent',
+    );
+  }
+  return { rows: rows.length - 1, height: bounds.slot.y - bounds.tabbar.y, ...bounds };
 }
 
 async function browserSettingsRestored(page: Page, native: Page) {
   const before = await compactBrowserHeader(page);
+  const splitter = page.getByRole('separator', { name: '调整浏览器宽度', exact: true });
+  await splitter.press('ArrowLeft');
+  await until(
+    async () => {
+      const resized = await compactBrowserHeader(page);
+      const nativeWidth = await native.evaluate(() => innerWidth);
+      return (
+        resized.slot.width > before.slot.width + 2 &&
+        Math.abs(nativeWidth - resized.slot.width) <= 2
+      );
+    },
+    5000,
+    'native viewport follows the keyboard splitter',
+  );
+  await splitter.press('ArrowRight');
+  await until(
+    async () => {
+      const restored = await compactBrowserHeader(page);
+      return Math.abs(restored.slot.width - before.slot.width) <= 2;
+    },
+    5000,
+    'browser pane returns to its original width',
+  );
   await page.getByRole('button', { name: '浏览器设置', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '浏览器设置', exact: true });
   await dialog.waitFor({ state: 'visible' });
@@ -1039,7 +1069,7 @@ async function nativeBrowserSdk(
     png: { bytes: png.length, ...pixels },
     ...browserEvidence,
   };
-  await page.getByRole('button', { name: '任务详情', exact: true }).first().click();
+  await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
   await save();
 }
 
@@ -1594,7 +1624,7 @@ async function functional(
       crossProjectPreviewRejected: true,
       savedBytes: Buffer.byteLength(browserDownloadBody),
     };
-    await page.getByRole('button', { name: '任务详情', exact: true }).first().click();
+    await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
   }
   evidence.phase = 'packaged-sdk';
   await save();
@@ -2026,16 +2056,14 @@ async function main(): Promise<void> {
     active = await launch(cfg, chromium, fixture, freshStarts + 2, false, true);
     const firstGateway = await verifyGateway(active);
     await active.page.getByRole('button', { name: '模型与网关设置', exact: true }).click();
-    const gatewaySettings = active.page.getByRole('dialog', {
-      name: '模型与网关设置',
-      exact: true,
-    });
+    await active.page.waitForURL(/#\/settings\/models$/u);
+    const gatewaySettings = active.page.locator('.settings-page');
     await gatewaySettings
       .getByRole('button', { name: '登录 ChatGPT', exact: true })
       .waitFor({ state: 'visible' });
     await gatewaySettings.getByText('尚无账户文件', { exact: false }).waitFor({ state: 'visible' });
     await active.page.screenshot({ path: join(root, 'managed-shunt-settings.png') });
-    await active.page.keyboard.press('Escape');
+    await active.page.getByRole('button', { name: '工作台后退', exact: true }).click();
     await gatewaySettings.waitFor({ state: 'hidden' });
     const localConfig = await readFile(firstGateway.configPath, 'utf8');
     const marked = localConfig + '\n# installation smoke persistence marker\n';

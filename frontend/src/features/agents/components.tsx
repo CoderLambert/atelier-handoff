@@ -1,3 +1,4 @@
+import { useUiTranslation } from '@/i18n';
 import type { ReactNode } from 'react';
 import {
   Dialog,
@@ -44,16 +45,11 @@ export function AgentDialog({
   );
 }
 
-export function AgentProblems({
-  issues,
-  label = '请先处理以下问题',
-}: {
-  issues: string[];
-  label?: string;
-}) {
+export function AgentProblems({ issues, label }: { issues: string[]; label?: string }) {
+  const { t } = useUiTranslation('extensions');
   return issues.length ? (
     <div className="agent-problems" role="alert">
-      <strong>{label}</strong>
+      <strong>{label ?? t('agentEditor.problems')}</strong>
       <ul>
         {[...new Set(issues)].map((issue) => (
           <li key={issue}>{issue}</li>
