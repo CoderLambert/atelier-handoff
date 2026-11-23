@@ -140,8 +140,9 @@
   justify-content: space-between;
   gap: var(--space-4);
   min-width: 0;
-  padding-inline: var(--space-5);
-  border-block-end: 1px solid var(--ui-border-subtle);
+  height: 48px;
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--ui-border);
   background: var(--ui-card);
 }
 
@@ -156,35 +157,42 @@
   min-width: 0;
   color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
+  gap: 6px;
 }
 
 .breadcrumbs > span:last-of-type {
   color: var(--ui-foreground);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .breadcrumb-slash {
-  color: var(--ui-input);
+  color: var(--ui-border);
+  font-size: var(--text-xs);
+  user-select: none;
 }
 
 .topbar-actions {
   flex: none;
+  gap: 6px;
 }
 
 .connection-state {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: var(--radius-pill);
   background: var(--ui-muted);
+  border: 1px solid var(--ui-border-subtle);
   color: var(--ui-muted-foreground);
-  font-size: var(--text-xs);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .connection-state[data-connected='true'] {
   background: var(--ui-success-soft);
+  border-color: var(--ui-success-border);
   color: var(--ui-success);
 }
 

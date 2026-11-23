@@ -1,7 +1,7 @@
 /**
- * @file 验证消息操作、引用草稿及快捷插入。
- * @implementation 使用隔离浏览器和回环 HTTP 替身验证复制和编辑、选区引用及会话草稿隔离，并覆盖发送正文、输入法和快捷插入失败。
- * @updated 2026-11-23T01:30:17+08:00
+ * @file 验证消息操作、引用草稿、快捷插入及任务清单。
+ * @implementation 使用隔离浏览器和回环 HTTP 替身覆盖消息和草稿操作、发送失败恢复，以及清单的键盘折叠、状态更新、历史查看和会话隔离。
+ * @updated 2026-11-23T13:37:30+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -311,6 +311,10 @@ test(
           current = { ...initial, session: { ...initial.session, id },
             messages: initial.messages.map(message => ({ ...message, sessionId: id })),
             runs: initial.runs.map(run => ({ ...run, sessionId: id })) };
+          render();
+        },
+        setRuns: (runs) => {
+          current = { ...current, runs };
           render();
         },
         patch: (options) => {
@@ -899,6 +903,48 @@ test(
       assert.equal(await dialog.count(), 0);
       assert.deepEqual(await readDraft(), otherDraft);
       assert.equal(await input.evaluate((element) => document.activeElement === element), true);
+      const steps: Run['plan'] = [
+        { content: '检查工作区', status: 'completed' },
+        { content: '验证结果', status: 'in_progress' },
+        { content: '整理结论', status: 'pending' },
+      ];
+      const running: Run = { ...run, status: 'running', plan: steps };
+      const finished: Run = {
+        ...running,
+        status: 'completed',
+        plan: steps.map((step) => ({ ...step, status: 'completed' })),
+      };
+      const setRuns = (runs: Run[]) =>
+        page.evaluate(`window.fixture.setRuns(${JSON.stringify(runs)})`);
+      const dock = page.locator('.chat-composer .chat-task-plan');
+      assert.equal(await dock.count(), 0);
+      await page.evaluate("window.fixture.switch('session-a')");
+      await setRuns([running]);
+      const toggle = dock.getByRole('button', { name: /1 \/ 3 已完成/ });
+      await toggle.waitFor();
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+      assert.equal(await page.locator('.chat-conversation .chat-task-plan').count(), 0);
+      await toggle.press('Space');
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+      await setRuns([finished]);
+      const finalToggle = dock.getByRole('button', { name: /3 \/ 3 已完成/ });
+      await finalToggle.waitFor();
+      assert.equal(await finalToggle.getAttribute('aria-expanded'), 'false');
+      await finalToggle.press('Enter');
+      assert.equal(await dock.getByRole('listitem').count(), 3);
+      assert.equal(
+        await finalToggle.evaluate((element) => document.activeElement === element),
+        true,
+      );
+      await setRuns([finished, { ...run, id: 'next', status: 'running' }]);
+      await dock.waitFor({ state: 'detached' });
+      const history = assistant.getByRole('button', { name: /3 \/ 3 已完成/ });
+      assert.equal(await history.getAttribute('aria-expanded'), 'false');
+      await history.click();
+      await assistant.getByText('验证结果', { exact: true }).waitFor();
+      await page.evaluate("window.fixture.switch('session-b')");
+      await page.locator('[data-session-id="session-b"]').waitFor();
+      assert.equal(await page.locator('.chat-task-plan').count(), 0);
       await page.setViewportSize({ width: 1440, height: 900 });
       assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
       assert.deepEqual(errors, []);

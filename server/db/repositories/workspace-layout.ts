@@ -12,6 +12,11 @@ import {
   workspaceLayoutSchema,
   type WorkspaceLayout,
 } from '../../../shared/workspace-layout.js';
+import {
+  defaultUiTheme,
+  resolveUiTheme,
+  type UiTheme,
+} from '../../../shared/desktop-ui-theme.js';
 
 const settings = sqliteTable('settings', {
   key: text().primaryKey(),
@@ -20,6 +25,7 @@ const settings = sqliteTable('settings', {
 const locationKey = 'workspace-location-v1';
 const lastSessionKey = 'workspace-last-session-v1';
 const layoutKey = 'workspace-layout-v1';
+const themeKey = 'workspace-theme-v1';
 
 export function workspaceLayoutRepository(db: BetterSQLite3Database) {
   function readValue(key: string) {
@@ -72,6 +78,15 @@ export function workspaceLayoutRepository(db: BetterSQLite3Database) {
         .onConflictDoUpdate({ target: settings.key, set: { value } })
         .run();
       return layout;
+    },
+    readTheme(): UiTheme {
+      const value = readValue(themeKey);
+      return resolveUiTheme(value);
+    },
+    saveTheme(theme: UiTheme): UiTheme {
+      const resolved = resolveUiTheme(theme);
+      saveValue(themeKey, resolved);
+      return resolved;
     },
   };
 }

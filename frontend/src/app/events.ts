@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
-import type { RunEvent } from '@shared/types';
+import type { RunEvent, RunStatus } from '@shared/types';
+import { notifyRunFinished } from '@/notifications';
 import { actions, store } from './store';
 
 export const keys = {
@@ -79,6 +80,12 @@ export function useRunEvents(client: QueryClient, cursor?: number) {
         schedule(keys.sessions, keys.runs);
       }
       if (event.type === 'artifact.created') schedule(keys.artifacts);
+      if (event.type === 'run.finished') {
+        notifyRunFinished(
+          (event.payload as { status?: RunStatus } | undefined)?.status,
+          event.sessionId,
+        );
+      }
       if (
         event.type === 'project.bound' ||
         event.type === 'session.created' ||

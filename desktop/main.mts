@@ -32,6 +32,10 @@ import {
 import { AppError } from '../shared/types.js';
 import { DesktopUiLanguagePreferences } from './host/ui-language.mjs';
 import { bindUiLanguage } from './host/ui-language-ipc.mjs';
+import { DesktopUiThemePreferences } from './host/ui-theme.mjs';
+import { bindUiTheme } from './host/ui-theme-ipc.mjs';
+import { DesktopUiNotificationsPreferences } from './host/ui-notifications.mjs';
+import { bindUiNotifications } from './host/ui-notifications-ipc.mjs';
 import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -220,6 +224,8 @@ if (temporaryProfile)
 const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) =>
   desktopI18n.changeLanguage(locale),
 );
+const uiTheme = new DesktopUiThemePreferences(regularProfile);
+const uiNotifications = new DesktopUiNotificationsPreferences(regularProfile);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -229,7 +235,7 @@ else {
   void app
     .whenReady()
     .then(async () => {
-      await uiLanguage.load();
+      await Promise.all([uiLanguage.load(), uiTheme.load(), uiNotifications.load()]);
       if (!migrationMode) {
         const unbindUiLanguage = bindUiLanguage(
           uiLanguage,
@@ -237,7 +243,23 @@ else {
           () => runtimeConnection,
           () => stopping,
         );
-        app.once('will-quit', unbindUiLanguage);
+        const unbindUiTheme = bindUiTheme(
+          uiTheme,
+          () => window,
+          () => runtimeConnection,
+          () => stopping,
+        );
+        const unbindUiNotifications = bindUiNotifications(
+          uiNotifications,
+          () => window,
+          () => runtimeConnection,
+          () => stopping,
+        );
+        app.once('will-quit', () => {
+          unbindUiLanguage();
+          unbindUiTheme();
+          unbindUiNotifications();
+        });
         return start();
       }
       if (

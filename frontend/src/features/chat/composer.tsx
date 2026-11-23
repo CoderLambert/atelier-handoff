@@ -1,13 +1,13 @@
 /**
- * @file 提供任务输入、引用卡片、上下文与附件编辑。
- * @implementation 在正文上方展示可移除的引用卡片，沿用草稿校验和队列发送路径，在可插入时显示 Alt+Enter 提示。
- * @updated 2026-11-22T14:41:36+08:00
+ * @file 提供任务清单、任务输入、引用卡片及上下文和附件编辑。
+ * @implementation 在输入框上方按运行 ID 展开任务清单。校验草稿，并在队列发送和实时插入之间选择提交路径。
+ * @updated 2026-11-23T13:35:55+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
-import { ArrowUp, Paperclip, Plus, Quote, Square, X } from 'lucide-react';
+import { ArrowUp, Paperclip, Plus, Quote, X } from 'lucide-react';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
-import type { Draft, ReasoningEffort } from '@shared/types';
+import type { Draft, ReasoningEffort, Run } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,8 @@ import { ContextUsagePopover } from './context-usage-popover';
 import { isActive } from './conversation';
 import { ComposerModeSelector } from './mode-selector';
 import { ModelPicker } from './model-picker';
-import { composerMode, parseSearchChargeLimit, runModeLabel, type ComposerMode } from './run-mode';
+import { composerMode, parseSearchChargeLimit, type ComposerMode } from './run-mode';
+import { TaskPlan } from './task-plan';
 
 import {
   useComposerAttachments,
@@ -39,6 +40,7 @@ type ComposerError =
 export function Composer({
   snapshot,
   draft,
+  taskPlanRun,
   inputRef: externalInputRef,
   editingMessage = false,
   draftActionError = '',
@@ -57,6 +59,7 @@ export function Composer({
 }: {
   snapshot: Snapshot;
   draft: Draft;
+  taskPlanRun?: Run;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   editingMessage?: boolean;
   draftActionError?: string;
@@ -341,6 +344,7 @@ export function Composer({
           ))}
         </div>
       ) : null}
+      {taskPlanRun ? <TaskPlan key={taskPlanRun.id} steps={taskPlanRun.plan} defaultOpen /> : null}
       <div className="composer-box">
         <label className="composer-label" htmlFor="prompt-input">
           {archived
@@ -462,26 +466,34 @@ export function Composer({
                 : busy
                   ? t('composer.processingAttachments')
                   : run
-                    ? (
-                        {
-                          queued: t('composer.queued'),
-                          running: t('composer.running'),
-                          awaiting_permission: t('composer.awaitingPermission'),
-                          stopping: t('composer.stoppingStatus'),
-                        } as Record<string, string>
-                      )[run.status]
+                    ? run.status === 'running'
+                      ? <span className="sr-only">{t('composer.running')}</span>
+                      : (
+                          {
+                            queued: t('composer.queued'),
+                            awaiting_permission: t('composer.awaitingPermission'),
+                            stopping: t('composer.stoppingStatus'),
+                          } as Record<string, string>
+                        )[run.status]
                     : ''}
-            {run ? ` · ${runModeLabel(run)}` : ''}
           </span>
           {run ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="composer-stop-button"
+              data-status={run.status}
               disabled={run.status === 'stopping'}
               onClick={() => onStop(run.id)}
             >
-              <Square data-icon="inline-start" aria-hidden="true" />
+              <span className="composer-stop-icon-wrapper" data-icon="inline-start" aria-hidden="true">
+                <svg className="composer-stop-spinner" viewBox="0 0 16 16">
+                  <circle className="composer-stop-track" cx="8" cy="8" r="6" />
+                  <circle className="composer-stop-indicator" cx="8" cy="8" r="6" />
+                </svg>
+                <span className="composer-stop-square" />
+              </span>
               {run.status === 'stopping'
                 ? t('composer.stopping')
                 : hasQueuedMessages

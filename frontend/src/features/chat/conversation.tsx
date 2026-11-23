@@ -1,7 +1,7 @@
 /**
- * @file 展示会话消息、运行结果、浏览器异常及网页链接选择入口。
- * @implementation 按运行组织消息、主助手执行明细和子任务，提供审批、完整输出及历史操作入口，并按会话状态启用助手正文选区引用。
- * @updated 2026-11-23T01:27:45+08:00
+ * @file 展示会话消息、历史任务清单、运行结果、浏览器异常及网页链接选择入口。
+ * @implementation 按运行组织消息和执行明细，输入区未展示的清单归入对应助手消息。提供审批、完整输出、选区引用及历史操作入口。
+ * @updated 2026-11-23T13:36:26+08:00
  */
 import { useUiTranslation, getTranslator } from '@/i18n';
 import {
@@ -43,6 +43,7 @@ import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from '.
 import { runModeLabel } from './run-mode';
 import { RunToolActivity } from './run-tool-activity';
 import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
+import { TaskPlan } from './task-plan';
 const ToolOutputDialog = lazy(() => import('@/features/inspector/tool-output-dialog'));
 
 const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
@@ -95,11 +96,6 @@ const toolStatuses = {
   denied: 'tool.denied',
   canceled: 'tool.canceled',
 } as const satisfies Record<ToolCall['status'], string>;
-const planStatuses = {
-  pending: 'plan.pending',
-  in_progress: 'plan.inProgress',
-  completed: 'plan.completed',
-} as const;
 const modelEvents = new Set([
   'sdk.initialized',
   'sdk.api_retry',
@@ -151,12 +147,24 @@ function ProgressClock({ at }: { at: string }) {
   );
 }
 
+function ModelLoadingIndicator({ label }: { label: string }) {
+  return (
+    <div className="model-loading-indicator" role="status" aria-live="polite" aria-label={label}>
+      <span className="model-loading-dot" />
+      <span className="model-loading-dot" />
+      <span className="model-loading-dot" />
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+
 function RunProgress({
   run,
   tools,
   events,
   hasText,
   snapshot,
+  showPlan,
   onPermission,
   onOutput,
   onTrace,
@@ -166,6 +174,7 @@ function RunProgress({
   events: RunEvent[];
   hasText: boolean;
   snapshot: Snapshot;
+  showPlan: boolean;
   onPermission: (permission: Permission) => void;
   onOutput: (tool: ToolCall) => void;
   onTrace: () => void;
@@ -201,7 +210,17 @@ function RunProgress({
       ),
     [work],
   );
-  if (!active && !work.tools.length && !work.subagents.length && !run.plan.length) return null;
+  const isPureModelWaiting =
+    !work.tools.length &&
+    !work.subagents.length &&
+    !showPlan &&
+    run.status !== 'awaiting_permission' &&
+    run.status !== 'stopping';
+  if (!active && !work.tools.length && !work.subagents.length && !showPlan) return null;
+  if (active && isPureModelWaiting) {
+    if (hasText) return null;
+    return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
+  }
   return (
     <section
       className="run-progress"
@@ -210,7 +229,21 @@ function RunProgress({
     >
       {active ? (
         <div className="run-progress-head">
-          <strong role="status">{stage}</strong>
+          {stage === t('progress.waitingModel') ? (
+            <div
+              className="run-progress-loading-inline"
+              role="status"
+              aria-live="polite"
+              aria-label={t('progress.waitingModel')}
+            >
+              <span className="model-loading-dot" />
+              <span className="model-loading-dot" />
+              <span className="model-loading-dot" />
+              <span className="sr-only">{t('progress.waitingModel')}</span>
+            </div>
+          ) : (
+            <strong role="status">{stage}</strong>
+          )}
           <ProgressClock
             at={events.at(-1)?.at || last?.endedAt || run.startedAt || run.createdAt}
           />
@@ -238,23 +271,7 @@ function RunProgress({
           onOutput={onOutput}
         />
       ) : null}
-      {run.plan.length > 0 ? (
-        <details className="run-progress-plan">
-          <summary>
-            {t('progress.planSummary', {
-              completed: run.plan.filter((step) => step.status === 'completed').length,
-              count: run.plan.length,
-            })}
-          </summary>
-          <ol>
-            {run.plan.map((step, index) => (
-              <li key={index}>
-                {step.content} <small>{t(planStatuses[step.status])}</small>
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
+      {showPlan ? <TaskPlan steps={run.plan} /> : null}
       <SubagentProgress
         groups={work.subagents}
         run={run}
@@ -425,6 +442,7 @@ function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: 
 
 export function Conversation({
   snapshot,
+  composerPlanRunId,
   onRetry,
   onTrace,
   onOpenLink,
@@ -438,6 +456,7 @@ export function Conversation({
   submitting,
 }: {
   snapshot: Snapshot;
+  composerPlanRunId?: string;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
   onOpenLink?: ChatLinkOpener;
@@ -557,12 +576,13 @@ export function Conversation({
     snapshot.permissions,
   ]);
   useEffect(() => {
-    if (!thread.current || typeof ResizeObserver === 'undefined') return;
+    const element = viewport.current;
+    if (!element || !thread.current || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      const element = viewport.current;
-      if (element && nearBottom.current) element.scrollTop = element.scrollHeight;
+      if (nearBottom.current) element.scrollTop = element.scrollHeight;
     });
     observer.observe(thread.current);
+    observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
@@ -577,7 +597,9 @@ export function Conversation({
       onClickCapture={(event) => {
         if (
           event.target instanceof Element &&
-          event.target.closest('.run-progress summary, .run-tool-activity button')
+          event.target.closest(
+            '.run-progress summary, .run-tool-activity button, .chat-task-plan-toggle',
+          )
         )
           nearBottom.current = false;
       }}
@@ -653,6 +675,7 @@ export function Conversation({
                       events={events}
                       hasText={hasText}
                       snapshot={snapshot}
+                      showPlan={run.id !== composerPlanRunId && run.plan.length > 0}
                       onPermission={(item) => setPermissionId(item.id)}
                       onOutput={(tool) => setOutputToolId(tool.id)}
                       onTrace={() => onTrace(run.id)}

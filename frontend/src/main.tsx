@@ -12,7 +12,12 @@ import { store } from './app/store';
 import { RouterProvider } from '@tanstack/react-router';
 import { workspaceRouter } from './app/workspace-router';
 import { initializeUiLanguage } from './i18n';
+import { initializeUiTheme, initializeUiThemeSync } from './theme';
+import { initializeUiNotifications, initializeUiNotificationsSync } from './notifications';
 import './styles.css';
+
+initializeUiThemeSync();
+initializeUiNotificationsSync();
 
 const client = new QueryClient({
   defaultOptions: {
@@ -26,7 +31,11 @@ const loadMotionFeatures = () =>
 
 const root = document.getElementById('root');
 if (root) {
-  void initializeUiLanguage().then(() => {
+  void Promise.all([
+    initializeUiLanguage(),
+    initializeUiTheme(),
+    initializeUiNotifications(),
+  ]).then(() => {
     createRoot(root).render(
       <StrictMode>
         <MotionConfig reducedMotion="user">

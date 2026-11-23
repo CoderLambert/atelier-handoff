@@ -11,7 +11,7 @@ import { cn } from './utils';
 const buttonVariants = cva(
   [
     'inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent text-sm font-medium leading-tight',
-    'transition-[background-color,color,border-color] duration-(--motion-feedback) ease-(--ease-standard) motion-reduce:transition-none',
+    'transition-[background-color,color,border-color,transform] duration-(--motion-feedback) ease-(--ease-standard) motion-reduce:transition-none active:scale-[0.98]',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50',
     '[&>svg]:pointer-events-none [&>svg]:size-(--ui-icon-size) [&>svg]:shrink-0',
   ],
