@@ -43,9 +43,10 @@ import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
 import { errorMessage } from './shared';
 import { WorkspaceLayoutForm, type WorkspaceLayoutFormProps } from './workspace-layout-form';
 import { NotificationSettings } from './notification-settings';
+import type { SettingsSection } from '@/app/types';
 import './settings-page.css';
 
-export type SettingsSection = 'models' | 'layout' | 'notifications' | 'diagnostics';
+export type { SettingsSection } from '@/app/types';
 
 export interface SettingsPageProps {
   section: SettingsSection;

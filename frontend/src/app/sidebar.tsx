@@ -36,6 +36,7 @@ import {
 } from './session-tree';
 import { SidebarSessionMenu, type SessionAction } from './sidebar-session-menu';
 import { type View } from './store';
+import { formatSessionTime } from '@/utils/format';
 import './sidebar.css';
 
 const links = [
@@ -45,16 +46,6 @@ const links = [
   { id: 'extensions', labelKey: 'links.extensions', Icon: Boxes },
   { id: 'agents', labelKey: 'links.agents', Icon: Bot },
 ] as const;
-
-function formatSessionTime(updatedAt: Date, now: Date, locale: string): string {
-  if (updatedAt.getFullYear() !== now.getFullYear()) {
-    return updatedAt.toLocaleDateString(locale, { dateStyle: 'short' });
-  }
-  if (updatedAt.getMonth() === now.getMonth() && updatedAt.getDate() === now.getDate()) {
-    return updatedAt.toLocaleTimeString(locale, { timeStyle: 'short' });
-  }
-  return updatedAt.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' });
-}
 
 export function Sidebar({
   project,

@@ -1,7 +1,7 @@
 /**
  * @file 从持久化会话历史生成跨轮恢复检查点。
  * @implementation 按会话和执行范围形成有界的用户要求、来源与操作摘要，并按 UTF-8 字节选取近期可见对话。
- * @updated 2026-11-22T18:15:39+08:00
+ * @updated 2026-11-23T18:25:00+08:00
  */
 import type { InheritedMessage, Message, Run, ToolCall } from '../shared/types.js';
 import {
@@ -17,6 +17,7 @@ type RecoveryRows = {
   tools: readonly ToolCall[];
 };
 type Scope = Pick<Run, 'id' | 'projectId' | 'sessionId' | 'executor' | 'agent'>;
+type Receipt = Pick<ProgressEvidence, 'runId' | 'toolCallId' | 'tool' | 'outcome'>;
 
 /** Rows are in persistent insertion order, also when timestamps tie. */
 function previousRuns(current: Scope, runs: readonly Run[]): Run[] {
@@ -114,7 +115,6 @@ export function sessionRecoveryContext(
     url: string;
     status: 'discovered_only';
   }>(3_000, 12);
-  type Receipt = Pick<ProgressEvidence, 'runId' | 'toolCallId' | 'tool' | 'outcome'>;
   const receipts = section<Receipt>(2_600, 16);
   const changes = section<Receipt & { state: 'confirmed' }>(2_600, 16);
   const uncertain = section<Receipt & { state: 'unverified' }>(3_000, 16);

@@ -26,88 +26,18 @@ import type {
   SpreadsheetSheet,
   SpreadsheetWorkerResponse,
 } from './spreadsheet-preview.worker';
-
-const workerErrorKeys = {
-  tooLarge: 'spreadsheet.tooLarge',
-  noSheets: 'spreadsheet.noSheets',
-  tooManySheets: 'spreadsheet.tooManySheets',
-  parseFailed: 'spreadsheet.parseFailed',
-} as const satisfies Record<SpreadsheetErrorCode, string>;
-type SpreadsheetMessageKey =
-  | (typeof workerErrorKeys)[SpreadsheetErrorCode]
-  | 'spreadsheet.timeout'
-  | 'spreadsheet.invalidResponse'
-  | 'spreadsheet.workerFailed'
-  | 'spreadsheet.messageFailed'
-  | 'spreadsheet.loadFailed';
-
-type PreviewState = {
-  source: FileInfo['source'];
-  attempt: number;
-} & (
-  | { status: 'loading' }
-  | { status: 'error'; messageKey: SpreadsheetMessageKey }
-  | { status: 'success'; sheets: SpreadsheetSheet[] }
-);
+import {
+  columnLabel,
+  isRecord,
+  isSheet,
+  isWorkerResponse,
+  workerErrorKeys,
+  type PreviewState,
+  type SpreadsheetMessageKey,
+} from './spreadsheet-preview-utils';
 
 const MAX_FILE_BYTES = documentPreviewBytes;
 const LOAD_TIMEOUT_MS = 15_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isSheet(value: unknown): value is SpreadsheetSheet {
-  if (!isRecord(value)) return false;
-  const { name, rows, columnCount, rangeTruncated, textTruncated } = value;
-  if (
-    typeof name !== 'string' ||
-    name.length > 128 ||
-    !Array.isArray(rows) ||
-    rows.length > 200 ||
-    typeof columnCount !== 'number' ||
-    !Number.isInteger(columnCount) ||
-    columnCount < 0 ||
-    columnCount > 50 ||
-    typeof rangeTruncated !== 'boolean' ||
-    typeof textTruncated !== 'boolean'
-  ) {
-    return false;
-  }
-  let characters = 0;
-  return rows.every(
-    (row: unknown) =>
-      Array.isArray(row) &&
-      row.length === columnCount &&
-      row.every((cell: unknown) => {
-        if (typeof cell !== 'string' || cell.length > 2_000) return false;
-        characters += cell.length;
-        return characters <= 100_000;
-      }),
-  );
-}
-
-function isWorkerResponse(value: unknown): value is SpreadsheetWorkerResponse {
-  if (!isRecord(value)) return false;
-  if (value.status === 'error') {
-    return typeof value.code === 'string' && Object.hasOwn(workerErrorKeys, value.code);
-  }
-  return (
-    value.status === 'success' &&
-    Array.isArray(value.sheets) &&
-    value.sheets.length > 0 &&
-    value.sheets.length <= 20 &&
-    value.sheets.every(isSheet)
-  );
-}
-
-function columnLabel(index: number): string {
-  let label = '';
-  for (let column = index + 1; column > 0; column = Math.floor((column - 1) / 26)) {
-    label = String.fromCharCode(65 + ((column - 1) % 26)) + label;
-  }
-  return label;
-}
 
 export default function SpreadsheetPreview({
   file,

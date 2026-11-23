@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import type { Snapshot } from '@/api/types';
 import type { Subagent } from '@shared/subagents';
 import type { Permission, Run, ToolCall } from '@shared/types';
-import { groupRunWork, permissionSubagentSource } from './subagent-progress';
+import { groupRunWork, permissionSubagentSource } from './subagent-progress-model';
 import { permissionSchema } from '@/use-query/permissions/use-permission';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 import { stopSubagentOptions } from '@/use-query/runs/use-stop-subagent';

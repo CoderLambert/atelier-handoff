@@ -1,7 +1,7 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
  * @implementation 以两行组织标签、下载和浏览操作，结合项目授权、人工控制与 Dialog 遮挡同步原生网页视图。
- * @updated 2026-11-20T18:19:08+08:00
+ * @updated 2026-11-23T18:25:00+08:00
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -26,12 +26,6 @@ import type {
   DesktopBrowserBridge,
   DesktopBrowserState as DesktopState,
 } from '@shared/desktop-browser';
-
-declare global {
-  interface Window {
-    atelierDesktop?: DesktopBrowserBridge;
-  }
-}
 
 export function useDesktopBrowser(projectId: string | undefined) {
   const [state, setState] = useState<DesktopState>();

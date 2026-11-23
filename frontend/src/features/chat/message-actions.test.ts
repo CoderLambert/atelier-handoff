@@ -16,7 +16,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
 import { activeStatuses, type Draft, type Permission, type Run } from '@shared/types';
 import type { Snapshot } from '@/api/types';
-import { MessageActions, rewindUnavailableReason } from './message-actions';
+import { MessageActions } from './message-actions';
+import { rewindUnavailableReason } from './message-actions-model';
 
 const at = '2026-11-21T00:00:00.000Z';
 const userText = '原始用户正文\n第二行';
@@ -924,8 +925,31 @@ test(
       await toggle.waitFor();
       assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
       assert.equal(await page.locator('.chat-conversation .chat-task-plan').count(), 0);
+      const fade = await page.locator('.chat-composer').evaluate((element) => {
+        const style = getComputedStyle(element, '::before');
+        return {
+          height: style.height,
+          pointerEvents: style.pointerEvents,
+          paint: style.backgroundImage,
+        };
+      });
+      assert.equal(fade.height, '24px');
+      assert.equal(fade.pointerEvents, 'none');
+      assert.match(fade.paint, /^linear-gradient/);
+      assert.equal(
+        await dock.evaluate((element) => element.nextElementSibling?.className),
+        'context-row',
+      );
       await toggle.press('Space');
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+      await toggle.press('Space');
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+      // Remount to exercise the automatic behavior without a manual override.
+      await setRuns([]);
+      await dock.waitFor({ state: 'detached' });
+      await setRuns([running]);
+      await toggle.waitFor();
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
       await setRuns([finished]);
       const finalToggle = dock.getByRole('button', { name: /3 \/ 3 已完成/ });
       await finalToggle.waitFor();

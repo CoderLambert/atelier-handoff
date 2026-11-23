@@ -1,7 +1,7 @@
 /**
  * @file 提供工作详情的通用展示与格式化。
  * @implementation 翻译运行和审批状态，组合语义徽章、字段及反馈组件，并格式化操作和时间。
- * @updated 2026-11-23T04:55:38+08:00
+ * @updated 2026-11-23T18:25:00+08:00
  */
 import { useUiTranslation, getTranslator, getUiLocale, translateError } from '@/i18n';
 import type { ReactNode } from 'react';
@@ -10,6 +10,9 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
 import type { Permission } from '@shared/types';
+import { formatBytes, formatDate, formatDuration } from '@/utils/format';
+
+export { formatBytes, formatDate, formatDuration } from '@/utils/format';
 
 export const fieldClass =
   'h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
@@ -177,45 +180,7 @@ export function SectionLabel({ children }: { children: ReactNode }) {
     </h3>
   );
 }
-export function formatDate(value: string | null | undefined, locale = getUiLocale()) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? date.toLocaleString(locale, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : '—';
-}
-export function formatDuration(ms: number | null | undefined) {
-  const t = getTranslator('inspector');
-  const locale = getUiLocale();
-  if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
-  if (ms < 1000) return t('format.milliseconds', { value: Math.round(ms).toLocaleString(locale) });
-  if (ms < 60000)
-    return t('format.seconds', {
-      value: (ms / 1000).toLocaleString(locale, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }),
-    });
-  return t('format.minutesSeconds', {
-    minutes: Math.floor(ms / 60000).toLocaleString(locale),
-    seconds: Math.floor((ms % 60000) / 1000).toLocaleString(locale),
-  });
-}
-export function formatBytes(bytes: number) {
-  const locale = getUiLocale();
-  const number = (value: number) =>
-    value.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return bytes < 1024
-    ? `${bytes.toLocaleString(locale)} B`
-    : bytes < 1024 * 1024
-      ? `${number(bytes / 1024)} KB`
-      : `${number(bytes / (1024 * 1024))} MB`;
-}
+
 export function eventName(type: string) {
   const t = getTranslator('inspector');
   const names: Record<string, string> = {

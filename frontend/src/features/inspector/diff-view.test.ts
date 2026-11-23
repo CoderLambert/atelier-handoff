@@ -1,8 +1,14 @@
+/**
+ * @file 验证审批文件差异对比、补丁解析与行列对齐。
+ * @implementation 测试 unified diff 补丁解析、空文件与大文件快照降级，以及双栏行号对齐。
+ * @updated 2026-11-23T18:25:00+08:00
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DiffView, parsePermissionPatch, type PermissionDiff } from './diff-view';
+import { DiffView } from './diff-view';
+import { parsePermissionPatch, type PermissionDiff } from './diff-model';
 
 const preview = (values: Partial<PermissionDiff>): PermissionDiff => ({
   diff: '',

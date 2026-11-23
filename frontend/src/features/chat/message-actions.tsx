@@ -18,33 +18,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  hasMessageForkAnchor,
+  rewindUnavailableReason,
+  type CopyFeedback,
+  type MessageDraftAction,
+} from './message-actions-model';
 
-export type MessageDraftAction = (message: Message, trigger: HTMLButtonElement) => void;
-
-export function hasMessageForkAnchor(message: Message): boolean {
-  return Boolean(message.forkAnchor?.sdkSessionId.trim() && message.forkAnchor.messageId.trim());
-}
-
-export function rewindUnavailableReason(
-  snapshot: Snapshot,
-  submitting: boolean,
-): string | undefined {
-  const t = getTranslator('chat');
-  if (submitting) return t('rewind.submitting');
-  if (snapshot.session.status === 'archived') return t('rewind.archived');
-  if (!snapshot.project.available) return t('rewind.projectUnavailable');
-  if (snapshot.permissions.some((permission) => permission.status === 'pending'))
-    return t('rewind.pendingApproval');
-  if (snapshot.runs.some((run) => activeStatuses.includes(run.status)))
-    return t('rewind.activeRun');
-  if (!snapshot.messageQueue) return t('rewind.queueUnconfirmed');
-  if (snapshot.messageQueue.items.some((item) => item.delivery === 'unknown'))
-    return t('rewind.deliveryUnknown');
-  if (snapshot.messageQueue.items.length) return t('rewind.queueNotEmpty');
-  return undefined;
-}
-
-type CopyFeedback = { status: 'pending' | 'copied' | 'error'; text: string };
+export {
+  hasMessageForkAnchor,
+  rewindUnavailableReason,
+  type CopyFeedback,
+  type MessageDraftAction,
+} from './message-actions-model';
 
 export function MessageActions({
   message,

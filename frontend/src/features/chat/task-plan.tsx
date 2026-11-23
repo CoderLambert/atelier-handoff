@@ -24,7 +24,8 @@ export function TaskPlan({
 }) {
   const { t } = useUiTranslation('chat');
   const id = useId();
-  const [open, setOpen] = useState(defaultOpen);
+  const [manualOpen, setManualOpen] = useState<boolean>();
+  const open = manualOpen ?? defaultOpen;
   const completed = steps.filter((step) => step.status === 'completed').length;
   const counts = { completed, count: steps.length };
 
@@ -38,7 +39,7 @@ export function TaskPlan({
         aria-expanded={open}
         aria-controls={id}
         aria-label={t('progress.planSummary', counts)}
-        onClick={() => setOpen((previous) => !previous)}
+        onClick={() => setManualOpen(!open)}
       >
         <ListChecks data-icon="inline-start" aria-hidden="true" />
         {t('plan.label')}

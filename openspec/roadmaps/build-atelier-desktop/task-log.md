@@ -365,3 +365,17 @@
 - P0 统一品牌和选中色，修正 48px 顶栏、侧栏时间、待审批状态与本机信任提示。上下文显示剩余百分比及旧样本标记。P1 历史执行明细使用时间轴，补充失败计数、退出码和恢复进度。历史消息操作按需显现并保留键盘、复制反馈和触屏入口。回退范围为前端、词条和侧栏烟测断言。
 - 类型、i18n、样式门禁和前端、桌面构建通过。404 项测试通过，1 项既有 WebFetch 用例跳过。Chromium 复核六主题与三种视口，隔离 Electron 复核原生分屏和执行明细。系统中文输入法实机测试待补。[验收记录与机器证据](../../../docs/evidence/frontend-design-system/2026-11-23-workspace-polish.md)
 - **开发过程 review**。用同一合成 API 夹具核对主题、视口、权限和执行状态。用 `31b769f` 的隔离副本复现侧栏旧断言，再按按钮实际边缘修正。后续修改控件尺寸时直接测量相邻边界，并组合验证输入框初始高度和长文本封顶。
+
+## 2026-11-23 · 实机验收后的输入区微调
+
+- 24px 渐变覆盖聊天滚动区底缘，并让队列与新消息按钮显示在渐变上方。任务清单位于上下文和权限工具栏上方。短清单全部完成时自动收起，手动展开或收起的选择随当前运行保留。
+- `npm run check`、`npm run build` 和文件说明门禁通过。全量测试 404 项通过，1 项既有 WebFetch 用例跳过。Chromium 的 [消息操作回归](../../../frontend/src/features/chat/message-actions.test.ts#L925) 检查渐变尺寸与点击穿透、清单顺序、从进行中到完成后的收起及键盘重开。`node --import tsx scripts/smoke-context-usage.mts` 首跑在关闭弹层后的即时焦点断言失败，原样复跑通过，覆盖原生分屏、输入和草稿。
+- **开发过程 review**。把清单状态更新与渐变属性放进同一个现有浏览器用例，隔离桌面复用现有烟测验证原生层。
+
+## 2026-11-23 · 前端类型与纯功能逻辑目录规范收敛
+
+- 清理函数/闭包内部嵌套类型（`server/codex-model-catalog.ts`、`server/session-checkpoint.ts`），将散落全局声明（`Window`、`HistoryState`）集中至 `frontend/src/types/`。
+- 建立统一纯功能工具目录：`frontend/src/utils/format.ts` 集中 `formatBytes`、`formatDate`、`formatDuration`、`formatSessionTime`，消除多处重复造轮子。
+- 业务领域模型四件套收敛：从 `.tsx` 视图组件剥离纯功能函数与状态类型至对应的 `*-model.ts` 或 `*-utils.ts`（包括 `diff-model.ts`、`subagent-progress-model.ts`、`message-actions-model.ts`、`selection-quote-model.ts`、`spreadsheet-preview-utils.ts`、`file-preview-utils.ts`、`agent-model.ts`、`app/types.ts`），组件仅消费 props 呈现界面与分发回调。
+- `npm run check`、`npm test`（404项通过，1项既有跳过）、`npm run build` 和 `npm run check:headers` 全量门禁通过。
+- **开发过程 review**。通过静态扫描前置发现跨组件隐式契约依赖和重复工具实现，使用先建共享纯模块并保持原导出兼容路径的渐进迁移策略，一次性完成多领域组件瘦身并保持 100% 测试与类型安全。

@@ -25,76 +25,13 @@ import {
 } from '@lamberl-lee/file-preview';
 import { pdfPlugin } from '@lamberl-lee/file-preview/plugins/pdf';
 import '@lamberl-lee/file-preview/styles/index.css';
+import {
+  previewRegistry,
+  toFileInfo,
+  type PreviewFile,
+} from './file-preview-utils';
 
-type PreviewFile = (
-  | { name: string; text: string }
-  | { name: string; size: number; url: string }
-  | { name: string; bytes: ArrayBuffer; mimeType: string }
-) & { id?: string; onError?: (error: PreviewError) => void };
-
-function previewRegistry() {
-  const t = getTranslator('inspector');
-  return createPreviewPluginRegistry([
-    sourceCodePlugin,
-    textPlugin,
-    csvPlugin,
-    markdownPlugin,
-    pdfPlugin,
-    imagePlugin,
-    {
-      id: 'atelier.spreadsheet',
-      name: t('preview.spreadsheetPlugin'),
-      match: (file) => file.fileType === 'xlsx' || file.fileType === 'xls',
-      load: () => import('./spreadsheet-preview'),
-    },
-  ]);
-}
-const markdownFile = /\.(?:md|markdown)$/i;
-const sourceFile = /\.(?:[cm]?[jt]sx?|css|html?|json|py|sh|sql|toml|xml|ya?ml)$/i;
-
-function toFileInfo(file: PreviewFile): FileInfo {
-  const { name } = file;
-  if ('url' in file) {
-    return {
-      id: file.id ?? file.url,
-      name,
-      size: file.size,
-      type: 'application/pdf',
-      fileType: 'pdf',
-      source: { kind: 'url', url: file.url, name },
-    };
-  }
-  if ('bytes' in file) {
-    const { mimeType, bytes } = file;
-    return {
-      id: file.id ?? name,
-      name,
-      size: bytes.byteLength,
-      type: mimeType,
-      fileType:
-        mimeType === 'application/pdf'
-          ? 'pdf'
-          : mimeType.startsWith('image/')
-            ? 'image'
-            : mimeType === 'application/vnd.ms-excel'
-              ? 'xls'
-              : 'xlsx',
-      source: { kind: 'arrayBuffer', buffer: bytes, name, mimeType },
-    };
-  }
-  const markdown = markdownFile.test(name);
-  const blob = new Blob([file.text], { type: markdown ? 'text/markdown' : 'text/plain' });
-  // FileVista's CSV parser splits on newlines before interpreting quotes.
-  const simpleCsv = /\.csv$/i.test(name) && !file.text.includes('"');
-  return {
-    id: file.id ?? name,
-    name,
-    size: blob.size,
-    type: blob.type,
-    fileType: markdown ? 'markdown' : simpleCsv ? 'csv' : sourceFile.test(name) ? 'code' : 'text',
-    source: { kind: 'blob', blob, name },
-  };
-}
+export type { PreviewFile } from './file-preview-utils';
 
 function FrontmatterPreview({
   file,
