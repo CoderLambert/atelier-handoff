@@ -359,3 +359,9 @@
 - `npm run check`、`npm run build`、`npm run build:desktop` 通过。`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 通过 399 项，既有 WebFetch 用例跳过 1 项。任务交互断言位于 [消息操作回归](../../../frontend/src/features/chat/message-actions.test.ts)。隔离 Electron 45.4.1 通过本地回环模型和真实 SDK 的 `update_plan` 请求核对 `0/2` 至 `2/2` 的更新、折叠保持、历史查看与中英文。1280×800、1440×900、1920×1080 和 680×800 下检查清单宽度与输入框一致，本机截图在 `.local/task-plan-completed-zh.png`。回退范围为聊天渲染、样式和词条。
 - **开发过程 review**。把切会话、折叠保持和新一轮历史归属加入现成的渲染回归，隔离桌面集中走一次真实工具更新。窗口调整后在同一个渲染帧读取清单和输入框边界，避免两次读取跨过窗口尺寸变化。
 - 文件说明批次 `composer-task-plan / c1997a1 + 源码哈希快照` 已完成。核对建议与输入哈希后更新四份文件说明，`npm run check:headers` 的本次文件检查通过。本机输入清单位于 `.local/task-plan-headers.pKbLaq/input-sha256.txt`。
+
+## 2026-11-23 · 工作台配色与对话流
+
+- P0 统一品牌和选中色，修正 48px 顶栏、侧栏时间、待审批状态与本机信任提示。上下文显示剩余百分比及旧样本标记。P1 历史执行明细使用时间轴，补充失败计数、退出码和恢复进度。历史消息操作按需显现并保留键盘、复制反馈和触屏入口。回退范围为前端、词条和侧栏烟测断言。
+- 类型、i18n、样式门禁和前端、桌面构建通过。404 项测试通过，1 项既有 WebFetch 用例跳过。Chromium 复核六主题与三种视口，隔离 Electron 复核原生分屏和执行明细。系统中文输入法实机测试待补。[验收记录与机器证据](../../../docs/evidence/frontend-design-system/2026-11-23-workspace-polish.md)
+- **开发过程 review**。用同一合成 API 夹具核对主题、视口、权限和执行状态。用 `31b769f` 的隔离副本复现侧栏旧断言，再按按钮实际边缘修正。后续修改控件尺寸时直接测量相邻边界，并组合验证输入框初始高度和长文本封顶。

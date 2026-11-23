@@ -442,6 +442,7 @@ export const inspector = {
   'tool.sdkPreview': ['SDK 回执预览', 'SDK receipt preview'],
   'tool.executionResult': ['执行结果', 'Execution result'],
   'tool.exitCode': ['退出码', 'Exit code'],
+  'tool.exitCodeSummary': ['退出码 {{code}}', 'Exit {{code}}'],
   'tool.notProvided': ['未提供', 'Not provided'],
   'tool.interrupted': ['中断', 'Interrupted'],
   'tool.yes': ['是', 'Yes'],

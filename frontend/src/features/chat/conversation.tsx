@@ -225,6 +225,7 @@ function RunProgress({
     <section
       className="run-progress"
       data-status={run.status}
+      data-active={active}
       aria-label={active ? t('progress.label') : t('progress.history')}
     >
       {active ? (
@@ -338,6 +339,7 @@ function RunResult({
       ? t('conversation.partialReply')
       : t('conversation.incompleteReply')
     : t('conversation.executionResult');
+  const completedTools = tools.filter((tool) => tool.status === 'succeeded').length;
   return (
     <section
       className="run-recovery"
@@ -347,12 +349,17 @@ function RunResult({
       <strong>{title}</strong>
       {run.error || run.reason ? <p>{run.error || run.reason}</p> : null}
       {tools.length > 0 ? (
-        <p>
-          {t('conversation.toolsCompleted', {
-            completed: tools.filter((tool) => tool.status === 'succeeded').length,
-            count: tools.length,
-          })}
-        </p>
+        <div className="run-recovery-progress-group">
+          <p>
+            {t('conversation.toolsCompleted', {
+              completed: completedTools,
+              count: tools.length,
+            })}
+          </p>
+          <div className="run-recovery-progress" aria-hidden="true">
+            <span style={{ width: `${(completedTools / tools.length) * 100}%` }} />
+          </div>
+        </div>
       ) : null}
       <div className="run-recovery-actions">
         <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
@@ -642,7 +649,7 @@ export function Conversation({
           </section>
         ) : null}
         {messages.length ? (
-          messages.map((message) => {
+          messages.map((message, index) => {
             const assistant = message.role === 'assistant';
             const run = indexes.runs.get(message.runId);
             const tools = indexes.tools.get(message.runId) || EMPTY_TOOLS;
@@ -655,6 +662,7 @@ export function Conversation({
                 className={cn('message', assistant ? 'assistant-message' : 'user-message')}
                 data-message-id={message.id}
                 data-run-id={message.runId}
+                data-last-message={index === messages.length - 1 || undefined}
               >
                 <div
                   className={cn('avatar', assistant ? 'ai-avatar' : 'user-avatar')}

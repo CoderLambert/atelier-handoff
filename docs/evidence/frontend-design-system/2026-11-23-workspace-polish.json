@@ -1,0 +1,754 @@
+{
+  "baseline": "31b769f",
+  "chromium": "155.0.8059.84",
+  "fixture": "real full React app entry, all /api intercepted with synthetic data",
+  "themes": [
+    {
+      "name": "theme-obsidian-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(24, 24, 27)",
+        "secondBar": "rgb(24, 24, 27)",
+        "period": "rgb(24, 24, 27)",
+        "tab": "rgb(24, 24, 27)",
+        "selectedStripe": "rgb(24, 24, 27)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-obsidian-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(24, 24, 27)",
+        "secondBar": "rgb(24, 24, 27)",
+        "period": "rgb(24, 24, 27)",
+        "tab": "rgb(24, 24, 27)",
+        "selectedStripe": "rgb(24, 24, 27)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-obsidian-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(24, 24, 27)",
+        "secondBar": "rgb(24, 24, 27)",
+        "period": "rgb(24, 24, 27)",
+        "tab": "rgb(24, 24, 27)",
+        "selectedStripe": "rgb(24, 24, 27)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-classic-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(70, 99, 57)",
+        "secondBar": "rgb(70, 99, 57)",
+        "period": "rgb(70, 99, 57)",
+        "tab": "rgb(70, 99, 57)",
+        "selectedStripe": "rgb(70, 99, 57)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-classic-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(70, 99, 57)",
+        "secondBar": "rgb(70, 99, 57)",
+        "period": "rgb(70, 99, 57)",
+        "tab": "rgb(70, 99, 57)",
+        "selectedStripe": "rgb(70, 99, 57)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-classic-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(70, 99, 57)",
+        "secondBar": "rgb(70, 99, 57)",
+        "period": "rgb(70, 99, 57)",
+        "tab": "rgb(70, 99, 57)",
+        "selectedStripe": "rgb(70, 99, 57)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-parchment-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(140, 78, 40)",
+        "secondBar": "rgb(140, 78, 40)",
+        "period": "rgb(140, 78, 40)",
+        "tab": "rgb(140, 78, 40)",
+        "selectedStripe": "rgb(140, 78, 40)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-parchment-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(140, 78, 40)",
+        "secondBar": "rgb(140, 78, 40)",
+        "period": "rgb(140, 78, 40)",
+        "tab": "rgb(140, 78, 40)",
+        "selectedStripe": "rgb(140, 78, 40)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-parchment-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(140, 78, 40)",
+        "secondBar": "rgb(140, 78, 40)",
+        "period": "rgb(140, 78, 40)",
+        "tab": "rgb(140, 78, 40)",
+        "selectedStripe": "rgb(140, 78, 40)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-nordic-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(37, 99, 235)",
+        "secondBar": "rgb(37, 99, 235)",
+        "period": "rgb(37, 99, 235)",
+        "tab": "rgb(37, 99, 235)",
+        "selectedStripe": "rgb(37, 99, 235)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-nordic-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(37, 99, 235)",
+        "secondBar": "rgb(37, 99, 235)",
+        "period": "rgb(37, 99, 235)",
+        "tab": "rgb(37, 99, 235)",
+        "selectedStripe": "rgb(37, 99, 235)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-nordic-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(37, 99, 235)",
+        "secondBar": "rgb(37, 99, 235)",
+        "period": "rgb(37, 99, 235)",
+        "tab": "rgb(37, 99, 235)",
+        "selectedStripe": "rgb(37, 99, 235)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(180, 83, 9)",
+        "background": "rgb(255, 251, 235)"
+      }
+    },
+    {
+      "name": "theme-rose-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(180, 99, 122)",
+        "secondBar": "rgb(180, 99, 122)",
+        "period": "rgb(180, 99, 122)",
+        "tab": "rgb(180, 99, 122)",
+        "selectedStripe": "rgb(180, 99, 122)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-rose-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(180, 99, 122)",
+        "secondBar": "rgb(180, 99, 122)",
+        "period": "rgb(180, 99, 122)",
+        "tab": "rgb(180, 99, 122)",
+        "selectedStripe": "rgb(180, 99, 122)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-rose-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(180, 99, 122)",
+        "secondBar": "rgb(180, 99, 122)",
+        "period": "rgb(180, 99, 122)",
+        "tab": "rgb(180, 99, 122)",
+        "selectedStripe": "rgb(180, 99, 122)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(163, 77, 11)",
+        "background": "rgb(251, 244, 232)"
+      }
+    },
+    {
+      "name": "theme-midnight-1280x800",
+      "status": "passed",
+      "viewport": [
+        1280,
+        800
+      ],
+      "accents": {
+        "primary": "rgb(56, 189, 248)",
+        "secondBar": "rgb(56, 189, 248)",
+        "period": "rgb(56, 189, 248)",
+        "tab": "rgb(56, 189, 248)",
+        "selectedStripe": "rgb(56, 189, 248)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(251, 191, 36)",
+        "background": "rgb(69, 26, 3)"
+      }
+    },
+    {
+      "name": "theme-midnight-1440x900",
+      "status": "passed",
+      "viewport": [
+        1440,
+        900
+      ],
+      "accents": {
+        "primary": "rgb(56, 189, 248)",
+        "secondBar": "rgb(56, 189, 248)",
+        "period": "rgb(56, 189, 248)",
+        "tab": "rgb(56, 189, 248)",
+        "selectedStripe": "rgb(56, 189, 248)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(251, 191, 36)",
+        "background": "rgb(69, 26, 3)"
+      }
+    },
+    {
+      "name": "theme-midnight-1920x1080",
+      "status": "passed",
+      "viewport": [
+        1920,
+        1080
+      ],
+      "accents": {
+        "primary": "rgb(56, 189, 248)",
+        "secondBar": "rgb(56, 189, 248)",
+        "period": "rgb(56, 189, 248)",
+        "tab": "rgb(56, 189, 248)",
+        "selectedStripe": "rgb(56, 189, 248)"
+      },
+      "documentOverflow": 0,
+      "warning": {
+        "foreground": "rgb(251, 191, 36)",
+        "background": "rgb(69, 26, 3)"
+      }
+    }
+  ],
+  "interactionResults": [
+    {
+      "name": "app-entry",
+      "status": "passed",
+      "details": {
+        "title": "atelier. — 把决定留给你",
+        "appErrors": []
+      }
+    },
+    {
+      "name": "native-footer-zh-en",
+      "status": "passed",
+      "details": {
+        "zh-CN": "Enter 发送 · Shift + Enter 换行\n本机信任 · 按当前用户权限执行本机命令与读写",
+        "en": "Enter to send · Shift + Enter for a new line\nTrust this device · runs local commands and file access with your permissions"
+      }
+    },
+    {
+      "name": "tabs-keyboard-and-narrow-browser",
+      "status": "passed",
+      "details": {
+        "dimensions": {
+          "width": 712,
+          "scroll": 712
+        },
+        "composer": {
+          "x": 280,
+          "y": 591.84375,
+          "width": 632,
+          "height": 208.15625
+        },
+        "right": {
+          "x": 961,
+          "y": 0,
+          "width": 319,
+          "height": 800
+        },
+        "screenshot": ".local/frontend-regression-20261123/evidence-final/browser-narrow-center-1280.png",
+        "draftPreserved": true,
+        "tabFocus": true,
+        "browserKind": "web-preview"
+      }
+    },
+    {
+      "name": "context-sample-levels-stale-focus",
+      "status": "passed",
+      "details": {
+        "samples": [
+          {
+            "remaining": 80,
+            "level": "normal",
+            "bounds": {
+              "x": 425,
+              "y": 366,
+              "width": 368,
+              "height": 336.75
+            },
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/context-80.png"
+          },
+          {
+            "remaining": 50,
+            "level": "normal",
+            "bounds": {
+              "x": 425,
+              "y": 366,
+              "width": 368,
+              "height": 336.75
+            },
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/context-50.png"
+          },
+          {
+            "remaining": 20,
+            "level": "warning",
+            "bounds": {
+              "x": 425,
+              "y": 366,
+              "width": 368,
+              "height": 336.75
+            },
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/context-20.png"
+          },
+          {
+            "remaining": 5,
+            "level": "danger",
+            "bounds": {
+              "x": 425,
+              "y": 366,
+              "width": 368,
+              "height": 336.75
+            },
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/context-5.png"
+          }
+        ],
+        "stale": true,
+        "sdkOwnership": true,
+        "languages": [
+          "zh-CN",
+          "en"
+        ]
+      }
+    },
+    {
+      "name": "slash-hash-popup-and-composition-no-send",
+      "status": "passed",
+      "details": {
+        "screenshots": [
+          {
+            "symbol": "/",
+            "bounds": {
+              "x": 372,
+              "y": 533.703125,
+              "width": 506,
+              "height": 63.984375
+            },
+            "popupScreenshot": ".local/frontend-regression-20261123/evidence-final/slash-popup.png",
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/slash-selection.png"
+          },
+          {
+            "symbol": "#",
+            "bounds": {
+              "x": 372,
+              "y": 433.71875,
+              "width": 506,
+              "height": 127.96875
+            },
+            "popupScreenshot": ".local/frontend-regression-20261123/evidence-final/hash-popup.png",
+            "screenshot": ".local/frontend-regression-20261123/evidence-final/hash-selection.png"
+          }
+        ],
+        "sendsBefore": 0,
+        "sendsAfter": 0,
+        "syntheticComposition": true
+      }
+    },
+    {
+      "name": "history-actions-keyboard-copy-fallback",
+      "status": "passed",
+      "details": {
+        "visibility": {
+          "opacity": "1",
+          "visibility": "visible"
+        },
+        "fallbackPreservesMarkdown": true,
+        "selectedForManualCopy": true,
+        "rewindCancelFocus": true,
+        "screenshot": ".local/frontend-regression-20261123/evidence-final/history-copy-fallback.png"
+      }
+    },
+    {
+      "name": "p1-tool-failure-count-exit-code-timeline",
+      "status": "passed",
+      "details": {
+        "failedCountText": "执行明细 · 4\n2 项失败",
+        "chatScreen": ".local/frontend-regression-20261123/evidence-final/tool-failures.png",
+        "timelineClass": "group",
+        "traceScreen": ".local/frontend-regression-20261123/evidence-final/trace-timeline.png"
+      }
+    },
+    {
+      "name": "p1-progress-states",
+      "status": "passed",
+      "details": [
+        {
+          "status": "queued",
+          "text": "Waiting to run\nLast updated 93 min 7 sec ago\n\nTool calls: 0 / 1 finished\n\nExecution details · 1\nBash\nprintf synthetic\nRunning"
+        },
+        {
+          "status": "running",
+          "text": "Calling tool · Bash\nLast updated 93 min 8 sec ago\n\nTool calls: 0 / 1 finished\n\nExecution details · 1\nBash\nprintf synthetic\nRunning"
+        },
+        {
+          "status": "awaiting_permission",
+          "text": "Waiting for action approval\nLast updated 93 min 8 sec ago\n\nTool calls: 0 / 1 finished\n\nExecution details · 1\nBash\nprintf synthetic\nAwaiting approval"
+        },
+        {
+          "status": "stopping",
+          "text": "Stopping\nLast updated 93 min 9 sec ago\n\nTool calls: 0 / 1 finished\n\nExecution details · 1\nBash\nprintf synthetic\nRunning"
+        }
+      ]
+    },
+    {
+      "name": "no-real-network-and-render-errors",
+      "status": "passed",
+      "details": {
+        "external": [],
+        "errors": [],
+        "unexpected": []
+      }
+    },
+    {
+      "name": "narrow-browser-context-and-completion",
+      "status": "passed",
+      "details": {
+        "bounds": {
+          "x": 147,
+          "y": 322,
+          "width": 368,
+          "height": 380.5
+        },
+        "popup": {
+          "x": 322,
+          "y": 469.71875,
+          "width": 506,
+          "height": 127.96875
+        },
+        "screenshot": ".local/frontend-regression-20261123/evidence-extra/narrow-browser-context.png",
+        "popupScreenshot": ".local/frontend-regression-20261123/evidence-extra/narrow-browser-hash-popup.png",
+        "noSend": true
+      }
+    },
+    {
+      "name": "p1-recovery-progress-width",
+      "status": "passed",
+      "details": {
+        "trackBox": {
+          "x": 409,
+          "y": 249.609375,
+          "width": 240,
+          "height": 3
+        },
+        "fill": {
+          "x": 409,
+          "y": 249.609375,
+          "width": 120,
+          "height": 3
+        },
+        "text": "Completed 2 / 4 tool calls.",
+        "screenshot": ".local/frontend-regression-20261123/evidence-extra/recovery-progress.png"
+      }
+    },
+    {
+      "name": "composer-plan-height-parchment-boundaries",
+      "status": "passed",
+      "details": {
+        "plans": [
+          {
+            "count": 3,
+            "defaultExpanded": true
+          },
+          {
+            "count": 4,
+            "defaultExpanded": false
+          }
+        ],
+        "constraints": {
+          "minHeight": "44px",
+          "maxHeight": "220px",
+          "lineHeight": "24px",
+          "height": "44px",
+          "scrollHeight": 44
+        },
+        "short": {
+          "x": 365,
+          "y": 656.84375,
+          "width": 790,
+          "height": 44
+        },
+        "long": {
+          "x": 365,
+          "y": 480.84375,
+          "width": 790,
+          "height": 220
+        },
+        "shrunk": {
+          "x": 365,
+          "y": 656.84375,
+          "width": 790,
+          "height": 44
+        },
+        "style": {
+          "overflowY": "auto",
+          "scrollHeight": 1464,
+          "clientHeight": 220
+        },
+        "boundaries": [
+          {
+            "selector": ".composer-box",
+            "label": null,
+            "borderColor": "rgb(148, 137, 123)",
+            "borderWidth": "1px",
+            "background": "rgb(255, 255, 255)",
+            "width": 820,
+            "height": 110,
+            "expectedInput": "rgb(148, 137, 123)"
+          },
+          {
+            "selector": ".sidebar-search input",
+            "label": null,
+            "borderColor": "rgb(148, 137, 123)",
+            "borderWidth": "1px",
+            "background": "rgb(255, 255, 255)",
+            "width": 207,
+            "height": 32,
+            "expectedInput": "rgb(148, 137, 123)"
+          },
+          {
+            "selector": ".new-session",
+            "label": "新建会话",
+            "borderColor": "rgb(148, 137, 123)",
+            "borderWidth": "1px",
+            "background": "rgb(255, 255, 255)",
+            "width": 207,
+            "height": 36,
+            "expectedInput": "rgb(148, 137, 123)"
+          },
+          {
+            "selector": ".chat-composer [role=\"combobox\"]:not(.composer-mode-trigger)",
+            "label": "选择模型",
+            "borderColor": "rgb(148, 137, 123)",
+            "borderWidth": "1px",
+            "background": "rgb(255, 255, 255)",
+            "width": 187.984375,
+            "height": 32,
+            "expectedInput": "rgb(148, 137, 123)"
+          },
+          {
+            "selector": ".chat-composer [role=\"combobox\"]:not(.composer-mode-trigger)",
+            "label": "选择推理深度",
+            "borderColor": "rgb(148, 137, 123)",
+            "borderWidth": "1px",
+            "background": "rgb(255, 255, 255)",
+            "width": 113.5625,
+            "height": 32,
+            "expectedInput": "rgb(148, 137, 123)"
+          }
+        ],
+        "screenshot": ".local/frontend-regression-20261123/evidence-composer-verified/parchment-composer-boundaries.png"
+      }
+    }
+  ],
+  "electron": {
+    "version": "45.4.1",
+    "contextAndSplit": {
+      "zh": {
+        "width": 1280,
+        "height": 800
+      },
+      "en": {
+        "width": 1440,
+        "height": 900
+      },
+      "cacheHitRate": 0.6,
+      "requests": [
+        "/v1/messages?beta=true"
+      ],
+      "draftPreserved": true,
+      "persistedAfterRestart": true,
+      "requestDisclosure": true,
+      "sessionTitleEllipsis": true,
+      "browserTabTitleEllipsis": true,
+      "browserSlotRestored": true,
+      "nativeKeyboardInput": true,
+      "nativeSplitResize": true,
+      "tabKeyboardNavigation": true,
+      "narrowNavigationFocusRestored": true,
+      "reducedMotion": true,
+      "wideViewport": [
+        1920,
+        1080
+      ],
+      "conversationHorizontalOverflow": 0
+    },
+    "toolActivity": {
+      "result": "passed",
+      "modelTransport": "loopback",
+      "commandVisibleBeforeCompletion": true,
+      "fullCommandLength": 4585,
+      "realOutputVisible": true,
+      "toolEventCorrelated": true,
+      "historyExpandable": true,
+      "sidebarHiddenByDefault": true,
+      "savedLogBytes": 217623,
+      "pagesToMiddle": 6,
+      "savedLogMiddleVisible": true,
+      "downloadedSavedLogMatches": true,
+      "firstLogReceiptOmitsMiddle": true,
+      "outputFocusRestored": true
+    }
+  },
+  "tests": {
+    "passed": 404,
+    "failed": 0,
+    "skipped": 1
+  },
+  "limitations": [
+    "The browser composition sequence uses synthetic events. A system Chinese IME was not exercised."
+  ]
+}

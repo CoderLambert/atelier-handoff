@@ -100,7 +100,11 @@ export function MessageActions({
   }
 
   return (
-    <div className="message-actions" data-feedback={feedback?.status}>
+    <div
+      className="message-actions"
+      data-feedback={feedback?.status}
+      data-forking={forking || undefined}
+    >
       <div className="message-action-buttons" role="group" aria-label={t('message.actions')}>
         <Button
           type="button"
