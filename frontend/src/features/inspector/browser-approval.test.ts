@@ -63,7 +63,12 @@ function renderBrowser(settings: DesktopBrowserAccessState | undefined, humanCon
       createElement(
         QueryClientProvider,
         { client },
-        createElement(DesktopBrowser, { projectId, state }),
+        createElement(DesktopBrowser, {
+          projectId,
+          state,
+          onClose: () => {},
+          closeLabel: '关闭浏览器',
+        }),
       ),
     );
   } finally {

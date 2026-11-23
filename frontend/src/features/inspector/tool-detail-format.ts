@@ -52,6 +52,17 @@ function singleLine(text: string): string {
   const line = text.replace(/\s+/gu, ' ').trim();
   return line.length > 180 ? `${line.slice(0, 179)}…` : line;
 }
+function displayTarget(target: string): string {
+  if (!/^https?:\/\//iu.test(target)) return target;
+  try {
+    // Validate without normalizing the recorded URL or decoding reserved delimiters.
+    new URL(target);
+    // Keep controls, invisible formatting and line separators out of summaries.
+    return decodeURI(target).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, encodeURIComponent);
+  } catch {
+    return target;
+  }
+}
 /** Split simple one-line lists at unquoted semicolons for display, retaining every character. */
 export function splitCommandForDisplay(command: string): string[] {
   if (!command.includes(';') || /[\r\n`]|<</u.test(command)) return [command];
@@ -157,7 +168,7 @@ export function toolInputView(tool: ToolCall): ToolInputView {
   return {
     name,
     isCommand,
-    target: singleLine(target),
+    target: singleLine(command ?? displayTarget(target)),
     command,
     explanation,
     parameters,

@@ -282,6 +282,14 @@ details.tool-detail {
   font-family: var(--font-mono);
 }
 
+.tool-detail__body[data-variant='compact'] .tool-detail__pre {
+  max-height: 180px;
+}
+
+.tool-detail__body[data-variant='compact'] .tool-detail__section--input .tool-detail__pre {
+  max-height: 120px;
+}
+
 .tool-detail[data-variant='compact'] > .tool-detail__summary {
   min-height: 34px;
   padding: 6px 10px;

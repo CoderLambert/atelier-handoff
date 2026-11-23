@@ -78,6 +78,63 @@ test('tool summary uses the recorded command ahead of JSON input, preserves mult
   );
 });
 
+test('HTTP URL targets decode readable text once while preserving reserved escapes and original parameters', () => {
+  const url =
+    'https://example.test/%E4%B8%AD%E6%96%87?q=%E6%B5%8B%E8%AF%95%2F%3F%23%26%3D%2B&nested=%250A';
+  const inputSummary = JSON.stringify({ url, timeout: 1000 });
+  const value = tool({ name: 'WebFetch', inputSummary });
+  const view = toolInputView(value);
+  assert.equal(view.target, 'https://example.test/中文?q=测试%2F%3F%23%26%3D%2B&nested=%0A');
+  assert.equal(toolCallSummary(value), `WebFetch · ${view.target}`);
+  assert.equal(view.parameters, JSON.stringify({ url, timeout: 1000 }, null, 2));
+  assert.equal(value.inputSummary, inputSummary);
+  assert.equal(
+    toolInputView(
+      tool({
+        name: 'WebFetch',
+        inputSummary: JSON.stringify({ url: `HTTP://example.test/${'%E4%B8%AD'.repeat(60)}` }),
+      }),
+    ).target,
+    `HTTP://example.test/${'中'.repeat(60)}`,
+  );
+});
+
+test('non-HTTP targets and malformed URLs stay encoded, including commands containing a URL', () => {
+  for (const target of [
+    '/fixture/%E4%B8%AD.txt',
+    'fixture/%E4%B8%AD',
+    '//example.test/%E4%B8%AD',
+    'ftp://example.test/%E4%B8%AD',
+    'javascript:alert("%E4%B8%AD")',
+    'curl https://example.test/%E4%B8%AD',
+    'https://',
+    'https://[invalid]/%E4%B8%AD',
+    'https://example.test/%E4%B8%AD%',
+    'https://example.test/%E4%B8%AD%GG',
+    'https://example.test/%E4%B8%AD%E0%A4',
+  ]) {
+    assert.equal(
+      toolInputView(tool({ name: 'WebFetch', inputSummary: JSON.stringify({ url: target }) }))
+        .target,
+      target,
+    );
+  }
+  const command = 'https://example.test/%E4%B8%AD%0A';
+  for (const name of ['Bash', 'mcp__atelier__run_command']) {
+    const view = toolInputView(tool({ name, inputSummary: JSON.stringify({ command }) }));
+    assert.equal(view.command, command);
+    assert.equal(view.target, command);
+  }
+});
+
+test('decoded URL controls and line separators remain escaped in single-line summaries', () => {
+  const escapes = '%00%01%09%0A%0D%1B%7F%C2%85%E2%80%A8%E2%80%A9%E2%80%AE%E2%80%8B';
+  const url = `https://example.test/%E4%B8%AD${escapes}/tail`;
+  const value = tool({ name: 'WebFetch', inputSummary: JSON.stringify({ url }) });
+  assert.equal(toolInputView(value).target, `https://example.test/中${escapes}/tail`);
+  assert.doesNotMatch(toolCallSummary(value), /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
+});
+
 const semicolonCommand = String.raw`printf 'first;\n'; export SAMPLE=$(printf x; printf y); printf '%s\n' "$SAMPLE"`;
 
 test('shell display breaks between top-level statements and preserves source characters', () => {
@@ -417,7 +474,7 @@ test(
           (id) =>
             document.querySelector('[data-tool-id]')?.getAttribute('data-tool-id') === id ||
             (!document.querySelector('details') &&
-              document.querySelector('.tool-detail__body') !== null),
+              document.querySelector('.tool-detail__id')?.textContent === id),
           value.id,
         );
       };
@@ -581,6 +638,7 @@ test(
           outputTruncated: true,
           outputLength: 90000,
         }),
+        'compact',
       );
       await page.locator('.tool-detail__summary').click();
       assert.equal(
@@ -593,6 +651,12 @@ test(
       assert.equal(
         await page.getByLabel('stdout / stderr（合并）', { exact: true }).textContent(),
         longText,
+      );
+      assert.equal(
+        await page
+          .getByLabel('stdout / stderr（合并）', { exact: true })
+          .evaluate((element) => getComputedStyle(element).maxHeight),
+        '180px',
       );
       await page.getByRole('button', { name: /查看完整输出/u }).click();
       assert.equal(await page.evaluate(() => Reflect.get(window, 'outputClicks')), 1);
@@ -610,6 +674,54 @@ test(
         await page.getByLabel('输出', { exact: true }).innerText(),
         /当前未提供完整输出入口/u,
       );
+
+      for (const variant of ['default', 'compact']) {
+        await render(
+          tool({
+            id: `scroll-limits-${variant}`,
+            command: 'printf line\n'.repeat(100),
+            inputSummary: JSON.stringify({
+              options: Array.from({ length: 100 }, (_, index) => index),
+            }),
+            output: JSON.stringify({ stdout: longText, stderr: longText, interrupted: false }),
+          }),
+          variant,
+          true,
+        );
+        const inputLimit = variant === 'compact' ? 120 : 176;
+        const outputLimit = variant === 'compact' ? 180 : 288;
+        const sizes = await page.locator('.tool-detail__pre').evaluateAll((elements) =>
+          elements.map((element) => ({
+            input: element.closest('.tool-detail__section--input') !== null,
+            maxHeight: getComputedStyle(element).maxHeight,
+            height: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+          })),
+        );
+        assert.equal(sizes.length, 4);
+        for (const size of sizes) {
+          const limit = size.input ? inputLimit : outputLimit;
+          assert.equal(size.maxHeight, `${limit}px`);
+          assert.equal(size.height, limit);
+          assert.ok(size.scrollHeight > size.height);
+        }
+      }
+
+      await page.evaluate((text) => {
+        const reader = document.createElement('div');
+        reader.className = 'tool-output-dialog__reader';
+        const pre = document.createElement('pre');
+        pre.textContent = text;
+        reader.append(pre);
+        document.body.append(reader);
+      }, longText);
+      const fullOutput = page.locator('.tool-output-dialog__reader pre');
+      assert.equal(await fullOutput.textContent(), longText);
+      assert.equal(
+        await fullOutput.evaluate((element) => getComputedStyle(element).maxHeight),
+        'none',
+      );
+      await page.locator('.tool-output-dialog__reader').evaluate((element) => element.remove());
 
       await render(
         tool({
@@ -659,7 +771,7 @@ test(
               scrollHeight: element.scrollHeight,
             }));
           assert.ok(
-            commandPreview.height <= 176 && commandPreview.height < commandPreview.scrollHeight,
+            commandPreview.height <= 120 && commandPreview.height < commandPreview.scrollHeight,
           );
           const layout = await page.locator('details').evaluate((element) => ({
             width: element.clientWidth,

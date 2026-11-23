@@ -269,6 +269,13 @@ test(
       );
       const before = await panel.boundingBox();
       assert.ok(before && Math.abs(before.width - 320) < 2);
+      const topbar = await page.locator('.topbar').boundingBox();
+      const tabs = await panel.locator('.desktop-browser-tabbar').boundingBox();
+      assert.ok(topbar && tabs);
+      assert.equal(topbar.height, 48);
+      assert.equal(tabs.height, 48);
+      assert.equal(tabs.y + tabs.height, topbar.y + topbar.height);
+      assert.equal(await panel.locator('.workspace-browser-heading').count(), 0);
       const resized = page.waitForResponse(
         (response) =>
           response.url().endsWith('/api/settings/workspace-layout') &&
@@ -303,6 +310,12 @@ test(
       await changes.click();
       const dialog = page.getByRole('dialog', { name: '变更记录', exact: true });
       await dialog.getByText('暂无操作记录。', { exact: true }).waitFor();
+      const drawer = await dialog.boundingBox();
+      assert.ok(drawer);
+      assert.equal(drawer.y, 0);
+      assert.equal(drawer.height, 900);
+      assert.equal(drawer.width, 480);
+      assert.equal(drawer.x + drawer.width, 1440);
       await page.waitForFunction(
         () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds === null,
       );

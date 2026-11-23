@@ -1,7 +1,7 @@
 /**
  * @file 汇集工作台全局样式并定义主题变量。
  * @implementation 按层引入 Tailwind、基础布局和各功能样式，同时定义工作台主题 token 与全局规则。
- * @updated 2026-11-23T12:55:00+08:00
+ * @updated 2026-11-23T20:05:00+08:00
  */
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
@@ -20,54 +20,60 @@
   color-scheme: light;
 
   /* Obsidian Studio Palette */
-  --ui-theme-obsidian-background: #fafafb;
-  --ui-theme-obsidian-foreground: #111827;
+  --ui-theme-obsidian-background: #f9f9fb;
+  --ui-theme-obsidian-foreground: #141518;
   --ui-theme-obsidian-card: #ffffff;
-  --ui-theme-obsidian-sidebar: #f7f7f8;
-  --ui-theme-obsidian-muted: #f3f4f6;
-  --ui-theme-obsidian-muted-foreground: #6b7280;
-  --ui-theme-obsidian-secondary: #f4f5f7;
-  --ui-theme-obsidian-secondary-foreground: #1f2937;
-  --ui-theme-obsidian-accent: #f0f1f4;
-  --ui-theme-obsidian-accent-foreground: #111827;
-  --ui-theme-obsidian-selected: #e5e7eb;
+  --ui-theme-obsidian-sidebar: #f3f4f6;
+  --ui-theme-obsidian-muted: #f1f2f5;
+  --ui-theme-obsidian-muted-foreground: #595d66;
+  --ui-theme-obsidian-secondary: #eef0f3;
+  --ui-theme-obsidian-secondary-foreground: #1f2228;
+  --ui-theme-obsidian-accent: #e9ebef;
+  --ui-theme-obsidian-accent-foreground: #141518;
+  --ui-theme-obsidian-selected: #e2e4ea;
   --ui-theme-obsidian-selected-foreground: #09090b;
   --ui-theme-obsidian-primary: #18181b;
   --ui-theme-obsidian-primary-foreground: #ffffff;
   --ui-theme-obsidian-primary-hover: #27272a;
   --ui-theme-obsidian-primary-active: #09090b;
-  --ui-theme-obsidian-border: #e5e7eb;
-  --ui-theme-obsidian-border-subtle: #f1f2f4;
-  --ui-theme-obsidian-input: #d1d5db;
+  --ui-theme-obsidian-border: #e4e5e9;
+  --ui-theme-obsidian-border-subtle: #eff0f3;
+  --ui-theme-obsidian-input: #8b8f99;
   --ui-theme-obsidian-ring: #18181b;
   --ui-theme-obsidian-scrim: rgb(0 0 0 / 0.35);
   --ui-theme-obsidian-shadow: rgb(0 0 0 / 0.05);
   --ui-theme-obsidian-shadow-overlay: 0 16px 36px -4px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04);
 
   /* Atelier Classic Palette */
-  --ui-theme-classic-background: #f7f8f5;
-  --ui-theme-classic-foreground: #252d24;
+  --ui-theme-classic-background: #fafbf8;
+  --ui-theme-classic-foreground: #222921;
   --ui-theme-classic-card: #ffffff;
-  --ui-theme-classic-sidebar: #f2f4ef;
-  --ui-theme-classic-muted: #f0f3ec;
-  --ui-theme-classic-muted-foreground: #5c6756;
-  --ui-theme-classic-secondary: #edf1e8;
-  --ui-theme-classic-secondary-foreground: #3b4735;
-  --ui-theme-classic-accent: #e8eee3;
-  --ui-theme-classic-accent-foreground: #33432d;
-  --ui-theme-classic-selected: #e0ead9;
-  --ui-theme-classic-selected-foreground: #2f4b27;
-  --ui-theme-classic-primary: #466339;
+  --ui-theme-classic-sidebar: #f2f5ef;
+  --ui-theme-classic-muted: #f0f4ec;
+  --ui-theme-classic-muted-foreground: #566151;
+  --ui-theme-classic-secondary: #ebf0e6;
+  --ui-theme-classic-secondary-foreground: #323d2e;
+  --ui-theme-classic-accent: #e5ece0;
+  --ui-theme-classic-accent-foreground: #273623;
+  --ui-theme-classic-selected: #dde8d6;
+  --ui-theme-classic-selected-foreground: #233b1d;
+  --ui-theme-classic-primary: #3f5e34;
   --ui-theme-classic-primary-foreground: #ffffff;
-  --ui-theme-classic-primary-hover: #37512d;
-  --ui-theme-classic-primary-active: #2d4325;
-  --ui-theme-classic-border: #d8ded1;
-  --ui-theme-classic-border-subtle: #e8ece4;
-  --ui-theme-classic-input: #808b78;
-  --ui-theme-classic-ring: #466a36;
-  --ui-theme-classic-scrim: rgb(24 32 15 / 0.38);
-  --ui-theme-classic-shadow: rgb(37 50 26 / 0.12);
-  --ui-theme-classic-shadow-overlay: 0 16px 48px rgb(37 50 26 / 0.12), 0 2px 8px rgb(37 50 26 / 0.12);
+  --ui-theme-classic-primary-hover: #334e2a;
+  --ui-theme-classic-primary-active: #283f21;
+  --ui-theme-classic-border: #dde3d7;
+  --ui-theme-classic-border-subtle: #eaeedf;
+  --ui-theme-classic-input: #828d7a;
+  --ui-theme-classic-ring: #3f5e34;
+  --ui-theme-classic-scrim: rgb(24 32 15 / 0.35);
+  --ui-theme-classic-shadow: rgb(34 45 25 / 0.05);
+  --ui-theme-classic-shadow-overlay: 0 16px 36px -4px rgb(34 45 25 / 0.09), 0 4px 12px -2px rgb(34 45 25 / 0.04);
+  --ui-theme-classic-success: #2c6844;
+  --ui-theme-classic-success-soft: #ecf5ee;
+  --ui-theme-classic-success-border: #c1dec9;
+  --ui-theme-classic-warning: #a34d0b;
+  --ui-theme-classic-warning-soft: #fbf4e8;
+  --ui-theme-classic-warning-border: #ebd1a4;
 
   /* Warm Parchment Palette */
   --ui-theme-parchment-background: #fcfbf8;
@@ -95,7 +101,7 @@
   --ui-theme-parchment-shadow-overlay:
     0 16px 36px -4px rgb(36 33 29 / 0.09), 0 4px 12px -2px rgb(36 33 29 / 0.04);
 
-  /* Shared Parchment and Rose status colors */
+  /* Warm Parchment status colors */
   --ui-theme-warm-success: #1f6b4e;
   --ui-theme-warm-success-soft: #eef5f0;
   --ui-theme-warm-success-border: #c5ddd0;
@@ -104,91 +110,102 @@
   --ui-theme-warm-warning-border: #ead2a8;
 
   /* Nordic Frost Palette */
-  --ui-theme-nordic-background: #f8fafc;
+  --ui-theme-nordic-background: #f8fafd;
   --ui-theme-nordic-foreground: #0f172a;
   --ui-theme-nordic-card: #ffffff;
-  --ui-theme-nordic-sidebar: #f1f5f9;
-  --ui-theme-nordic-muted: #e2e8f0;
-  --ui-theme-nordic-muted-foreground: #64748b;
-  --ui-theme-nordic-secondary: #e2e8f0;
+  --ui-theme-nordic-sidebar: #f1f5fa;
+  --ui-theme-nordic-muted: #eef3f8;
+  --ui-theme-nordic-muted-foreground: #516075;
+  --ui-theme-nordic-secondary: #e9f0f7;
   --ui-theme-nordic-secondary-foreground: #1e293b;
-  --ui-theme-nordic-accent: #e0e7ff;
-  --ui-theme-nordic-accent-foreground: #1e1b4b;
+  --ui-theme-nordic-accent: #e6effb;
+  --ui-theme-nordic-accent-foreground: #172554;
   --ui-theme-nordic-selected: #dbeafe;
   --ui-theme-nordic-selected-foreground: #1e3a8a;
   --ui-theme-nordic-primary: #2563eb;
   --ui-theme-nordic-primary-foreground: #ffffff;
   --ui-theme-nordic-primary-hover: #1d4ed8;
   --ui-theme-nordic-primary-active: #1e40af;
-  --ui-theme-nordic-border: #cbd5e1;
-  --ui-theme-nordic-border-subtle: #e2e8f0;
-  --ui-theme-nordic-input: #94a3b8;
+  --ui-theme-nordic-border: #dce4ef;
+  --ui-theme-nordic-border-subtle: #ebf0f7;
+  --ui-theme-nordic-input: #7d8ea5;
   --ui-theme-nordic-ring: #2563eb;
   --ui-theme-nordic-scrim: rgb(15 23 42 / 0.35);
   --ui-theme-nordic-shadow: rgb(15 23 42 / 0.05);
   --ui-theme-nordic-shadow-overlay: 0 16px 36px -4px rgb(15 23 42 / 0.08), 0 4px 12px -2px rgb(15 23 42 / 0.04);
 
   /* Rosé Pine Dawn Palette */
-  --ui-theme-rose-background: #faf4ed;
-  --ui-theme-rose-foreground: #575279;
-  --ui-theme-rose-card: #fffaf3;
-  --ui-theme-rose-sidebar: #f2e9de;
-  --ui-theme-rose-muted: #e4dbcf;
-  --ui-theme-rose-muted-foreground: #797593;
-  --ui-theme-rose-secondary: #ece1d3;
-  --ui-theme-rose-secondary-foreground: #575279;
-  --ui-theme-rose-accent: #f4ebe1;
-  --ui-theme-rose-accent-foreground: #575279;
-  --ui-theme-rose-selected: #ebbcba;
-  --ui-theme-rose-selected-foreground: #282737;
-  --ui-theme-rose-primary: #b4637a;
+  --ui-theme-rose-background: #fcf7f2;
+  --ui-theme-rose-foreground: #4a4568;
+  --ui-theme-rose-card: #fffdfa;
+  --ui-theme-rose-sidebar: #f5ede5;
+  --ui-theme-rose-muted: #f1e8df;
+  --ui-theme-rose-muted-foreground: #635d7e;
+  --ui-theme-rose-secondary: #eee4da;
+  --ui-theme-rose-secondary-foreground: #464163;
+  --ui-theme-rose-accent: #f4e8e4;
+  --ui-theme-rose-accent-foreground: #3f3a59;
+  --ui-theme-rose-selected: #f1d6d4;
+  --ui-theme-rose-selected-foreground: #2f2a42;
+  --ui-theme-rose-primary: #a8516a;
   --ui-theme-rose-primary-foreground: #ffffff;
-  --ui-theme-rose-primary-hover: #9e5267;
-  --ui-theme-rose-primary-active: #884255;
-  --ui-theme-rose-border: #dfd5c6;
-  --ui-theme-rose-border-subtle: #ebd9c8;
-  --ui-theme-rose-input: #9893a5;
-  --ui-theme-rose-ring: #b4637a;
-  --ui-theme-rose-scrim: rgb(87 82 121 / 0.35);
-  --ui-theme-rose-shadow: rgb(87 82 121 / 0.08);
-  --ui-theme-rose-shadow-overlay: 0 16px 36px -4px rgb(87 82 121 / 0.12), 0 4px 12px -2px rgb(87 82 121 / 0.06);
+  --ui-theme-rose-primary-hover: #94435b;
+  --ui-theme-rose-primary-active: #7f374d;
+  --ui-theme-rose-border: #e6dad0;
+  --ui-theme-rose-border-subtle: #f0e7de;
+  --ui-theme-rose-input: #887f98;
+  --ui-theme-rose-ring: #a8516a;
+  --ui-theme-rose-scrim: rgb(74 69 104 / 0.35);
+  --ui-theme-rose-shadow: rgb(74 69 104 / 0.06);
+  --ui-theme-rose-shadow-overlay: 0 16px 36px -4px rgb(74 69 104 / 0.10), 0 4px 12px -2px rgb(74 69 104 / 0.05);
+  --ui-theme-rose-info: #286983;
+  --ui-theme-rose-info-soft: #eef5f7;
+  --ui-theme-rose-success: #2f7066;
+  --ui-theme-rose-success-soft: #edf5f3;
+  --ui-theme-rose-success-border: #c2ddd7;
+  --ui-theme-rose-warning: #a25712;
+  --ui-theme-rose-warning-soft: #fbf3e8;
+  --ui-theme-rose-warning-border: #e8cfa9;
+  --ui-theme-rose-destructive: #b43b5a;
+  --ui-theme-rose-destructive-soft: #fdf0f3;
+  --ui-theme-rose-destructive-border: #f2c6d1;
 
   /* Midnight Slate (Dark) Palette */
-  --ui-theme-midnight-background: #0f141c;
+  --ui-theme-midnight-background: #0d1117;
   --ui-theme-midnight-foreground: #e6edf3;
-  --ui-theme-midnight-card: #161f2e;
-  --ui-theme-midnight-sidebar: #121824;
-  --ui-theme-midnight-muted: #1c2637;
-  --ui-theme-midnight-muted-foreground: #8b9bb4;
-  --ui-theme-midnight-secondary: #1e2a3c;
+  --ui-theme-midnight-card: #151b24;
+  --ui-theme-midnight-sidebar: #11161f;
+  --ui-theme-midnight-muted: #1b222e;
+  --ui-theme-midnight-muted-foreground: #8e9cb0;
+  --ui-theme-midnight-secondary: #1f2735;
   --ui-theme-midnight-secondary-foreground: #d1dbe8;
-  --ui-theme-midnight-accent: #223046;
-  --ui-theme-midnight-accent-foreground: #ffffff;
-  --ui-theme-midnight-selected: #293b56;
+  --ui-theme-midnight-accent: #253042;
+  --ui-theme-midnight-accent-foreground: #f4f7fb;
+  --ui-theme-midnight-selected: #2a384d;
   --ui-theme-midnight-selected-foreground: #ffffff;
-  --ui-theme-midnight-primary: #38bdf8;
-  --ui-theme-midnight-primary-foreground: #0f172a;
-  --ui-theme-midnight-primary-hover: #7dd3fc;
-  --ui-theme-midnight-primary-active: #0284c7;
-  --ui-theme-midnight-border: #28384f;
-  --ui-theme-midnight-border-subtle: #1d293a;
-  --ui-theme-midnight-input: #3d5272;
-  --ui-theme-midnight-ring: #38bdf8;
+  --ui-theme-midnight-primary: #4cb8f0;
+  --ui-theme-midnight-primary-foreground: #0b121b;
+  --ui-theme-midnight-primary-hover: #74cbf6;
+  --ui-theme-midnight-primary-active: #2aa2e2;
+  --ui-theme-midnight-border: #283344;
+  --ui-theme-midnight-border-subtle: #1e2736;
+  --ui-theme-midnight-input: #5d708a;
+  --ui-theme-midnight-ring: #4cb8f0;
   --ui-theme-midnight-scrim: rgb(0 0 0 / 0.65);
   --ui-theme-midnight-shadow: rgb(0 0 0 / 0.35);
   --ui-theme-midnight-shadow-overlay: 0 16px 36px -4px rgb(0 0 0 / 0.45), 0 4px 12px -2px rgb(0 0 0 / 0.25);
-  --ui-theme-midnight-info: #38bdf8;
-  --ui-theme-midnight-info-soft: #082f49;
+  --ui-theme-midnight-info: #4cb8f0;
+  --ui-theme-midnight-info-soft: #122638;
   --ui-theme-midnight-success: #34d399;
-  --ui-theme-midnight-success-soft: #064e3b;
-  --ui-theme-midnight-success-border: #047857;
-  --ui-theme-midnight-warning: #fbbf24;
-  --ui-theme-midnight-warning-soft: #451a03;
-  --ui-theme-midnight-warning-border: #b45309;
+  --ui-theme-midnight-success-soft: #112924;
+  --ui-theme-midnight-success-border: #1d5a4a;
+  --ui-theme-midnight-warning: #f5b841;
+  --ui-theme-midnight-warning-soft: #2a2113;
+  --ui-theme-midnight-warning-border: #6e4e1c;
   --ui-theme-midnight-destructive: #f87171;
-  --ui-theme-midnight-destructive-soft: #450a0a;
-  --ui-theme-midnight-destructive-border: #991b1b;
-  --ui-theme-midnight-destructive-foreground: #ffffff;
+  --ui-theme-midnight-destructive-soft: #2d171a;
+  --ui-theme-midnight-destructive-border: #7c2d36;
+  --ui-theme-midnight-destructive-foreground: #1a090b;
 
   /* Active Theme Variables (default: Obsidian Studio) */
   --ui-background: var(--ui-theme-obsidian-background);
@@ -334,6 +351,12 @@
   --ui-scrim: var(--ui-theme-classic-scrim);
   --ui-shadow: var(--ui-theme-classic-shadow);
   --ui-shadow-overlay: var(--ui-theme-classic-shadow-overlay);
+  --ui-success: var(--ui-theme-classic-success);
+  --ui-success-soft: var(--ui-theme-classic-success-soft);
+  --ui-success-border: var(--ui-theme-classic-success-border);
+  --ui-warning: var(--ui-theme-classic-warning);
+  --ui-warning-soft: var(--ui-theme-classic-warning-soft);
+  --ui-warning-border: var(--ui-theme-classic-warning-border);
 }
 
 :root[data-theme='parchment'] {
@@ -360,6 +383,12 @@
   --ui-scrim: var(--ui-theme-parchment-scrim);
   --ui-shadow: var(--ui-theme-parchment-shadow);
   --ui-shadow-overlay: var(--ui-theme-parchment-shadow-overlay);
+  --ui-success: var(--ui-theme-warm-success);
+  --ui-success-soft: var(--ui-theme-warm-success-soft);
+  --ui-success-border: var(--ui-theme-warm-success-border);
+  --ui-warning: var(--ui-theme-warm-warning);
+  --ui-warning-soft: var(--ui-theme-warm-warning-soft);
+  --ui-warning-border: var(--ui-theme-warm-warning-border);
 }
 
 :root[data-theme='nordic'] {
@@ -412,15 +441,17 @@
   --ui-scrim: var(--ui-theme-rose-scrim);
   --ui-shadow: var(--ui-theme-rose-shadow);
   --ui-shadow-overlay: var(--ui-theme-rose-shadow-overlay);
-}
-
-:root:is([data-theme='parchment'], [data-theme='rose']) {
-  --ui-success: var(--ui-theme-warm-success);
-  --ui-success-soft: var(--ui-theme-warm-success-soft);
-  --ui-success-border: var(--ui-theme-warm-success-border);
-  --ui-warning: var(--ui-theme-warm-warning);
-  --ui-warning-soft: var(--ui-theme-warm-warning-soft);
-  --ui-warning-border: var(--ui-theme-warm-warning-border);
+  --ui-info: var(--ui-theme-rose-info);
+  --ui-info-soft: var(--ui-theme-rose-info-soft);
+  --ui-success: var(--ui-theme-rose-success);
+  --ui-success-soft: var(--ui-theme-rose-success-soft);
+  --ui-success-border: var(--ui-theme-rose-success-border);
+  --ui-warning: var(--ui-theme-rose-warning);
+  --ui-warning-soft: var(--ui-theme-rose-warning-soft);
+  --ui-warning-border: var(--ui-theme-rose-warning-border);
+  --ui-destructive: var(--ui-theme-rose-destructive);
+  --ui-destructive-soft: var(--ui-theme-rose-destructive-soft);
+  --ui-destructive-border: var(--ui-theme-rose-destructive-border);
 }
 
 :root[data-theme='midnight'] {

@@ -379,3 +379,22 @@
 - 业务领域模型四件套收敛：从 `.tsx` 视图组件剥离纯功能函数与状态类型至对应的 `*-model.ts` 或 `*-utils.ts`（包括 `diff-model.ts`、`subagent-progress-model.ts`、`message-actions-model.ts`、`selection-quote-model.ts`、`spreadsheet-preview-utils.ts`、`file-preview-utils.ts`、`agent-model.ts`、`app/types.ts`），组件仅消费 props 呈现界面与分发回调。
 - `npm run check`、`npm test`（404项通过，1项既有跳过）、`npm run build` 和 `npm run check:headers` 全量门禁通过。
 - **开发过程 review**。通过静态扫描前置发现跨组件隐式契约依赖和重复工具实现，使用先建共享纯模块并保持原导出兼容路径的渐进迁移策略，一次性完成多领域组件瘦身并保持 100% 测试与类型安全。
+
+## 2026-11-23 · 桌面窗口与浏览器面板收官
+
+- Linux 和 Windows 默认隐藏原生菜单条，保留系统窗口框架和菜单。窗口持有当前主题的背景色。右侧浏览器将关闭操作并入 48px 标签栏，工具栏与语义状态条减高，变更记录改为贴右抽屉。工具摘要解码 HTTP(S) URL，紧凑回执和参数分别限高为 180px、120px。
+- 类型、i18n、样式门禁和前端、桌面构建通过。408 项全量测试通过，1 项既有 WebFetch 用例跳过。隔离 Electron 核对 48px 顶栏对齐、标签切换和关闭、分隔条缩放、弹层遮挡与焦点恢复。Chromium 核对已完成清单首次挂载即收起。[验收记录与三栏截图](../../../docs/evidence/frontend-design-system/2026-11-23-desktop-final-round.md)
+- **开发过程 review**。在一个现有 Electron 烟测中复用同一原生浏览器标签，验证抽屉、设置和上下文弹层。截图等待显示合成器完成全屏动画，再按隔离窗口几何裁取。弹层焦点测试按实际焦点恢复条件短时等待。
+
+## 2026-11-23 · 移除输入区的全网搜索额度入口
+
+- 移除全工具自动化模式旁的「全网搜索 Skill · 0 分」和额度弹窗，保留 `/` 调用 Skill、`#` 选择 MCP 和现有运行时费用校验。通过输入区发送继续采用 0 分默认额度。
+- `npm run check`、前端与桌面构建通过。隔离 Chromium 的自动审批和消息操作回归 18 项通过，覆盖切换到全工具自动化后不再渲染搜索额度按钮。全量复跑通过 408 项，1 项既有 WebFetch 用例跳过。首跑的 Skill 子进程测试因临时测试文件 `state/ticks` 尚未生成失败，复跑通过。
+- **开发过程 review**。在既有运行模式 Chromium 夹具补充断言，并复用现有发送与审批测试验证费用默认值。
+
+## 2026-11-23 · 输入区权限按钮颜色
+
+- 本机信任与全工具自动化的触发器文字、模式图标和下拉箭头共用主题警告前景色，背景和边框继续使用同组语义色。Rose 警告前景与浅底对比度为 4.88:1。
+- Chromium 检查六套主题、四种运行模式的实际计算颜色，24 组通过。用 `.local/frontend-regression-20261123/mode-colors.mts` 可复跑实际页面夹具。`npm run check:ui` 与前端构建通过。
+
+- 实机复查后调整全工具自动化触发器，改与菜单当前项的高亮共用主题强调底色和前景色。本机信任继续使用警告色。六主题、四种模式的 Chromium 回归通过，并直接比较了六主题全工具自动化触发器与展开菜单当前项的计算前景及底色。复跑夹具为 `.local/frontend-regression-20261123/mode-colors-accent.mts`。

@@ -376,14 +376,12 @@ export const chat = {
     '自动批准可用工具操作',
     'Automatically approve available tool actions',
   ],
-  'mode.checkLimit': ['检查上限', 'Check limit'],
   'mode.controlled': ['受控修改', 'Controlled edits'],
   'mode.controlledDescription': [
     '需要审批的操作逐次确认',
     'Confirm each action that requires approval',
   ],
   'mode.controlledRun': ['受控修改 · 逐次审批', 'Controlled edits · approve each action'],
-  'mode.done': ['完成', 'Done'],
   'mode.invalidSearchLimit': [
     '付费搜索单次上限须为 0–100000 的整数（分）。',
     'The paid search limit must be an integer from 0 to 100000 (fen).',
@@ -397,25 +395,6 @@ export const chat = {
   'mode.readonly': ['只读', 'Read only'],
   'mode.readonlyDescription': ['先讨论，不修改文件', 'Discuss first, without changing files'],
   'mode.saved': ['运行模式 · 随会话保存', 'Run mode · saved for this session'],
-  'mode.searchLimitDescription': [
-    '此上限仅用于下次发送，发送后恢复为 0 分。',
-    'This limit applies only to the next message and resets to 0 fen after sending.',
-  ],
-  'mode.searchLimitFen': ['{{amount}} 分', '{{amount}} fen'],
-  'mode.searchLimitHelp': [
-    '仅限制该 Skill 的单次请求费用，不是任务总费用上限。留空按 0 分处理。',
-    'Limits the cost of one request to this Skill, rather than the total task cost. An empty value means 0 fen.',
-  ],
-  'mode.searchLimitLabel': [
-    '全网搜索 Skill 单次上限（分）',
-    'Web search Skill limit per request (fen)',
-  ],
-  'mode.searchLimitSummary': ['全网搜索 Skill · {{limit}}', 'Web search Skill · {{limit}}'],
-  'mode.searchSkill': ['全网搜索 Skill', 'Web search Skill'],
-  'mode.setSearchLimit': [
-    '设置全网搜索 Skill 单次上限',
-    'Set the per request limit for the web search Skill',
-  ],
   'model.cancel': ['取消', 'Cancel'],
   'model.choose': ['选择模型', 'Choose model'],
   'model.chooseEffort': ['选择推理深度', 'Choose reasoning effort'],

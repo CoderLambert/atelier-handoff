@@ -966,6 +966,10 @@ test(
       assert.equal(await history.getAttribute('aria-expanded'), 'false');
       await history.click();
       await assistant.getByText('验证结果', { exact: true }).waitFor();
+      await setRuns([finished]);
+      await finalToggle.waitFor();
+      assert.equal(await finalToggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(await dock.getByRole('listitem').count(), 0);
       await page.evaluate("window.fixture.switch('session-b')");
       await page.locator('[data-session-id="session-b"]').waitFor();
       assert.equal(await page.locator('.chat-task-plan').count(), 0);
