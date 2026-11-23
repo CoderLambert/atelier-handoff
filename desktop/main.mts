@@ -159,7 +159,7 @@ async function start(): Promise<void> {
   const owner =
     window && !window.isDestroyed()
       ? window
-      : createWindow(join(here, 'preload.cjs'), () => origin);
+      : createWindow(join(here, 'preload.cjs'), () => origin, uiTheme.get());
   window = owner;
   owner.webContents.removeListener('render-process-gone', rendererGone);
   owner.webContents.on('render-process-gone', rendererGone);

@@ -139,7 +139,12 @@ try {
     await page.screenshot({ path: process.env.ATELIER_CONTEXT_SCREENSHOT });
   await page.keyboard.press('Escape');
   await first.panel.waitFor({ state: 'hidden' });
-  assert.equal(await first.button.evaluate((element) => document.activeElement === element), true);
+  await until(
+    async () =>
+      (await first.button.evaluate((element) => document.activeElement === element)) || undefined,
+    2_000,
+    'context trigger regains focus after Escape',
+  );
   assert.equal(await input.inputValue(), 'Preserve this draft.');
   await page.getByRole('button', { name: '浏览器', exact: true }).click();
   const browser = page.locator('.desktop-browser');
@@ -179,6 +184,12 @@ try {
   const send = await page.getByRole('button', { name: '发送任务', exact: true }).boundingBox();
   const rightPanel = await browser.boundingBox();
   assert.ok(send && rightPanel && send.x + send.width <= rightPanel.x);
+  const centerToolbar = await page.locator('.topbar').boundingBox();
+  const browserTabs = await browser.locator('.desktop-browser-tabbar').boundingBox();
+  assert.ok(centerToolbar && browserTabs);
+  assert.equal(centerToolbar.height, 48);
+  assert.equal(browserTabs.height, 48);
+  assert.equal(centerToolbar.y + centerToolbar.height, browserTabs.y + browserTabs.height);
   const nativeTabAttached = () =>
     app?.evaluate(
       ({ BrowserWindow, WebContentsView }, url) =>
@@ -236,6 +247,39 @@ try {
   );
   if (process.env.ATELIER_BROWSER_SCREENSHOT)
     await page.screenshot({ path: process.env.ATELIER_BROWSER_SCREENSHOT });
+  for (const [trigger, title] of [
+    ['变更记录', '变更记录'],
+    ['浏览器设置', '浏览器设置'],
+  ] as const) {
+    const open = page.getByRole('button', { name: trigger, exact: true });
+    await open.click();
+    const dialog = page.getByRole('dialog', { name: title, exact: true });
+    await dialog.waitFor();
+    if (title === '变更记录') {
+      const drawer = await dialog.boundingBox();
+      assert.ok(drawer);
+      assert.equal(drawer.y, 0);
+      assert.equal(drawer.x + drawer.width, await page.evaluate(() => innerWidth));
+    }
+    await until(
+      async () => ((await nativeTabAttached()) === false ? true : undefined),
+      5_000,
+      `native page detached under ${title}`,
+    );
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await until(
+      async () => ((await nativeTabAttached()) === true ? true : undefined),
+      5_000,
+      `native page restored after ${title}`,
+    );
+    await until(
+      async () =>
+        (await open.evaluate((element) => document.activeElement === element)) || undefined,
+      2_000,
+      `trigger regains focus after ${title}`,
+    );
+  }
   const overBrowser = await verifyPanel(page, '上下文详情', '缓存命中率');
   await until(
     async () => ((await nativeTabAttached()) === false ? true : undefined),
@@ -249,8 +293,37 @@ try {
     5_000,
     'native page restored',
   );
+  const previousTab = browser.locator('.desktop-browser-tab[data-active="false"]').first();
+  await previousTab.locator('.desktop-browser-tab-select').click();
+  await until(
+    async () => ((await nativeTabAttached()) === false ? true : undefined),
+    5_000,
+    'switching tabs detaches the previous native page',
+  );
+  await browser.locator('.desktop-browser-tab[data-active="true"] .desktop-browser-icon').click();
+  await until(
+    async () => ((await nativeTabAttached()) === true ? true : undefined),
+    5_000,
+    'closing the active tab restores the remaining native page',
+  );
+  await until(
+    async () =>
+      (await browser
+        .locator('.desktop-browser-tab-select')
+        .evaluate((element) => element === document.activeElement)) || undefined,
+    2_000,
+    'tab close returns focus to the remaining tab',
+  );
   await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
   await browser.waitFor({ state: 'hidden' });
+  await until(
+    async () =>
+      (await page
+        .getByRole('button', { name: '浏览器', exact: true })
+        .evaluate((element) => element === document.activeElement)) || undefined,
+    2_000,
+    'panel close returns focus to the workspace browser trigger',
+  );
   await page.goto(`${new URL(page.url()).origin}/#/settings/models`);
   await page.getByRole('combobox', { name: '界面语言', exact: true }).click();
   await page.getByRole('option', { name: 'English', exact: true }).click();
@@ -318,6 +391,10 @@ try {
       sessionTitleEllipsis: true,
       browserTabTitleEllipsis: true,
       browserSlotRestored: true,
+      browserChromeAndTopbarHeight: 48,
+      drawerAndBrowserSettingsHideAndRestoreNativeView: true,
+      browserTabSwitchAndClose: true,
+      browserCloseFocusRestored: true,
       nativeKeyboardInput: true,
       nativeSplitResize: true,
       tabKeyboardNavigation: true,

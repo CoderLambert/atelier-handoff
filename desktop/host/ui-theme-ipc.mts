@@ -9,6 +9,7 @@ import {
   desktopUiThemeGetSchema,
   desktopUiThemeResultSchema,
   desktopUiThemeSetSchema,
+  uiThemeBackgroundColors,
 } from '../../shared/desktop-ui-theme.js';
 import type { DesktopUiThemePreferences } from './ui-theme.mjs';
 
@@ -49,6 +50,7 @@ export function bindUiTheme(
       if (trusted(event) !== connection) throw new Error('UI theme request connection changed.');
     });
     trusted(event);
+    getWindow()?.setBackgroundColor(uiThemeBackgroundColors[result]);
     return desktopUiThemeResultSchema.parse(result);
   });
   return () => {

@@ -57,7 +57,6 @@ export default function SessionChat({
     }
   }, [focusMessageId, id]);
   const savedDraft = useWorkspace((state) => state.workspace.drafts[id]);
-  const searchChargeLimit = useWorkspace((state) => state.workspace.searchChargeLimits[id]);
   const submitting = useWorkspace((state) => state.workspace.submitting[id] === true);
   const message = useSendSessionMessage();
   const insert = useInsertQueuedMessage(id);
@@ -141,13 +140,7 @@ export default function SessionChat({
         if (store.getState().workspace.submitting[id]) return;
         changeDraft((previous) => ({ ...previous, effort }), true);
       }}
-      searchChargeLimit={searchChargeLimit}
       onModeChange={changeMode}
-      onSearchChargeChange={(value) => {
-        if (store.getState().workspace.submitting[id] || snapshot.agent?.mode === 'readonly')
-          return;
-        store.dispatch(actions.setSearchChargeLimit({ id, value }));
-      }}
       onDraftChange={changeDraft}
       onSend={send}
       onStop={onStop}

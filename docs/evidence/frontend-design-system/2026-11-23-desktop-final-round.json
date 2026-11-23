@@ -1,0 +1,445 @@
+{
+  "baseline": "cf7852e",
+  "tests": {
+    "passed": 408,
+    "skipped": 1,
+    "failed": 0
+  },
+  "nativeBrowser": {
+    "zh": {
+      "width": 1280,
+      "height": 800
+    },
+    "en": {
+      "width": 1440,
+      "height": 900
+    },
+    "cacheHitRate": 0.6,
+    "requests": [
+      "/v1/messages?beta=true"
+    ],
+    "draftPreserved": true,
+    "persistedAfterRestart": true,
+    "requestDisclosure": true,
+    "sessionTitleEllipsis": true,
+    "browserTabTitleEllipsis": true,
+    "browserSlotRestored": true,
+    "browserChromeAndTopbarHeight": 48,
+    "drawerAndBrowserSettingsHideAndRestoreNativeView": true,
+    "browserTabSwitchAndClose": true,
+    "browserCloseFocusRestored": true,
+    "nativeKeyboardInput": true,
+    "nativeSplitResize": true,
+    "tabKeyboardNavigation": true,
+    "narrowNavigationFocusRestored": true,
+    "reducedMotion": true,
+    "wideViewport": [
+      1920,
+      1080
+    ],
+    "conversationHorizontalOverflow": 0
+  },
+  "window": {
+    "platform": "linux",
+    "checks": [
+      {
+        "name": "menu-default-hidden",
+        "detail": {
+          "background": "#FAFAFB",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ]
+        }
+      },
+      {
+        "name": "fresh-default-background",
+        "detail": {
+          "theme": "obsidian",
+          "background": "#FAFAFB",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(250, 250, 251)"
+        }
+      },
+      {
+        "name": "alt-reveals-menu",
+        "detail": {
+          "background": "#FAFAFB",
+          "autoHide": true,
+          "visible": true,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ]
+        }
+      },
+      {
+        "name": "copy-cut-paste-shortcuts",
+        "detail": true
+      },
+      {
+        "name": "default-reload-menu-role",
+        "detail": true
+      },
+      {
+        "name": "switch-parchment",
+        "detail": {
+          "theme": "parchment",
+          "background": "#FCFBF8",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(252, 251, 248)"
+        }
+      },
+      {
+        "name": "switch-midnight",
+        "detail": {
+          "theme": "midnight",
+          "background": "#0F141C",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(15, 20, 28)"
+        }
+      },
+      {
+        "name": "switch-parchment",
+        "detail": {
+          "theme": "parchment",
+          "background": "#FCFBF8",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(252, 251, 248)"
+        }
+      },
+      {
+        "name": "menu-default-hidden",
+        "detail": {
+          "background": "#FCFBF8",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ]
+        }
+      },
+      {
+        "name": "restart-parchment-background",
+        "detail": {
+          "theme": "parchment",
+          "background": "#FCFBF8",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(252, 251, 248)"
+        }
+      },
+      {
+        "name": "switch-midnight",
+        "detail": {
+          "theme": "midnight",
+          "background": "#0F141C",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(15, 20, 28)"
+        }
+      },
+      {
+        "name": "menu-default-hidden",
+        "detail": {
+          "background": "#0F141C",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ]
+        }
+      },
+      {
+        "name": "restart-midnight-background",
+        "detail": {
+          "theme": "midnight",
+          "background": "#0F141C",
+          "autoHide": true,
+          "visible": false,
+          "roles": [
+            "filemenu",
+            "editmenu",
+            "viewmenu",
+            "windowmenu",
+            "minimize",
+            "zoom",
+            "close",
+            "reload",
+            "forcereload",
+            "toggledevtools",
+            "resetzoom",
+            "zoomin",
+            "zoomout",
+            "togglefullscreen",
+            "undo",
+            "redo",
+            "cut",
+            "copy",
+            "paste",
+            "delete",
+            "selectall",
+            "quit"
+          ],
+          "css": "rgb(15, 20, 28)"
+        }
+      }
+    ],
+    "syntheticInputLimitation": "Neither CDP Control+R nor webContents.sendInputEvent Control+R dispatched the menu accelerator; the native Wayland keyboard supplement verified it.",
+    "nativeCtrlR": {
+      "evidence": "native-shortcut.json",
+      "verifiedFocusedPid": 1101800,
+      "nativeCtrlRReloaded": true
+    },
+    "status": "passed",
+    "nativeCtrlRReloaded": true
+  },
+  "toolActivity": {
+    "result": "passed",
+    "modelTransport": "loopback",
+    "commandVisibleBeforeCompletion": true,
+    "fullCommandLength": 4585,
+    "realOutputVisible": true,
+    "toolEventCorrelated": true,
+    "historyExpandable": true,
+    "sidebarHiddenByDefault": true,
+    "savedLogBytes": 217623,
+    "pagesToMiddle": 6,
+    "savedLogMiddleVisible": true,
+    "downloadedSavedLogMatches": true,
+    "firstLogReceiptOmitsMiddle": true,
+    "outputFocusRestored": true
+  }
+}

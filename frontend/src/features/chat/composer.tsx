@@ -20,7 +20,7 @@ import { ContextUsagePopover } from './context-usage-popover';
 import { isActive } from './conversation';
 import { ComposerModeSelector } from './mode-selector';
 import { ModelPicker } from './model-picker';
-import { composerMode, parseSearchChargeLimit, type ComposerMode } from './run-mode';
+import { composerMode, type ComposerMode } from './run-mode';
 import { TaskPlan } from './task-plan';
 
 import {
@@ -53,13 +53,11 @@ export function Composer({
   editingMessage = false,
   draftActionError = '',
   onRemoveQuote,
-  searchChargeLimit = '0',
   defaultModel,
   nativeExecution = false,
   onModelChange,
   onEffortChange,
   onModeChange,
-  onSearchChargeChange,
   onDraftChange,
   onSend,
   onStop,
@@ -72,13 +70,11 @@ export function Composer({
   editingMessage?: boolean;
   draftActionError?: string;
   onRemoveQuote: (id: string) => void;
-  searchChargeLimit?: string;
   defaultModel: string;
   nativeExecution?: boolean;
   onModelChange: (model?: string) => void;
   onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
-  onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
   onSend: (insertIntoRunId?: string) => Promise<void>;
   onStop: (runId: string) => void;
@@ -106,14 +102,6 @@ export function Composer({
   const agent = snapshot.agent;
   const nativeAvailable = nativeExecution && !agent && !snapshot.session.agentRevisionId;
   const mode = composerMode(draft, agent?.mode === 'readonly', nativeAvailable);
-  let searchChargeError = '';
-  if (mode === 'automatic') {
-    try {
-      parseSearchChargeLimit(searchChargeLimit);
-    } catch (failure) {
-      searchChargeError = translateError(failure, t('mode.invalidSearchLimit'));
-    }
-  }
   const contextAllowed = !agent || agent.capabilities.includes('context');
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
@@ -153,7 +141,6 @@ export function Composer({
     !submitting &&
     !busy &&
     !agent?.issues.length &&
-    !searchChargeError &&
     !quoteTooLong &&
     Boolean(draft.text.trim());
   const attachments = new Map(
@@ -319,10 +306,7 @@ export function Composer({
           nativeExecution={nativeAvailable}
           readonlyProfile={agent?.mode === 'readonly'}
           disabled={archived || submitting}
-          searchChargeLimit={searchChargeLimit}
-          searchChargeError={searchChargeError}
           onModeChange={onModeChange}
-          onSearchChargeChange={onSearchChargeChange}
         />
       </div>
       <p id="composer-mode-help" className="sr-only">
@@ -583,7 +567,6 @@ export function Composer({
       </div>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
         {draftActionError ||
-          searchChargeError ||
           (quoteTooLong ? t('composer.quoteTooLong') : '') ||
           errorText ||
           (archived

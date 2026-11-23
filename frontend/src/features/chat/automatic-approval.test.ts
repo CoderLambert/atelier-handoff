@@ -502,7 +502,7 @@ test(
         const [available,setAvailable]=useState(true);
         const [readonly,setReadonly]=useState(false);
         window.configureFixture=(nextAvailable,nextReadonly)=>{setAvailable(nextAvailable);setReadonly(nextReadonly);};
-        return <><ComposerModeSelector mode={composerMode(draft,readonly,available)} nativeExecution={available} readonlyProfile={readonly} disabled={false} searchChargeLimit="0" searchChargeError="" onModeChange={mode=>setDraft(previous=>withComposerMode(previous,mode))} onSearchChargeChange={()=>{}}/><output id="draft">{JSON.stringify(draft)}</output></>;
+        return <><ComposerModeSelector mode={composerMode(draft,readonly,available)} nativeExecution={available} readonlyProfile={readonly} disabled={false} onModeChange={mode=>setDraft(previous=>withComposerMode(previous,mode))}/><output id="draft">{JSON.stringify(draft)}</output></>;
       }
       createRoot(document.getElementById('app')).render(<App/>);
     `,
@@ -555,6 +555,10 @@ test(
       assert.equal(await page.getByRole('option', { name: /^本机信任/ }).count(), 0);
       await page.keyboard.press('Escape');
       assert.match(await selector.innerText(), /受控修改/);
+      await selector.click();
+      await page.getByRole('option', { name: /^全工具自动化/ }).click();
+      assert.match(await selector.innerText(), /全工具自动化/);
+      assert.equal(await page.getByRole('button', { name: /全网搜索 Skill/ }).count(), 0);
       await page.evaluate('window.configureFixture(true,true)');
       await selector.click();
       assert.equal(await page.getByRole('option', { name: /^本机信任/ }).count(), 0);

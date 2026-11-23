@@ -6,13 +6,21 @@
 import { BrowserWindow, dialog } from 'electron';
 import { desktopHostDeadlines, desktopPairingHeader } from '../../shared/desktop-host.js';
 import { desktopT, DesktopHostError, diagnosticText } from './i18n.mjs';
+import { uiThemeBackgroundColors, type UiTheme } from '../../shared/desktop-ui-theme.js';
 
-export function createWindow(preload: string, getOrigin: () => string | undefined): BrowserWindow {
+export function createWindow(
+  preload: string,
+  getOrigin: () => string | undefined,
+  theme: UiTheme,
+): BrowserWindow {
+  const hideMenuBar = process.platform === 'linux' || process.platform === 'win32';
   const owner = new BrowserWindow({
     width: 1440,
     height: 960,
     show: false,
     title: 'atelier',
+    backgroundColor: uiThemeBackgroundColors[theme],
+    ...(hideMenuBar ? { autoHideMenuBar: true } : {}),
     webPreferences: {
       preload,
       partition: 'atelier-workbench',
@@ -22,6 +30,7 @@ export function createWindow(preload: string, getOrigin: () => string | undefine
       webSecurity: true,
     },
   });
+  if (hideMenuBar) owner.setMenuBarVisibility(false);
   const wc = owner.webContents;
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
   wc.on('will-attach-webview', (event) => event.preventDefault());

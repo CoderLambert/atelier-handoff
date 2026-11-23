@@ -41,7 +41,17 @@ export function useDesktopBrowser(projectId: string | undefined) {
   return state?.projectId === projectId ? state : undefined;
 }
 
-export function DesktopBrowser({ projectId, state }: { projectId: string; state?: DesktopState }) {
+export function DesktopBrowser({
+  projectId,
+  state,
+  onClose,
+  closeLabel,
+}: {
+  projectId: string;
+  state?: DesktopState;
+  onClose: () => void;
+  closeLabel: string;
+}) {
   const { t } = useUiTranslation('browser');
   const slot = useRef<HTMLDivElement>(null);
   const selectedTab = useRef<HTMLButtonElement>(null);
@@ -93,6 +103,18 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
                         ? t('status.agentTab')
                         : t('status.waiting');
   const showAgentTarget = differentAgentTab && !state?.control && !transferring && !statusError;
+
+  const statusTone = statusError
+    ? 'error'
+    : transferring
+      ? 'busy'
+      : state?.control
+        ? 'control'
+        : state?.busy
+          ? 'busy'
+          : !agentAvailable || !agentEnabled || showAgentTarget
+            ? 'notice'
+            : 'idle';
 
   useEffect(() => {
     selectedTab.current
@@ -213,7 +235,7 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
                   disabled={disabled || state.busy}
                   onClick={() => void command('close-tab', tab.id)}
                 >
-                  <X size={16} data-icon="inline-start" />
+                  <X data-icon="inline-start" aria-hidden="true" />
                 </Button>
               </div>
             );
@@ -325,6 +347,18 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
             </section>
           </DialogContent>
         </Dialog>
+        <span className="desktop-browser-divider" aria-hidden="true" />
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          className="desktop-browser-icon"
+          aria-label={closeLabel}
+          title={closeLabel}
+          onClick={onClose}
+        >
+          <X aria-hidden="true" />
+        </Button>
       </div>
       <form
         className="desktop-browser-toolbar"
@@ -404,9 +438,13 @@ export function DesktopBrowser({ projectId, state }: { projectId: string; state?
       </form>
       <div
         className="desktop-browser-status"
+        data-tone={statusTone}
         role={statusError ? 'alert' : 'status'}
         title={status}
       >
+        {statusTone === 'busy' ? (
+          <span className="desktop-browser-status-dot" aria-hidden="true" />
+        ) : null}
         {showAgentTarget ? (
           <Button
             type="button"

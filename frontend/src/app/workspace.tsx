@@ -461,25 +461,36 @@ export default function Workspace() {
     snapshot?.permissions.filter((item) => item.status === 'pending').length ?? 0;
   const browserPanel = (
     <section className="workspace-browser-panel" aria-label={t('browser.panel')}>
-      <header className="workspace-browser-heading">
-        <h2>
-          <Globe aria-hidden="true" />
-          {t('browser.title')}
-        </h2>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label={t('browser.close')}
-          onClick={closeBrowser}
-        >
-          <X aria-hidden="true" />
-        </Button>
-      </header>
       {desktop && previewProject ? (
-        <DesktopBrowser key={previewProject} projectId={previewProject} state={nativeBrowser} />
+        <>
+          <h2 className="sr-only">{t('browser.title')}</h2>
+          <DesktopBrowser
+            key={previewProject}
+            projectId={previewProject}
+            state={nativeBrowser}
+            onClose={closeBrowser}
+            closeLabel={t('browser.close')}
+          />
+        </>
       ) : (
-        <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
+        <>
+          <header className="workspace-browser-heading">
+            <h2>
+              <Globe aria-hidden="true" />
+              {t('browser.title')}
+            </h2>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t('browser.close')}
+              onClick={closeBrowser}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </header>
+          <BrowserPreview frame={browser.data?.frame} error={browser.isError} />
+        </>
       )}
     </section>
   );

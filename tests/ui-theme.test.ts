@@ -17,6 +17,7 @@ import {
   desktopUiThemeResultSchema,
   desktopUiThemeSetSchema,
   resolveUiTheme,
+  uiThemeBackgroundColors,
   uiThemeSchema,
 } from '../shared/desktop-ui-theme.js';
 import {
@@ -46,6 +47,17 @@ test('theme service resolves valid themes and falls back to default', () => {
   assert.equal(resolveUiTheme(null), 'obsidian');
   assert.equal(resolveUiTheme(undefined), 'obsidian');
   assert.equal(allUiThemes.length, 6);
+});
+
+test('native window background colors match every theme in the renderer stylesheet', async () => {
+  const stylesheet = await readFile(new URL('../frontend/src/styles.css', import.meta.url), 'utf8');
+  assert.deepEqual(Object.keys(uiThemeBackgroundColors), [...allUiThemes]);
+  for (const theme of allUiThemes) {
+    const color = stylesheet.match(
+      new RegExp(`--ui-theme-${theme}-background:\\s*(#[a-f0-9]{6});`, 'i'),
+    )?.[1];
+    assert.equal(uiThemeBackgroundColors[theme], color, theme);
+  }
 });
 
 test('desktop theme IPC channels and schemas validate payloads', () => {

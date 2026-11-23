@@ -372,7 +372,11 @@
 .workspace-changes-dialog {
   display: flex;
   flex-direction: column;
-  width: min(960px, calc(100% - 32px));
-  height: min(760px, calc(100dvh - 32px));
+  inset: 0 0 0 auto;
+  transform: none;
+  width: min(480px, 92vw);
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
   overflow: hidden;
 }

@@ -27,13 +27,11 @@ import './chat.css';
 export interface ChatProps {
   snapshot: Snapshot;
   draft: Draft;
-  searchChargeLimit?: string;
   defaultModel: string;
   nativeExecution?: boolean;
   onModelChange: (model?: string) => void;
   onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
-  onSearchChargeChange: (value: string) => void;
   onDraftChange: DraftChange;
   onSend: (insertIntoRunId?: string) => Promise<void>;
   onStop: (runId: string) => void;
@@ -237,13 +235,11 @@ function SessionChat(props: ChatProps) {
           setActionError(undefined);
           focusInput();
         }}
-        searchChargeLimit={props.searchChargeLimit}
         defaultModel={props.defaultModel}
         nativeExecution={props.nativeExecution}
         onModelChange={props.onModelChange}
         onEffortChange={props.onEffortChange}
         onModeChange={props.onModeChange}
-        onSearchChargeChange={props.onSearchChargeChange}
         onDraftChange={props.onDraftChange}
         onSend={props.onSend}
         onStop={props.onStop}

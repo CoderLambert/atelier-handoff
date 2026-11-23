@@ -508,15 +508,20 @@
   line-height: 1.6;
 }
 
-.chat-composer .composer-mode-trigger:is([data-mode='native'], [data-mode='automatic']) {
+.chat-composer .composer-mode-trigger[data-mode='native'] {
   border-color: var(--ui-warning-border);
   background: var(--ui-warning-soft);
+  color: var(--ui-warning);
 }
 
-.chat-composer
-  .composer-mode-trigger:is([data-mode='native'], [data-mode='automatic'])
-  [data-icon='inline-start'] {
-  color: var(--ui-warning);
+.chat-composer .composer-mode-trigger[data-mode='automatic'] {
+  border-color: var(--ui-border);
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+}
+
+.chat-composer .composer-mode-trigger:is([data-mode='native'], [data-mode='automatic']) svg {
+  color: inherit;
 }
 
 .chat-composer .context-usage-trigger[data-level='warning'] {
@@ -832,10 +837,6 @@
 .chat-field:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-.chat-search-limit {
-  width: 8rem;
 }
 
 .chat-conversation .model-loading-indicator {
