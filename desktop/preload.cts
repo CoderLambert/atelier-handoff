@@ -113,3 +113,52 @@ const uiLanguage: DesktopUiLanguageBridge = {
   },
 };
 contextBridge.exposeInMainWorld('atelierUiLanguage', uiLanguage);
+
+import {
+  desktopUiThemeChannels,
+  desktopUiThemeGetSchema,
+  desktopUiThemeResultSchema,
+  desktopUiThemeSetSchema,
+  type DesktopUiThemeBridge,
+} from '../shared/desktop-ui-theme.js';
+
+const uiTheme: DesktopUiThemeBridge = {
+  async get() {
+    const request = desktopUiThemeGetSchema.parse(undefined);
+    const response: unknown = await ipcRenderer.invoke(desktopUiThemeChannels.get, request);
+    return desktopUiThemeResultSchema.parse(response);
+  },
+  async set(theme) {
+    const request = desktopUiThemeSetSchema.parse(theme);
+    const response: unknown = await ipcRenderer.invoke(desktopUiThemeChannels.set, request);
+    return desktopUiThemeResultSchema.parse(response);
+  },
+};
+contextBridge.exposeInMainWorld('atelierUiTheme', uiTheme);
+
+import {
+  desktopUiNotificationChannels,
+  desktopUiNotificationGetSchema,
+  desktopUiNotificationResultSchema,
+  desktopUiNotificationSetSchema,
+  desktopWindowFocusResultSchema,
+  type DesktopUiNotificationsBridge,
+} from '../shared/desktop-ui-notifications.js';
+
+const uiNotifications: DesktopUiNotificationsBridge = {
+  async get() {
+    const request = desktopUiNotificationGetSchema.parse(undefined);
+    const response: unknown = await ipcRenderer.invoke(desktopUiNotificationChannels.get, request);
+    return desktopUiNotificationResultSchema.parse(response);
+  },
+  async set(notifications) {
+    const request = desktopUiNotificationSetSchema.parse(notifications);
+    const response: unknown = await ipcRenderer.invoke(desktopUiNotificationChannels.set, request);
+    return desktopUiNotificationResultSchema.parse(response);
+  },
+  async focusWindow() {
+    const response: unknown = await ipcRenderer.invoke(desktopUiNotificationChannels.focusWindow);
+    return desktopWindowFocusResultSchema.parse(response);
+  },
+};
+contextBridge.exposeInMainWorld('atelierUiNotifications', uiNotifications);

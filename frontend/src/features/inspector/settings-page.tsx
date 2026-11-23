@@ -4,11 +4,12 @@
  * @updated 2026-11-22T13:50:57+08:00
  */
 import { useUiTranslation, getTranslator, useUiLanguage } from '@/i18n';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import {
   Activity,
   ArrowLeft,
   ArrowRight,
+  Bell,
   Check,
   CircleCheck,
   CircleHelp,
@@ -41,9 +42,10 @@ import { useGatewayModels } from '@/use-query/settings/use-gateway-models';
 import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
 import { errorMessage } from './shared';
 import { WorkspaceLayoutForm, type WorkspaceLayoutFormProps } from './workspace-layout-form';
+import { NotificationSettings } from './notification-settings';
 import './settings-page.css';
 
-export type SettingsSection = 'models' | 'layout' | 'diagnostics';
+export type SettingsSection = 'models' | 'layout' | 'notifications' | 'diagnostics';
 
 export interface SettingsPageProps {
   section: SettingsSection;
@@ -68,6 +70,12 @@ function translatedSections() {
       icon: LayoutPanelLeft,
     },
     {
+      id: 'notifications',
+      label: t('settings.notifications'),
+      description: t('settings.notificationsNavDescription'),
+      icon: Bell,
+    },
+    {
       id: 'diagnostics',
       label: t('settings.diagnostics'),
       description: t('settings.diagnosticsNavDescription'),
@@ -83,9 +91,23 @@ export default function SettingsPage({
   onBack,
 }: SettingsPageProps) {
   const { t } = useUiTranslation('inspector');
+  const [activeSection, setActiveSection] = useState<SettingsSection>(section);
+
+  useEffect(() => {
+    setActiveSection(section);
+  }, [section]);
+
+  const currentSection = activeSection;
+
   // Keep visited forms mounted so changing categories preserves an unsaved draft.
-  const [visited, setVisited] = useState<SettingsSection[]>([section]);
-  if (!visited.includes(section)) setVisited([...visited, section]);
+  const [visited, setVisited] = useState<SettingsSection[]>([currentSection]);
+  if (!visited.includes(currentSection)) setVisited([...visited, currentSection]);
+
+  function handleSectionChange(next: SettingsSection) {
+    setActiveSection(next);
+    onSectionChange(next);
+  }
+
   return (
     <div className="settings-page">
       <header className="settings-page-header">
@@ -116,31 +138,31 @@ export default function SettingsPage({
               variant="ghost"
               className="settings-page-nav-item"
               aria-label={label}
-              aria-current={section === id ? 'page' : undefined}
-              onClick={() => onSectionChange(id)}
+              aria-current={currentSection === id ? 'page' : undefined}
+              onClick={() => handleSectionChange(id)}
             >
               <SectionIcon data-icon="inline-start" aria-hidden="true" />
               <span className="settings-page-nav-copy">
                 <span>{label}</span>
                 <span className="settings-page-nav-description">{description}</span>
               </span>
-              {section === id ? <ArrowRight data-icon="inline-end" aria-hidden="true" /> : null}
+              {currentSection === id ? <ArrowRight data-icon="inline-end" aria-hidden="true" /> : null}
             </Button>
           ))}
           <p className="settings-page-nav-note">{t('settings.localSettings')}</p>
         </nav>
         <div className="settings-page-content">
           {visited.includes('models') ? (
-            <section hidden={section !== 'models'} aria-labelledby="settings-models-heading">
+            <section hidden={currentSection !== 'models'} aria-labelledby="settings-models-heading">
               <div className="settings-section-intro">
                 <h2 id="settings-models-heading">{t('settings.models')}</h2>
                 <p>{t('settings.modelsDescription')}</p>
               </div>
-              <GatewaySettings active={section === 'models'} />
+              <GatewaySettings active={currentSection === 'models'} />
             </section>
           ) : null}
           {visited.includes('layout') ? (
-            <section hidden={section !== 'layout'} aria-labelledby="settings-layout-heading">
+            <section hidden={currentSection !== 'layout'} aria-labelledby="settings-layout-heading">
               <div className="settings-section-intro">
                 <h2 id="settings-layout-heading">{t('settings.layout')}</h2>
                 <p>{t('settings.layoutDescription')}</p>
@@ -148,9 +170,21 @@ export default function SettingsPage({
               <WorkspaceLayoutForm {...layout} />
             </section>
           ) : null}
+          {visited.includes('notifications') ? (
+            <section
+              hidden={currentSection !== 'notifications'}
+              aria-labelledby="settings-notifications-heading"
+            >
+              <div className="settings-section-intro">
+                <h2 id="settings-notifications-heading">{t('settings.notifications')}</h2>
+                <p>{t('settings.notificationsDescription')}</p>
+              </div>
+              <NotificationSettings />
+            </section>
+          ) : null}
           {visited.includes('diagnostics') ? (
             <section
-              hidden={section !== 'diagnostics'}
+              hidden={currentSection !== 'diagnostics'}
               aria-labelledby="settings-diagnostics-heading"
             >
               <div className="settings-section-intro">

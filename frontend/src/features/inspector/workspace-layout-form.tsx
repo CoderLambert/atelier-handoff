@@ -1,12 +1,14 @@
 /**
- * @file 编辑桌面工作区的默认面板宽度。
- * @implementation 校验导航栏和按需浏览器面板的默认宽度，保留错误与草稿并提供保存应用和恢复默认操作。
- * @updated 2026-11-22T00:00:00+08:00
+ * @file 编辑桌面工作区的主题皮肤与默认面板宽度。
+ * @implementation 提供带有微型预览的主题弹出列表，并校验保存导航栏与浏览器面板的默认宽度。
+ * @updated 2026-11-23T13:15:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemePicker } from '@/components/theme-picker';
+import { useUiTheme } from '@/theme';
 import {
   initialWorkspaceLayout,
   minNavigationWidth,
@@ -26,6 +28,7 @@ export interface WorkspaceLayoutFormProps {
 
 export function WorkspaceLayoutForm({ layout, pending, error, onApply }: WorkspaceLayoutFormProps) {
   const { t } = useUiTranslation('inspector');
+  const { theme, setTheme } = useUiTheme();
   const id = useId();
   const [left, setLeft] = useState(String(layout.defaults.left));
   const [right, setRight] = useState(String(layout.defaults.right));
@@ -47,6 +50,16 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
           onApply({ defaults: widths.data, recent: widths.data, collapsed: false });
       }}
     >
+      <fieldset className="settings-form-section">
+        <legend>{t('layout.themeSection')}</legend>
+        <div className="settings-field-row">
+          <div className="settings-field-copy">
+            <label htmlFor={`${id}-theme`}>{t('layout.themeLabel')}</label>
+            <p id={`${id}-theme-help`}>{t('layout.themeHint')}</p>
+          </div>
+          <ThemePicker triggerId={`${id}-theme`} />
+        </div>
+      </fieldset>
       <fieldset className="settings-form-section" disabled={pending}>
         <legend>{t('layout.defaultWidths')}</legend>
         <p className="settings-section-description">{t('layout.widthsHint')}</p>

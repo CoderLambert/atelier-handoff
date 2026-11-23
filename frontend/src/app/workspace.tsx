@@ -83,10 +83,11 @@ const collectionPaths = {
   extensions: '/extensions',
   agents: '/agents',
 } as const;
-type SettingsSection = 'models' | 'layout' | 'diagnostics';
+type SettingsSection = 'models' | 'layout' | 'notifications' | 'diagnostics';
 const settingsPaths = {
   models: '/settings/models',
   layout: '/settings/layout',
+  notifications: '/settings/notifications',
   diagnostics: '/settings/diagnostics',
 } as const;
 
@@ -151,9 +152,11 @@ export default function Workspace() {
   const section: SettingsSection =
     pathname === settingsPaths.layout
       ? 'layout'
-      : pathname === settingsPaths.diagnostics
-        ? 'diagnostics'
-        : 'models';
+      : pathname === settingsPaths.notifications
+        ? 'notifications'
+        : pathname === settingsPaths.diagnostics
+          ? 'diagnostics'
+          : 'models';
   const drawer = useWorkspace((state) => state.workspace.drawer);
   const connected = useWorkspace((state) => state.workspace.connected);
   const ready = useQuery({ queryKey: keys.bootstrap, queryFn: bootstrap, staleTime: 30_000 });
@@ -215,6 +218,22 @@ export default function Workspace() {
   const rememberLocation = useRememberWorkspaceLocation();
   const retryKeys = useRef(new Map<string, string>());
   useRunEvents(client, ready.data?.cursor);
+
+  useEffect(() => {
+    function onRunFinished(event: Event) {
+      const custom = event as CustomEvent<{ sessionId?: string; status?: string }>;
+      const finishedSessionId = custom.detail?.sessionId;
+      if (finishedSessionId && (!sessionId || sessionId === finishedSessionId)) {
+        if (!sessionId) {
+          void navigate({ to: `/sessions/${encodeURIComponent(finishedSessionId)}` });
+        }
+      }
+    }
+    window.addEventListener('atelier:run-finished', onRunFinished);
+    return () => {
+      window.removeEventListener('atelier:run-finished', onRunFinished);
+    };
+  }, [sessionId, navigate]);
 
   useEffect(() => {
     if (!ready.data || pathname !== '/') return;

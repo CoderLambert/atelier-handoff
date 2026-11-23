@@ -50,6 +50,7 @@ import { magpieModel, magpieModels, magpieOrigin } from './magpie-models.js';
 import { gatewayToken } from './gateway-search.js';
 import { workspaceLocationSchema } from '../shared/workspace-location.js';
 import { workspaceLayoutSchema } from '../shared/workspace-layout.js';
+import { uiThemeSchema } from '../shared/desktop-ui-theme.js';
 import { ManagedGatewayLogin } from './managed-gateway-login.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
@@ -877,6 +878,13 @@ export async function createApp(options: {
             res,
             store.workspaceLayout.save(workspaceLayoutSchema.parse(await body(req))),
           );
+      }
+      if (url.pathname === '/api/settings/ui-theme') {
+        if (method === 'GET') return json(res, { theme: store.workspaceLayout.readTheme() });
+        if (method === 'PATCH') {
+          const { theme } = z.strictObject({ theme: uiThemeSchema }).parse(await body(req));
+          return json(res, { theme: store.workspaceLayout.saveTheme(theme) });
+        }
       }
       if (url.pathname === '/api/models' && method === 'GET') {
         const config = effectiveConfig();

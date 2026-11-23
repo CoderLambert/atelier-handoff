@@ -1,7 +1,7 @@
 /**
- * @file 组合会话消息、待处理队列和任务输入界面。
- * @implementation 按会话隔离编辑确认和输入焦点，将整条回复或选区快照保存为草稿引用，并处理去重、移除和正文长度校验。
- * @updated 2026-11-23T01:25:40+08:00
+ * @file 组合会话消息、待处理队列、任务清单和输入界面。
+ * @implementation 选定输入区显示清单的运行，协调其在消息中的展示。按会话隔离编辑确认、输入焦点及草稿引用。
+ * @updated 2026-11-23T13:35:40+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -13,7 +13,7 @@ import { permissionKeys } from '@/use-query/permissions/keys';
 import { sessionKeys } from '@/use-query/sessions/keys';
 import type { ChatLinkOpener } from './chat-web-link-dialog';
 import { Composer, type DraftChange } from './composer';
-import { Conversation } from './conversation';
+import { Conversation, isActive } from './conversation';
 import { MessageQueue } from './message-queue';
 import {
   hasMessageForkAnchor,
@@ -53,6 +53,8 @@ export default function Chat(props: ChatProps) {
 function SessionChat(props: ChatProps) {
   const { t } = useUiTranslation('chat');
   const { snapshot, draft, onDraftChange, onRetry, onTrace, onOpenLink, submitting } = props;
+  const currentRun = snapshot.runs.find(isActive) ?? snapshot.runs.at(-1);
+  const composerPlan = currentRun?.plan.length ? currentRun : undefined;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [replacement, setReplacement] = useState<{
     sessionId: string;
@@ -190,6 +192,7 @@ function SessionChat(props: ChatProps) {
       <Conversation
         key={`conversation:${snapshot.session.id}`}
         snapshot={snapshot}
+        composerPlanRunId={composerPlan?.id}
         onRetry={onRetry}
         onTrace={onTrace}
         onOpenLink={onOpenLink}
@@ -221,6 +224,7 @@ function SessionChat(props: ChatProps) {
         key={`composer:${snapshot.session.id}`}
         snapshot={snapshot}
         draft={draft}
+        taskPlanRun={composerPlan}
         inputRef={inputRef}
         editingMessage={editing}
         draftActionError={actionError ? t(actionError, { count: messageQuoteLimit }) : ''}

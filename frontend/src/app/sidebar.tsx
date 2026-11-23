@@ -16,14 +16,18 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  Palette,
   Plus,
   Search,
   Settings2,
 } from 'lucide-react';
 import { type Project, type RunStatus, type Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import { ThemePicker } from '@/components/theme-picker';
+import { SoundPicker } from '@/components/sound-picker';
 import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
+import { useUiTheme } from '@/theme';
 import { useActiveRuns } from '@/use-query/runs/use-active-runs';
 import {
   buildProjectSessionGroups,
@@ -81,6 +85,16 @@ export function Sidebar({
   onToggleCollapsed?: () => void;
 }) {
   const { t, locale } = useUiTranslation('navigation');
+  const { theme } = useUiTheme();
+  const themeLabels: Record<string, string> = {
+    obsidian: t('sidebar.themeObsidian'),
+    classic: t('sidebar.themeClassic'),
+    parchment: t('sidebar.themeParchment'),
+    nordic: t('sidebar.themeNordic'),
+    rose: t('sidebar.themeRose'),
+    midnight: t('sidebar.themeMidnight'),
+  };
+  const activeThemeLabel = themeLabels[theme] ?? t('sidebar.themeObsidian');
   const numberFormat = new Intl.NumberFormat(locale);
   const runStatus: Partial<Record<RunStatus, string>> = {
     queued: t('status.queued'),
@@ -115,14 +129,13 @@ export function Sidebar({
     const archived = session.status === 'archived';
     const status = active ? runStatus[active.status] : undefined;
     const updatedAt = new Date(session.updatedAt);
-    const timestamp = !status && !archived;
+    const timestamp = !archived;
     const meta = [
       priorVersion
         ? t('session.priorVersion')
         : session.fork && !session.fork.kind
           ? t('session.branch')
           : undefined,
-      status,
       archived ? t('session.archived') : undefined,
       timestamp
         ? updatedAt.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' })
@@ -148,6 +161,7 @@ export function Sidebar({
               size="icon-sm"
               variant="ghost"
               className="history-disclosure"
+              data-status={active?.status}
               aria-expanded={expanded}
               aria-controls={groupId}
               aria-label={t(expanded ? 'session.collapseBranches' : 'session.expandBranches', {
@@ -164,9 +178,24 @@ export function Sidebar({
               }
             >
               <Chevron data-icon="inline-start" aria-hidden="true" />
+              {active ? (
+                <span
+                  className="sidebar-status-ring sidebar-status-ring--disclosure"
+                  aria-hidden="true"
+                />
+              ) : null}
             </Button>
           ) : (
-            <span className="sidebar-disclosure-space" aria-hidden="true" />
+            <span
+              className={cn('sidebar-disclosure-space', active && 'has-status')}
+              data-status={active?.status}
+              title={status}
+              onClick={active ? () => onSession(session.id) : undefined}
+            >
+              {active ? (
+                <span className="sidebar-status-ring" aria-hidden="true" />
+              ) : null}
+            </span>
           )}
           <button
             type="button"
@@ -180,13 +209,10 @@ export function Sidebar({
             <span
               className="history-meta"
               data-status={active?.status}
-              title={timestamp ? updatedAt.toLocaleString(locale) : meta}
+              title={updatedAt.toLocaleString(locale)}
             >
-              {archived ? (
-                <Archive aria-hidden="true" />
-              ) : status ? (
-                <span className="sidebar-status-dot" aria-hidden="true" />
-              ) : null}
+              {archived ? <Archive aria-hidden="true" /> : null}
+              {active && status ? <span className="sr-only">{status}</span> : null}
               <span className="truncate">{meta}</span>
             </span>
           </button>
@@ -462,6 +488,23 @@ export function Sidebar({
         </>
       ) : null}
       <div className="sidebar-bottom">
+        <ThemePicker align="start" side="right">
+          <Button
+            variant="ghost"
+            size={collapsed ? 'icon-sm' : 'default'}
+            aria-label={t('sidebar.themeToggle')}
+            title={t('sidebar.themeCurrent', { theme: activeThemeLabel })}
+          >
+            <Palette data-icon="inline-start" aria-hidden="true" />
+            {!collapsed ? activeThemeLabel : null}
+          </Button>
+        </ThemePicker>
+        <SoundPicker
+          align="start"
+          side="right"
+          collapsed={collapsed}
+          onOpenSettings={onSettings}
+        />
         <Button
           variant="ghost"
           size={collapsed ? 'icon-sm' : 'default'}

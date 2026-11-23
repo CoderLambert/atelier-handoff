@@ -62,6 +62,7 @@ const routeTree = root.addChildren([
   }),
   page('/settings/models'),
   page('/settings/layout'),
+  page('/settings/notifications'),
   page('/settings/diagnostics'),
 ]);
 export const workspaceRouter = createRouter({ routeTree, history: createHashHistory() });

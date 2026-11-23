@@ -202,6 +202,8 @@ export const inspector = {
   ],
   'settings.layout': ['工作区布局', 'Workspace layout'],
   'settings.layoutNavDescription': ['面板宽度与默认布局', 'Panel widths and default layout'],
+  'settings.notifications': ['提示音与通知', 'Sound & Notifications'],
+  'settings.notificationsNavDescription': ['完成提示音与窗口唤醒', 'Completion chime and window focus'],
   'settings.diagnostics': ['诊断', 'Diagnostics'],
   'settings.diagnosticsNavDescription': ['导出本机诊断文件', 'Export local diagnostic files'],
   'settings.title': ['设置', 'Settings'],
@@ -219,6 +221,40 @@ export const inspector = {
   'settings.layoutDescription': [
     '调整导航栏和浏览器的默认宽度。会话与执行轨迹默认使用完整中栏。',
     'Adjust default navigation and browser widths. Sessions and execution traces use the full center panel by default.',
+  ],
+  'settings.notificationsDescription': [
+    '管理任务执行结束时的提示音、音量与窗口自动聚焦。',
+    'Manage audio chimes, volume, and window focus when execution completes.',
+  ],
+  'settings.notificationsSoundGroup': ['提示音设置', 'Audio Chime Settings'],
+  'settings.notificationsSoundGroupDescription': [
+    '当智能体或任务运行结束时，播放提示音以提醒您。',
+    'Play an audio chime to notify you when an agent or run finishes.',
+  ],
+  'settings.notificationsCompletionSound': ['任务完成提示音', 'Task Completion Chime'],
+  'settings.notificationsCompletionSoundDescription': [
+    '任务成功完成时播放清脆悦耳的双音和弦提示音。',
+    'Play a crisp, pleasant chime when a task finishes successfully.',
+  ],
+  'settings.notificationsFailureSound': ['任务中断或失败提示音', 'Interruption & Failure Chime'],
+  'settings.notificationsFailureSoundDescription': [
+    '任务异常失败或被中断时播放低柔提示音。',
+    'Play a subtle alert when a task fails or is interrupted.',
+  ],
+  'settings.notificationsVolume': ['提示声音量', 'Chime Volume'],
+  'settings.notificationsVolumeDescription': ['调整提示音播放音量。', 'Adjust the playback volume of audio chimes.'],
+  'settings.notificationsTestSound': ['试听音效', 'Test Sound'],
+  'settings.soundMuted': ['已静音', 'Muted'],
+  'settings.moreSettings': ['完整通知设置…', 'Full notification settings…'],
+  'settings.notificationsWindowGroup': ['窗口与焦点', 'Window & Focus'],
+  'settings.notificationsWindowGroupDescription': [
+    '在任务执行结束后，自动唤醒并聚焦当前工作台。',
+    'Automatically bring the workbench to the foreground when tasks complete.',
+  ],
+  'settings.notificationsFocusOnCompletion': ['完成时聚焦窗口', 'Focus Window on Completion'],
+  'settings.notificationsFocusOnCompletionDescription': [
+    '在后台或非激活状态下完成任务时，自动将应用窗口前置并聚焦会话。',
+    'Bring the application window to the foreground and focus the session when a background run finishes.',
   ],
   'settings.diagnosticsDescription': [
     '遇到连接或运行问题时，导出诊断文件辅助排查。',
@@ -471,6 +507,43 @@ export const inspector = {
   'tool.outputExcerpt': ['摘录', 'Excerpt'],
   'tool.rawOutput': ['原文', 'Raw output'],
   'tool.emptyOutput': ['（空输出）', '(Empty output)'],
+  'layout.themeSection': ['界面外观', 'Appearance'],
+  'layout.themeLabel': ['工作台主题', 'Workbench theme'],
+  'layout.themeSelectTitle': ['选择界面主题', 'Select UI Theme'],
+  'layout.themeHint': [
+    '选择您喜爱的工作台界面视觉风格，支持随时切换。',
+    'Choose your preferred workbench visual style. You can switch at any time.',
+  ],
+  'layout.themeObsidian': ['黑曜工作室 (Obsidian Studio)', 'Obsidian Studio'],
+  'layout.themeObsidianDesc': [
+    '极简中性灰 · 专注高密度生产力',
+    'Neutral grays · Focus and high density',
+  ],
+  'layout.themeClassic': ['工坊经典 (Atelier Classic)', 'Atelier Classic'],
+  'layout.themeClassicDesc': [
+    '原版草木绿 · 质朴手工工坊质感',
+    'Original olive green · Artisanal craft',
+  ],
+  'layout.themeParchment': ['暖纸书卷 (Warm Parchment)', 'Warm Parchment'],
+  'layout.themeParchmentDesc': [
+    '晨光米纸色 · 长文阅读护眼舒适',
+    'Warm ivory paper · Eye-friendly reading',
+  ],
+  'layout.themeNordic': ['冰川冷白 (Nordic Frost)', 'Nordic Frost'],
+  'layout.themeNordicDesc': [
+    '清冽冰川蓝 · 通透理性工程美学',
+    'Glacial blue · Crisp engineering clarity',
+  ],
+  'layout.themeRose': ['晨曦蔷薇 (Rosé Pine)', 'Rosé Pine'],
+  'layout.themeRoseDesc': [
+    '落日浅樱粉 · 文艺复古柔和舒缓',
+    'Dusty rose · Subdued retro elegance',
+  ],
+  'layout.themeMidnight': ['深空墨夜 (Midnight Slate)', 'Midnight Slate'],
+  'layout.themeMidnightDesc': [
+    '深邃墨蓝黑 · 夜间沉浸重度专注',
+    'Deep ink slate · Nocturnal focus & immersion',
+  ],
   'layout.defaultWidths': ['默认面板宽度', 'Default panel widths'],
   'layout.widthsHint': [
     '单位为像素。会话与执行轨迹默认占用导航栏之外的全部空间，浏览器仅在主动打开时占用右栏。',

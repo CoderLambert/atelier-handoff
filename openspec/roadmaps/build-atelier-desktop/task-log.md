@@ -352,3 +352,10 @@
 - `npm run check`、前端及桌面构建通过，398 项测试通过，既有 WebFetch 用例跳过。隔离 Electron 复核三种桌面视口、680px 导航抽屉、中英文、草稿、原生网页输入、分栏、叠层遮挡和恢复，以及日志分页下载。首屏 CSS gzip 从 18.92 降至 13.53 kB，JS 从 197.76 增至 207.97 kB，Motion 功能异步块为 18.90 kB。活动桌面切换待授权。[验收记录与复现](../../../docs/evidence/frontend-design-system/2026-11-23.md)
 - **开发过程 review**。用同一隔离上下文夹具覆盖浏览器输入、布局、弹层、重开与截图。首次加载轨迹时焦点丢失，按同一通路收窄 Suspense 后复验。下次修改路由内容时，将首次异步加载的焦点断言与界面调整放在同一批次。
 - 文件说明批次 `frontend-design-system / 当前源码哈希快照` 完成。按指定模型的只读建议复核，集中更新 22 份文件头。`npm run check:headers -- --files …` 覆盖本轮 76 份源码并通过。
+
+## 2026-11-23 · 输入框上方的任务清单
+
+- 当前运行的任务清单与输入框等宽，默认展开，支持键盘和鼠标折叠。完成数随运行快照更新，已完成的条目显示勾选和划线。运行结束后保留最终状态。进入下一轮后可在旧消息中展开对应清单。没有任务计划的当前运行隐藏输入框上方的清单。[实现说明与数据流](../../../docs/chat-task-plan.md)
+- `npm run check`、`npm run build`、`npm run build:desktop` 通过。`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 通过 399 项，既有 WebFetch 用例跳过 1 项。任务交互断言位于 [消息操作回归](../../../frontend/src/features/chat/message-actions.test.ts)。隔离 Electron 45.4.1 通过本地回环模型和真实 SDK 的 `update_plan` 请求核对 `0/2` 至 `2/2` 的更新、折叠保持、历史查看与中英文。1280×800、1440×900、1920×1080 和 680×800 下检查清单宽度与输入框一致，本机截图在 `.local/task-plan-completed-zh.png`。回退范围为聊天渲染、样式和词条。
+- **开发过程 review**。把切会话、折叠保持和新一轮历史归属加入现成的渲染回归，隔离桌面集中走一次真实工具更新。窗口调整后在同一个渲染帧读取清单和输入框边界，避免两次读取跨过窗口尺寸变化。
+- 文件说明批次 `composer-task-plan / c1997a1 + 源码哈希快照` 已完成。核对建议与输入哈希后更新四份文件说明，`npm run check:headers` 的本次文件检查通过。本机输入清单位于 `.local/task-plan-headers.pKbLaq/input-sha256.txt`。
