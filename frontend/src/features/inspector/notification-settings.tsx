@@ -1,20 +1,30 @@
 /**
  * @file 提供运行提示音与窗口焦点设置表单。
- * @implementation 呈现提示音开关、音量调节滑块、实时试听与自动聚焦窗口配置，变更即时持久化。
- * @updated 2026-11-23T15:35:00+08:00
+ * @implementation 呈现提示音风格切换、开关、音量调节滑块、实时试听与自动聚焦窗口配置，变更即时持久化。
+ * @updated 2026-11-23T16:40:00+08:00
  */
 import { useId } from 'react';
 import { Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useUiTranslation } from '@/i18n';
 import { useUiNotifications } from '@/notifications';
+import { type SoundTheme } from '@shared/desktop-ui-notifications';
 
 export function NotificationSettings() {
   const { t } = useUiTranslation('inspector');
   const { notifications, updateNotifications, playTestSound } = useUiNotifications();
 
   const completionId = useId();
+  const themeId = useId();
   const failureId = useId();
   const volumeId = useId();
   const focusId = useId();
@@ -38,6 +48,36 @@ export function NotificationSettings() {
               checked={notifications.completionSound}
               onCheckedChange={(checked) => updateNotifications({ completionSound: checked })}
             />
+          </div>
+        </div>
+
+        <div className="settings-field-row">
+          <div className="settings-field-copy">
+            <label htmlFor={themeId}>{t('settings.notificationsSoundTheme')}</label>
+            <p>{t('settings.notificationsSoundThemeDescription')}</p>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Select
+              value={notifications.soundTheme}
+              onValueChange={(value) => {
+                const nextTheme = value as SoundTheme;
+                updateNotifications({ soundTheme: nextTheme });
+                playTestSound(nextTheme);
+              }}
+            >
+              <SelectTrigger id={themeId} className="w-64 max-w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                <SelectGroup>
+                  <SelectItem value="codex">{t('settings.notificationsSoundThemeCodex')}</SelectItem>
+                  <SelectItem value="chime">{t('settings.notificationsSoundThemeChime')}</SelectItem>
+                  <SelectItem value="marimba">{t('settings.notificationsSoundThemeMarimba')}</SelectItem>
+                  <SelectItem value="bubble">{t('settings.notificationsSoundThemeBubble')}</SelectItem>
+                  <SelectItem value="ping">{t('settings.notificationsSoundThemePing')}</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -80,7 +120,7 @@ export function NotificationSettings() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={playTestSound}
+                onClick={() => playTestSound(notifications.soundTheme)}
                 className="gap-1.5"
                 aria-label={t('settings.notificationsTestSound')}
               >

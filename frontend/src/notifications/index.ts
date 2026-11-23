@@ -1,7 +1,7 @@
 /**
  * @file 管理全局通知与提示音偏好、播放服务及窗口唤醒。
  * @implementation 优先使用桌面 profile IPC 桥接持久化，在 SSE 接收到 run.finished 时自动裁决提示音和窗口焦点。
- * @updated 2026-11-23T15:35:00+08:00
+ * @updated 2026-11-23T16:35:00+08:00
  */
 import { useEffect, useState } from 'react';
 import type { RunStatus } from '@shared/types';
@@ -10,6 +10,7 @@ import {
   resolveDesktopUiNotifications,
   type DesktopUiNotifications,
   type DesktopUiNotificationsBridge,
+  type SoundTheme,
 } from '@shared/desktop-ui-notifications';
 import { soundChime } from './sound-chime';
 
@@ -92,15 +93,16 @@ export function setUiNotifications(
   return next;
 }
 
-export function playTestSound(): void {
-  soundChime.playCompletionChime(inMemoryNotifications.volume);
+export function playTestSound(theme?: SoundTheme): void {
+  const chosenTheme = theme ?? inMemoryNotifications.soundTheme;
+  soundChime.playCompletionChime(chosenTheme, inMemoryNotifications.volume);
 }
 
 export function notifyRunFinished(status?: RunStatus, sessionId?: string): void {
   const config = inMemoryNotifications;
 
   if (status === 'completed' && config.completionSound) {
-    soundChime.playCompletionChime(config.volume);
+    soundChime.playCompletionChime(config.soundTheme, config.volume);
   } else if ((status === 'failed' || status === 'interrupted') && config.failureSound) {
     soundChime.playFailureChime(config.volume);
   }

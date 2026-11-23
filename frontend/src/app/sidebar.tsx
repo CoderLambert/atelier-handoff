@@ -24,7 +24,6 @@ import {
 import { type Project, type RunStatus, type Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { ThemePicker } from '@/components/theme-picker';
-import { SoundPicker } from '@/components/sound-picker';
 import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
 import { useUiTheme } from '@/theme';
@@ -499,12 +498,6 @@ export function Sidebar({
             {!collapsed ? activeThemeLabel : null}
           </Button>
         </ThemePicker>
-        <SoundPicker
-          align="start"
-          side="right"
-          collapsed={collapsed}
-          onOpenSettings={onSettings}
-        />
         <Button
           variant="ghost"
           size={collapsed ? 'icon-sm' : 'default'}

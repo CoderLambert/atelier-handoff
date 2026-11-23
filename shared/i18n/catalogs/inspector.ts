@@ -236,6 +236,16 @@ export const inspector = {
     '任务成功完成时播放清脆悦耳的双音和弦提示音。',
     'Play a crisp, pleasant chime when a task finishes successfully.',
   ],
+  'settings.notificationsSoundTheme': ['提示音风格', 'Chime Style'],
+  'settings.notificationsSoundThemeDescription': [
+    '选择任务完成时播放的提示音音效，支持即时预览。',
+    'Choose the chime style played on completion, with instant preview.',
+  ],
+  'settings.notificationsSoundThemeCodex': ['Codex 经典玻璃音 (Codex)', 'Codex Glass Chime'],
+  'settings.notificationsSoundThemeChime': ['双音和弦 (Harmonic Chime)', 'Harmonic Chime'],
+  'settings.notificationsSoundThemeMarimba': ['温暖木琴 (Warm Marimba)', 'Warm Marimba'],
+  'settings.notificationsSoundThemeBubble': ['灵动水泡 (Playful Bubble)', 'Playful Bubble'],
+  'settings.notificationsSoundThemePing': ['极简微鸣 (Minimal Ping)', 'Minimal Ping'],
   'settings.notificationsFailureSound': ['任务中断或失败提示音', 'Interruption & Failure Chime'],
   'settings.notificationsFailureSoundDescription': [
     '任务异常失败或被中断时播放低柔提示音。',
@@ -244,8 +254,6 @@ export const inspector = {
   'settings.notificationsVolume': ['提示声音量', 'Chime Volume'],
   'settings.notificationsVolumeDescription': ['调整提示音播放音量。', 'Adjust the playback volume of audio chimes.'],
   'settings.notificationsTestSound': ['试听音效', 'Test Sound'],
-  'settings.soundMuted': ['已静音', 'Muted'],
-  'settings.moreSettings': ['完整通知设置…', 'Full notification settings…'],
   'settings.notificationsWindowGroup': ['窗口与焦点', 'Window & Focus'],
   'settings.notificationsWindowGroupDescription': [
     '在任务执行结束后，自动唤醒并聚焦当前工作台。',

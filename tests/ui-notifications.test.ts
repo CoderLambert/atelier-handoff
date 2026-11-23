@@ -35,24 +35,28 @@ async function withProfile(run: (directory: string) => Promise<void>): Promise<v
 }
 
 test('notification service resolves valid notifications and falls back to default', () => {
+  assert.equal(defaultDesktopUiNotifications.soundTheme, 'codex');
   assert.equal(defaultDesktopUiNotifications.completionSound, true);
   assert.equal(defaultDesktopUiNotifications.failureSound, true);
   assert.equal(defaultDesktopUiNotifications.focusOnCompletion, true);
   assert.equal(defaultDesktopUiNotifications.volume, 80);
 
   const parsed = resolveDesktopUiNotifications({
+    soundTheme: 'marimba',
     completionSound: false,
     failureSound: true,
     focusOnCompletion: false,
     volume: 50,
   });
+  assert.equal(parsed.soundTheme, 'marimba');
   assert.equal(parsed.completionSound, false);
   assert.equal(parsed.failureSound, true);
   assert.equal(parsed.focusOnCompletion, false);
   assert.equal(parsed.volume, 50);
 
   // Partial or invalid fallback
-  const fallback = resolveDesktopUiNotifications({ volume: 150 });
+  const fallback = resolveDesktopUiNotifications({ soundTheme: 'unknown_theme', volume: 150 });
+  assert.equal(fallback.soundTheme, 'codex');
   assert.equal(fallback.completionSound, true);
   assert.equal(fallback.volume, 80);
 
@@ -68,6 +72,7 @@ test('desktop notifications IPC channels and schemas validate payloads', () => {
   assert.equal(desktopUiNotificationGetSchema.safeParse({}).success, false);
 
   const valid = {
+    soundTheme: 'codex' as const,
     completionSound: true,
     failureSound: false,
     focusOnCompletion: true,
@@ -89,6 +94,7 @@ test('desktop notifications preference persists in user profile across loads', a
     assert.deepEqual(preferences.get(), defaultDesktopUiNotifications);
 
     const custom = {
+      soundTheme: 'bubble' as const,
       completionSound: false,
       failureSound: true,
       focusOnCompletion: false,

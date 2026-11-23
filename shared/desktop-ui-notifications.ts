@@ -1,11 +1,15 @@
 /**
  * @file 定义桌面通知与提示音偏好及 IPC 契约。
  * @implementation 共享 Zod schema 校验持久偏好与请求响应，preload 仅暴露偏好读写和窗口唤醒。
- * @updated 2026-11-23T15:35:00+08:00
+ * @updated 2026-11-23T16:35:00+08:00
  */
 import { z } from 'zod';
 
+export const soundThemes = ['codex', 'chime', 'marimba', 'bubble', 'ping'] as const;
+export type SoundTheme = (typeof soundThemes)[number];
+
 export const desktopUiNotificationsSchema = z.strictObject({
+  soundTheme: z.enum(soundThemes),
   completionSound: z.boolean(),
   failureSound: z.boolean(),
   focusOnCompletion: z.boolean(),
@@ -15,6 +19,7 @@ export const desktopUiNotificationsSchema = z.strictObject({
 export type DesktopUiNotifications = z.infer<typeof desktopUiNotificationsSchema>;
 
 export const defaultDesktopUiNotifications: DesktopUiNotifications = {
+  soundTheme: 'codex',
   completionSound: true,
   failureSound: true,
   focusOnCompletion: true,
@@ -26,7 +31,13 @@ export function resolveDesktopUiNotifications(value: unknown): DesktopUiNotifica
   if (result.success) return result.data;
   if (value && typeof value === 'object') {
     const candidate = value as Record<string, unknown>;
+    const soundTheme =
+      typeof candidate.soundTheme === 'string' &&
+      (soundThemes as readonly string[]).includes(candidate.soundTheme)
+        ? (candidate.soundTheme as SoundTheme)
+        : defaultDesktopUiNotifications.soundTheme;
     return {
+      soundTheme,
       completionSound:
         typeof candidate.completionSound === 'boolean'
           ? candidate.completionSound
