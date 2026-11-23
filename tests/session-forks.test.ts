@@ -209,7 +209,7 @@ test(
       assert.match(requests[count + 2] ?? '', /A_ONLY_SENTINEL/);
       assert.doesNotMatch(requests[count + 2] ?? '', /B_ONLY_SENTINEL|PARENT_ONLY_SENTINEL/);
       const rebuilt = await turn(a.id, 'A_NEW_EFFORT_SENTINEL', { effort: 'high' });
-      assert.notEqual(rebuilt.session.sdkSessionId, a.sdkSessionId);
+      assert.equal(rebuilt.session.sdkSessionId, a.sdkSessionId);
       const rebuiltRequest = requests[count + 3] ?? '';
       assert.match(rebuiltRequest, /SHARED_BRANCH_SENTINEL/);
       assert.match(rebuiltRequest, /A_ONLY_SENTINEL/);

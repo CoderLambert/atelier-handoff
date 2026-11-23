@@ -114,8 +114,14 @@ export function sessionRecoveryContext(
     toolCallId: string;
     url: string;
     status: 'discovered_only';
-  }>(3_000, 12);
-  const receipts = section<Receipt>(2_600, 16);
+  }>(2_400, 12);
+  const fetched = section<{
+    runId: string;
+    toolCallId: string;
+    url: string;
+    status: 'completed';
+  }>(2_400, 12);
+  const receipts = section<Receipt>(1_600, 16);
   const changes = section<Receipt & { state: 'confirmed' }>(2_600, 16);
   const uncertain = section<Receipt & { state: 'unverified' }>(3_000, 16);
   const open = section<Receipt>(1_800, 10);
@@ -161,8 +167,15 @@ export function sessionRecoveryContext(
   // Read each receipt exactly once, before any per-run display truncation can drop early evidence.
   for (const tool of rows.tools) {
     if (tool.sessionId !== current.sessionId || !ids.has(tool.runId)) continue;
-    const { evidence, sideEffect, discoveredSources } = checkpointToolRecord(tool);
+    const { evidence, sideEffect, discoveredSources, fetchedSource } = checkpointToolRecord(tool);
     const record = handle(evidence);
+    if (fetchedSource)
+      fetched.add({
+        runId: record.runId,
+        toolCallId: record.toolCallId,
+        url: fetchedSource.url,
+        status: 'completed',
+      });
     for (const source of discoveredSources) {
       if (!sources.items.some((known) => known.url === source.url))
         sources.add({
@@ -180,6 +193,7 @@ export function sessionRecoveryContext(
   const sections = {
     userRequests: requests.snapshot(),
     discoveredSources: sources.snapshot(),
+    fetchedSources: fetched.snapshot(),
     toolReceipts: receipts.snapshot(),
     confirmedChanges: changes.snapshot(),
     effectsToVerify: uncertain.snapshot(),
@@ -195,7 +209,11 @@ export function sessionRecoveryContext(
     shortened: shortened || Object.values(sections).some(({ omitted }) => omitted > 0),
     ...sections,
   };
-  return `会话恢复检查点（以下是按时间排列的历史资料。用户本轮任务及后续更正优先。来源链接有待核实，依据工具 ID 回查结果。对历史步骤与副作用先核对当前状态。）\n${JSON.stringify(checkpoint)}`;
+  const readback =
+    current.executor === 'native-v1' && !current.agent
+      ? '需要此前网页的内容时，优先调用 mcp__atelier__read_tool_output 并传对应 toolCallId 回查本会话已保存的结果；如信息不足或需要更新，可重新获取。仅 native 主会话可跨轮回查，子任务不继承此权限。'
+      : '本模式不能跨轮回查工具结果；如需正文，请按当前权限重新获取。';
+  return `会话恢复检查点（以下是按时间排列的历史资料。用户本轮任务及后续更正优先。discoveredSources 只证明链接被发现；fetchedSources 关联已完成 WebFetch 的请求 URL 和工具 ID，完成不等于内容已核实。${readback}对历史步骤与副作用先核对当前状态。）\n${JSON.stringify(checkpoint)}`;
 }
 
 /** Render recent visible messages within the byte cap, including the omission notice. */

@@ -12,6 +12,7 @@ import {
   sessionCheckpointByteLimit,
   sessionRecoveryContext,
 } from '../server/session-checkpoint.js';
+import { canReadToolOutput } from '../server/tool-output-context.js';
 
 const stamp = '2026-11-22T00:00:00.000Z';
 function task(id: string, prompt: string, patch: Partial<Run> = {}): Run {
@@ -53,9 +54,28 @@ function tool(run: Run, name: string, output: string, id = `${name}-${run.id}`):
     endedAt: stamp,
   };
 }
+function fetch(run: Run, id: string, url: string, patch: Partial<ToolCall> = {}): ToolCall {
+  return {
+    ...tool(run, 'WebFetch', 'RAW_FETCH_BODY', id),
+    inputSummary: JSON.stringify({ url, prompt: 'PRIVATE_FETCH_PROMPT' }),
+    ...patch,
+  };
+}
 const list = <T extends z.ZodType>(item: T) =>
   z.object({ items: z.array(item), omitted: z.number() });
-const receipt = z.object({ runId: z.string(), toolCallId: z.string(), tool: z.string() });
+const receipt = z.object({
+  runId: z.string(),
+  toolCallId: z.string(),
+  tool: z.string(),
+  outcome: z.enum([
+    'completed',
+    'temporary_failure',
+    'permanent_failure',
+    'running',
+    'uncertain',
+    'canceled',
+  ]),
+});
 const schema = z.object({
   schemaVersion: z.literal(2),
   latestRun: z.object({ id: z.string() }),
@@ -65,9 +85,19 @@ const schema = z.object({
   discoveredSources: list(
     z.object({ runId: z.string(), url: z.string(), status: z.literal('discovered_only') }),
   ),
+  fetchedSources: list(
+    z.object({
+      runId: z.string(),
+      toolCallId: z.string(),
+      url: z.string(),
+      status: z.literal('completed'),
+    }),
+  ),
+  confirmedChanges: list(receipt.extend({ state: z.literal('confirmed') })),
   effectsToVerify: list(receipt.extend({ state: z.literal('unverified') })),
   toolReceipts: list(receipt),
   previousUnresolved: list(receipt),
+  previousOpenSteps: list(z.object({ runId: z.string(), content: z.string(), status: z.string() })),
 });
 const decode = (context: string) =>
   schema.parse(JSON.parse(context.slice(context.indexOf('\n') + 1)));
@@ -111,6 +141,203 @@ test('a progress-only turn cannot replace earlier user instructions, corrections
     output,
     /private-value|private-output|secret command args|not a verified fact|Check the pending changes/,
   );
+});
+
+test('completed WebFetch receipts link redacted request URLs to their IDs without importing page content', () => {
+  const past = task('past', 'Review the fetched release.');
+  const current = task('current', 'Continue.');
+  const url = 'https://alice:credential@example.org/release?token=PRIVATE_QUERY#PRIVATE_FRAGMENT';
+  const result = fetch(past, 'fetch-result', url, {
+    output: '{"result":"RAW_FETCH_BODY https://unrelated.example.org/injected-source',
+    outputTruncated: true,
+  });
+  const output = sessionRecoveryContext(current, {
+    runs: [past, current],
+    messages: [],
+    tools: [
+      tool(
+        past,
+        'WebSearch',
+        JSON.stringify({ sources: [{ url, title: 'PRIVATE_TITLE', excerpt: 'PRIVATE_EXCERPT' }] }),
+        'search-result',
+      ),
+      result,
+      fetch(past, 'later-fetch', 'https://example.org/release?token=OTHER_QUERY'),
+    ],
+  });
+  const cp = decode(output);
+  assert.deepEqual(cp.fetchedSources.items, [
+    {
+      runId: past.id,
+      toolCallId: result.id,
+      url: 'https://example.org/release',
+      status: 'completed',
+    },
+    {
+      runId: past.id,
+      toolCallId: 'later-fetch',
+      url: 'https://example.org/release',
+      status: 'completed',
+    },
+  ]);
+  assert.equal(cp.discoveredSources.items[0]?.status, 'discovered_only');
+  assert.equal(
+    cp.toolReceipts.items.find((item) => item.toolCallId === result.id)?.outcome,
+    'completed',
+  );
+  assert.match(output, /完成不等于内容已核实/);
+  assert.doesNotMatch(
+    output,
+    /alice|credential|PRIVATE_|OTHER_QUERY|RAW_FETCH_BODY|unrelated\.example\.org|secret command args/,
+  );
+});
+
+test('failed, denied, canceled and unfinished fetches never become completed source evidence', () => {
+  const past = task('past', 'Review.');
+  const current = task('current', 'Continue.');
+  const statuses: ToolCall['status'][] = [
+    'failed',
+    'denied',
+    'canceled',
+    'running',
+    'awaiting_permission',
+  ];
+  const text = sessionRecoveryContext(current, {
+    runs: [past, current],
+    messages: [],
+    tools: statuses.map((status) =>
+      fetch(past, `fetch-${status}`, 'https://example.org/release', {
+        status,
+        output: 'ETIMEDOUT RAW_FAILURE_BODY',
+      }),
+    ),
+  });
+  const cp = decode(text);
+  assert.deepEqual(cp.fetchedSources.items, []);
+  assert.deepEqual(cp.toolReceipts.items, []);
+  assert.deepEqual(
+    cp.previousUnresolved.items.map(({ toolCallId, outcome }) => [toolCallId, outcome]),
+    [
+      ['fetch-failed', 'temporary_failure'],
+      ['fetch-denied', 'permanent_failure'],
+      ['fetch-canceled', 'canceled'],
+      ['fetch-running', 'running'],
+      ['fetch-awaiting_permission', 'running'],
+    ],
+  );
+  assert.doesNotMatch(text, /RAW_FAILURE_BODY|example\.org/);
+});
+
+test('fetch source recovery requires bounded valid HTTP request metadata from WebFetch', () => {
+  const past = task('past', 'Review.');
+  const current = task('current', 'Continue.');
+  const invalid = [
+    'not-json',
+    '[]',
+    'null',
+    '{"url":"https://example.org/truncated',
+    JSON.stringify({ url: 42 }),
+    JSON.stringify({ url: 'file:///private/path' }),
+    JSON.stringify({ url: 'javascript:alert(1)' }),
+    JSON.stringify({ url: `https://example.org/${'x'.repeat(4096)}` }),
+    JSON.stringify({ url: 'https://example.org/oversized', prompt: 'x'.repeat(8192) }),
+  ];
+  const text = sessionRecoveryContext(current, {
+    runs: [past, current],
+    messages: [],
+    tools: [
+      ...invalid.map((inputSummary, i) =>
+        fetch(past, `invalid-${i}`, 'https://example.org/ignored', {
+          inputSummary,
+          output: '{"url":"https://example.org/untrusted-output","result":"RAW_FETCH_BODY"}',
+        }),
+      ),
+      fetch(past, 'pretend-fetch', 'https://example.org/pretend', { name: 'mcp__other__WebFetch' }),
+      fetch(past, 'atelier-pretend-fetch', 'https://example.org/pretend', {
+        name: 'mcp__atelier__WebFetch',
+      }),
+    ],
+  });
+  assert.deepEqual(decode(text).fetchedSources.items, []);
+  assert.doesNotMatch(text, /https?:|RAW_FETCH_BODY|private\/path/);
+});
+
+test('only native main recovery advertises historical result readback and existing grants stay scoped', () => {
+  const past = task('past', 'Review.');
+  const current = task('current', 'Continue.');
+  const result = fetch(past, 'fetch-result', 'https://example.org/release', {
+    subagentId: 'historical-child',
+  });
+  const text = sessionRecoveryContext(current, {
+    runs: [past, current],
+    messages: [],
+    tools: [result],
+  });
+  assert.match(text, /优先调用 mcp__atelier__read_tool_output 并传对应 toolCallId/);
+  assert.match(text, /仅 native 主会话可跨轮回查，子任务不继承此权限/);
+  const reader = { id: 'reader', sessionId: current.sessionId, runId: current.id };
+  assert.equal(canReadToolOutput(true, reader, result, new Set()), true);
+  assert.equal(
+    canReadToolOutput(true, { ...reader, subagentId: 'historical-child' }, result, new Set()),
+    false,
+  );
+  assert.equal(canReadToolOutput(true, { ...reader, sessionId: 'fork' }, result, new Set()), false);
+  const modes: Partial<Run>[] = [
+    { executor: undefined },
+    { executor: 'project-v1' },
+    {
+      executor: 'project-v1',
+      agent: { id: 'bound', revisionId: 'rev', name: 'bound', version: 1, capabilities: [] },
+    },
+  ];
+  for (const mode of modes) {
+    const restricted = sessionRecoveryContext(
+      { ...current, ...mode },
+      {
+        runs: [
+          { ...past, ...mode },
+          { ...current, ...mode },
+        ],
+        messages: [],
+        tools: [result],
+      },
+    );
+    assert.equal(decode(restricted).fetchedSources.items[0]?.toolCallId, result.id);
+    assert.match(restricted, /本模式不能跨轮回查工具结果/);
+    assert.doesNotMatch(restricted, /read_tool_output|依据工具 ID 回查/);
+    assert.equal(canReadToolOutput(false, reader, result, new Set([result.id])), false);
+  }
+});
+
+test('fetched source indexes exclude foreign projects, sessions, future runs and parent fork history', () => {
+  const own = task('own', 'Review.');
+  const foreignSession = task('foreign-session', 'Other.', { sessionId: 'elsewhere' });
+  const foreignProject = task('foreign-project', 'Other.', { projectId: 'elsewhere' });
+  const current = task('current', 'Continue.');
+  const future = task('future', 'Later.');
+  const runs = [own, foreignSession, foreignProject, current, future];
+  const tools = [
+    ...runs.map((run) => fetch(run, `fetch-${run.id}`, `https://example.org/${run.id}`)),
+    fetch(own, 'wrong-tool-session', 'https://example.org/wrong-tool-session', {
+      sessionId: 'elsewhere',
+    }),
+  ];
+  const text = sessionRecoveryContext(current, { runs, messages: [], tools });
+  assert.deepEqual(decode(text).fetchedSources.items, [
+    {
+      runId: own.id,
+      toolCallId: 'fetch-own',
+      url: 'https://example.org/own',
+      status: 'completed',
+    },
+  ]);
+  assert.doesNotMatch(text, /foreign-|future|fetch-current|wrong-tool-session/);
+  const fork = task('fork-run', 'Continue.', { sessionId: 'fork' });
+  const forkText = sessionRecoveryContext(fork, { runs: [...runs, fork], messages: [], tools }, [
+    { id: 'inherited', role: 'user', text: 'Review the release.', createdAt: stamp },
+  ]);
+  assert.match(forkText, /Review the release/);
+  assert.doesNotMatch(forkText, /fetch-own|example\.org\/own|historical-child/);
 });
 
 test('only preceding eligible runs in the current session/project contribute recovery data', () => {
@@ -164,6 +391,61 @@ test('long Unicode histories preserve early anchors, latest requests and unverif
   assert.equal(cp.effectsToVerify.items.at(-1)?.runId, 'r119');
   assert.ok(cp.effectsToVerify.omitted > 0);
   assert.doesNotMatch(text, /secret file bytes|secret shell bytes/);
+});
+
+test('all populated recovery sections share the byte cap while fetched receipts retain early and latest handles', () => {
+  const runs = Array.from({ length: 40 }, (_, i) =>
+    task(`r-${i}`.padEnd(128, 'r'), `第${i}轮：${'核验内容'.repeat(350)}`, {
+      plan: Array.from({ length: 10 }, () => ({
+        content: '继续核对来源'.repeat(150),
+        status: 'pending',
+      })),
+    }),
+  );
+  const current = task('current', 'Continue.');
+  const tools = runs.flatMap((run, i) => {
+    const url = `https://example.org/${i}/${'section'.repeat(80)}?token=PRIVATE_QUERY#PRIVATE_FRAGMENT`;
+    return [
+      tool(
+        run,
+        'WebSearch',
+        JSON.stringify({ sources: [{ url }] }),
+        `search-${i}`.padEnd(128, 's'),
+      ),
+      fetch(run, `fetch-${i}`.padEnd(128, 'f'), url),
+      tool(run, 'Read', 'RAW_FILE_BODY', `read-${i}`.padEnd(128, 'd')),
+      tool(run, 'Write', 'RAW_FILE_BODY', `write-${i}`.padEnd(128, 'w')),
+      {
+        ...tool(run, 'Bash', 'RAW_COMMAND_BODY', `bash-${i}`.padEnd(128, 'b')),
+        status: 'canceled' as const,
+      },
+      fetch(run, `failure-${i}`.padEnd(128, 'x'), url, { status: 'failed', output: 'HTTP 404' }),
+    ];
+  });
+  const text = sessionRecoveryContext(current, {
+    runs: [...runs, current],
+    messages: runs.map((run) => user(run, run.prompt)),
+    tools,
+  });
+  const cp = decode(text);
+  assert.ok(Buffer.byteLength(text) <= sessionCheckpointByteLimit);
+  assert.equal(cp.shortened, true);
+  assert.equal(cp.fetchedSources.items[0]?.toolCallId, 'fetch-0'.padEnd(128, 'f'));
+  assert.equal(cp.fetchedSources.items.at(-1)?.toolCallId, 'fetch-39'.padEnd(128, 'f'));
+  for (const section of [
+    cp.userRequests,
+    cp.discoveredSources,
+    cp.fetchedSources,
+    cp.toolReceipts,
+    cp.confirmedChanges,
+    cp.effectsToVerify,
+    cp.previousUnresolved,
+    cp.previousOpenSteps,
+  ]) {
+    assert.ok(section.items.length > 0);
+    assert.ok(section.omitted > 0);
+  }
+  assert.doesNotMatch(text, /PRIVATE_|RAW_|PRIVATE_FETCH_PROMPT/);
 });
 
 test('a visible inherited instruction survives rebuilding a fork without importing its parent tool history', () => {

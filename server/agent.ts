@@ -304,22 +304,12 @@ export class AgentRunner implements Runner {
     const modelId = magpieModel(run.config.model) ?? run.config.model;
     const configKey = fingerprint(
       JSON.stringify({
-        model: run.config.model,
-        effort: run.config.effort,
+        // This key describes transcript compatibility, not the current tool configuration.
+        // Current permissions, tools and extensions are rebuilt for every query below.
+        recoveryIdentity: 1,
         gateway: run.config.gateway,
-        searchPolicy: 1,
-        outputContextPolicy: 2,
-        ...(native ? { executor: 'native-v1' } : {}),
-        ...(process.env.ATELIER_DISABLE_SUBAGENTS !== '1' ? { delegationPolicy: 2 } : {}),
-        ...(run.agent ? { agent: run.agent, capabilityPolicy: 1 } : {}),
-        ...(run.extensions ? { extensions: run.extensions } : {}),
-        ...(run.browserRevision ? { browserRevision: run.browserRevision } : {}),
-        ...(automaticApproval
-          ? { approvalMode: run.approvalMode, maxSearchChargeFen: run.maxSearchChargeFen ?? 0 }
-          : {}),
-        ...(skillRefs.length ? { skills: skillRefs } : {}),
-        ...(weatherEnabled ? { weatherLookup: true } : {}),
-        ...(skillBindings.length ? { skillBindings } : {}),
+        executor: native ? 'native-v1' : 'project-v1',
+        ...(run.agent ? { agentRevisionId: run.agent.revisionId } : {}),
       }),
     );
     const resumeExisting =
