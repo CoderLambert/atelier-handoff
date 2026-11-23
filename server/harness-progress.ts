@@ -293,8 +293,19 @@ function discoveredSources(tool: ToolCall): ProgressSource[] {
   return sources;
 }
 
+/** Only a completed native fetch links its requested URL to a persisted receipt. */
+function fetchedSource(tool: ToolCall): ProgressSource | undefined {
+  if (tool.name !== 'WebFetch' || tool.status !== 'succeeded') return undefined;
+  const input = object(parse(tool.inputSummary, MAX_INPUT));
+  return typeof input?.url === 'string' ? sourceOf(input.url) : undefined;
+}
+
 export function checkpointToolRecord(tool: ToolCall) {
-  return { ...observationOf(tool, {}), discoveredSources: discoveredSources(tool) };
+  return {
+    ...observationOf(tool, {}),
+    discoveredSources: discoveredSources(tool),
+    fetchedSource: fetchedSource(tool),
+  };
 }
 
 function observationOf(tool: ToolCall, hints: ProgressHints): ProgressObservation {
