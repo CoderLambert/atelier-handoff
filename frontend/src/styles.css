@@ -70,29 +70,38 @@
   --ui-theme-classic-shadow-overlay: 0 16px 48px rgb(37 50 26 / 0.12), 0 2px 8px rgb(37 50 26 / 0.12);
 
   /* Warm Parchment Palette */
-  --ui-theme-parchment-background: #f9f6f0;
-  --ui-theme-parchment-foreground: #26231f;
-  --ui-theme-parchment-card: #fffdfa;
-  --ui-theme-parchment-sidebar: #f3ede2;
-  --ui-theme-parchment-muted: #ede6da;
-  --ui-theme-parchment-muted-foreground: #78716c;
-  --ui-theme-parchment-secondary: #ebe3d5;
-  --ui-theme-parchment-secondary-foreground: #2e2924;
-  --ui-theme-parchment-accent: #e8dfcf;
-  --ui-theme-parchment-accent-foreground: #241f1a;
-  --ui-theme-parchment-selected: #e5d9c5;
-  --ui-theme-parchment-selected-foreground: #201c18;
+  --ui-theme-parchment-background: #fcfbf8;
+  --ui-theme-parchment-foreground: #24211d;
+  --ui-theme-parchment-card: #ffffff;
+  --ui-theme-parchment-sidebar: #f4f1ea;
+  --ui-theme-parchment-muted: #f3efe7;
+  --ui-theme-parchment-muted-foreground: #666058;
+  --ui-theme-parchment-secondary: #f1ede4;
+  --ui-theme-parchment-secondary-foreground: #2d2823;
+  --ui-theme-parchment-accent: #ece6db;
+  --ui-theme-parchment-accent-foreground: #221e1a;
+  --ui-theme-parchment-selected: #e7dfd1;
+  --ui-theme-parchment-selected-foreground: #1e1a16;
   --ui-theme-parchment-primary: #8c4e28;
   --ui-theme-parchment-primary-foreground: #ffffff;
   --ui-theme-parchment-primary-hover: #783f1f;
   --ui-theme-parchment-primary-active: #633318;
-  --ui-theme-parchment-border: #e2d8c7;
-  --ui-theme-parchment-border-subtle: #ede5d6;
-  --ui-theme-parchment-input: #c9bcab;
+  --ui-theme-parchment-border: #e5dfd3;
+  --ui-theme-parchment-border-subtle: #efeae0;
+  --ui-theme-parchment-input: #94897b;
   --ui-theme-parchment-ring: #8c4e28;
-  --ui-theme-parchment-scrim: rgb(38 35 31 / 0.35);
-  --ui-theme-parchment-shadow: rgb(38 35 31 / 0.06);
-  --ui-theme-parchment-shadow-overlay: 0 16px 36px -4px rgb(38 35 31 / 0.10), 0 4px 12px -2px rgb(38 35 31 / 0.05);
+  --ui-theme-parchment-scrim: rgb(36 33 29 / 0.35);
+  --ui-theme-parchment-shadow: rgb(36 33 29 / 0.05);
+  --ui-theme-parchment-shadow-overlay:
+    0 16px 36px -4px rgb(36 33 29 / 0.09), 0 4px 12px -2px rgb(36 33 29 / 0.04);
+
+  /* Shared Parchment and Rose status colors */
+  --ui-theme-warm-success: #1f6b4e;
+  --ui-theme-warm-success-soft: #eef5f0;
+  --ui-theme-warm-success-border: #c5ddd0;
+  --ui-theme-warm-warning: #a34d0b;
+  --ui-theme-warm-warning-soft: #fbf4e8;
+  --ui-theme-warm-warning-border: #ead2a8;
 
   /* Nordic Frost Palette */
   --ui-theme-nordic-background: #f8fafc;
@@ -403,6 +412,15 @@
   --ui-scrim: var(--ui-theme-rose-scrim);
   --ui-shadow: var(--ui-theme-rose-shadow);
   --ui-shadow-overlay: var(--ui-theme-rose-shadow-overlay);
+}
+
+:root:is([data-theme='parchment'], [data-theme='rose']) {
+  --ui-success: var(--ui-theme-warm-success);
+  --ui-success-soft: var(--ui-theme-warm-success-soft);
+  --ui-success-border: var(--ui-theme-warm-success-border);
+  --ui-warning: var(--ui-theme-warm-warning);
+  --ui-warning-soft: var(--ui-theme-warm-warning-soft);
+  --ui-warning-border: var(--ui-theme-warm-warning-border);
 }
 
 :root[data-theme='midnight'] {

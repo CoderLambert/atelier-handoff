@@ -90,6 +90,10 @@
   box-shadow: 0 1px 2px var(--ui-shadow);
 }
 
+:root[data-theme='parchment'] .atelier-sidebar :is(.new-session, .sidebar-search > input:not(:focus)) {
+  border-color: var(--ui-input);
+}
+
 .atelier-sidebar .nav-item {
   width: 100%;
   height: 32px;
@@ -177,7 +181,7 @@
   gap: 6px;
   min-width: 0;
   padding: 8px 4px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
   text-align: start;
   border-radius: var(--radius-sm);
@@ -200,7 +204,7 @@
 
 .sidebar-project-count {
   margin-inline-start: auto;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font: var(--text-xs)/1.5 var(--font-mono);
 }
 
@@ -212,7 +216,7 @@
 .sidebar-project-empty,
 .sidebar-archive-summary {
   margin: 2px 8px 8px 24px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   line-height: 1.5;
 }
@@ -233,7 +237,7 @@
 .atelier-sidebar .history-branches[data-indent] {
   margin-inline-start: 10px;
   padding-inline-start: 5px;
-  border-inline-start: 1px solid var(--border);
+  border-inline-start: 1px solid var(--ui-border);
 }
 
 .atelier-sidebar .history-tree > li {
@@ -259,23 +263,22 @@
 }
 
 .atelier-sidebar .sidebar-session-row[data-selected] {
+  position: relative;
   background: var(--ui-card);
   border-color: var(--ui-border);
   box-shadow: 0 1px 2px var(--ui-shadow);
   color: var(--ui-foreground);
 }
 
-:root:is([data-theme='classic'], [data-theme='parchment'], [data-theme='rose']) .atelier-sidebar .sidebar-session-row[data-selected] {
-  background: var(--ui-selected);
-  border-color: var(--ui-border);
-  color: var(--ui-selected-foreground);
-}
-
-:root:is([data-theme='classic'], [data-theme='parchment'], [data-theme='rose']) .atelier-sidebar .nav-item[aria-current='page'],
-:root:is([data-theme='classic'], [data-theme='parchment'], [data-theme='rose']) .atelier-sidebar .sidebar-bottom [aria-current='page'] {
-  background: var(--ui-selected);
-  border-color: var(--ui-border);
-  color: var(--ui-selected-foreground);
+.atelier-sidebar .sidebar-session-row[data-selected]::before {
+  content: '';
+  position: absolute;
+  inset-block: 7px;
+  inset-inline-start: 0;
+  width: 2.5px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-primary);
+  pointer-events: none;
 }
 
 .atelier-sidebar .history-item,
@@ -360,7 +363,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 1.5px solid var(--success);
+  border: 1.5px solid var(--ui-success);
   background: transparent;
   box-sizing: border-box;
   transition: all var(--motion-feedback) ease;
@@ -377,7 +380,7 @@
 
 .sidebar-disclosure-space[data-status='running'] .sidebar-status-ring,
 .history-disclosure[data-status='running'] .sidebar-status-ring {
-  border-color: var(--success);
+  border-color: var(--ui-success);
   animation: herdr-ring-breathe 2s ease-in-out infinite;
 }
 
@@ -387,7 +390,7 @@
 .history-disclosure[data-status='awaiting_permission'] .sidebar-status-ring,
 .history-disclosure[data-status='queued'] .sidebar-status-ring,
 .history-disclosure[data-status='stopping'] .sidebar-status-ring {
-  border-color: var(--warn);
+  border-color: var(--ui-warning);
 }
 
 @keyframes herdr-ring-breathe {
@@ -430,7 +433,7 @@
 
 .atelier-sidebar :is(button, input):focus-visible,
 .sidebar-session-menu-item:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ui-ring);
   outline-offset: -2px;
 }
 
@@ -439,7 +442,7 @@
   max-height: var(--radix-dropdown-menu-content-available-height);
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
   background: var(--ui-popover);
   color: var(--ui-popover-foreground);
@@ -466,17 +469,17 @@
 }
 
 .sidebar-session-menu-item[data-highlighted] {
-  background: var(--selected);
+  background: var(--ui-selected);
 }
 
 .sidebar-session-menu-item[data-variant='destructive'] {
-  color: var(--danger);
+  color: var(--ui-destructive);
 }
 
 .sidebar-session-menu-separator {
   height: 1px;
   margin: 4px -4px;
-  background: var(--border-soft);
+  background: var(--ui-border-subtle);
 }
 
 .sidebar-pagination {
@@ -485,7 +488,7 @@
   justify-content: space-between;
   gap: 2px;
   padding-block: 6px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 

@@ -88,7 +88,13 @@ export function ComposerModeSelector({
             onModeChange(value);
         }}
       >
-        <SelectTrigger size="sm" aria-label={t('mode.label')} aria-describedby="composer-mode-help">
+        <SelectTrigger
+          size="sm"
+          className="composer-mode-trigger"
+          data-mode={mode}
+          aria-label={t('mode.label')}
+          aria-describedby="composer-mode-help"
+        >
           <SelectValue>
             <Icon data-icon="inline-start" aria-hidden="true" />
             {t(selected.labelKey)}

@@ -46,6 +46,16 @@ const links = [
   { id: 'agents', labelKey: 'links.agents', Icon: Bot },
 ] as const;
 
+function formatSessionTime(updatedAt: Date, now: Date, locale: string): string {
+  if (updatedAt.getFullYear() !== now.getFullYear()) {
+    return updatedAt.toLocaleDateString(locale, { dateStyle: 'short' });
+  }
+  if (updatedAt.getMonth() === now.getMonth() && updatedAt.getDate() === now.getDate()) {
+    return updatedAt.toLocaleTimeString(locale, { timeStyle: 'short' });
+  }
+  return updatedAt.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' });
+}
+
 export function Sidebar({
   project,
   current,
@@ -119,6 +129,8 @@ export function Sidebar({
     activity.flatMap((query) => query.data?.items ?? []).map((run) => [run.sessionId, run]),
   );
 
+  const now = new Date();
+
   function renderSession(
     { session, children, priorVersion }: SessionNode,
     selectedPath: string[],
@@ -128,7 +140,6 @@ export function Sidebar({
     const archived = session.status === 'archived';
     const status = active ? runStatus[active.status] : undefined;
     const updatedAt = new Date(session.updatedAt);
-    const timestamp = !archived;
     const meta = [
       priorVersion
         ? t('session.priorVersion')
@@ -136,9 +147,7 @@ export function Sidebar({
           ? t('session.branch')
           : undefined,
       archived ? t('session.archived') : undefined,
-      timestamp
-        ? updatedAt.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' })
-        : undefined,
+      archived ? undefined : formatSessionTime(updatedAt, now, locale),
     ]
       .filter(Boolean)
       .join(' · ');
@@ -295,6 +304,7 @@ export function Sidebar({
       </button>
       <Button
         size={collapsed ? 'icon' : 'default'}
+        variant="outline"
         className="new-session"
         onClick={onNew}
         aria-label={t('sidebar.newSession')}

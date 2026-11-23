@@ -114,6 +114,8 @@ export function WorkspaceToolbar({
             <Button
               variant="ghost"
               size="sm"
+              className="topbar-changes-btn"
+              data-pending={sessionActions.pendingPermissions > 0 || undefined}
               aria-label={t('changes.title')}
               title={changesLabel}
               onClick={sessionActions.onOpenChanges}
