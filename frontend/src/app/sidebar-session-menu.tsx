@@ -1,7 +1,7 @@
 /**
  * @file 提供侧栏会话操作菜单。
  * @implementation 使用 Radix 菜单限制弹层边界，并在菜单关闭后交付重命名、归档、恢复或删除动作。
- * @updated 2026-11-23T04:53:58+08:00
+ * @updated 2026-11-23T18:25:00+08:00
  */
 import { useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -9,8 +9,9 @@ import { Archive, ArchiveRestore, Ellipsis, Pencil, Trash2 } from 'lucide-react'
 import type { Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
+import type { SessionAction } from './types';
 
-export type SessionAction = 'rename' | 'archive' | 'restore' | 'delete';
+export type { SessionAction } from './types';
 
 /** Keep menus within the sidebar, clear the menu focus scope before opening a dialog. */
 export function SidebarSessionMenu({

@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/components/ui/utils';
 import { getTranslator, translateError, useUiTranslation } from '@/i18n';
+import { formatBytes } from '@/utils/format';
 import {
   BrowserDownloadPreview,
   type BrowserDownloadPreviewState,
@@ -51,12 +52,8 @@ const commandNoticeKeys = {
   'open-download-directory': 'downloads.directoryOpened',
 } as const satisfies Record<Exclude<DownloadAction, 'cancel-download'>, keyof typeof browser>;
 
-function formatBytes(bytes: number, locale: UiLocale) {
-  if (bytes < 1024) return `${bytes.toLocaleString(locale)} B`;
-  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)) - 1, units.length - 1);
-  const amount = bytes / 1024 ** (index + 1);
-  return `${amount.toLocaleString(locale, { maximumFractionDigits: 1 })} ${units[index]}`;
+function downloadBytes(bytes: number, locale: UiLocale) {
+  return formatBytes(bytes, locale, true);
 }
 
 function downloadName(download: DesktopBrowserDownload) {
@@ -65,13 +62,13 @@ function downloadName(download: DesktopBrowserDownload) {
 
 function downloadProgress(download: DesktopBrowserDownload, locale: UiLocale) {
   const t = getTranslator('browser');
-  const received = formatBytes(download.receivedBytes, locale);
+  const received = downloadBytes(download.receivedBytes, locale);
   if (download.totalBytes <= 0) return t('downloads.progressUnknown', { received });
   const percent = Math.min(100, Math.floor((download.receivedBytes / download.totalBytes) * 100));
   return t('downloads.progress', {
     percent: (percent / 100).toLocaleString(locale, { style: 'percent', maximumFractionDigits: 0 }),
     received,
-    total: formatBytes(download.totalBytes, locale),
+    total: downloadBytes(download.totalBytes, locale),
   });
 }
 
@@ -307,7 +304,7 @@ export function BrowserDownloads({
                 </div>
                 <DialogDescription>
                   {t('downloads.previewSize', {
-                    size: formatBytes(preview.download.receivedBytes, locale),
+                    size: downloadBytes(preview.download.receivedBytes, locale),
                   })}
                 </DialogDescription>
               </>
@@ -382,9 +379,9 @@ export function BrowserDownloads({
                                 {download.status === 'progressing'
                                   ? downloadProgress(download, locale)
                                   : download.status === 'completed'
-                                    ? formatBytes(download.receivedBytes, locale)
+                                    ? downloadBytes(download.receivedBytes, locale)
                                     : t('downloads.received', {
-                                        size: formatBytes(download.receivedBytes, locale),
+                                        size: downloadBytes(download.receivedBytes, locale),
                                       })}
                               </span>
                             </p>

@@ -1,7 +1,7 @@
 /**
  * @file 读取本机 Codex 客户端公开的可见模型目录。
  * @implementation 通过有时限的 app-server stdio 握手请求模型列表，解析显示名称与支持的推理深度，并短时间复用结果。
- * @updated 2026-11-20T17:32:12+08:00
+ * @updated 2026-11-23T18:25:00+08:00
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -21,6 +21,14 @@ export interface CodexCatalogRequest {
 export interface CodexCatalogResult {
   models: Models;
   discovery: Discovery;
+}
+
+interface CodexCatalogCacheEntry {
+  result?: CodexCatalogResult;
+  success?: { models: Models; at: number };
+  nextAttemptAt: number;
+  failures: number;
+  pending?: Promise<CodexCatalogResult>;
 }
 const model = z.object({
   model: z.string().max(200).regex(/^\S+$/u),
@@ -211,14 +219,7 @@ export function createCodexModelCatalog(
   const start = options.start ?? (() => spawn('codex', ['app-server', '--stdio']));
   const identity = options.identity ?? localIdentity;
   const now = options.now ?? Date.now;
-  interface Entry {
-    result?: CodexCatalogResult;
-    success?: { models: Models; at: number };
-    nextAttemptAt: number;
-    failures: number;
-    pending?: Promise<CodexCatalogResult>;
-  }
-  const cache = new Map<string, Entry>();
+  const cache = new Map<string, CodexCatalogCacheEntry>();
   let active = 0;
   return async (request: CodexCatalogRequest): Promise<CodexCatalogResult> => {
     const before = await identity();

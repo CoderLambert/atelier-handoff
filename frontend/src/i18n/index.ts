@@ -14,6 +14,8 @@ import {
   type UiLocale,
 } from '@shared/i18n/locale';
 
+export type { UiLocale } from '@shared/i18n/locale';
+
 const storageKey = 'atelier.ui-language.v1';
 export const uiI18n = createUiI18n(defaultUiLocale);
 

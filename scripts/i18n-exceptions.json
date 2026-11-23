@@ -5,11 +5,6 @@
     "reason": "应用品牌在原生窗口标题中保持固定拼写"
   },
   {
-    "file": "frontend/src/features/agents/api.tsx",
-    "fingerprint": "8c73f4418d2408550246",
-    "reason": "创建时可保存为 Agent 配置的示例模板正文"
-  },
-  {
     "file": "frontend/src/features/agents/dependencies.tsx",
     "fingerprint": "544f45186af3a1119127",
     "reason": "软件版本号的技术标识前缀"

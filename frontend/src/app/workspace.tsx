@@ -50,15 +50,11 @@ import { useStopRun } from '@/use-query/runs/use-stop-run';
 import { useRetryRun } from '@/use-query/runs/use-retry-run';
 import { DesktopBrowser, useDesktopBrowser } from './desktop-browser';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
+import type { SessionAction, SettingsSection } from './types';
 
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
-declare module '@tanstack/react-router' {
-  interface HistoryState {
-    workspaceBrowserReturn?: string;
-  }
-}
 
 const SessionChanges = lazy(() =>
   import('@/features/inspector').then(({ SessionChanges }) => ({ default: SessionChanges })),
@@ -83,7 +79,6 @@ const collectionPaths = {
   extensions: '/extensions',
   agents: '/agents',
 } as const;
-type SettingsSection = 'models' | 'layout' | 'notifications' | 'diagnostics';
 const settingsPaths = {
   models: '/settings/models',
   layout: '/settings/layout',
@@ -106,7 +101,6 @@ const tabs = [
 ] as const;
 const active = new Set(['queued', 'running', 'awaiting_permission', 'stopping']);
 
-type SessionAction = 'rename' | 'archive' | 'restore' | 'delete';
 const sessionActions = {
   rename: 'session.rename',
   archive: 'session.archive',

@@ -219,6 +219,16 @@ export function Composer({
       }}
       onSubmit={(event) => void submit(event)}
     >
+      {taskPlanRun ? (
+        <TaskPlan
+          key={taskPlanRun.id}
+          steps={taskPlanRun.plan}
+          defaultOpen={
+            taskPlanRun.plan.length <= 3 &&
+            taskPlanRun.plan.some((step) => step.status !== 'completed')
+          }
+        />
+      ) : null}
       <div className="context-row">
         <div className="context-chips" aria-label={t('composer.draftContext')}>
           {draft.contextPaths.map((path) => (
@@ -350,13 +360,6 @@ export function Composer({
             </Button>
           ))}
         </div>
-      ) : null}
-      {taskPlanRun ? (
-        <TaskPlan
-          key={taskPlanRun.id}
-          steps={taskPlanRun.plan}
-          defaultOpen={taskPlanRun.plan.length <= 3}
-        />
       ) : null}
       <div className="composer-box">
         <label

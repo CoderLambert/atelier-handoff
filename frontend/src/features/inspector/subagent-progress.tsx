@@ -15,71 +15,19 @@ import { StatusBadge, formatDuration, permissionOperation } from './shared';
 import { ToolDetail } from './tool-detail';
 import { useStopSubagent } from '@/use-query/runs/use-stop-subagent';
 import { errorMessage, ErrorNotice } from './shared';
+import {
+  groupRunWork,
+  permissionSubagentSource,
+  type SubagentSource,
+  type SubagentWork,
+} from './subagent-progress-model';
 
-export type SubagentSource = Pick<Subagent, 'id' | 'title'>;
-export interface SubagentWork {
-  id: string;
-  subagent?: Subagent;
-  tools: ToolCall[];
-  permissions: Permission[];
-}
-
-export function permissionSubagentSource(
-  snapshot: Snapshot,
-  permission: Permission,
-): SubagentSource | undefined {
-  if (permission.sessionId !== snapshot.session.id) return;
-  const id =
-    permission.subagentId ||
-    snapshot.tools.find(
-      (tool) =>
-        tool.id === permission.toolCallId &&
-        tool.sessionId === permission.sessionId &&
-        tool.runId === permission.runId,
-    )?.subagentId;
-  if (!id) return;
-  const subagent = snapshot.subagents?.find(
-    (item) =>
-      item.id === id && item.sessionId === permission.sessionId && item.runId === permission.runId,
-  );
-  return { id, title: subagent?.title || id };
-}
-
-export function groupRunWork(snapshot: Snapshot, run: Run) {
-  const tools: ToolCall[] = [];
-  const permissions: Permission[] = [];
-  const groups = new Map<string, SubagentWork>();
-  const inRun = (item: { sessionId: string; runId: string }) =>
-    run.sessionId === snapshot.session.id &&
-    item.sessionId === run.sessionId &&
-    item.runId === run.id;
-  function group(id: string) {
-    let work = groups.get(id);
-    if (!work) {
-      work = { id, tools: [], permissions: [] };
-      groups.set(id, work);
-    }
-    return work;
-  }
-  for (const subagent of snapshot.subagents ?? []) {
-    if (inRun(subagent)) group(subagent.id).subagent = subagent;
-  }
-  const toolOwners = new Map<string, string>();
-  for (const tool of snapshot.tools) {
-    if (!inRun(tool)) continue;
-    if (tool.subagentId) {
-      group(tool.subagentId).tools.push(tool);
-      toolOwners.set(tool.id, tool.subagentId);
-    } else tools.push(tool);
-  }
-  for (const permission of snapshot.permissions) {
-    if (!inRun(permission)) continue;
-    const id = permission.subagentId || toolOwners.get(permission.toolCallId);
-    if (id) group(id).permissions.push(permission);
-    else permissions.push(permission);
-  }
-  return { tools, permissions, subagents: [...groups.values()] };
-}
+export {
+  groupRunWork,
+  permissionSubagentSource,
+  type SubagentSource,
+  type SubagentWork,
+} from './subagent-progress-model';
 
 function StopSubagentAction({ run, subagent }: { run: Run; subagent: Subagent }) {
   const { t } = useUiTranslation('inspector');
