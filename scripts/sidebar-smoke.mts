@@ -1,3 +1,8 @@
+/**
+ * @file 验证工作台侧栏导航和会话操作。
+ * @implementation 用隔离 Chromium 夹具验证分组、菜单行内布局、键盘焦点和折叠状态。
+ * @updated 2026-11-23T17:40:31+08:00
+ */
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
@@ -141,7 +146,8 @@ try {
   const rowMenu = await longRow.locator('.sidebar-session-menu-trigger').boundingBox();
   assert.ok(rowBounds && rowMenu && rowBounds.height <= 48);
   assert.ok(rowMenu.y >= rowBounds.y && rowMenu.y + rowMenu.height <= rowBounds.y + rowBounds.height);
-  assert.ok(rowMenu.x >= rowBounds.x + rowBounds.width - 32);
+  const menuEndGap = rowBounds.x + rowBounds.width - (rowMenu.x + rowMenu.width);
+  assert.ok(rowMenu.x >= rowBounds.x && menuEndGap >= 0 && menuEndGap <= 8);
   await nav.getByRole('button', { name: '在「Beta」中新建会话' }).click();
   assert.equal(await page.locator('#fixture-created').textContent(), 'Beta');
 

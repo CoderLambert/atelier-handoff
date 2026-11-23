@@ -11,6 +11,7 @@ import type { Draft, ReasoningEffort, Run } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import { ExtensionPicker } from '@/features/extensions/picker';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
@@ -36,6 +37,13 @@ type ComposerError =
       type: 'notice';
       key: 'composer.attachmentsDisabled' | 'composer.dropBusy' | 'composer.pasteBusy';
     };
+
+const modeFooter = {
+  native: 'composer.nativeFooter',
+  automatic: 'composer.automaticFooter',
+  edit: 'composer.controlledFooter',
+  readonly: 'composer.readonlyFooter',
+} as const satisfies Record<ComposerMode, string>;
 
 export function Composer({
   snapshot,
@@ -156,8 +164,7 @@ export function Composer({
     const input = inputRef.current;
     if (!input) return;
     input.style.height = 'auto';
-    input.style.height = `${Math.max(48, Math.min(240, input.scrollHeight))}px`;
-    input.style.overflowY = input.scrollHeight > 240 ? 'auto' : 'hidden';
+    input.style.height = `${input.scrollHeight}px`;
   }, [draft.text]);
 
   async function submit(event?: FormEvent<HTMLFormElement>, insertIntoRunId?: string) {
@@ -344,9 +351,18 @@ export function Composer({
           ))}
         </div>
       ) : null}
-      {taskPlanRun ? <TaskPlan key={taskPlanRun.id} steps={taskPlanRun.plan} defaultOpen /> : null}
+      {taskPlanRun ? (
+        <TaskPlan
+          key={taskPlanRun.id}
+          steps={taskPlanRun.plan}
+          defaultOpen={taskPlanRun.plan.length <= 3}
+        />
+      ) : null}
       <div className="composer-box">
-        <label className="composer-label" htmlFor="prompt-input">
+        <label
+          className={cn('composer-label', !archived && !editingMessage && 'sr-only')}
+          htmlFor="prompt-input"
+        >
           {archived
             ? t('composer.archivedLabel')
             : editingMessage
@@ -386,7 +402,7 @@ export function Composer({
         <textarea
           ref={inputRef}
           id="prompt-input"
-          rows={2}
+          rows={1}
           maxLength={composerTextLimit}
           value={draft.text}
           disabled={archived}
@@ -560,13 +576,7 @@ export function Composer({
             insertHelp: insertRunId ? t('composer.insertShortcut') : '',
           })}
         </span>
-        <span>
-          {mode === 'automatic'
-            ? t('composer.automaticFooter')
-            : mode === 'edit'
-              ? t('composer.controlledFooter')
-              : t('composer.readonlyFooter')}
-        </span>
+        <span>{t(modeFooter[mode])}</span>
       </div>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
         {draftActionError ||

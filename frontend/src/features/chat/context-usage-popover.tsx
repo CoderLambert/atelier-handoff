@@ -75,7 +75,21 @@ export function ContextUsagePopover({
   const heading = useRef<HTMLHeadingElement>(null);
   const context = sample?.context;
   const stats = context ? contextStats(context) : undefined;
+  const remaining = stats?.remainingRatio;
+  const level =
+    remaining === undefined
+      ? 'empty'
+      : remaining < 0.15
+        ? 'danger'
+        : remaining < 0.3
+          ? 'warning'
+          : 'normal';
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 });
+  const remainingLabel =
+    remaining === undefined
+      ? undefined
+      : t('window.triggerRemaining', { percent: percent.format(remaining) });
+  const triggerTitle = t(sample?.previous ? 'window.staleTitle' : 'window.title');
   const emptyMessage = running
     ? 'window.waiting'
     : hasRuns
@@ -88,12 +102,20 @@ export function ContextUsagePopover({
           type="button"
           variant="ghost"
           size="sm"
+          className="context-usage-trigger"
+          data-level={level}
+          data-stale={sample?.previous || undefined}
           aria-label={t('window.title')}
-          title={t('window.title')}
+          aria-description={
+            sample?.previous && remainingLabel
+              ? `${remainingLabel} · ${triggerTitle}`
+              : remainingLabel
+          }
+          title={triggerTitle}
         >
           <Gauge aria-hidden="true" data-icon="inline-start" />
           <span className="tabular-nums" aria-hidden="true">
-            {stats ? percent.format(stats.remainingRatio) : t('window.triggerEmpty')}
+            {remainingLabel ?? t('window.triggerEmpty')}
           </span>
         </Button>
       </PopoverTrigger>

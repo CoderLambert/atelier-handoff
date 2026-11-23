@@ -241,7 +241,7 @@
   opacity: 0.5;
 }
 .theme-preview-swatch[data-theme='classic'] .swatch-card {
-  background: var(--ui-theme-classic-selected);
+  background: var(--ui-theme-classic-card);
   border-color: var(--ui-theme-classic-border);
 }
 .theme-preview-swatch[data-theme='classic'] .swatch-line {
@@ -272,7 +272,7 @@
   opacity: 0.5;
 }
 .theme-preview-swatch[data-theme='parchment'] .swatch-card {
-  background: var(--ui-theme-parchment-selected);
+  background: var(--ui-theme-parchment-card);
   border-color: var(--ui-theme-parchment-border);
 }
 .theme-preview-swatch[data-theme='parchment'] .swatch-line {
@@ -303,7 +303,7 @@
   opacity: 0.5;
 }
 .theme-preview-swatch[data-theme='nordic'] .swatch-card {
-  background: var(--ui-theme-nordic-selected);
+  background: var(--ui-theme-nordic-card);
   border-color: var(--ui-theme-nordic-border);
 }
 .theme-preview-swatch[data-theme='nordic'] .swatch-line {
@@ -334,7 +334,7 @@
   opacity: 0.5;
 }
 .theme-preview-swatch[data-theme='rose'] .swatch-card {
-  background: var(--ui-theme-rose-selected);
+  background: var(--ui-theme-rose-card);
   border-color: var(--ui-theme-rose-border);
 }
 .theme-preview-swatch[data-theme='rose'] .swatch-line {

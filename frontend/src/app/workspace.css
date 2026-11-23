@@ -5,7 +5,7 @@
  */
 @layer components {
   .react-workspace .main {
-    grid-template-rows: 56px minmax(0, 1fr);
+    grid-template-rows: 48px minmax(0, 1fr);
   }
   .react-workspace .react-center {
     min-width: 0;
@@ -33,8 +33,8 @@
     min-width: 0;
     min-height: 0;
     overflow: auto;
-    border-inline-start: 1px solid var(--border-soft);
-    background: var(--surface);
+    border-inline-start: 1px solid var(--ui-border-subtle);
+    background: var(--ui-card);
   }
   .react-workspace .react-collections {
     flex: 1;
@@ -191,9 +191,18 @@
 }
 
 .connection-state[data-connected='true'] {
-  background: var(--ui-success-soft);
-  border-color: var(--ui-success-border);
-  color: var(--ui-success);
+  background: transparent;
+  border-color: transparent;
+}
+
+.connection-state[data-connected='true'] .connection-dot {
+  background: var(--ui-success);
+}
+
+.topbar-changes-btn[data-pending='true'] {
+  background: var(--ui-warning-soft);
+  border-color: var(--ui-warning-border);
+  color: var(--ui-warning);
 }
 
 .connection-dot {
