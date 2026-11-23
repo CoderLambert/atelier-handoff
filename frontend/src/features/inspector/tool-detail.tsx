@@ -240,8 +240,13 @@ export function ToolDetail({
 }: ToolDetailProps) {
   const { t } = useUiTranslation('inspector');
   const input = toolInputView(tool);
-  const status = toolDisplayStatus(tool, toolOutputView(tool));
+  const output = toolOutputView(tool);
+  const status = toolDisplayStatus(tool, output);
   const description = variant === 'compact' ? input.explanation : undefined;
+  const failedExitCode =
+    status === 'failed' && typeof output.exitCode === 'number' && output.exitCode !== 0
+      ? output.exitCode
+      : undefined;
   return (
     <details className="tool-detail" data-tool-id={tool.id} data-variant={variant}>
       <summary className="tool-detail__summary">
@@ -272,6 +277,11 @@ export function ToolDetail({
         ) : null}
         <span className="tool-detail__status" data-status={status}>
           <StatusBadge status={status} />
+          {failedExitCode !== undefined ? (
+            <span className="tool-detail__exit-code">
+              {t('tool.exitCodeSummary', { code: failedExitCode })}
+            </span>
+          ) : null}
         </span>
       </summary>
       <ToolDetailBody

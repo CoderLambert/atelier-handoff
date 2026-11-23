@@ -9,6 +9,7 @@ import { ChevronRight } from 'lucide-react';
 import type { ToolCall } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { ToolDetail } from '@/features/inspector/tool-detail';
+import { toolDisplayStatus, toolOutputView } from '@/features/inspector/tool-detail-format';
 
 export function RunToolActivity({
   tools,
@@ -26,6 +27,9 @@ export function RunToolActivity({
   const [expanded, setExpanded] = useState<boolean>();
   const [from, setFrom] = useState<number>();
   const open = expanded ?? active;
+  const failedCount = tools.filter(
+    (tool) => toolDisplayStatus(tool, toolOutputView(tool)) === 'failed',
+  ).length;
   const latest = Math.max(0, tools.length - 4);
   const start = Math.min(from ?? latest, latest);
   const visible = open
@@ -47,6 +51,11 @@ export function RunToolActivity({
       >
         <ChevronRight data-icon="inline-start" aria-hidden="true" />
         {t('activity.details', { count: tools.length })}
+        {failedCount > 0 ? (
+          <span className="run-activity-failed">
+            {t('activity.failedCount', { count: failedCount })}
+          </span>
+        ) : null}
       </Button>
       <div id={id} hidden={!open}>
         {open ? (

@@ -189,6 +189,21 @@
   gap: 4px;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .chat-conversation
+    .message:not([data-last-message]):not(:hover):not(:focus-within)
+    .message-actions:not([data-feedback]):not([data-forking])
+    .message-action-buttons {
+    opacity: 0;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .chat-conversation .message-action-buttons {
+    transition: opacity var(--motion-feedback) var(--ease-standard);
+  }
+}
+
 .message-copy-status {
   min-width: 0;
   color: var(--ui-muted-foreground);
@@ -874,6 +889,17 @@
   overflow-wrap: anywhere;
 }
 
+.chat-conversation .run-progress[data-active='false'] {
+  gap: 6px;
+  margin-block: 6px 10px;
+  padding-block: 2px;
+  padding-inline: 12px 0;
+  border: 0;
+  border-inline-start: 1.5px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+}
+
 .chat-conversation .run-progress-head {
   display: flex;
   align-items: center;
@@ -981,15 +1007,22 @@
 
 .run-activity-toggle {
   justify-self: start;
-  height: 26px;
-  padding: 2px 10px;
+  min-height: var(--ui-size-xs);
+  padding: 0 10px;
   border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  background: var(--ui-card);
-  color: var(--ui-muted-foreground);
+  background: var(--ui-muted);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
-  box-shadow: 0 1px 2px var(--ui-shadow);
-  transition: all var(--motion-feedback) ease;
+}
+
+.run-activity-failed {
+  margin-inline-start: 4px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-destructive-soft);
+  color: var(--ui-destructive);
+  font-variant-numeric: tabular-nums;
 }
 
 .run-activity-toggle:hover {
@@ -1015,15 +1048,16 @@
   margin-top: 12px;
   padding: 12px 16px;
   border: 1px solid var(--ui-border);
+  border-inline-start: 3px solid var(--run-recovery-status-color, var(--ui-border));
   border-radius: var(--radius-md);
-  background: var(--ui-muted);
+  background: var(--ui-card);
   color: var(--ui-foreground);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .chat-conversation .run-recovery[data-status='failed'] {
-  background: var(--ui-destructive-soft);
+  --run-recovery-status-color: var(--ui-destructive);
 }
 
 .chat-conversation .run-recovery[data-status='failed'] strong {
@@ -1031,11 +1065,15 @@
 }
 
 .chat-conversation .run-recovery:is([data-status='stopped'], [data-status='interrupted']) {
-  background: var(--ui-warning-soft);
+  --run-recovery-status-color: var(--ui-warning);
 }
 
 .chat-conversation .run-recovery:is([data-status='stopped'], [data-status='interrupted']) strong {
   color: var(--ui-warning);
+}
+
+.chat-conversation .run-recovery[data-status='succeeded'] {
+  --run-recovery-status-color: var(--ui-success);
 }
 
 .chat-conversation .run-recovery[data-status='succeeded'] strong {
@@ -1044,6 +1082,26 @@
 
 .chat-conversation .run-recovery p {
   margin: 0;
+}
+
+.chat-conversation .run-recovery-progress-group {
+  display: grid;
+  gap: 6px;
+}
+
+.chat-conversation .run-recovery-progress {
+  width: min(100%, 240px);
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--ui-border-subtle);
+}
+
+.chat-conversation .run-recovery-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--run-recovery-status-color, var(--ui-warning));
 }
 
 .chat-conversation .run-recovery-actions {

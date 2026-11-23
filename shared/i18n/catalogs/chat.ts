@@ -7,6 +7,8 @@ export const chat = {
   'activity.details_one': ['执行明细 · {{count}}', 'Execution details · {{count}}'],
   'activity.details_other': ['执行明细 · {{count}}', 'Execution details · {{count}}'],
   'activity.earlier': ['查看更早的调用', 'View earlier calls'],
+  'activity.failedCount_one': ['{{count}} 项失败', '{{count}} failed'],
+  'activity.failedCount_other': ['{{count}} 项失败', '{{count}} failed'],
   'attachment.description': ['会话附件 · {{size}}', 'Session attachment · {{size}}'],
   'attachment.downloadOriginal': ['下载原件', 'Download original'],
   'attachment.imageFailed': [
