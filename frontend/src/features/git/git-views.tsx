@@ -1,7 +1,7 @@
 /**
  * @file 展示 Git 文件、提交、差异及操作入口。
  * @implementation 按工作树读取文件和差异，提供手动提交、AI 分组和未完成提交的恢复入口。
- * @updated 2026-11-25T00:55:36+08:00
+ * @updated 2026-11-25T02:40:00+08:00
  */
 import { useRef, useState } from 'react';
 import {
@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { translateError, useUiTranslation } from '@/i18n';
 import { useGitFiles } from '@/use-query/git/use-git-files';
 import { useGitFileDiff } from '@/use-query/git/use-git-file-diff';
-import { useGitHistory } from '@/use-query/git/use-git-history';
 import { useGitCommitDiff } from '@/use-query/git/use-git-commit-diff';
 import type {
   GitDiff,
@@ -32,6 +31,7 @@ import { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
 import { usePendingMultiCommits } from '@/use-query/git/use-pending-multi-commits';
 import { useRecoverMultiCommit } from '@/use-query/git/use-recover-multi-commit';
 import { useAbandonMultiCommit } from '@/use-query/git/use-abandon-multi-commit';
+import { GitHistoryView as GitHistoryViewInternal } from './git-history/git-history-view';
 
 export function GitQueryFeedback({ error, retry }: { error?: unknown; retry: () => void }) {
   const { t } = useUiTranslation('git');
@@ -321,6 +321,24 @@ export function GitFilesView({
   );
 }
 
+function CommitDiffSection({
+  projectId,
+  commitOid,
+}: {
+  projectId: string;
+  commitOid: string;
+}) {
+  const patch = useGitCommitDiff(projectId, commitOid);
+  return (
+    <DiffContent
+      key={commitOid}
+      data={patch.data}
+      error={patch.error}
+      retry={() => void patch.refetch()}
+    />
+  );
+}
+
 export function GitHistoryView({
   projectId,
   overview,
@@ -330,129 +348,17 @@ export function GitHistoryView({
   overview: GitOverview;
   tree: GitWorktree;
 }) {
-  const { t, locale } = useUiTranslation('git');
-  const [ref, selectRef] = useState<{ kind: 'local' | 'remote'; name: string }>();
-  const [selection, selectCommit] = useState<{ anchor: string; oid: string }>();
-  const branch =
-    ref && overview.branches.find((item) => item.kind === ref.kind && item.name === ref.name);
-  const anchor = branch?.oid ?? tree.head ?? undefined;
-  const commit = selection?.anchor === anchor ? selection?.oid : undefined;
-  const history = useGitHistory(projectId, anchor);
-  const patch = useGitCommitDiff(projectId, commit);
-  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
   return (
-    <div className="git-split">
-      <div className="git-list">
-        <Button
-          className="git-list-button justify-start"
-          variant="ghost"
-          size="sm"
-          aria-pressed={!branch}
-          onClick={() => {
-            selectRef(undefined);
-            selectCommit(undefined);
-          }}
-        >
-          <BranchIcon data-icon="inline-start" aria-hidden="true" /> {t('branch.head')}
-        </Button>
-        {(['local', 'remote'] as const).map((kind) => {
-          const list = overview.branches.filter((item) => item.kind === kind);
-          if (!list.length) return null;
-          return (
-            <div className="git-list-group" key={kind}>
-              <h3>{t(`branch.${kind}`)}</h3>
-              <ul>
-                {list.map((item) => {
-                  const path = overview.worktrees.find(({ id }) => id === item.worktreeId)?.path;
-                  return (
-                    <li key={item.name}>
-                      <Button
-                        className="git-list-button git-branch-button items-stretch justify-start"
-                        variant="ghost"
-                        aria-pressed={item === branch}
-                        title={item.name}
-                        onClick={() => {
-                          selectRef(item);
-                          selectCommit(undefined);
-                        }}
-                      >
-                        <span className="truncate">{item.name}</span>
-                        {path && (
-                          <small className="truncate" title={path}>
-                            {t('branch.occupied', { path })}
-                          </small>
-                        )}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-      <div className="git-history">
-        {anchor && (!history.data || (history.error && !history.isFetchNextPageError)) ? (
-          <GitQueryFeedback error={history.error} retry={() => void history.refetch()} />
-        ) : anchor && history.data?.pages.some(({ items }) => items.length) ? (
-          <div className="git-history-list">
-            <ul>
-              {history.data.pages
-                .flatMap(({ items }) => items)
-                .map((item) => (
-                  <li key={item.oid}>
-                    <Button
-                      className="git-list-button git-commit-button justify-start"
-                      variant="ghost"
-                      aria-pressed={item.oid === commit}
-                      onClick={() => selectCommit({ anchor, oid: item.oid })}
-                    >
-                      <GitCommitHorizontal data-icon="inline-start" aria-hidden="true" />
-                      <span className="git-commit-summary">
-                        <span className="truncate" title={item.subject}>
-                          {item.subject || t('history.untitled')}
-                        </span>
-                        <small className="truncate">
-                          {item.author} · {dateFormat.format(new Date(item.date))}
-                        </small>
-                      </span>
-                      <code>{item.oid.slice(0, 8)}</code>
-                    </Button>
-                  </li>
-                ))}
-            </ul>
-            {history.isFetchNextPageError ? (
-              <GitQueryFeedback error={history.error} retry={() => void history.fetchNextPage()} />
-            ) : history.hasNextPage ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={history.isFetching}
-                onClick={() => void history.fetchNextPage()}
-              >
-                {t('history.more')}
-              </Button>
-            ) : null}
-          </div>
-        ) : (
-          <p className="git-feedback">{t('history.empty')}</p>
-        )}
-        {commit ? (
-          <section className="git-detail" aria-label={t('diff.commit', { oid: commit })}>
-            <h3 className="git-detail-title" title={commit}>
-              <code>{commit.slice(0, 12)}</code>
-            </h3>
-            <DiffContent
-              key={commit}
-              data={patch.data}
-              error={patch.error}
-              retry={() => void patch.refetch()}
-            />
-          </section>
-        ) : (
-          <p className="git-history-hint">{t('history.choose')}</p>
-        )}
-      </div>
-    </div>
+    <GitHistoryViewInternal
+      projectId={projectId}
+      overview={overview}
+      tree={tree}
+      diffRenderer={(commitOid) => (
+        <CommitDiffSection projectId={projectId} commitOid={commitOid} />
+      )}
+      feedbackRenderer={(error, retry) => (
+        <GitQueryFeedback error={error} retry={retry ?? (() => {})} />
+      )}
+    />
   );
 }

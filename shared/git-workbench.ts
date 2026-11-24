@@ -107,9 +107,16 @@ export interface GitCommit {
   date: string;
   subject: string;
 }
+export interface GitHistoryQuery {
+  query?: string;
+  author?: string;
+  since?: string;
+}
 export interface GitHistory {
   items: GitCommit[];
   nextOffset: number | null;
+  authors?: string[];
+  totalCount?: number;
 }
 export interface GitSessionWorkspace {
   id: string;

@@ -1,7 +1,7 @@
 /**
  * @file 读取 Git 工作树、分支、文件变化和提交历史。
  * @implementation 解析 Git 的 NUL 分隔协议，并在工作树实际状态中定位单个差异。
- * @updated 2026-11-24T03:36:56+08:00
+ * @updated 2026-11-25T02:48:00+08:00
  */
 import { createTwoFilesPatch } from 'diff';
 import { normalize } from 'node:path';
@@ -9,10 +9,12 @@ import {
   gitOid,
   gitPath,
   type GitBranch,
+  type GitCommit,
   type GitDiff,
   type GitDiffLayer,
   type GitFile,
   type GitHistory,
+  type GitHistoryQuery,
   type GitOverview,
 } from '../../../shared/git-workbench.js';
 import { AppError } from '../../../shared/types.js';
@@ -185,37 +187,204 @@ export async function readFileDiff(
   );
 }
 
+/**
+ * 解析 NUL 分隔的 Git 日志条目为结构化提交记录。
+ */
+export function parseGitLogRecords(raw: string): GitCommit[] {
+  const fields = raw.split('\0');
+  const items: GitCommit[] = [];
+  for (let i = 0; i + 3 < fields.length; i += 4) {
+    const [sha, author, date, subject] = fields.slice(i, i + 4);
+    if (sha && author !== undefined && date !== undefined && subject !== undefined) {
+      items.push({ oid: gitOid.parse(sha), author, date, subject });
+    }
+  }
+  return items;
+}
+
+const gitLogRecordFormat = '--format=%H%x00%an%x00%aI%x00%s';
+
+/**
+ * 封装结构化 Git 日志查询与记录解析，复用参数构建与容错逻辑。
+ */
+async function queryGitLogCommits(
+  git: LocalGit,
+  args: string[],
+  options?: { signal?: AbortSignal; allowExit?: number[] },
+): Promise<GitCommit[]> {
+  try {
+    const raw = await git.text(['log', gitLogRecordFormat, '-z', ...args], options);
+    return parseGitLogRecords(raw);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 转换时间范围快捷选项为 git log 对应的 --since 参数。
+ */
+export function resolveSinceArgument(since?: string): string | undefined {
+  const s = since?.trim();
+  if (!s || s === 'all') return undefined;
+  if (s === '7d') return '--since=7 days ago';
+  if (s === '30d') return '--since=30 days ago';
+  return `--since=${s}`;
+}
+
+/**
+ * 校验提交时间是否落在指定的时间跨度内。
+ */
+function isCommitWithinSince(dateStr: string, since?: string): boolean {
+  const s = since?.trim();
+  if (!s || s === 'all') return true;
+  const commitTime = new Date(dateStr).getTime();
+  if (Number.isNaN(commitTime)) return true;
+  const now = Date.now();
+  if (s === '7d') return commitTime >= now - 7 * 86400_000;
+  if (s === '30d') return commitTime >= now - 30 * 86400_000;
+  return true;
+}
+
+/**
+ * 提取指定基准下最近的唯一作者列表。
+ */
+async function readRepositoryAuthors(
+  git: LocalGit,
+  oid: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  try {
+    const text = await git.text(['log', '--format=%an', '-n', '200', oid, '--'], {
+      signal,
+      allowExit: [1],
+    });
+    return Array.from(
+      new Set(
+        text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      ),
+    ).sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 按短/长 Hash 前缀检索在指定基准历史中的可达提交。
+ */
+async function findAncestorCommitsByHash(
+  git: LocalGit,
+  oid: string,
+  prefix: string,
+  signal?: AbortSignal,
+): Promise<GitCommit[]> {
+  if (prefix.length < 4 || !/^[0-9a-fA-F]{4,64}$/.test(prefix)) return [];
+  try {
+    const shas = (
+      await git.text(['rev-parse', `--disambiguate=${prefix}`], { signal, allowExit: [1] })
+    )
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const matches: GitCommit[] = [];
+    for (const sha of shas) {
+      const mb = (await git.text(['merge-base', sha, oid], { signal, allowExit: [1] })).trim();
+      if (mb === sha) {
+        matches.push(
+          ...(await queryGitLogCommits(git, ['-1', sha, '--'], { signal, allowExit: [1] })),
+        );
+      }
+    }
+    return matches;
+  } catch {
+    return [];
+  }
+}
+
 export async function readGitHistory(
   git: LocalGit,
   oid: string,
   offset: number,
+  options?: GitHistoryQuery,
   signal?: AbortSignal,
 ): Promise<GitHistory> {
   if ((await git.oid(oid, signal)) !== oid) throw gitError('BASE_MISSING', '本机提交不可用。', 404);
   const pageSize = 25;
-  const fields = (
-    await git.text(
-      [
-        'log',
-        '--format=%H%x00%an%x00%aI%x00%s',
-        '-z',
-        '--max-count=' + (pageSize + 1),
-        '--skip=' + offset,
-        oid,
-        '--',
-      ],
+  const query = options?.query?.trim();
+  const author = options?.author?.trim();
+  const sinceArg = resolveSinceArgument(options?.since);
+  const sinceArgs = sinceArg ? [sinceArg] : [];
+
+  // Fast path: 无关键词搜索、无作者筛选且无时间范围限制时直接按游标分页
+  if (!query && (!author || author === 'all') && sinceArgs.length === 0) {
+    const items = await queryGitLogCommits(
+      git,
+      [`--max-count=${pageSize + 1}`, `--skip=${offset}`, oid, '--'],
       { signal },
-    )
-  ).split('\0');
-  const items: GitHistory['items'] = [];
-  for (let i = 0; i + 3 < fields.length; i += 4) {
-    const [sha, author, date, subject] = fields.slice(i, i + 4);
-    if (sha && author !== undefined && date !== undefined && subject !== undefined)
-      items.push({ oid: gitOid.parse(sha), author, date, subject });
+    );
+    const authors = offset === 0 ? await readRepositoryAuthors(git, oid, signal) : undefined;
+
+    return {
+      items: items.slice(0, pageSize),
+      nextOffset: items.length > pageSize ? offset + pageSize : null,
+      authors,
+    };
   }
+
+  // Filtered path: 聚合 Hash 前缀精确匹配与说明/作者文本检索
+  const commitMap = new Map<string, GitCommit>();
+
+  // 1. Commit Hash 前缀匹配
+  if (query) {
+    const hashMatches = await findAncestorCommitsByHash(git, oid, query, signal);
+    for (const commit of hashMatches) {
+      const matchAuthor =
+        !author || author === 'all' || commit.author.toLowerCase().includes(author.toLowerCase());
+      const matchSince = isCommitWithinSince(commit.date, options?.since);
+      if (matchAuthor && matchSince) {
+        commitMap.set(commit.oid, commit);
+      }
+    }
+  }
+
+  // 2. 构造日志筛选条件（--grep、--author、--since）
+  const logRuns: string[][] = [];
+  if (author && author !== 'all') {
+    const runArgs = [...sinceArgs, `--author=${author}`];
+    if (query) runArgs.push(`--grep=${query}`, '-F', '-i');
+    logRuns.push(runArgs);
+  } else if (query) {
+    logRuns.push([...sinceArgs, `--grep=${query}`, '-F', '-i']);
+    logRuns.push([...sinceArgs, `--author=${query}`, '-i']);
+  } else {
+    logRuns.push([...sinceArgs]);
+  }
+
+  for (const runArgs of logRuns) {
+    const commits = await queryGitLogCommits(
+      git,
+      ['--max-count=300', ...runArgs, oid, '--'],
+      { signal, allowExit: [1] },
+    );
+    for (const commit of commits) {
+      commitMap.set(commit.oid, commit);
+    }
+  }
+
+  const allSorted = Array.from(commitMap.values()).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+
+  const authors = offset === 0 ? await readRepositoryAuthors(git, oid, signal) : undefined;
+
   return {
-    items: items.slice(0, pageSize),
-    nextOffset: items.length > pageSize ? offset + pageSize : null,
+    items: allSorted.slice(offset, offset + pageSize),
+    nextOffset: allSorted.length > offset + pageSize ? offset + pageSize : null,
+    totalCount: allSorted.length,
+    authors,
   };
 }
 
