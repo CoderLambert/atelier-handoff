@@ -1,7 +1,7 @@
 /**
- * @file 定义 Git 面板、差异、工作树及提交核对表单样式。
- * @implementation 用工作台主题、容器查询和独立滚动适配文件列表、差异和核对表单。
- * @updated 2026-11-24T14:10:00+08:00
+ * @file 定义 Git 面板、差异、工作树及提交审查界面样式。
+ * @implementation 用工作台主题、容器查询和独立滚动适配文件列表、差异、对话摘要和核对表单。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 @layer components {
   .git-board {
@@ -659,6 +659,62 @@
     flex: 1 1 300px;
     min-height: 0;
     max-height: none;
+  }
+  .git-commit-conversation {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    gap: 12px;
+    min-height: 0;
+    font-size: 13px;
+  }
+  .git-commit-conversation[hidden] {
+    display: none;
+  }
+  .git-commit-conversation-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
+  }
+  .git-commit-conversation-groups,
+  .git-commit-conversation-turns {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+  }
+  .git-commit-conversation-groups > li,
+  .git-commit-conversation-turns > li {
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    display: grid;
+    gap: 4px;
+  }
+  .git-commit-conversation-input {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .git-commit-conversation-input textarea {
+    border: 1px solid var(--ui-input);
+    border-radius: var(--radius-md);
+    background: var(--ui-card);
+    color: var(--ui-foreground);
+    padding: 8px 10px;
+    resize: vertical;
+    min-width: 0;
+    max-height: 20vh;
+  }
+  .git-commit-conversation-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .git-commit-form,
   .git-commit-editor {

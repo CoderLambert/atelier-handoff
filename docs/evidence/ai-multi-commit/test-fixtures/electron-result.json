@@ -1,0 +1,15 @@
+{
+  "result": "passed",
+  "oldCredentialFlags": 6,
+  "remainingCredentialFlags": 1,
+  "testFilesInPreview": [
+    "tests/git-commit-analysis-sessions.test.ts",
+    "tests/git-commit-plan-privacy.test.ts",
+    "tests/git-commit-plan-revision.test.ts",
+    "tests/git-commit-planner.test.ts",
+    "tests/git-multi-commit-api.test.ts"
+  ],
+  "retainedOriginalGroup": true,
+  "candidateIndexUntouched": true,
+  "realModelRequests": 0
+}

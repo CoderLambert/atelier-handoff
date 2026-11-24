@@ -2,6 +2,39 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-25 · 凭据测试样例可预览（隔离验证通过）
+
+- 用临时 Git 仓库复现截图中五个测试文件的凭据命中。测试改用运行时构造的合成样例，以及用于回环认证的明确占位符。生产快照复验五个文件均可进入模型候选和提交预览，独立凭据阳性对照仍同时被这两道检查拦截。复跑 `node --import tsx .local/ai-commit-test-fixtures/verify.mts`，输出为同目录 `red.log` 和 `snapshot.log`。[决策与回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md#2026-11-25--凭据回归测试样例)
+- 定向运行五个测试文件，85 项通过。隔离副本按顺序通过 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build` 和 `npm run build:desktop`。运行时 660 项通过、1 项既有 WebFetch 跳过，Chromium 119 项通过。五份源文件说明检查通过。测试、检查、构建输出和候选 SHA-256 均在 `.local/ai-commit-test-fixtures/`。
+- 隔离 Electron 打开修正前的计划，预留受限分类触发预览过期提示，然后重新读取工作树。旧分组和标题保留，五个修正的文件回到待分配并批量进入逐组预览，阳性对照继续保留不提交。Electron 验收没有推理请求。原仓库 HEAD、暂存区和运行窗口保留。[桌面状态](../../../docs/evidence/ai-multi-commit/test-fixtures/resolved-zh-1280.png) · [机器结果](../../../docs/evidence/ai-multi-commit/test-fixtures/electron-result.json)
+- **开发过程 review**。直接让生产快照读取测试源码，定位到合成输入写法，避免扩大到测试目录白名单。桌面夹具首跑发现批量分组会切换筛选，随后增加等待工作树读取完成的步骤。下次修改凭据回归样例时先跑源码可提交性检查，再用同一临时仓库验证阳性对照和最终预览。
+
+## 2026-11-25 · AI 提交的对话修改（隔离验证通过）
+
+- 首轮可补充分组要求，随原分析会话恢复。审查时继续用当前模型按要求改标题、挪动或合并整批变更，界面列出实际改动并支持撤销。摘要可直接确认，详情可核对逐组差异。摘要确认保留验证结果及操作 ID，执行响应丢失后可重取回执。[技术决策和回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md#2026-11-25--对话修改提交草稿)
+- Chromium 首跑缺少可输入的首轮要求，修复后通过首轮请求、对话修改、撤销及原续跑保留编辑断言。API 以临时 Git 和回环替身验证过期快照、伪造受限 ID 及带凭据的补充要求均被拒绝，披露负载也不含受限路径、差异、手写正文或历史里的合成凭据。证据在 `.local/ai-commit-conversation/{red,chromium,test}.log`。
+- 验收基线 `3db4a86` 加 `.local/ai-commit-conversation/sources-final.sha256`。隔离副本按顺序通过 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build` 和 `npm run build:desktop`。运行时 660 项通过、1 项既有 WebFetch 跳过，前端 119 项通过。原始输出在 `.local/ai-commit-conversation/{check,test,build,build-desktop}.log`。
+- 隔离 Electron 以真实 Git 验证一条请求归并 25 个 OpenWiki 变更并改名、失败后保留要求和手写正文、根据上文追问、逐组预览和撤销。首次提交响应交付中断的实验复现了旧代码的快照过期提示。修复后使用同一操作 ID 和摘要重试，回执恢复，临时仓库最终只增加 3 条确认过的提交。确认前 HEAD 和暂存区字节一致。中英文复验包含英文深色的修改失败提示。网关捕获 2 次规划与 4 次修改请求，均为回环替身。真实模型的分组质量尚未验证。复跑 `node --import tsx .local/ai-commit-conversation/electron-smoke.mts <隔离源码副本> .local/ai-commit-conversation`。[对话摘要](../../../docs/evidence/ai-multi-commit/conversation/conversation-zh-1280.png) · [逐组预览](../../../docs/evidence/ai-multi-commit/conversation/preview-zh-1440.png) · [英文错误状态](../../../docs/evidence/ai-multi-commit/conversation/conversation-en-error-1440.png) · [机器结果](../../../docs/evidence/ai-multi-commit/conversation/electron-result.json)
+- 单批只读核对 18 个文件，更新 10 个有效说明，独立 `check:headers` 通过。原仓库 HEAD、暂存区和运行窗口保留，全部验证提交创建于临时仓库。源码与候选逐项比较及文件说明证据位于 `.local/ai-commit-conversation/`。
+- **开发过程 review**。把修改失败、只改指定分组、手写正文保全和撤销合并到同一个 Electron 验收夹具。通过 renderer 丢弃首个成功响应复现提交回执丢失，保留真实 Git 执行与权限复核。下一轮新增确认入口时直接复用这个夹具同时覆盖执行已完成和客户端未知状态。
+
+## 2026-11-25 · 手动提交与待决定项批量分配（隔离验证通过）
+
+- Git 文件工具栏新增手动入口，读取冻结快照后打开一组空白草稿，用户可选已暂存、未暂存及未跟踪改动。需要决定视图支持勾选单块、同类里的整个文件、整类或全部待决定项，选定目标后显式应用。每次只修改草稿分组及保留列表，提交继续使用既有逐组预览、确认和恢复接口。包含受限项的选择可整批保留。回退范围为本次工具栏、编辑器及词条。
+- Chromium 先复现同文件多块缺少批量选择，修复后在 246 项夹具核对按文件归组、批量保留、受限目标禁用、冲突门禁和手动入口零推理。定向类型、i18n、UI 检查通过。原始输出为 `.local/ai-multi-commit-bulk/{red,chromium}.log`。
+- 隔离副本按顺序运行 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build`、`npm run build:desktop`，全部通过。运行时 658 通过，1 个既有 WebFetch 跳过，前端 119 通过。原始输出为同目录 `{check,test,build,build-desktop}.log`。
+- 隔离 Electron 使用真实 Git 和回环模型替身，在 AI 计划中一次分配同文件三个变更块；从独立手动入口选中三个块并确认创建一条本地提交，另一文件仍在暂存区，两项未跟踪改动保留。前后推理计数证明手动流程为零，真实模型调用为零。中英文渲染视口为 1280×800 和 1440×900，核对 Esc 后焦点返回手动入口。复跑入口 `node --import tsx .local/ai-multi-commit-bulk/electron-smoke.mts <隔离源码副本> .local/ai-multi-commit-bulk`。[批量分配](../../../docs/evidence/ai-multi-commit/bulk-manual/bulk-assignment-zh-1280.png) · [手动预览](../../../docs/evidence/ai-multi-commit/bulk-manual/manual-preview-zh-1440.png) · [机器结果](../../../docs/evidence/ai-multi-commit/bulk-manual/electron-result.json)。
+- 原仓库 HEAD 和暂存区指纹一致。用户运行窗口保留本轮前状态。单批核对 7 个验收源码输入，集中更新 5 份文件说明，独立 `check:headers` 通过。工作区与构建副本的行为源码一致，证据为 `.local/ai-multi-commit-bulk/headers/` 和 `headers.log`。
+- **开发过程 review**。同一临时仓库先验证 AI 返回未分组块，再用独立手动入口直接选取并提交这些块，以一条 Git 结果同时覆盖批量分配和暂存保全。Chromium 测试负责混合限制和冲突状态，桌面复验聚焦真实入口与 Git 状态。
+
+## 2026-11-25 · 多提交模型与推理偏好（隔离验证通过）
+
+- 根据用户反馈直接复用聊天输入框的 `ModelPicker`，多提交独立保存上次模型和推理等级于 SQLite settings；跟随默认时保留默认语义，不修改聊天模型。选择中的等级以 `output_config.effort` 发到各批及最终整理；固定路由以网关配置为准，实际上游采纳情况未用真实模型验证。[决策](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- `npm run check`、`npm test`（运行时 658 通过、1 跳过；前端 119 通过）和 `npm run build` 通过。隔离 SQLite 测试覆盖重启后恢复与损坏数据回退；隔离 Git API 测试覆盖默认不继承聊天等级、Shunt/Magpie 请求及改变等级拒绝旧会话续跑。Chromium 测试覆盖保存失败重试、模型切换、固定等级、延迟保存顺序和页面重开。
+- 隔离 Electron 关闭并重启，确认 `fixture-picked` / `high` 恢复、三次回环模型请求均带 `output_config.effort=high`，并完成两条测试提交；中文与重启英文截图：[中文](../../../docs/evidence/ai-multi-commit/persisted-model-zh-1280.png)、[重启后英文](../../../docs/evidence/ai-multi-commit/persisted-model-restarted-en.png)。未调用真实模型。用户运行窗口未切换，避免丢失当前状态。
+- 文件说明维护批次 `multi-commit-preferences / 未提交工作区` 待补总结：`.local/multi-commit-preferences-headers.sha256` 和 brief 已保存；后台 `codex exec` 被自动审批以可能向外部模型发送私有仓库内容为由拒绝，未绕过。`npm run check:headers` 已通过。
+- 开发过程 review：直接复用已有模型选择器和 SQLite 独立设置，避免复制能力映射；先用受控延迟验证快速切换，再以独立 Electron 重启验证持久化，减少对真实数据和付费模型的依赖。
+
 ## 2026-11-24 · 重新打开后的多提交复测
 
 - 用户要求重新打开并测试；启动前未发现运行中的 Atelier 桌面或运行时，使用 `npm run desktop` 沿用原有数据目录启动。实际窗口显示原工作区及会话列表；只读 SQLite `quick_check=ok`，2 个项目和 14 个会话可读取。

@@ -95,9 +95,59 @@ export const git = {
   'file.conflict': ['冲突', 'Conflicted'],
   'file.untracked': ['未跟踪', 'Untracked'],
   'multi.heading': ['AI 多提交计划', 'AI commit plan'],
+  'multi.conversation.initial': ['补充提交要求（可选）', 'Planning instructions (optional)'],
+  'multi.conversation.initialPlaceholder': [
+    '例如代码和文档分开提交，OpenWiki 单独提交',
+    'For example, separate code and docs, with OpenWiki in its own commit',
+  ],
+  'multi.conversation.input': ['告诉 AI 怎么改', 'Ask AI to edit the plan'],
+  'multi.conversation.placeholder': [
+    '例如把 OpenWiki 放入最后一组，并改写第一条标题',
+    'For example, group OpenWiki last and rewrite the first subject',
+  ],
+  'multi.conversation.send': ['发送修改要求', 'Send edit request'],
+  'multi.conversation.history': ['提交草稿修改记录', 'Commit draft revisions'],
+  'multi.conversation.working': ['正在修改当前提交草稿…', 'Revising the current commit draft…'],
+  'multi.conversation.noChange': ['这条要求未改动草稿。', 'The draft stayed the same.'],
+  'multi.conversation.applied': [
+    '更新 {{groups}} 个提交组、移除 {{removed}} 个空组、新增保留 {{kept}} 项。',
+    'Updated {{groups}} groups, removed {{removed}} empty groups, and kept {{kept}} more changes.',
+  ],
+  'multi.conversation.morePaths_one': ['另有 {{count}} 个文件', '{{count}} more file'],
+  'multi.conversation.morePaths_other': ['另有 {{count}} 个文件', '{{count}} more files'],
+  'multi.conversation.summary': [
+    '待决定 {{pending}} 项 · 保留不提交 {{retained}} 项',
+    '{{pending}} need a decision · {{retained}} kept uncommitted',
+  ],
+  'multi.conversation.pending': ['查看待决定项', 'Show unresolved changes'],
+  'multi.conversation.retained': ['查看保留项', 'Show kept changes'],
+  'multi.conversation.details': ['展开详细编辑与差异', 'Open detailed review'],
+  'multi.conversation.back': ['返回对话与摘要', 'Back to conversation and summary'],
+  'multi.conversation.undo': ['撤销上次 AI 修改', 'Undo last AI edit'],
+  'multi.manualHeading': ['手动提交', 'Manual commit'],
+  'multi.manualDescription': [
+    '选择要提交的变更，填写提交说明，然后核对预览并确认。',
+    'Choose changes, write a commit message, then review the preview and confirm.',
+  ],
+  'multi.batch.destination': ['批量分配到', 'Batch destination'],
+  'multi.batch.all': ['选择全部待决定项', 'Select all changes needing a decision'],
+  'multi.batch.apply': ['应用到选中项', 'Apply to selection'],
+  'multi.batch.clear': ['取消选择', 'Clear selection'],
+  'multi.batch.blocked': [
+    '选中项含有本流程无法提交的变更。可保留整批，或取消选中受限项后再分组。',
+    'The selection includes blocked changes. Keep the whole selection uncommitted or deselect the blocked changes before grouping.',
+  ],
+  'multi.batch.selected_one': ['已选中 {{count}} 个变更块', '{{count}} change selected'],
+  'multi.batch.selected_other': ['已选中 {{count}} 个变更块', '{{count}} changes selected'],
+  'multi.batch.category': ['选择「{{category}}」全部变更', 'Select {{category}}'],
+  'multi.batch.file': ['选择 {{path}} 的变更', 'Select changes in {{path}}'],
+  'multi.batch.unit': [
+    '选择 {{path}} 的变更块（{{layer}} {{change}}）',
+    'Select change in {{path}} ({{layer}} {{change}})',
+  ],
   'multi.description': [
-    '选择模型，审查 AI 建议的提交分组，再预览和创建本地提交。',
-    'Choose a model, review its suggested groups, then preview and create local commits.',
+    '选择模型，审查和调整 AI 建议的提交分组，再确认创建本地提交。',
+    'Choose a model, review and adjust its suggested groups, then confirm local commits.',
   ],
   'multi.notStarted': ['尚未开始 AI 规划', 'AI planning has not started'],
   'multi.snapshotSummary': [
@@ -420,6 +470,26 @@ export const git = {
     '仅用于本次弹窗，不修改聊天草稿或工作台设置。选择后点击分析。',
     'Applies to this dialog only. Chat drafts and workspace settings stay unchanged. Choose a model, then analyze.',
   ],
+  'multi.model.savedHelp': [
+    '模型与推理等级为多提交单独保存，不影响聊天；实际支持以模型和网关为准。',
+    'Model and reasoning level are saved for multi-commit only. Support depends on the model and gateway.',
+  ],
+  'multi.model.preferencesLoading': [
+    '正在读取多提交模型设置…',
+    'Loading multi-commit model settings…',
+  ],
+  'multi.model.preferencesSaving': [
+    '正在保存多提交模型设置…',
+    'Saving multi-commit model settings…',
+  ],
+  'multi.model.preferencesLoadFailed': [
+    '无法读取多提交模型设置。',
+    'Could not load multi-commit model settings.',
+  ],
+  'multi.model.preferencesSaveFailed': [
+    '当前选择尚未保存；本次仍可使用。',
+    'This selection was not saved; you can still use it for this analysis.',
+  ],
   'multi.model.loading': ['正在加载模型目录…', 'Loading the model catalog…'],
   'multi.model.failed': [
     '模型目录加载失败。可使用默认模型、手动输入 ID 或刷新重试。',
@@ -535,6 +605,18 @@ export const git = {
   'errors.planCredential': [
     '所选变更可能引入凭据。请在本地核对并修正。',
     'A selected change may introduce a credential. Review and fix it locally.',
+  ],
+  'errors.planInstructionPrivate': [
+    '补充要求可能包含凭据，请删去相关内容后再试。',
+    'The instruction may contain a credential. Remove it and try again.',
+  ],
+  'errors.planRevisionFailed': [
+    'AI 修改请求未完成，可以重试。',
+    'The AI revision did not complete. Try again.',
+  ],
+  'errors.planRevisionInvalid': [
+    'AI 返回的修改无法应用，草稿保持原样。',
+    'The model returned an invalid edit. The draft stayed the same.',
   ],
   'errors.planAnalysisExpired': [
     '此分析记录已过期。重新开始分析时会保留当前分组和编辑。',

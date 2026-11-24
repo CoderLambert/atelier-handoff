@@ -1,7 +1,7 @@
 /**
- * @file 展示 Git 文件、提交和差异，并提供 AI 多提交及未完成操作处理入口。
- * @implementation 按工作树和稳定提交选择数据，组织文件分组、差异和多提交计划；查询未完成操作，并提供恢复或放弃入口。
- * @updated 2026-11-24T15:59:19+08:00
+ * @file 展示 Git 文件、提交、差异及操作入口。
+ * @implementation 按工作树读取文件和差异，提供手动提交、AI 分组和未完成提交的恢复入口。
+ * @updated 2026-11-25T00:55:36+08:00
  */
 import { useRef, useState } from 'react';
 import {
@@ -134,6 +134,8 @@ export function GitFilesView({
   const fileCount = status.data.files.length;
   const staged = groups[0]?.files.length ?? 0;
   const number = new Intl.NumberFormat(locale);
+  const commitDisabled =
+    busy || pending.isPending || pending.isError || Boolean(pending.data?.items.length);
   return (
     <div className="git-files-view">
       <div className="git-files-toolbar" ref={toolbar} tabIndex={-1}>
@@ -143,19 +145,34 @@ export function GitFilesView({
             <Badge variant="success">{t('commit.stagedCount', { count: staged })}</Badge>
           ) : null}
         </div>
-        <Button
-          type="button"
-          size="sm"
-          ref={trigger}
-          title={t('commit.aiTooltip')}
-          disabled={
-            busy || pending.isPending || pending.isError || Boolean(pending.data?.items.length)
-          }
-          onClick={review.start}
-        >
-          <Sparkles data-icon="inline-start" aria-hidden="true" />
-          {t('commit.ai')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={commitDisabled}
+            onClick={(event) => {
+              trigger.current = event.currentTarget;
+              review.startManual();
+            }}
+          >
+            <GitCommitHorizontal data-icon="inline-start" aria-hidden="true" />
+            {t('multi.manualHeading')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            title={t('commit.aiTooltip')}
+            disabled={commitDisabled}
+            onClick={(event) => {
+              trigger.current = event.currentTarget;
+              review.start();
+            }}
+          >
+            <Sparkles data-icon="inline-start" aria-hidden="true" />
+            {t('commit.ai')}
+          </Button>
+        </div>
       </div>
       {pending.isError ? (
         <div className="git-feedback" role="alert">

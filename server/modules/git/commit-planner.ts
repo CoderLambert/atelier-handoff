@@ -1,7 +1,7 @@
 /**
  * @file 为服务端候选变更单元生成可编辑的有序提交分组。
- * @implementation 将限长候选分批交给配置网关并整理结果。校验单元 ID，在启动时报告统计，并在每批通过验证后记录恢复点。
- * @updated 2026-11-24T22:06:05+08:00
+ * @implementation 将限长候选与补充要求分批交给配置网关，校验单元 ID，并在每批通过验证后记录恢复点。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 import { z } from 'zod';
 import {
@@ -11,7 +11,12 @@ import {
   gitPath,
 } from '../../../shared/git-workbench.js';
 import { uiLocaleSchema, type UiLocale } from '../../../shared/i18n/locale.js';
-import { gatewayModelSchema, type AppConfig } from '../../../shared/types.js';
+import {
+  gatewayModelSchema,
+  reasoningEfforts,
+  type AppConfig,
+  type ReasoningEffort,
+} from '../../../shared/types.js';
 import { gatewayToken } from '../../gateway-search.js';
 import { magpieModel } from '../../magpie-models.js';
 import { canSendCommitDiff } from './commit-plan-privacy.js';
@@ -116,6 +121,7 @@ export interface CommitPlanCheckpoint {
 export interface CommitPlanOptions {
   /** Independent deadline for each batch and the final merge, including response reading. */
   timeoutMs?: number;
+  instruction?: string;
   checkpoint?: CommitPlanCheckpoint;
   onStart?: (coverage: CommitPlanCoverage) => void;
   onProgress?: (checkpoint: CommitPlanCheckpoint, result: CommitPlanResult) => void;
@@ -130,6 +136,7 @@ const optionsSchema = z.strictObject({
 const gatewaySchema = z.object({
   gateway: z.string().min(1).max(4096),
   model: gatewayModelSchema.shape.id,
+  effort: z.enum(reasoningEfforts).optional(),
 });
 const messageResponse = z.object({
   stop_reason: z.string().nullable().optional(),
@@ -155,10 +162,13 @@ function requestBody(
   model: string,
   locale: UiLocale,
   units: readonly CommitPlanUnit[],
+  effort: ReasoningEffort | undefined,
+  instruction: string | undefined,
   batches?: readonly CommitPlan[],
 ): string {
   return JSON.stringify({
     model,
+    ...(effort ? { output_config: { effort } } : {}),
     max_tokens: 16_000,
     system:
       'Propose ordered, cohesive Git commits from the candidate change units supplied as JSON. ' +
@@ -173,6 +183,9 @@ function requestBody(
       'Do not return patches, commands, tool calls or additional fields. You cannot execute Git. ' +
       'Do not guess changes absent from the input or reproduce sensitive values. ' +
       'Limit titles to 240 characters and bodies to 8000 characters. ' +
+      (instruction
+        ? 'Use the explicit user request in instruction to guide grouping and commit messages. All safety and ID constraints still apply. '
+        : '') +
       (batches
         ? 'This is the global planning pass. Reconcile the batch summaries into one ordered plan; combine related groups across batches and reconsider unassigned units only when the evidence supports it. '
         : 'This is an initial planning batch. Group related changes and summarize their purpose in titles and bodies for the later global pass. ') +
@@ -184,6 +197,7 @@ function requestBody(
         role: 'user',
         content: JSON.stringify({
           units: units.map((unit) => ({ ...unit, metadataOnly: unit.diff === undefined })),
+          ...(instruction ? { instruction } : {}),
           ...(batches ? { batches } : {}),
         }),
       },
@@ -220,14 +234,19 @@ async function readMessage(
   }
 }
 
-async function requestPlan(
+type CommitJsonResponse =
+  { status: 'json'; value: unknown } | { status: 'manual'; reason: CommitPlanManualReason };
+
+export async function requestCommitModelJson(
   endpoint: URL,
   token: string,
   body: string,
-  knownIds: ReadonlySet<string>,
   signal: AbortSignal,
-): Promise<PlanResponse> {
-  const manual = (reason: CommitPlanManualReason): PlanResponse => ({ status: 'manual', reason });
+): Promise<CommitJsonResponse> {
+  const manual = (reason: CommitPlanManualReason): CommitJsonResponse => ({
+    status: 'manual',
+    reason,
+  });
   const response = await fetch(endpoint, {
     method: 'POST',
     redirect: 'error',
@@ -282,7 +301,26 @@ async function requestPlan(
   } catch {
     return manual('invalid-json');
   }
-  return validatePlan(value, knownIds);
+  return { status: 'json', value };
+}
+
+export function commitModelEndpoint(gateway: string): URL | undefined {
+  try {
+    const endpoint = new URL(gateway);
+    if (
+      !['http:', 'https:'].includes(endpoint.protocol) ||
+      endpoint.username ||
+      endpoint.password ||
+      endpoint.search ||
+      endpoint.hash
+    )
+      return undefined;
+    endpoint.pathname =
+      endpoint.pathname.replace(/\/$/u, '').replace(/\/v1$/u, '') + '/v1/messages';
+    return endpoint;
+  } catch {
+    return undefined;
+  }
 }
 
 function validatePlan(value: unknown, knownIds: ReadonlySet<string>): PlanResponse {
@@ -356,24 +394,11 @@ export async function suggestCommitPlan(
 
   const gateway = gatewaySchema.safeParse(config);
   if (!gateway.success) return manual('invalid-config');
-  let endpoint: URL;
-  try {
-    endpoint = new URL(gateway.data.gateway);
-    if (
-      !['http:', 'https:'].includes(endpoint.protocol) ||
-      endpoint.username ||
-      endpoint.password ||
-      endpoint.search ||
-      endpoint.hash
-    )
-      return manual('invalid-config');
-    endpoint.pathname =
-      endpoint.pathname.replace(/\/$/u, '').replace(/\/v1$/u, '') + '/v1/messages';
-  } catch {
-    return manual('invalid-config');
-  }
+  const endpoint = commitModelEndpoint(gateway.data.gateway);
+  if (!endpoint) return manual('invalid-config');
   const model = magpieModel(gateway.data.model) ?? gateway.data.model;
-  // Keep endpoint, model and authentication bound to the same configuration for every batch.
+  const effort = gateway.data.effort;
+  // Keep endpoint, model, effort and authentication bound to the same configuration for every batch.
   const token = gatewayToken(config);
   const batches: CommitPlanUnit[][] = [];
   let current: CommitPlanUnit[] = [];
@@ -381,8 +406,10 @@ export async function suggestCommitPlan(
     const candidate = [...current, unit];
     if (
       candidate.length <= commitPlanLimits.maxUnitsPerBatch &&
-      Buffer.byteLength(requestBody(model, locale, candidate), 'utf8') <=
-        commitPlanLimits.maxInputBytes
+      Buffer.byteLength(
+        requestBody(model, locale, candidate, effort, options.instruction),
+        'utf8',
+      ) <= commitPlanLimits.maxInputBytes
     ) {
       current = candidate;
     } else {
@@ -390,8 +417,10 @@ export async function suggestCommitPlan(
       batches.push(current);
       current = [unit];
       if (
-        Buffer.byteLength(requestBody(model, locale, current), 'utf8') >
-        commitPlanLimits.maxInputBytes
+        Buffer.byteLength(
+          requestBody(model, locale, current, effort, options.instruction),
+          'utf8',
+        ) > commitPlanLimits.maxInputBytes
       )
         return manual('input-too-large');
     }
@@ -439,9 +468,9 @@ export async function suggestCommitPlan(
     const cancellation = AbortSignal.any([signal, timeout]);
     try {
       cancellation.throwIfAborted();
-      const result = await requestPlan(endpoint, token, body, ids, cancellation);
+      const result = await requestCommitModelJson(endpoint, token, body, cancellation);
       cancellation.throwIfAborted();
-      return result;
+      return result.status === 'json' ? validatePlan(result.value, ids) : result;
     } catch {
       return {
         status: 'manual',
@@ -451,7 +480,7 @@ export async function suggestCommitPlan(
   };
   for (const batch of batches.slice(plans.length)) {
     const result = await request(
-      requestBody(model, locale, batch),
+      requestBody(model, locale, batch, effort, options.instruction),
       new Set(batch.map((unit) => unit.id)),
     );
     if (result.status === 'manual') return manual(result.reason);
@@ -468,7 +497,7 @@ export async function suggestCommitPlan(
 
   // The validated initial plans summarize diff evidence; the global pass gets no raw diff again.
   const metadata = input.data.map(({ diff: _diff, ...unit }) => unit);
-  const globalBody = requestBody(model, locale, metadata, plans);
+  const globalBody = requestBody(model, locale, metadata, effort, options.instruction, plans);
   if (Buffer.byteLength(globalBody, 'utf8') > commitPlanLimits.maxInputBytes)
     return manual('input-too-large');
   const result = await request(globalBody, knownIds);

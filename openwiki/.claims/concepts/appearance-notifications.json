@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5147640a068ea6c64361663bd3802303aa80f0f12fff6e6bfe56f32b345893bc",
+  "claims": [
+    {
+      "id": "claim_29dd5d636cfa4aa18ced3ebe41c50e77",
+      "statement": "工作台支持六种主题，默认 obsidian，主题由共享 schema 校验。",
+      "evidence": [
+        {
+          "resource": "repo://shared/desktop-ui-theme.ts#L8-L35",
+          "version": "repo-lines-v1:sha256:08f5ea6487996ff0d27b1445d94bff934c96c7359b74b80b8ad33f61d8632214:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2ZGQyMmUxNDYxYmE3NzY5ODMxZTFkNTZiZDUzMjNiZDE4Yjg4NWQ5YTkwMGYxNGM3OTVmYzZmZGZlNGZmMjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1NzUzNzczMTM0MWFmNjMxZTk2ZGFiZGIwNjgzYTk5OGNiOWI3NmQ0NjJkNTcwMGE4NGEwNGUyNTU1YWVlZDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiMzYxMTEyZmJlNDFkNzU1NmVmZmZjMTU3MDZiZmY2Y2JmNDdkZWI2OWE4OTMwZTJlMmY4MDg2ZTZkZDcwMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAxNjZjZmFlZmNjZjEwYmU4NDZjOTcyZWE4MmZhNjRlZjJlNzcwZjU5ZGIxNGIyYzdjZjcyNjhlMzg0ZDg3M2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f2a1289fd5b640c19439b88405c572bc",
+      "statement": "通知偏好支持五种提示音、完成和失败声音开关、完成聚焦及 0 至 100 音量。",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/notifications/index.ts#L90-L101",
+          "version": "repo-lines-v1:sha256:90cfc0c54e794c00843d2beab6630812107cca7f51773ea8fdc6475f996759f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2YzA5OTYxNzUzMjQ2YzYxNzhkZWY0MjE5YTZhZTgwMzYxNTk3ZTBkZDdhYzJmOGQ2NmNlMTBhMjY2OGZjNDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzM2Q2ZGU1ODM3ZDFiOTc3MDkwNDk0NGFhMzNiMzJkNmZhMDExMDg1Nzk3NTRlNGFkOWU3MGI1YmU3ZjQyY2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0MjQ0NTg0MDEzY2E4ZmZjMjBiZWZhYWJjMzNmZTgyZDkxOTVkZDQyMjIxMjNiZTA0MDk2Mjk2YjVkZjY4ZDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5Y2JhYTA0Mjc3NzgxNGZiYWQzODZlMTdmNDI0YjVhNThmY2E1ZDU5YTIyYTUyZTEwMDBiM2E3ODAyMDNlMzUifQ"
+        },
+        {
+          "resource": "repo://shared/desktop-ui-notifications.ts#L8-L27",
+          "version": "repo-lines-v1:sha256:92e5728af74f15a1dc2599932aade3ece979797a33fc0650b8809e549d4f4abd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2MWVmOTYwY2I2YTk5NTAxYTcyN2FhYmI1YWI2YTc5ODBhZGY5NDAxMGFjMTM3NjIyM2JhOTczM2U3ODc3NzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiMzYxMTEyZmJlNDFkNzU1NmVmZmZjMTU3MDZiZmY2Y2JmNDdkZWI2OWE4OTMwZTJlMmY4MDg2ZTZkZDcwMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4YzU3YWRjZDQzY2Q1YzA4ZTFmODJmMzk4ZjdkODg3OTRlMTZmZDQzMzg4NWMyY2M1N2FlNTFjYjc2OTllZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_89f6ae89e2a74d5d9e0e39b9bffc51c3",
+      "statement": "桌面通知偏好保存在 profile 文件中，通过临时文件与重命名保存，读取失败时使用默认值。",
+      "evidence": [
+        {
+          "resource": "repo://desktop/host/ui-notifications.mts#L15-L28",
+          "version": "repo-lines-v1:sha256:e4ec1dca6aff4c139e3b04da1b5b4c23a8c6e18de72751e943cf72e885378a92:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhNzA1OTliZThjODZjNmY2ZmQ0Zjk5ODUwNjU3ZDI3ZWQxNDAzNTJmN2QzOTQwYzlhMjJiMDUzZWIzMjJlYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzZTZiYWU2NDhmZjgyNmMwMzIzM2U1ZDVjM2MyOGZmMDJmMmJjNjFlYzBjODFmNGU1N2M5ZDUyNWRhNmNkMWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmNDkzZjg1NTQ5Y2IwODJmMmVmZmQ0NTA3YjY2Y2MzZWYzZGViMWNiMDYxYzI5OTdlOGJmNmE3NTM1YWY0NmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2Zjk1OWUwNDQ0ODRhM2ZiNTQ2ZjY1Y2IwMzljNzZkY2Q5OGQ4OWYwNzkyOWQ2MWI0OGY4YWRjN2Y3ZTRhODkifQ"
+        },
+        {
+          "resource": "repo://desktop/host/ui-notifications.mts#L46-L68",
+          "version": "repo-lines-v1:sha256:dfa5db044d75b318a3afadcad4fda8c9abdb68f5182bf9c7ee903cac7ac25f2a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyOTYwMTgxNmRkMWEyZWY3MjJhOTg5NGQxY2IxOTAyNDM2NmZjYTdiMmE2N2U4ODE5ZGRjNzgxYWYzMzViMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliNjJmNjBkODU5MGE1NzljZjQ2ZjhkNjczNzhjNGM1NzJiOTYyY2VjY2RiOTBjN2E1ZjdiNDJiOTYwNzgyYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyMTk1NGU0MDYyYjRmZWY3NmZiNTNlODA0N2Y0NmQzNTVkNDc2YWJhODYyY2Q3Y2I2MTMyN2I2MzBlYzk5ZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlMTJiNjExODk0M2UzMGMwMDY4MzNlNzgxNjMwYTUzYjMyZjQxN2VmNWY5Nzk1YzNmMTJmMzMwODAyNGM1ZDkifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-23T19:36:38.791Z"
+  }
+}

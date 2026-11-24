@@ -1,7 +1,7 @@
 /**
  * @file 管理 MCP 连接、工具发现和调用。
- * @implementation 通过 HTTP 或本地进程管理 MCP 会话、工具校验与结果处理；维护旧版浏览器预览并在桌面端禁用旧版 Playwright 工具。
- * @updated 2026-11-20T12:10:16+08:00
+ * @implementation 以服务和工作目录隔离连接，让本地进程在该目录启动，并在调用前复核授权。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -70,6 +70,8 @@ function createConnection(server: EnabledMcp, cwd: string) {
 type Connection = ReturnType<typeof createConnection>;
 type Session = {
   transportKey: string;
+  id: string;
+  cwd: string;
   projectId: string;
   browser?: Promise<Awaited<ReturnType<typeof launchPreviewBrowser>> | undefined>;
   frame?: ReturnType<typeof readBrowserFrame>;
@@ -82,8 +84,24 @@ export class McpSessions {
   private readonly sessions = new Map<string, Session>();
 
   async close(id: string) {
-    const session = this.sessions.get(id);
-    this.sessions.delete(id);
+    await Promise.all(
+      [...this.sessions.entries()]
+        .filter(([, session]) => session.id === id)
+        .map(([key]) => this.closeEntry(key)),
+    );
+  }
+
+  async closeDirectory(cwd: string) {
+    await Promise.all(
+      [...this.sessions.entries()]
+        .filter(([, session]) => session.cwd === cwd)
+        .map(([key]) => this.closeEntry(key)),
+    );
+  }
+
+  private async closeEntry(key: string) {
+    const session = this.sessions.get(key);
+    this.sessions.delete(key);
     await session?.connection?.close();
     await (await session?.browser)?.close();
   }
@@ -92,8 +110,8 @@ export class McpSessions {
     const entry = [...this.sessions.entries()]
       .reverse()
       .find(
-        ([id, session]) =>
-          session.projectId === projectId && enabledServerIds.has(id) && session.browser,
+        ([, session]) =>
+          session.projectId === projectId && enabledServerIds.has(session.id) && session.browser,
       )?.[1];
     const browser = await entry?.browser;
     if (!browser || !entry) return null;
@@ -107,14 +125,14 @@ export class McpSessions {
     return entry.frame;
   }
 
-  noteBrowserPage(id: string, text: string) {
-    const entry = this.sessions.get(id);
+  noteBrowserPage(id: string, cwd: string, text: string) {
+    const entry = this.sessions.get(JSON.stringify([id, cwd]));
     const url = /^- Page URL: (https?:\/\/[^\r\n]+)$/m.exec(text)?.[1];
     if (entry?.browser && url) entry.pageUrl = url.trim();
   }
 
   async shutdown() {
-    await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
+    await Promise.all([...this.sessions.keys()].map((key) => this.closeEntry(key)));
   }
 
   async use<T>(
@@ -122,15 +140,16 @@ export class McpSessions {
     cwd: string,
     signal: AbortSignal,
     work: (client: Client, secrets: string[]) => Promise<T>,
-    verify?: () => void,
+    verify?: () => void | Promise<void>,
   ): Promise<T> {
     signal.throwIfAborted();
-    verify?.();
-    const id = server.id;
+    await verify?.();
+    signal.throwIfAborted();
+    const key = JSON.stringify([server.id, cwd]);
     const transportKey = JSON.stringify([server.projectId, cwd, server.transport]);
-    let session = this.sessions.get(id);
+    let session = this.sessions.get(key);
     if (session && session.transportKey !== transportKey) {
-      await this.close(id);
+      await this.closeEntry(key);
       return this.use(server, cwd, signal, work, verify);
     }
     if (!session) {
@@ -140,16 +159,23 @@ export class McpSessions {
           '已打开 8 个常驻 MCP。停用不再使用的服务后重试。',
           409,
         );
-      session = { transportKey, projectId: server.projectId, tail: Promise.resolve() };
-      this.sessions.set(id, session);
+      session = {
+        transportKey,
+        id: server.id,
+        cwd,
+        projectId: server.projectId,
+        tail: Promise.resolve(),
+      };
+      this.sessions.set(key, session);
     }
     const entry = session;
     const execute = entry.tail
       .catch(() => undefined)
       .then(async () => {
         signal.throwIfAborted();
-        verify?.();
-        if (this.sessions.get(id) !== entry)
+        await verify?.();
+        signal.throwIfAborted();
+        if (this.sessions.get(key) !== entry)
           throw new AppError('MCP_SESSION_CLOSED', 'MCP 会话已关闭，请重新发起工具调用。', 409);
         try {
           if (!entry.connection) {
@@ -170,7 +196,7 @@ export class McpSessions {
               entry.browser = launchPreviewBrowser(signal).catch(() => undefined);
               const browser = await entry.browser;
               signal.throwIfAborted();
-              if (this.sessions.get(id) !== entry)
+              if (this.sessions.get(key) !== entry)
                 throw new AppError('MCP_SESSION_CLOSED', 'MCP 会话已关闭。', 409);
               if (browser)
                 configured = {
@@ -184,7 +210,7 @@ export class McpSessions {
             const connection = createConnection(configured, cwd);
             entry.connection = connection;
             connection.client.onclose = () => {
-              if (this.sessions.get(id) === entry) void this.close(id).catch(() => {});
+              if (this.sessions.get(key) === entry) void this.closeEntry(key).catch(() => {});
             };
             await connection.client.connect(connection.transport, {
               timeout: MCP_CONNECT_TIMEOUT,
@@ -194,7 +220,8 @@ export class McpSessions {
           signal.throwIfAborted();
           return await work(entry.connection.client, entry.connection.secrets);
         } catch (error) {
-          if (!(error instanceof AppError) && this.sessions.get(id) === entry) await this.close(id);
+          if (!(error instanceof AppError) && this.sessions.get(key) === entry)
+            await this.closeEntry(key);
           signal.throwIfAborted();
           throw configurationError(error);
         }
@@ -297,7 +324,7 @@ export async function callMcp(
   name: string,
   args: Record<string, unknown>,
   signal: AbortSignal,
-  beforeCall?: () => void,
+  beforeCall?: () => void | Promise<void>,
   sessions?: McpSessions,
   publishScreenshot?: (data: string) => Promise<string>,
 ): Promise<string> {
@@ -316,7 +343,8 @@ export async function callMcp(
     ) {
       throw new AppError('MCP_TOOL_CHANGED', '工具定义已变化。请重新测试连接并检查工具权限。', 409);
     }
-    beforeCall?.();
+    await beforeCall?.();
+    signal.throwIfAborted();
     const screenshot = name === 'browser_take_screenshot' && publishScreenshot;
     const input = screenshot ? { ...args, filename: undefined, type: 'png' } : args;
     const response = await client.callTool({ name, arguments: input }, CallToolResultSchema, {
@@ -331,7 +359,8 @@ export async function callMcp(
       );
       if (!image || image.type !== 'image')
         throw new AppError('MCP_SCREENSHOT_MISSING', '浏览器没有返回 PNG 截图。', 502);
-      beforeCall?.();
+      await beforeCall?.();
+      signal.throwIfAborted();
       const artifactId = await screenshot(image.data);
       return `已保存网页截图到本轮交付物（ID ${artifactId}）。请提示用户点击下方卡片查看。`;
     }
@@ -342,7 +371,8 @@ export async function callMcp(
       blocks.push(JSON.stringify(result.structuredContent));
     }
     let text = blocks.join('\n');
-    if (!result.isError && name.startsWith('browser_')) sessions?.noteBrowserPage(server.id, text);
+    if (!result.isError && name.startsWith('browser_'))
+      sessions?.noteBrowserPage(server.id, cwd, text);
     for (const secret of secrets) text = text.replaceAll(secret, '[已隐藏]');
     if (result.isError)
       throw new AppError(
