@@ -11,7 +11,8 @@ import * as t from '@babel/types';
 import { z } from 'zod';
 
 const rawStatement =
-  /^\s*(?:select\s+[\s\S]+?\sfrom\s|insert\s+(?:or\s+\w+\s+)?into\s|update\s+[\w$"`[.]+\s+set\s|delete\s+from\s|(?:create|alter|drop)\s+(?:unique\s+)?(?:table|index|trigger|view)\s|pragma\s|begin\s+(?:immediate|exclusive|deferred)|(?:rollback|commit)\s*;?\s*$)/i;
+  /^\s*(?:select\s+[\s\S]+?\sfrom\s|insert\s+(?:or\s+\w+\s+)?into\s|update\s+[\w$"`[.]+\s+set\s|delete\s+from\s|(?:create|alter|drop)\s+(?:unique\s+)?(?:table|index|trigger|view)\s|pragma\s|begin\s+(?:immediate|exclusive|deferred)\b|(?:rollback|commit)\s+(?:transaction|work)\b)/i;
+const transactionStatement = /^\s*(?:begin|commit|rollback)\s*;?\s*$/i;
 const drivers = /^(?:node:sqlite|better-sqlite3)(?:\/|$)/;
 const orm = /^drizzle-orm(?:\/|$)/;
 export type DatabaseSite = { key: string; line: number };
@@ -100,7 +101,8 @@ export function databaseSites(file: string, text: string): DatabaseSite[] {
           : t.isTemplateLiteral(arg)
             ? arg.quasis[0]?.value.raw
             : undefined;
-        if (!literal || !rawStatement.test(literal)) add(node, 'driver-call');
+        if (literal && transactionStatement.test(literal) && arg) add(arg, 'sql');
+        else if (!literal || !rawStatement.test(literal)) add(node, 'driver-call');
       }
     }
   });
