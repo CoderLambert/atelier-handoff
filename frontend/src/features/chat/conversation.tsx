@@ -24,7 +24,7 @@ import type {
   RunEvent,
   ToolCall,
 } from '@shared/types';
-import { Activity, ArrowDown, RotateCcw, Shield } from 'lucide-react';
+import { Activity, ArrowDown, File, Folder, RotateCcw, Shield } from 'lucide-react';
 import { activeStatuses } from '@shared/types';
 import { cn } from '@/components/ui/utils';
 import type { Snapshot } from '@/api/types';
@@ -378,6 +378,54 @@ function RunResult({
   );
 }
 
+function FormattedUserMessage({ text }: { text: string }) {
+  const parts = useMemo(() => {
+    const regex = /(?:^|(?<=[\s(\["']))@([a-zA-Z0-9_\-./]+)(?=[,.;:!?)\]"'\s]|$)/g;
+    const nodes: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      const fullMatch = match[0];
+      const rawPath = match[1];
+      if (!rawPath) continue;
+
+      if (match.index > lastIndex) {
+        nodes.push(text.slice(lastIndex, match.index));
+      }
+
+      const isDir = rawPath.endsWith('/');
+      const cleanPath = isDir ? rawPath.slice(0, -1) : rawPath;
+      const lastSlash = cleanPath.lastIndexOf('/');
+      const dir = lastSlash >= 0 ? cleanPath.slice(0, lastSlash + 1) : '';
+      const name = (lastSlash >= 0 ? cleanPath.slice(lastSlash + 1) : cleanPath) + (isDir ? '/' : '');
+
+      nodes.push(
+        <span key={match.index} className="composer-file-mention-badge" title={rawPath}>
+          {isDir ? (
+            <Folder className="file-mention-icon" aria-hidden="true" />
+          ) : (
+            <File className="file-mention-icon" aria-hidden="true" />
+          )}
+          <span className="file-mention-at">@</span>
+          {dir ? <span className="file-mention-dir">{dir}</span> : null}
+          <strong className="file-mention-name">{name}</strong>
+        </span>,
+      );
+
+      lastIndex = match.index + fullMatch.length;
+    }
+
+    if (lastIndex < text.length) {
+      nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes.length ? nodes : [text];
+  }, [text]);
+
+  return <>{parts}</>;
+}
+
 function MessageContext({ run, attachments }: { run: Run; attachments: Map<string, Attachment> }) {
   const { t } = useUiTranslation('chat');
   const references = [
@@ -716,7 +764,9 @@ export function Conversation({
                       <p className="message-placeholder">{t('conversation.noReply')}</p>
                     )
                   ) : (
-                    <div className="message-text">{message.text}</div>
+                    <div className="message-text">
+                      <FormattedUserMessage text={message.text} />
+                    </div>
                   )}
                   {!assistant && run ? (
                     <MessageContext run={run} attachments={indexes.attachments} />

@@ -4,7 +4,7 @@ import type { Draft, Extension, ExtensionSelection, Mode } from '@shared/types';
 export interface CompletionTrigger {
   start: number;
   end: number;
-  symbol: '/' | '#';
+  symbol: '/' | '#' | '@';
   query: string;
   word: string;
 }
@@ -54,13 +54,13 @@ export function triggerAt(
   while (end < value.length && !/\s/u.test(value[end]!)) end++;
   const word = value.slice(start, end);
   const before = value.slice(start, caret);
-  if (!/^(?:\/[\p{L}\p{N}_:-]*|#[\p{L}\p{N}_:.-]*(?:\/[\p{L}\p{N}_:.-]*)?)$/u.test(word))
+  if (!/^(?:\/[\p{L}\p{N}_:-]*|#[\p{L}\p{N}_:.-]*(?:\/[\p{L}\p{N}_:.-]*)?|@[^\s@]*)$/u.test(word))
     return null;
   if (!before || inCode(value.slice(0, start))) return null;
   return {
     start,
     end,
-    symbol: word[0] as '/' | '#',
+    symbol: word[0] as '/' | '#' | '@',
     query: before.slice(1).toLocaleLowerCase(),
     word,
   };
@@ -155,6 +155,40 @@ export function chooseExtension(
       ...draft,
       text: draft.text.slice(0, trigger.start) + replacement + draft.text.slice(trigger.end),
       ...(latest.kind !== 'command' ? { extensionSelections: selections } : {}),
+    },
+    caret: trigger.start + replacement.length,
+  };
+}
+export function chooseFile(
+  draft: Draft,
+  trigger: CompletionTrigger,
+  file: { path: string; name?: string },
+): { draft: Draft; caret: number } {
+  const cleanPath = file.path.replace(/\\/g, '/').replace(/^\/+/, '');
+  const replacement = `@${cleanPath} `;
+  const before = draft.text.slice(0, trigger.start);
+  const after = draft.text.slice(trigger.end);
+  return {
+    draft: {
+      ...draft,
+      text: before + replacement + after,
+    },
+    caret: trigger.start + replacement.length,
+  };
+}
+export function chooseDirectory(
+  draft: Draft,
+  trigger: CompletionTrigger,
+  dir: { path: string },
+): { draft: Draft; caret: number } {
+  const cleanPath = dir.path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  const replacement = `@${cleanPath}/`;
+  const before = draft.text.slice(0, trigger.start);
+  const after = draft.text.slice(trigger.end);
+  return {
+    draft: {
+      ...draft,
+      text: before + replacement + after,
     },
     caret: trigger.start + replacement.length,
   };

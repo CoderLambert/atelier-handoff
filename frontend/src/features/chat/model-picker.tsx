@@ -1,7 +1,7 @@
 /**
  * @file 为会话选择网关模型和推理深度。
  * @implementation 按来源分组展示模型目录和可选深度，保留路由固定档位。Magpie 关闭时提示既有选择不可用，并在手动输入时校验。
- * @updated 2026-11-22T13:50:57+08:00
+ * @updated 2026-11-24T01:00:00+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useId, useRef, useState } from 'react';
@@ -152,7 +152,7 @@ export function ModelPicker({
         <SelectTrigger
           ref={triggerRef}
           size="sm"
-          className="min-w-0 max-w-48 [&_[data-slot=select-value]]:min-w-0"
+          className="composer-ghost-select min-w-0 max-w-48 [&_[data-slot=select-value]]:min-w-0"
           aria-label={t('model.choose')}
           aria-describedby={modelUnavailable ? `${id}-model-help` : undefined}
           title={
@@ -280,7 +280,7 @@ export function ModelPicker({
       >
         <SelectTrigger
           size="sm"
-          className="shrink-0"
+          className="composer-ghost-select shrink-0"
           aria-label={t('model.chooseEffort')}
           aria-describedby={`${id}-effort-help`}
           aria-invalid={fixedEffort === undefined && unsupportedEffort}

@@ -215,7 +215,9 @@ function SessionChat(props: ChatProps) {
             ['running', 'awaiting_permission', 'stopping'].includes(run.status),
           )}
           archived={snapshot.session.status === 'archived'}
-          available={snapshot.project.available}
+          available={
+            snapshot.workspace ? snapshot.workspace.state === 'ready' : snapshot.project.available
+          }
         />
       ) : null}
       <Composer

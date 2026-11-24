@@ -1,7 +1,7 @@
 /**
  * @file 提供会话运行模式选择。
  * @implementation 根据桌面本机能力和智能体约束显示可用选项。
- * @updated 2026-11-22T16:22:55+08:00
+ * @updated 2026-11-24T01:00:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { BookOpen, Monitor, Shield, Sparkles } from 'lucide-react';
@@ -55,7 +55,7 @@ export function ComposerModeSelector({
   const selected = modes[mode];
   const Icon = selected.icon;
   return (
-    <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+    <div className="flex max-w-full flex-wrap items-center gap-2">
       <Select
         value={mode}
         disabled={disabled}

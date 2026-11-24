@@ -938,7 +938,7 @@ test(
       assert.match(fade.paint, /^linear-gradient/);
       assert.equal(
         await dock.evaluate((element) => element.nextElementSibling?.className),
-        'context-row',
+        'composer-box',
       );
       await toggle.press('Space');
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false');

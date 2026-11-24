@@ -6,7 +6,9 @@ import { capabilityLabels, initialConfig } from '@/features/agents/api';
 import {
   allowedTools,
   choices,
+  chooseDirectory,
   chooseExtension,
+  chooseFile,
   inCode,
   selectionReason,
   triggerAt,
@@ -255,4 +257,80 @@ test('chips report missing, disabled, incompatible, changed and restricted tools
     selectionReason(mcp, { id: mcp.id, version: 1, tools: ['read'] }, 'readonly', true),
     '',
   );
+});
+
+test('@ token activates file completion and excludes emails', () => {
+  for (const text of ['@', '@styles', 'please @frontend/src/styles.css', '说明 @代码']) {
+    const token = atEnd(text);
+    assert.ok(token, text);
+    assert.equal(token.symbol, '@');
+  }
+  for (const text of ['user@example.com', 'test@domain.org', '`@styles`', '```\n@styles\n```']) {
+    assert.equal(atEnd(text), null, text);
+  }
+});
+
+test('chooseFile updates draft text with @file reference and does not modify contextPaths', () => {
+  const inputDraft: Draft = {
+    text: 'please check @styl and fix it',
+    mode: 'edit',
+    contextPaths: ['src/existing.ts'],
+    attachmentIds: [],
+  };
+  const token = triggerAt('please check @styl', 18, 18)!;
+  assert.equal(token.symbol, '@');
+  assert.equal(token.query, 'styl');
+
+  const result = chooseFile(inputDraft, token, {
+    path: 'frontend/src/styles.css',
+    name: 'styles.css',
+  });
+  assert.equal(result.draft.text, 'please check @frontend/src/styles.css  and fix it');
+  assert.deepEqual(result.draft.contextPaths, ['src/existing.ts']);
+  assert.equal(result.caret, 'please check @frontend/src/styles.css '.length);
+});
+
+test('chooseDirectory replaces @query with @dir/ without trailing space and does not modify contextPaths', () => {
+  const inputDraft: Draft = {
+    text: 'please inspect @front and review',
+    mode: 'edit',
+    contextPaths: ['src/existing.ts'],
+    attachmentIds: [],
+  };
+  const token = triggerAt('please inspect @front', 21, 21)!;
+  assert.equal(token.symbol, '@');
+  assert.equal(token.query, 'front');
+
+  const result = chooseDirectory(inputDraft, token, {
+    path: 'frontend',
+  });
+  assert.equal(result.draft.text, 'please inspect @frontend/ and review');
+  assert.deepEqual(result.draft.contextPaths, ['src/existing.ts']);
+  assert.equal(result.caret, 'please inspect @frontend/'.length);
+
+  // Triggering next-level directory completion
+  const nextToken = triggerAt(result.draft.text, result.caret, result.caret)!;
+  assert.equal(nextToken.symbol, '@');
+  assert.equal(nextToken.query, 'frontend/');
+
+  // Continuing to next-level subfolder
+  const subResult = chooseDirectory(result.draft, nextToken, {
+    path: 'frontend/src',
+  });
+  assert.equal(subResult.draft.text, 'please inspect @frontend/src/ and review');
+  assert.deepEqual(subResult.draft.contextPaths, ['src/existing.ts']);
+  assert.equal(subResult.caret, 'please inspect @frontend/src/'.length);
+
+  // Finally choosing a file in the nested directory
+  const fileToken = triggerAt(subResult.draft.text, subResult.caret, subResult.caret)!;
+  assert.equal(fileToken.symbol, '@');
+  assert.equal(fileToken.query, 'frontend/src/');
+
+  const finalResult = chooseFile(subResult.draft, fileToken, {
+    path: 'frontend/src/styles.css',
+    name: 'styles.css',
+  });
+  assert.equal(finalResult.draft.text, 'please inspect @frontend/src/styles.css  and review');
+  assert.deepEqual(finalResult.draft.contextPaths, ['src/existing.ts']);
+  assert.equal(finalResult.caret, 'please inspect @frontend/src/styles.css '.length);
 });
