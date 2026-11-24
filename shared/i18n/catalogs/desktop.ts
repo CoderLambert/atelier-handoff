@@ -93,6 +93,14 @@ export const desktop = {
     '无法迁入所选工作台数据。',
     'The selected workspace data could not be imported.',
   ],
+  'host.migration.worktreesLive': [
+    '请先在旧工作台完成工作树操作并回收独立检出，再迁入到新数据目录。',
+    'Finish the Git operations and reclaim the linked worktrees in the original workspace before importing to a new data directory.',
+  ],
+  'host.migration.worktreeSnapshotInvalid': [
+    '工作树快照未通过完整性校验。',
+    'A worktree snapshot failed verification.',
+  ],
   'host.migration.failedDetail': [
     '检查来源目录及目标位置，再启动迁入向导。',
     'Check the source directory and destination, then start the import wizard again.',
