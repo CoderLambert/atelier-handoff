@@ -51,3 +51,9 @@ test('an existing SQL statement cannot be duplicated, modified, or transferred b
   );
   assert.equal(unexpectedSites(databaseSites(repo, text), []).length, 1);
 });
+
+test('a Git commit literal is distinct from a SQL transaction command', () => {
+  assert.deepEqual(databaseSites(service, "const target = { kind: 'commit' };"), []);
+  assert.equal(databaseSites(service, "db.exec('commit')").length, 1);
+  assert.equal(databaseSites(service, "db.exec('COMMIT TRANSACTION')").length, 1);
+});
