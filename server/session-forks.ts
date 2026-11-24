@@ -1,7 +1,7 @@
 /**
- * @file 从已完成的消息创建同项目下的独立会话。
- * @implementation 借助独立 SDK transcript 复制上下文，以会话记录保留来源、显示前缀和创建状态。
- * @updated 2026-11-21T00:00:00Z
+ * @file 从已完成的消息创建同项目独立会话。
+ * @implementation 在源会话工作目录读取 SDK 记录并复制到新会话，持久化来源和继承的工作树绑定。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { lstat, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -45,6 +45,7 @@ export class SessionForks {
     private readonly store: Store,
     private readonly forkTranscript = forkSessionTranscript,
     private readonly hasPendingMessages: (id: string) => boolean = () => false,
+    private readonly resolveWorkspace?: (session: Session) => Promise<string>,
   ) {}
 
   async restoreLegacyAnchors({
@@ -75,7 +76,8 @@ export class SessionForks {
       )
     )
       return false;
-    const check = readLegacyForkTurns(project.path, this.sdkDirectory(session.id))
+    const check = Promise.resolve(this.resolveWorkspace?.(session) ?? project.path)
+      .then((path) => readLegacyForkTurns(path, this.sdkDirectory(session.id)))
       .then((turns) => {
         const current = this.findExisting(session.id);
         if (
@@ -222,7 +224,8 @@ export class SessionForks {
       },
     });
     try {
-      const projectPath = await resolveProjectPath(project.path, '', { directory: true });
+      const projectPath = await (this.resolveWorkspace?.(source) ??
+        resolveProjectPath(project.path, '', { directory: true }));
       const sdkSessionId = await this.forkTranscript({
         projectPath,
         sourceDirectory: this.sdkDirectory(source.id),
@@ -238,6 +241,8 @@ export class SessionForks {
             messageId,
             rewindFromHead,
           );
+        const worktree = this.store.gitWorktrees.forSession(source.id);
+        if (worktree) this.store.gitWorktrees.bind(id, worktree.id);
         const ready = this.store.update('sessions', id, { sdkSessionId, creatingFork: undefined });
         this.store.event(`session-${id}`, id, 'session.created', { sourceSessionId });
         return ready;
