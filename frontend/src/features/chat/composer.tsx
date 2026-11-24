@@ -1,11 +1,11 @@
 /**
- * @file 提供任务清单、任务输入、引用卡片及上下文和附件编辑。
- * @implementation 在输入框上方按运行 ID 展开任务清单。校验草稿，并在队列发送和实时插入之间选择提交路径。
- * @updated 2026-11-23T13:35:55+08:00
+ * @file 提供任务输入、引用和附件编辑。
+ * @implementation 按会话工作目录的状态控制发送和上下文选择，保留草稿、队列与实时插入。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
-import { ArrowUp, Paperclip, Plus, Quote, X } from 'lucide-react';
+import { ArrowUp, File as FileIcon, Paperclip, Plus, Quote, X } from 'lucide-react';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
 import type { Draft, ReasoningEffort, Run } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
@@ -135,9 +135,12 @@ export function Composer({
     onError: (error) => setError({ type: 'attachment', error }),
   });
   const dropAllowed = canUpload && draft.attachmentIds.length < 20;
+  const directoryAvailable = snapshot.workspace
+    ? snapshot.workspace.state === 'ready'
+    : snapshot.project.available;
   const canSend =
     !archived &&
-    snapshot.project.available &&
+    directoryAvailable &&
     !submitting &&
     !busy &&
     !agent?.issues.length &&
@@ -206,120 +209,6 @@ export function Composer({
       }}
       onSubmit={(event) => void submit(event)}
     >
-      {taskPlanRun ? (
-        <TaskPlan
-          key={taskPlanRun.id}
-          steps={taskPlanRun.plan}
-          defaultOpen={
-            taskPlanRun.plan.length <= 3 &&
-            taskPlanRun.plan.some((step) => step.status !== 'completed')
-          }
-        />
-      ) : null}
-      <div className="context-row">
-        <div className="context-chips" aria-label={t('composer.draftContext')}>
-          {draft.contextPaths.map((path) => (
-            <Button
-              key={path}
-              type="button"
-              variant="secondary"
-              size="xs"
-              className="context-chip"
-              disabled={archived || submitting}
-              aria-label={t('composer.removeContext', { path })}
-              title={path}
-              onClick={() =>
-                onDraftChange((previous) => ({
-                  ...previous,
-                  contextPaths: previous.contextPaths.filter((value) => value !== path),
-                }))
-              }
-            >
-              <span className="truncate">{path}</span>
-              <X data-icon="inline-end" aria-hidden="true" />
-            </Button>
-          ))}
-          {draft.attachmentIds.map((id) => {
-            const item = attachments.get(id);
-            const name = item?.name ?? id;
-            const isRemoving = removing.includes(id);
-            return (
-              <div key={id} className="context-chip attachment-chip">
-                {item ? (
-                  <AttachmentPreview attachment={item}>
-                    <Paperclip data-icon="inline-start" aria-hidden="true" />
-                    <span className="truncate" title={name}>
-                      {name}
-                    </span>
-                  </AttachmentPreview>
-                ) : (
-                  <span>{name}</span>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="attachment-remove"
-                  disabled={archived || submitting || isRemoving}
-                  aria-label={t('composer.removeAttachment', { name })}
-                  title={isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')}
-                  onClick={() => removeAttachment(id)}
-                >
-                  <X data-icon="inline-start" aria-hidden="true" />
-                </Button>
-              </div>
-            );
-          })}
-          {uploads.map((entry) =>
-            entry.error ? (
-              <Button
-                key={entry.id}
-                type="button"
-                variant="outline"
-                size="xs"
-                className="context-chip chat-upload-error"
-                aria-label={t('composer.dismissUpload', { name: entry.name, error: entry.error })}
-                onClick={() => dismissUpload(entry.id)}
-              >
-                {t('composer.failedUpload', { name: entry.name, error: entry.error })}
-                <X data-icon="inline-end" aria-hidden="true" />
-              </Button>
-            ) : (
-              <span key={entry.id} className="context-chip" role="status">
-                {t('composer.uploadingFile', { name: entry.name })}
-              </span>
-            ),
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={!contextAllowed || archived || submitting || !snapshot.project.available}
-          onClick={() => setContextOpen(true)}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          {t('composer.context')}
-        </Button>
-        <ComposerModeSelector
-          mode={mode}
-          nativeExecution={nativeAvailable}
-          readonlyProfile={agent?.mode === 'readonly'}
-          disabled={archived || submitting}
-          onModeChange={onModeChange}
-        />
-      </div>
-      <p id="composer-mode-help" className="sr-only">
-        {agent?.mode === 'readonly'
-          ? t('composer.readonlyAgentHelp')
-          : mode === 'native'
-            ? t('composer.nativeHelp')
-            : mode === 'automatic'
-              ? t('composer.automaticHelp')
-              : mode === 'edit'
-                ? t('composer.controlledHelp')
-                : t('composer.readonlyHelp')}
-      </p>
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
           {t('composer.agentIssues', {
@@ -345,7 +234,115 @@ export function Composer({
           ))}
         </div>
       ) : null}
+      {taskPlanRun ? (
+        <TaskPlan
+          key={taskPlanRun.id}
+          steps={taskPlanRun.plan}
+          defaultOpen={
+            taskPlanRun.plan.length <= 3 &&
+            taskPlanRun.plan.some((step) => step.status !== 'completed')
+          }
+        />
+      ) : null}
       <div className="composer-box">
+        <p id="composer-mode-help" className="sr-only">
+          {agent?.mode === 'readonly'
+            ? t('composer.readonlyAgentHelp')
+            : mode === 'native'
+              ? t('composer.nativeHelp')
+              : mode === 'automatic'
+                ? t('composer.automaticHelp')
+                : mode === 'edit'
+                  ? t('composer.controlledHelp')
+                  : t('composer.readonlyHelp')}
+        </p>
+        {(draft.contextPaths.length > 0 ||
+          draft.attachmentIds.length > 0 ||
+          uploads.length > 0) && (
+          <div className="composer-chips-bar" aria-label={t('composer.draftContext')}>
+            {draft.contextPaths.map((path) => {
+              const lastSlash = path.lastIndexOf('/');
+              const dir = lastSlash >= 0 ? path.slice(0, lastSlash + 1) : '';
+              const name = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+              return (
+                <Button
+                  key={path}
+                  type="button"
+                  variant="secondary"
+                  size="xs"
+                  className="context-chip"
+                  disabled={archived || submitting}
+                  aria-label={t('composer.removeContext', { path })}
+                  title={path}
+                  onClick={() =>
+                    onDraftChange((previous) => ({
+                      ...previous,
+                      contextPaths: previous.contextPaths.filter((value) => value !== path),
+                    }))
+                  }
+                >
+                  <FileIcon className="size-3 text-muted-foreground shrink-0" aria-hidden="true" />
+                  <span className="truncate">
+                    {dir ? <span className="opacity-60 font-mono text-[11px]">{dir}</span> : null}
+                    <strong className="font-semibold text-foreground">{name}</strong>
+                  </span>
+                  <X data-icon="inline-end" aria-hidden="true" />
+                </Button>
+              );
+            })}
+            {draft.attachmentIds.map((id) => {
+              const item = attachments.get(id);
+              const name = item?.name ?? id;
+              const isRemoving = removing.includes(id);
+              return (
+                <div key={id} className="context-chip attachment-chip">
+                  {item ? (
+                    <AttachmentPreview attachment={item}>
+                      <Paperclip data-icon="inline-start" aria-hidden="true" />
+                      <span className="truncate" title={name}>
+                        {name}
+                      </span>
+                    </AttachmentPreview>
+                  ) : (
+                    <span>{name}</span>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="attachment-remove"
+                    disabled={archived || submitting || isRemoving}
+                    aria-label={t('composer.removeAttachment', { name })}
+                    title={isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')}
+                    onClick={() => removeAttachment(id)}
+                  >
+                    <X data-icon="inline-start" aria-hidden="true" />
+                  </Button>
+                </div>
+              );
+            })}
+            {uploads.map((entry) =>
+              entry.error ? (
+                <Button
+                  key={entry.id}
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="context-chip chat-upload-error"
+                  aria-label={t('composer.dismissUpload', { name: entry.name, error: entry.error })}
+                  onClick={() => dismissUpload(entry.id)}
+                >
+                  {t('composer.failedUpload', { name: entry.name, error: entry.error })}
+                  <X data-icon="inline-end" aria-hidden="true" />
+                </Button>
+              ) : (
+                <span key={entry.id} className="context-chip" role="status">
+                  {t('composer.uploadingFile', { name: entry.name })}
+                </span>
+              ),
+            )}
+          </div>
+        )}
         <label
           className={cn('composer-label', !archived && !editingMessage && 'sr-only')}
           htmlFor="prompt-input"
@@ -443,6 +440,8 @@ export function Composer({
           <ExtensionPicker
             projectId={archived ? undefined : snapshot.project.id}
             agent={agent}
+            sessionId={snapshot.workspace ? sessionId : undefined}
+            contextAllowed={contextAllowed && directoryAvailable}
             draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
             onChange={(next: Draft) => {
               if (!archived && !submitting)
@@ -458,102 +457,124 @@ export function Composer({
             onQuickInsert={insertRunId ? () => void submit(undefined, insertRunId) : undefined}
           />
         </fieldset>
-        <div className="composer-toolbar justify-end">
-          <span className="composer-run-status" data-status={run?.status} role="status">
-            {dragging
-              ? dropAllowed
-                ? t('composer.dropToAdd')
-                : t('composer.cannotAdd')
-              : submitting
-                ? t('composer.sending')
-                : busy
-                  ? t('composer.processingAttachments')
-                  : run
-                    ? run.status === 'running'
-                      ? <span className="sr-only">{t('composer.running')}</span>
-                      : (
-                          {
-                            queued: t('composer.queued'),
-                            awaiting_permission: t('composer.awaitingPermission'),
-                            stopping: t('composer.stoppingStatus'),
-                          } as Record<string, string>
-                        )[run.status]
-                    : ''}
-          </span>
-          {run ? (
+        <div className="composer-toolbar">
+          <div className="composer-toolbar-left">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="composer-stop-button"
-              data-status={run.status}
-              disabled={run.status === 'stopping'}
-              onClick={() => onStop(run.id)}
+              variant="ghost"
+              size="xs"
+              className="composer-action-btn"
+              disabled={!contextAllowed || archived || submitting || !directoryAvailable}
+              onClick={() => setContextOpen(true)}
             >
-              <span className="composer-stop-icon-wrapper" data-icon="inline-start" aria-hidden="true">
-                <svg className="composer-stop-spinner" viewBox="0 0 16 16">
-                  <circle className="composer-stop-track" cx="8" cy="8" r="6" />
-                  <circle className="composer-stop-indicator" cx="8" cy="8" r="6" />
-                </svg>
-                <span className="composer-stop-square" />
-              </span>
-              {run.status === 'stopping'
-                ? t('composer.stopping')
-                : hasQueuedMessages
-                  ? t('composer.stopTurn')
-                  : t('composer.stop')}
+              <Plus data-icon="inline-start" aria-hidden="true" />
+              {t('composer.context')}
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="attach-button"
-            disabled={
-              !attachmentsAllowed ||
-              archived ||
-              submitting ||
-              busy ||
-              draft.attachmentIds.length >= 20
-            }
-            aria-label={t('composer.upload')}
-            title={t('composer.uploadHint')}
-            onClick={() => fileInput.current?.click()}
-          >
-            <Paperclip data-icon="inline-start" aria-hidden="true" />
-          </Button>
-          <ContextUsagePopover
-            sample={selectContextUsage(
-              snapshot.runs,
-              snapshot.session.sdkSessionId,
-              run?.id,
-              draft.model ?? defaultModel,
-            )}
-            running={Boolean(run)}
-            hasRuns={snapshot.runs.length > 0}
-          />
-          <ModelPicker
-            model={draft.model}
-            effort={draft.effort}
-            defaultModel={defaultModel}
-            disabled={archived || submitting}
-            onModelChange={onModelChange}
-            onEffortChange={onEffortChange}
-          />
-          <Button
-            type="submit"
-            size={queueing ? 'sm' : 'icon'}
-            className="shrink-0"
-            disabled={!canSend}
-            aria-label={sendLabel}
-            title={sendLabel}
-          >
-            {queueing ? (
-              t('composer.queue')
-            ) : (
-              <ArrowUp data-icon="inline-start" aria-hidden="true" />
-            )}
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="composer-action-btn attach-button"
+              disabled={
+                !attachmentsAllowed ||
+                archived ||
+                submitting ||
+                busy ||
+                draft.attachmentIds.length >= 20
+              }
+              aria-label={t('composer.upload')}
+              title={t('composer.uploadHint')}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Paperclip data-icon="inline-start" aria-hidden="true" />
+            </Button>
+            <ComposerModeSelector
+              mode={mode}
+              nativeExecution={nativeAvailable}
+              readonlyProfile={agent?.mode === 'readonly'}
+              disabled={archived || submitting}
+              onModeChange={onModeChange}
+            />
+          </div>
+          <div className="composer-toolbar-right">
+            <span className="composer-run-status" data-status={run?.status} role="status">
+              {dragging
+                ? dropAllowed
+                  ? t('composer.dropToAdd')
+                  : t('composer.cannotAdd')
+                : submitting
+                  ? t('composer.sending')
+                  : busy
+                    ? t('composer.processingAttachments')
+                    : run
+                      ? run.status === 'running'
+                        ? <span className="sr-only">{t('composer.running')}</span>
+                        : (
+                            {
+                              queued: t('composer.queued'),
+                              awaiting_permission: t('composer.awaitingPermission'),
+                              stopping: t('composer.stoppingStatus'),
+                            } as Record<string, string>
+                          )[run.status]
+                      : ''}
+            </span>
+            {run ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="composer-stop-button"
+                data-status={run.status}
+                disabled={run.status === 'stopping'}
+                onClick={() => onStop(run.id)}
+              >
+                <span className="composer-stop-icon-wrapper" data-icon="inline-start" aria-hidden="true">
+                  <svg className="composer-stop-spinner" viewBox="0 0 16 16">
+                    <circle className="composer-stop-track" cx="8" cy="8" r="6" />
+                    <circle className="composer-stop-indicator" cx="8" cy="8" r="6" />
+                  </svg>
+                  <span className="composer-stop-square" />
+                </span>
+                {run.status === 'stopping'
+                  ? t('composer.stopping')
+                  : hasQueuedMessages
+                    ? t('composer.stopTurn')
+                    : t('composer.stop')}
+              </Button>
+            ) : null}
+            <ContextUsagePopover
+              sample={selectContextUsage(
+                snapshot.runs,
+                snapshot.session.sdkSessionId,
+                run?.id,
+                draft.model ?? defaultModel,
+              )}
+              running={Boolean(run)}
+              hasRuns={snapshot.runs.length > 0}
+            />
+            <ModelPicker
+              model={draft.model}
+              effort={draft.effort}
+              defaultModel={defaultModel}
+              disabled={archived || submitting}
+              onModelChange={onModelChange}
+              onEffortChange={onEffortChange}
+            />
+            <Button
+              type="submit"
+              size={queueing ? 'sm' : 'icon'}
+              className="shrink-0"
+              disabled={!canSend}
+              aria-label={sendLabel}
+              title={sendLabel}
+            >
+              {queueing ? (
+                t('composer.queue')
+              ) : (
+                <ArrowUp data-icon="inline-start" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
       <div className="composer-footer" data-quick-insert={insertRunId ? '' : undefined}>
@@ -571,7 +592,7 @@ export function Composer({
           errorText ||
           (archived
             ? t('composer.archivedError')
-            : !snapshot.project.available
+            : !snapshot.workspace && !directoryAvailable
               ? t('composer.projectUnavailable')
               : '')}
       </p>
@@ -586,9 +607,10 @@ export function Composer({
           event.target.value = '';
         }}
       />
-      {contextOpen && !archived && !submitting ? (
+      {contextOpen && !archived && !submitting && directoryAvailable ? (
         <ContextPicker
           projectId={snapshot.project.id}
+          sessionId={snapshot.workspace ? sessionId : undefined}
           selectedPaths={draft.contextPaths}
           onSelect={(path) =>
             onDraftChange((previous) => ({

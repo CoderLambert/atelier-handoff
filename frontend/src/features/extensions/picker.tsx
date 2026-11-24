@@ -1,13 +1,14 @@
 /**
- * @file 提供消息输入区的扩展补全和键盘操作。
- * @implementation 跟踪光标与输入法状态，展示适用的扩展选项，并将普通发送和 Alt+Enter 快捷插入交给输入区。
- * @updated 2026-11-22T14:33:25+08:00
+ * @file 提供输入区扩展和文件补全。
+ * @implementation 跟随光标和输入法状态查询当前会话的工作目录，处理候选选择和键盘发送。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -16,21 +17,53 @@ import {
 import { createPortal } from 'react-dom';
 import type { AgentSessionInfo, Draft, Extension } from '@shared/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { X } from 'lucide-react';
+import { Check, ChevronRight, File, Folder, X } from 'lucide-react';
+import { formatBytes } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { ExtensionKindIcon } from './components';
 import { extensionKeys, messageOf, useExtensions } from './api';
-import { allowedTools, choices, chooseExtension, selectionReason, triggerAt } from './picker-model';
+import { useSearchProjectFiles } from '@/use-query/projects/use-search-project-files';
+import {
+  allowedTools,
+  choices,
+  chooseDirectory,
+  chooseExtension,
+  chooseFile,
+  selectionReason,
+  triggerAt,
+} from './picker-model';
 import './extensions.css';
 
 export interface ExtensionPickerProps {
   projectId?: string;
+  sessionId?: string;
   agent?: AgentSessionInfo;
+  contextAllowed?: boolean;
   draft: Draft;
   onChange: (draft: Draft) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onSubmit: () => void;
   onQuickInsert?: () => void;
+}
+interface FileCompletionRow {
+  path: string;
+  name: string;
+  dir: string;
+  size: number;
+  label: string;
+  isDirectory: boolean;
+}
+function highlightMatch(text: string, query: string) {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="ext-file-match">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
 }
 interface Cursor {
   text: string;
@@ -63,7 +96,9 @@ function scopeExtensions(items: Extension[], agent?: AgentSessionInfo): Extensio
 
 export function ExtensionPicker({
   projectId,
+  sessionId,
   agent,
+  contextAllowed = true,
   draft,
   onChange,
   inputRef,
@@ -88,9 +123,35 @@ export function ExtensionPicker({
   const lastScope = useRef(projectId);
   const items = scopeExtensions(query.data ?? [], agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
-  const completionKey = JSON.stringify([projectId, cursor.text, cursor.start, cursor.end]);
-  const rows = trigger ? choices(items, trigger, cursor.text, draft.mode) : [];
-  const selectedIndex = Math.min(index, Math.max(0, rows.length - 1));
+  const completionKey = JSON.stringify([projectId, sessionId, cursor.text, cursor.start, cursor.end]);
+  const rows = trigger && trigger.symbol !== '@' ? choices(items, trigger, cursor.text, draft.mode) : [];
+
+  const fileSearch = useSearchProjectFiles(
+    projectId,
+    trigger?.symbol === '@' ? trigger.query : '',
+    Boolean(projectId && trigger?.symbol === '@' && contextAllowed),
+    sessionId,
+  );
+  const fileRows: FileCompletionRow[] = useMemo(() => {
+    if (trigger?.symbol !== '@' || !fileSearch.data?.items) return [];
+    return fileSearch.data.items.map((file) => {
+      const lastSlash = file.path.lastIndexOf('/');
+      const dir = lastSlash >= 0 ? file.path.slice(0, lastSlash + 1) : '';
+      const name = lastSlash >= 0 ? file.path.slice(lastSlash + 1) : file.path;
+      return {
+        path: file.path,
+        name,
+        dir,
+        size: file.size,
+        label: file.isDirectory ? `@${file.path}/` : `@${file.path}`,
+        isDirectory: file.isDirectory,
+      };
+    });
+  }, [trigger?.symbol, fileSearch.data]);
+
+  const isFile = trigger?.symbol === '@';
+  const activeCount = isFile ? fileRows.length : rows.length;
+  const selectedIndex = Math.min(index, Math.max(0, activeCount - 1));
   const open = Boolean(
     projectId &&
     cursor.focused &&
@@ -98,7 +159,10 @@ export function ExtensionPicker({
     !composing &&
     trigger &&
     dismissed !== completionKey &&
-    (rows.length || !trigger.query || query.isPending || query.isError),
+    (isFile
+      ? contextAllowed &&
+        (fileRows.length || !trigger.query || fileSearch.isPending || fileSearch.isError)
+      : rows.length || !trigger.query || query.isPending || query.isError),
   );
   const current = useRef({
     projectId,
@@ -109,6 +173,7 @@ export function ExtensionPicker({
     onQuickInsert,
     open,
     rows,
+    fileRows,
     selectedIndex,
     trigger,
     completionKey,
@@ -122,6 +187,7 @@ export function ExtensionPicker({
     onQuickInsert,
     open,
     rows,
+    fileRows,
     selectedIndex,
     trigger,
     completionKey,
@@ -153,11 +219,9 @@ export function ExtensionPicker({
   function choose(choiceIndex: number) {
     const state = current.current;
     const input = inputRef.current;
-    const row = state.rows[choiceIndex];
     if (
       !input ||
       !state.projectId ||
-      !row ||
       input.disabled ||
       input.readOnly ||
       composition.current.active
@@ -168,6 +232,59 @@ export function ExtensionPicker({
       sync();
       return;
     }
+    if (token.symbol === '@') {
+      const fileRow = state.fileRows[choiceIndex];
+      if (!fileRow) {
+        sync();
+        return;
+      }
+      if (fileRow.isDirectory) {
+        const result = chooseDirectory(state.draft, token, fileRow);
+        const scope = state.projectId;
+        input.value = result.draft.text;
+        input.setSelectionRange(result.caret, result.caret);
+        setIndex(0);
+        state.onChange(result.draft);
+        sync();
+        if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
+        selectionFrame.current = requestAnimationFrame(() => {
+          if (
+            current.current.projectId !== scope ||
+            inputRef.current !== input ||
+            !input.isConnected ||
+            current.current.draft.text !== result.draft.text
+          )
+            return;
+          input.focus({ preventScroll: true });
+          input.setSelectionRange(result.caret, result.caret);
+          sync();
+        });
+        return;
+      }
+      const result = chooseFile(state.draft, token, fileRow);
+      const scope = state.projectId;
+      input.value = result.draft.text;
+      input.setSelectionRange(result.caret, result.caret);
+      setDismissed(JSON.stringify([scope, result.draft.text, result.caret, result.caret]));
+      state.onChange(result.draft);
+      sync();
+      if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
+      selectionFrame.current = requestAnimationFrame(() => {
+        if (
+          current.current.projectId !== scope ||
+          inputRef.current !== input ||
+          !input.isConnected ||
+          current.current.draft.text !== result.draft.text
+        )
+          return;
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(result.caret, result.caret);
+        sync();
+      });
+      return;
+    }
+    const row = state.rows[choiceIndex];
+    if (!row) return;
     const latest = scopeExtensions(
       client.getQueryData<Extension[]>(extensionKeys.list(state.projectId)) ?? [],
       state.agent,
@@ -241,14 +358,16 @@ export function ExtensionPicker({
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    if (state.open && state.rows.length && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+    const activeLength =
+      state.trigger?.symbol === '@' ? state.fileRows.length : state.rows.length;
+    if (state.open && activeLength && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       setIndex(
-        (state.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + state.rows.length) %
-          state.rows.length,
+        (state.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + activeLength) %
+          activeLength,
       );
-    } else if (state.open && state.rows.length && ['Enter', 'Tab'].includes(event.key)) {
+    } else if (state.open && activeLength && ['Enter', 'Tab'].includes(event.key)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       choose(state.selectedIndex);
@@ -469,7 +588,11 @@ export function ExtensionPicker({
             >
               <div className="ext-completion-head">
                 <strong>
-                  {trigger?.symbol === '/' ? t('picker.heading') : t('common.mcpTools')}
+                  {trigger?.symbol === '@'
+                    ? t('picker.filesHeading')
+                    : trigger?.symbol === '/'
+                      ? t('picker.heading')
+                      : t('common.mcpTools')}
                 </strong>
                 <span>{t('common.currentProject')}</span>
               </div>
@@ -478,10 +601,83 @@ export function ExtensionPicker({
                 className="ext-completion-list"
                 role="listbox"
                 aria-label={
-                  trigger?.symbol === '/' ? t('picker.chooseCommand') : t('picker.chooseMcp')
+                  trigger?.symbol === '@'
+                    ? t('picker.chooseFile')
+                    : trigger?.symbol === '/'
+                      ? t('picker.chooseCommand')
+                      : t('picker.chooseMcp')
                 }
               >
-                {rows.length ? (
+                {isFile ? (
+                  fileRows.length ? (
+                    fileRows.map((file, rowIndex) => {
+                      const queryLastSlash = trigger.query.lastIndexOf('/');
+                      const nameQuery =
+                        queryLastSlash >= 0 ? trigger.query.slice(queryLastSlash + 1) : trigger.query;
+                      return (
+                        <button
+                          key={`${file.isDirectory ? 'dir' : 'file'}:${file.path}`}
+                          type="button"
+                          role="option"
+                          tabIndex={-1}
+                          id={`${id}-option-${rowIndex}`}
+                          data-option-index={rowIndex}
+                          aria-selected={selectedIndex === rowIndex}
+                          onPointerMove={() => setIndex(rowIndex)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            choose(rowIndex);
+                          }}
+                        >
+                          <span className="ext-option-mark" aria-hidden="true">
+                            {file.isDirectory ? (
+                              <Folder className="size-4 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <File className="size-4 shrink-0 text-muted-foreground" />
+                            )}
+                          </span>
+                          <span className="ext-option-copy">
+                            <strong className="ext-file-name">
+                              {highlightMatch(file.name + (file.isDirectory ? '/' : ''), nameQuery)}
+                            </strong>
+                            {file.dir ? (
+                              <small className="ext-file-dir">
+                                {highlightMatch(file.dir, nameQuery || trigger.query)}
+                              </small>
+                            ) : null}
+                          </span>
+                          <span className="ext-option-kind">
+                            {file.isDirectory ? (
+                              <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                            ) : file.size > 0 ? (
+                              <span className="ext-file-size">{formatBytes(file.size)}</span>
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="ext-completion-empty" role="status">
+                      {fileSearch.isError ? (
+                        <>
+                          {messageOf(fileSearch.error)}{' '}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void fileSearch.refetch()}
+                          >
+                            {t('common.reload')}
+                          </Button>
+                        </>
+                      ) : fileSearch.isPending ? (
+                        t('extensions.loading')
+                      ) : (
+                        t('picker.noFiles')
+                      )}
+                    </div>
+                  )
+                ) : rows.length ? (
                   rows.map((row, rowIndex) => (
                     <button
                       key={`${row.item.id}:${row.label}`}

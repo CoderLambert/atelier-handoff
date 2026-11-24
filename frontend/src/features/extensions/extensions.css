@@ -1076,6 +1076,27 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ext-file-name {
+  color: var(--fg);
+  font-weight: 600;
+}
+.ext-file-match {
+  background: var(--ui-accent);
+  color: var(--ui-accent-foreground);
+  border-radius: var(--radius-xs);
+  padding: 0 1px;
+  font-weight: 700;
+}
+.ext-file-dir {
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+}
+.ext-file-size {
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+}
 .ext-option-kind {
   flex: none;
   color: var(--muted);
