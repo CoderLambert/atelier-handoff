@@ -1,0 +1,70 @@
+{
+  "result": "passed",
+  "platform": "linux",
+  "arch": "x64",
+  "electron": "45.4.1",
+  "rendererViewports": [
+    "1280x800",
+    "1440x900",
+    "1920x1080"
+  ],
+  "nativeContentBounds": [
+    "2560x1440"
+  ],
+  "locales": [
+    "zh-CN",
+    "en"
+  ],
+  "fixtureChanges": 131,
+  "eligible": 129,
+  "modelRequests": [
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 1,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 129,
+      "model": "fixture-selected",
+      "global": true
+    },
+    {
+      "changes": 129,
+      "model": "fixture-selected",
+      "global": true
+    },
+    {
+      "changes": 2,
+      "model": "fixture-default",
+      "global": false
+    }
+  ],
+  "liveStages": [
+    "zh-CN batch 1 of 3",
+    "zh-CN batch 2 of 3 (64 validated)",
+    "zh-CN global grouping (129 validated)",
+    "en batch 1 of 1"
+  ],
+  "localCommits": 3,
+  "realModelRequests": 0,
+  "screenshots": [
+    "analyzing-zh-1280.png",
+    "organizing-zh-1280.png",
+    "analyzing-en-1440.png"
+  ]
+}

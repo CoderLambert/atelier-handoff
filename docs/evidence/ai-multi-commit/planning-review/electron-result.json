@@ -1,0 +1,66 @@
+{
+  "result": "passed",
+  "platform": "linux",
+  "arch": "x64",
+  "electron": "45.4.1",
+  "rendererViewports": [
+    "1280x800",
+    "1440x900",
+    "1920x1080"
+  ],
+  "nativeContentBounds": [
+    "2560x1440"
+  ],
+  "locales": [
+    "zh-CN",
+    "en"
+  ],
+  "fixtureChanges": 131,
+  "eligible": 129,
+  "modelRequests": [
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 64,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 1,
+      "model": "fixture-selected",
+      "global": false
+    },
+    {
+      "changes": 129,
+      "model": "fixture-selected",
+      "global": true
+    },
+    {
+      "changes": 129,
+      "model": "fixture-selected",
+      "global": true
+    },
+    {
+      "changes": 2,
+      "model": "fixture-default",
+      "global": false
+    }
+  ],
+  "localCommits": 3,
+  "realModelRequests": 0,
+  "screenshots": [
+    "setup-zh-1280.png",
+    "partial-zh-1280.png",
+    "review-zh-1440.png",
+    "preview-zh-1440.png",
+    "review-en-dark-1920.png"
+  ]
+}
