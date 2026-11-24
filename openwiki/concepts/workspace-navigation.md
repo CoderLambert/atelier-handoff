@@ -5,7 +5,7 @@ description: 工作台 Hash 路由、恢复位置、项目会话树、消息分�
 tags: [workspace, routing, settings, conversation, layout]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-6127afb5191b21fc48dc7766
     resource: repo://frontend/src/app/workspace-panels.tsx
@@ -19,9 +19,11 @@ sources:
     resource: repo://frontend/src/features/chat/message-actions.test.ts
   - id: openwiki-source-ae01d9a6ecd87bfcaaecc27a
     resource: repo://frontend/src/features/chat/session-tree.test.ts
+  - id: openwiki-source-63b3e2be45873f4504d4e7e7
+    resource: repo://frontend/src/features/extensions/picker-model.ts
   - id: openwiki-source-98607f5a7f86340e17e82c0e
     resource: repo://server/db/repositories/workspace-layout.ts
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+generated: { by: "claude-code", at: "2026-11-23T19:36:38.791Z" }
 ---
 
 # 工作台导航与会话操作
@@ -33,6 +35,10 @@ generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 侧栏按项目组织会话树。分支搜索保留匹配项的祖先路径，回退占据原树位置，旧版本仍可查看。消息操作按角色、可用回调及 SDK 锚点显示。分支和回退各自校验条件，回退有活动运行或待处理操作时不可用。相关用例见 `frontend/src/features/chat/session-tree.test.ts` 与 `message-actions.test.ts`。
 
 「引用回复」把选中内容加入输入区引用卡片，发送时与可编辑正文组合。运行允许即时插入时，`Alt + Enter` 提交当前草稿并发起插入。当前执行明细显示在助手消息内，历史回执可按需打开。查看回执分页和日志搜索见[Agent 运行时](../architecture/agent-runtime.md)。
+
+## 输入区文件引用（开发中）
+
+当前未提交工作区实现中，输入 `@` 可触发文件候选，选择目录继续下钻，选择文件则插入路径文本。它与「+ 上下文」的 `contextPaths` 分开：行内引用不自动把文件全文放进上下文。检索由服务端项目文件接口处理，并过滤敏感路径。该功能本次未做验收，行为以正在开发的源码及测试为准；设计记录见 `docs/decisions/2026-11-24-composer-file-mentions.md`。
 
 ## 调整布局
 

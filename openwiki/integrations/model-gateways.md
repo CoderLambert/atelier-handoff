@@ -5,7 +5,7 @@ description: Shunt 路由、Codex 补充目录、Magpie 开关和会话模型选
 tags: [model-catalog, gateway, shunt, codex, magpie]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-14c344861a255393228110f4
     resource: repo://frontend/src/features/chat/model-picker.tsx
@@ -15,6 +15,8 @@ sources:
     resource: repo://server/app.ts
   - id: openwiki-source-fc274c6bc8842c9bb497e761
     resource: repo://server/gateway-models.ts
+  - id: openwiki-source-00f6e5badfd2fd85d2943b4e
+    resource: repo://server/magpie-models.ts
 generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 ---
 

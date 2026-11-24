@@ -5,7 +5,7 @@ description: Claude Agent SDK 的消息执行、SSE 游标、会话恢复和工�
 tags: [agent, claude-agent-sdk, runtime, sse, recovery, tool-output]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-d141707bca164293967811cd
     resource: repo://frontend/src/app/events.ts
@@ -19,9 +19,7 @@ sources:
     resource: repo://server/session-checkpoint.ts
   - id: openwiki-source-4bc265ec5cf3ceec89040a7d
     resource: repo://server/tool-output-search.ts
-  - id: openwiki-source-fc41acb26ca48a125eb2df3e
-    resource: repo://tests/session-checkpoint.test.ts
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+generated: { by: "claude-code", at: "2026-11-23T19:36:38.791Z" }
 ---
 
 # Agent 运行时与会话调度
@@ -34,7 +32,9 @@ generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 
 ## 停止与恢复
 
-运行拥有取消信号。SDK 连接重建时，运行时组合该会话的近期对话与从历史运行、工具回执提取的有界检查点。检查点保留早期要求与纠正、近期记录及未确认操作。分支可继承可见的对话前缀，运行和工具证据仍按实际会话与项目筛选。`tests/session-checkpoint.test.ts` 覆盖长历史预算、继承边界与待核实副作用。[数据持久化](./database-storage.md)
+运行拥有取消信号。SDK 会话 ID、模式和兼容指纹匹配时沿用原生会话；需要重建上下文时，运行时组合近期对话与从历史运行、工具回执提取的有界检查点。检查点记录用户要求、来源和回执引用及未确认副作用，不等同于完整工具输出；分支可继承可见对话前缀，运行和工具证据仍按实际会话与项目筛选。`tests/session-checkpoint.test.ts` 覆盖长历史预算、继承边界与待核实副作用。[数据持久化](./database-storage.md)
+
+兼容身份包含网关、执行器和绑定智能体版本；运行模式另行匹配，当前权限和工具在每次请求重新组装。检查点区分仅发现的链接与已完成抓取的请求，并记录对应工具 ID；抓取完成不等于内容已核实。符合权限的 native 主会话可跨轮回查保存的工具结果，子任务不继承这一权限。历史资料不能替代当前指令，未确认副作用须先核查实际状态。恢复行为的锁定 SDK 回环使用本地模型传输替身，不证明真实模型一定选择回查而非重新抓取。
 
 ## 工具结果与日志
 

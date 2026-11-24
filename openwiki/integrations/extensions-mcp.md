@@ -5,7 +5,7 @@ description: Atelier 应用的 Skills、Commands 和 MCP 扩展，以及编码�
 tags: [mcp, extensions, skills, commands, openwiki]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:26:38.011Z
 sources:
   - id: openwiki-source-f0035ce5a0edeeb448a6807a
     resource: repo://.claude/skills/openwiki/SKILL.md
