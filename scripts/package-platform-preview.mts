@@ -1,7 +1,7 @@
 /**
- * @file 生成供 Windows x64 和 macOS arm64 本机验收的桌面候选 ZIP。
- * @implementation 校验 Linux 共享资源与目标平台输入，替换并核验 SQLite 原生驱动、核对快照迁移文件，使用 Electron Packager 装配并检查候选 ZIP。
- * @updated 2026-11-21T01:12:55+08:00
+ * @file 生成 Windows x64 和 macOS arm64 桌面候选 ZIP。
+ * @implementation 校验共享与平台资源，替换 SQLite 驱动并核对包括工作树迁移的发行资源。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -34,6 +34,9 @@ const linuxSqliteBinding = `resources/runtime/${sqlitePackage}/prebuilds/linux-x
 const migrationPaths = [
   'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql',
   'resources/runtime/server/db/migrations/0007-subagents.sql',
+  'resources/runtime/server/db/migrations/0008-git-worktrees.sql',
+  'resources/runtime/server/db/migrations/0009-git-commit-operations.sql',
+  'resources/runtime/server/db/migrations/0010-git-commit-operation-lifecycle.sql',
 ] as const;
 const targets = {
   'win32-x64': {

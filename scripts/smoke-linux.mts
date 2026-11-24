@@ -1,8 +1,8 @@
 #!/usr/bin/env -S tsx
 /**
  * @file 组织已安装 Linux 应用的冒烟验收。
- * @implementation 准备隔离环境并运行验收驱动，核对安装资源清单、SQLite 原生驱动及快照迁移文件，记录验收结果。
- * @updated 2026-11-21T01:12:55+08:00
+ * @implementation 在隔离环境运行验收驱动并核对清单、SQLite 驱动与数据库迁移资源。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 // Controller only. esbuild emits the driver into a private test-resource directory;
 // neither the driver nor its dependencies are copied into the distributed app.
@@ -209,6 +209,9 @@ async function verifyResources(
   const migrations = [
     'resources/runtime/server/db/migrations/0006-session-snapshot-indexes.sql',
     'resources/runtime/server/db/migrations/0007-subagents.sql',
+    'resources/runtime/server/db/migrations/0008-git-worktrees.sql',
+    'resources/runtime/server/db/migrations/0009-git-commit-operations.sql',
+    'resources/runtime/server/db/migrations/0010-git-commit-operation-lifecycle.sql',
   ];
   assert.deepEqual(
     [...seen].filter(
