@@ -1,7 +1,7 @@
 /**
  * @file 管理文件和工具操作的审批。
- * @implementation 按运行策略处理逐次审批或单次自动裁决，记录结果，并复核文件基线和取消状态。
- * @updated 2026-11-20T14:44:21+08:00
+ * @implementation 按运行策略裁决并记录审批，在允许和执行前核验所选工作树、文件基线和取消状态。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AppError, activeStatuses, now, type Permission, type Run } from '../shared/types.js';
@@ -43,6 +43,7 @@ export class PermissionService {
   constructor(
     private readonly store: Store,
     private readonly ttlMs = 120000,
+    private readonly verifyWorkspace?: (run: Run) => Promise<void>,
   ) {}
   async request(
     run: Run,
@@ -50,6 +51,7 @@ export class PermissionService {
     operation: RequestedOperation,
     signal: AbortSignal,
   ): Promise<Permission> {
+    if (run.workspacePath) await this.verifyWorkspace?.(run);
     signal.throwIfAborted();
     const current = this.store.get('runs', run.id);
     if (!activeStatuses.includes(current.status) || current.status === 'stopping')
@@ -136,6 +138,8 @@ export class PermissionService {
         '此操作被拒绝、过期或取消；不要使用其他工具重试同一操作。',
         403,
       );
+    if (run.workspacePath) await this.verifyWorkspace?.(run);
+    signal.throwIfAborted();
     return this.store.get('permissions', permission.id);
   }
   private finish(id: string, status: Permission['status'], reason?: string): Permission {
@@ -186,10 +190,17 @@ export class PermissionService {
       this.finish(id, 'expired');
       throw new AppError('PERMISSION_EXPIRED', '审批已过期。', 409);
     }
-    const staleReason =
+    let staleReason =
       decision === 'allow' && permission.path
         ? await fileBaselineIssue(permission, pending.root)
         : undefined;
+    if (decision === 'allow' && run.workspacePath && !staleReason) {
+      try {
+        await this.verifyWorkspace?.(run);
+      } catch {
+        staleReason = '工作树已变化，请重新发起此操作。';
+      }
+    }
     // File checks yield to stop and competing decisions: re-check after every await.
     const latest = this.store.get('permissions', id);
     if (
