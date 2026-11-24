@@ -631,6 +631,17 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
       );
       const p = (await request('/api/projects', 'POST', selection, 201)).project;
       assert.equal(p.branch, 'fixture');
+      const searchFiles = await request(`/api/projects/${p.id}/files?query=note`);
+      assert.equal(searchFiles.items.length, 1);
+      assert.equal(searchFiles.items[0].name, 'note.txt');
+      assert.equal(searchFiles.items[0].path, 'note.txt');
+      assert.equal(searchFiles.items[0].isDirectory, false);
+      await mkdir(join(project, 'src', 'components'), { recursive: true });
+      await writeFile(join(project, 'src', 'components', 'button.tsx'), 'export const Button = () => null;\n');
+      const searchDirs = await request(`/api/projects/${p.id}/files?query=src/`);
+      assert.ok(searchDirs.items.some((item: { name: string; isDirectory: boolean }) => item.name === 'components' && item.isDirectory));
+      const searchSubFiles = await request(`/api/projects/${p.id}/files?query=src/components/`);
+      assert.ok(searchSubFiles.items.some((item: { name: string; isDirectory: boolean }) => item.name === 'button.tsx' && !item.isDirectory));
       const s1 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
       const s2 = (await request('/api/sessions', 'POST', { projectId: p.id }, 201)).session;
       await request(`/api/sessions/${s2.id}`, 'PATCH', { title: 'Planning archive' });
