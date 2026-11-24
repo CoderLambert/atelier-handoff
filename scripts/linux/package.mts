@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * @file 构建 Linux x64 应用发布包。
- * @implementation 校验构建输入、依赖和许可证，将内置 Shunt、文档解析资源、SQLite 原生驱动及快照迁移打入便携包和 Arch 包，并记录资源哈希。
- * @updated 2026-11-21T01:12:55+08:00
+ * @implementation 校验输入、依赖和许可证，打包运行资源、SQLite 驱动和数据库迁移，并记录哈希。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 // Linux x64/glibc only: build the production frontend, then run with tsx.
 // Uses installed inputs only; no downloads, dependency installs, root, or git.
@@ -50,6 +50,9 @@ const SQLITE_NATIVE_BINDING = 'prebuilds/linux-x64.node';
 const RUNTIME_MIGRATIONS = [
   'server/db/migrations/0006-session-snapshot-indexes.sql',
   'server/db/migrations/0007-subagents.sql',
+  'server/db/migrations/0008-git-worktrees.sql',
+  'server/db/migrations/0009-git-commit-operations.sql',
+  'server/db/migrations/0010-git-commit-operation-lifecycle.sql',
 ];
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
