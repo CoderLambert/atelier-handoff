@@ -157,7 +157,7 @@ export class SubagentRun {
 export class ProjectWrites {
   private tail = Promise.resolve();
 
-  async run<T>(verify: () => void, effect: () => Promise<T>): Promise<T> {
+  async run<T>(verify: () => void | Promise<void>, effect: () => Promise<T>): Promise<T> {
     const previous = this.tail;
     let unlock: () => void = () => {};
     this.tail = new Promise<void>((resolve) => {
@@ -165,7 +165,7 @@ export class ProjectWrites {
     });
     try {
       await previous;
-      verify();
+      await verify();
       return await effect();
     } finally {
       unlock();

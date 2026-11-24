@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { ProjectWrites } from '../server/subagent-run.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AgentRunner } from '../server/agent.js';
 import { FileRecords } from '../server/artifacts.js';
@@ -249,3 +250,40 @@ for (const scenario of ['approve', 'stop-all', 'stop-one'] as const) {
     },
   );
 }
+
+test('a queued write waits for the execution-time authorization check', async () => {
+  function gate() {
+    let open = () => {};
+    let fail = (_error: Error) => {};
+    const promise = new Promise<void>((resolve, reject) => {
+      open = resolve;
+      fail = reject;
+    });
+    return { promise, open, fail };
+  }
+  const writes = new ProjectWrites();
+  const occupied = gate();
+  const verify = gate();
+  const verifying = gate();
+  const first = writes.run(
+    () => {},
+    () => occupied.promise,
+  );
+  let written = false;
+  const pending = writes.run(
+    () => {
+      verifying.open();
+      return verify.promise;
+    },
+    async () => {
+      written = true;
+    },
+  );
+  const rejected = assert.rejects(pending, /workspace moved/u);
+  occupied.open();
+  await verifying.promise;
+  verify.fail(new Error('workspace moved'));
+  await first;
+  await rejected;
+  assert.equal(written, false);
+});
