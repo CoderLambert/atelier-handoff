@@ -5,7 +5,7 @@ description: 工作台的四种输入模式、受控审批和文件基线复核�
 tags: [permissions, sandbox, bubblewrap, native-execution, approval]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-ce5aff777b3733ade8671fea
     resource: repo://frontend/src/features/chat/run-mode.ts

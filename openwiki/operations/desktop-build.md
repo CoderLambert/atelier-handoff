@@ -5,19 +5,23 @@ description: 开发桌面、Linux x64 打包输入、发布清单和独立安装
 tags: [desktop, build, electron, linux, packaging, smoke-test]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-754af1375ffae564bdab3544
     resource: repo://desktop/main.mts
+  - id: openwiki-source-5ab468669f70351eaf5e6050
+    resource: repo://openspec/roadmaps/build-atelier-desktop/roadmap.md
   - id: openwiki-source-5b54a58d1b51cd490b0e7162
     resource: repo://package.json
   - id: openwiki-source-23775c3de52f3ab95a13cb8b
     resource: repo://README.md
   - id: openwiki-source-39a2636efc69030d51e32d63
     resource: repo://scripts/linux/package.mts
+  - id: openwiki-source-9982f6639f97e28643d73aa5
+    resource: repo://scripts/package-platform-preview.mts
   - id: openwiki-source-eb4663761189167522a9402e
     resource: repo://scripts/smoke-linux.mts
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+generated: { by: "claude-code", at: "2026-11-23T19:26:38.011Z" }
 ---
 
 # 桌面端打包与运维构建
@@ -29,6 +33,10 @@ generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 ## Linux x64 打包
 
 `npm run package:linux` 先执行仓库检查和前端构建。打包脚本组装 Electron、Node、SDK 可执行文件、Shunt 和前端资源，生成 Arch pacman `.pkg.tar.zst` 与便携 `.tar.zst`。使用项目指定的 Node 和 Shunt 输入，可由 `ATELIER_BUILD_NODE` 与 `ATELIER_BUILD_SHUNT` 提供绝对路径。脚本核对版本、二进制或许可证的预期校验，并为 `dist/linux/` 输出发布清单及 `SHA256SUMS`。
+
+## 跨平台候选
+
+`scripts/package-platform-preview.mts` 为 Windows x64 和 macOS arm64 组装候选 ZIP，并检查目标平台 Node、Electron、SQLite 原生驱动及迁移资源。候选构建不等于目标系统安装、签名或真机验收；后续平台验收和发行按路线图安排。
 
 ## 验收入口
 

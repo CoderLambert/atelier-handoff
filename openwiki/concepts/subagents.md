@@ -5,7 +5,7 @@ description: Explore 和 Worker 的工具范围、SDK 委派、子任务持久�
 tags: [subagents, delegation, native-sdk, cancellation]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:26:38.011Z
 sources:
   - id: openwiki-source-9cb1e02f59a7fc96ce5b1ac2
     resource: repo://server/agent.ts

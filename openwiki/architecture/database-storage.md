@@ -5,7 +5,7 @@ description: Node 运行时的数据目录、SQLite 排他所有权、Drizzle �
 tags: [database, sqlite, drizzle, session-snapshot, persistence]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-e275da6f88f7ddcacfc7ebc9
     resource: repo://server/data-owner.ts

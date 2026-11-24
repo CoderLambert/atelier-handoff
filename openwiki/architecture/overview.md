@@ -5,7 +5,7 @@ description: Electron 桌面宿主、Node 运行时、React 工作台与本地�
 tags: [architecture, electron, runtime, react, gateway]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:26:38.011Z
 sources:
   - id: openwiki-source-754af1375ffae564bdab3544
     resource: repo://desktop/main.mts

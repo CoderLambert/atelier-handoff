@@ -5,7 +5,7 @@ description: 启动本机 AI 工作台，并按开发任务定位运行时、工
 tags: [atelier, quickstart, local-workbench, development]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-22T13:27:54.578Z
+    at: 2026-11-23T19:36:38.791Z
 sources:
   - id: openwiki-source-5b54a58d1b51cd490b0e7162
     resource: repo://package.json
@@ -13,7 +13,7 @@ sources:
     resource: repo://server/agent.ts
   - id: openwiki-source-3fa62e7db05e246c4b1a480b
     resource: repo://server/main.ts
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+generated: { by: "claude-code", at: "2026-11-23T19:36:38.791Z" }
 ---
 
 # Atelier 快速上手
@@ -37,6 +37,8 @@ npm start
 | --- | --- |
 | Electron、Node、React 和网关由谁负责 | [系统架构全景](./architecture/overview.md) |
 | 如何定位设置、会话、分支、回退和引用 | [工作台导航与会话操作](./concepts/workspace-navigation.md) |
+| 如何设置桌面主题、提示音和通知 | [桌面外观与通知](./concepts/appearance-notifications.md) |
+| Git 看板和开发会话如何组织（当前工作区开发中） | [Git 工作台与开发会话](./concepts/git-workbench.md) |
 | 模型如何选择，Shunt 与 Magpie 如何发现和路由 | [模型目录与网关路由](./integrations/model-gateways.md) |
 | 一轮运行如何执行、推送、恢复和读取工具日志 | [Agent 运行时与会话调度](./architecture/agent-runtime.md) |
 | SQLite 存哪些记录，如何读取会话快照 | [数据持久化与模型映射](./architecture/database-storage.md) |
