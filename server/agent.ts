@@ -1,7 +1,7 @@
 /**
- * @file 编排智能体运行、工具调用、实时消息插入与取消。
- * @implementation 协调执行器、子任务与进程回收，保存工具回执，按执行者投递停滞提示、日志摘要、命中片段和分页原文。
- * @updated 2026-11-22T21:17:02+08:00
+ * @file 编排智能体运行、工具调用与取消。
+ * @implementation 使用冻结的执行目录并在工具分派前核验工作树，协调 SDK、子任务和工具回执。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -171,6 +171,7 @@ export class AgentRunner implements Runner {
     private readonly files: FileRecords,
     private readonly mcpSessions = new McpSessions(),
     private readonly browserAccess?: DesktopBrowserAccess,
+    private readonly verifyWorkspace?: (run: Run) => Promise<void>,
   ) {}
   start(
     run: Run,
@@ -266,6 +267,7 @@ export class AgentRunner implements Runner {
       ? '本轮已启用全工具自动化，应用会自动裁决本轮已授权工具的审批。按工具返回结果继续任务。'
       : '本轮按工具操作需要逐次审批。';
     const project = this.store.get('projects', run.projectId);
+    const workingDirectory = run.workspacePath ?? project.path;
     const session = this.store.get('sessions', run.sessionId);
     const allowed = (capability: AgentCapability) =>
       !run.agent || run.agent.capabilities.includes(capability);
@@ -277,6 +279,10 @@ export class AgentRunner implements Runner {
       toolSignal().throwIfAborted();
       if (closing) throw new AppError('RUN_STOPPED', '运行正在收尾。', 409);
       validateAgent?.();
+    };
+    const verifyDispatch = async () => {
+      if (run.workspacePath) await this.verifyWorkspace?.(run);
+      verifyCurrent();
     };
     const automaticSkills = skills.filter((skill) => !skill.manual);
     const selectedSkills = (run.extensions ?? []).filter(({ kind }) => kind === 'skill');
@@ -607,7 +613,7 @@ export class AgentRunner implements Runner {
           const scope = branch ? AbortSignal.any([signal, branch.signal]) : signal;
           const work = toolContext.run(scope, async () => {
             try {
-              verifyCurrent();
+              await verifyDispatch();
               const result = await handler(z.object(schema).parse(args), id);
               const output = typeof result === 'string' ? result : JSON.stringify(result);
               const saved = finishTool(id, true, output);
@@ -661,13 +667,13 @@ export class AgentRunner implements Runner {
         'list_files',
         'List a project directory. Excludes private settings, secrets, links, and dependencies. Paths are project-relative.',
         { path: z.string().default('') },
-        async (args) => listProjectFiles(project.path, args.path),
+        async (args) => listProjectFiles(workingDirectory, args.path),
       ),
       custom(
         'search_files',
         'Search project UTF-8 text for a literal substring. Returns matching relative paths, line numbers, and snippets; output limits are explicit.',
         { query: z.string().min(1).max(200) },
-        async (args) => searchProject(project.path, args.query, toolSignal()),
+        async (args) => searchProject(workingDirectory, args.query, toolSignal()),
       ),
       custom(
         'publish_artifact',
@@ -686,7 +692,7 @@ export class AgentRunner implements Runner {
           if (args.path && !allowed('read'))
             throw new AppError('AGENT_CAPABILITY_DENIED', '此智能体未启用项目文件读取。', 403);
           const text =
-            args.content ?? (await readProjectText(project.path, args.path!, 1024 * 1024));
+            args.content ?? (await readProjectText(workingDirectory, args.path!, 1024 * 1024));
           verifyCurrent();
           return this.files.publish(run, args.name, text);
         },
@@ -768,16 +774,16 @@ export class AgentRunner implements Runner {
           'Create or replace a UTF-8 project file. The user must approve the exact before/after contents before execution. Do not retry a denied operation.',
           { path, content: z.string().max(MAX_TEXT), reason },
           async (args, id) => {
-            await resolveProjectPath(project.path, args.path, { create: true });
+            await resolveProjectPath(workingDirectory, args.path, { create: true });
             let before: string | null = null;
             try {
-              before = await readProjectText(project.path, args.path);
+              before = await readProjectText(workingDirectory, args.path);
             } catch (error) {
               if (!(error instanceof AppError) || error.code !== 'FILE_UNAVAILABLE') throw error;
             }
             await this.permissions.request(
               run,
-              project.path,
+              workingDirectory,
               {
                 toolCallId: id,
                 kind: 'write',
