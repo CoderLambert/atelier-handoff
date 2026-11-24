@@ -1,5 +1,10 @@
+/**
+ * @file 在 Linux 隔离目录中执行受控命令。
+ * @implementation 探测 bubblewrap，以传入目录挂载工作区，遮蔽凭据和 Git 元数据并限制网络、时间及输出。
+ * @updated 2026-11-24T03:39:03+08:00
+ */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { AppError } from '../shared/types.js';
 
@@ -86,8 +91,11 @@ export async function runCommand(
     '/workspace',
   ];
   // Hide application state and common credentials at the project root inside commands.
-  for (const name of ['.data', '.local', '.git', '.claude', '.codex', '.ssh', '.aws'])
-    if (existsSync(join(root, name))) args.push('--tmpfs', '/workspace/' + name);
+  for (const name of ['.data', '.local', '.git', '.claude', '.codex', '.ssh', '.aws']) {
+    const entry = lstatSync(join(root, name), { throwIfNoEntry: false });
+    if (entry?.isFile()) args.push('--ro-bind', '/dev/null', '/workspace/' + name);
+    else if (entry) args.push('--tmpfs', '/workspace/' + name);
+  }
   for (const name of [
     '.env',
     '.env.local',

@@ -794,8 +794,15 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            const hash = await writes.run(verifyCurrent, () =>
-              applyText(project.path, args.path, before, args.content, toolSignal(), verifyCurrent),
+            const hash = await writes.run(verifyDispatch, () =>
+              applyText(
+                workingDirectory,
+                args.path,
+                before,
+                args.content,
+                toolSignal(),
+                verifyCurrent,
+              ),
             );
             return { path: args.path, fingerprint: hash, applied: true };
           },
@@ -810,20 +817,20 @@ export class AgentRunner implements Runner {
             reason,
           },
           async (args, id) => {
-            const before = await readProjectText(project.path, args.path);
+            const before = await readProjectText(workingDirectory, args.path);
             if (before.split(args.oldText).length !== 2)
               throw new AppError('AMBIGUOUS_EDIT', '待替换文本必须精确且只出现一次。');
             const after = before.replace(args.oldText, () => args.newText);
             await this.permissions.request(
               run,
-              project.path,
+              workingDirectory,
               { toolCallId: id, kind: 'edit', path: args.path, before, after, reason: args.reason },
               toolSignal(),
             );
             return {
               path: args.path,
-              fingerprint: await writes.run(verifyCurrent, () =>
-                applyText(project.path, args.path, before, after, toolSignal(), verifyCurrent),
+              fingerprint: await writes.run(verifyDispatch, () =>
+                applyText(workingDirectory, args.path, before, after, toolSignal(), verifyCurrent),
               ),
               applied: true,
             };
@@ -834,10 +841,10 @@ export class AgentRunner implements Runner {
           'Delete one existing regular file under the run approval policy. The decision covers the original file contents; directories cannot be deleted.',
           { path, reason },
           async (args, id) => {
-            const before = await readProjectText(project.path, args.path);
+            const before = await readProjectText(workingDirectory, args.path);
             await this.permissions.request(
               run,
-              project.path,
+              workingDirectory,
               {
                 toolCallId: id,
                 kind: 'delete',
@@ -848,8 +855,8 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            await writes.run(verifyCurrent, () =>
-              applyText(project.path, args.path, before, null, toolSignal(), verifyCurrent),
+            await writes.run(verifyDispatch, () =>
+              applyText(workingDirectory, args.path, before, null, toolSignal(), verifyCurrent),
             );
             return { path: args.path, deleted: true };
           },
@@ -886,7 +893,7 @@ export class AgentRunner implements Runner {
             if (approval) {
               await this.permissions.request(
                 run,
-                project.path,
+                workingDirectory,
                 {
                   toolCallId,
                   kind: 'browser',
@@ -1004,15 +1011,15 @@ export class AgentRunner implements Runner {
             { path, reason },
             async (args, id) => {
               verifyBinding();
-              const target = await resolveProjectPath(project.path, args.path);
+              const target = await resolveProjectPath(workingDirectory, args.path);
               if (!/\.pdf$/i.test(target) || (await lstat(target)).size > 16 * 1024 * 1024)
                 throw new AppError('INVALID_INPUT', '请选择 16 MiB 以内的项目 PDF 文件。');
-              const workspacePath = '/workspace/' + relative(project.path, target);
+              const workspacePath = '/workspace/' + relative(workingDirectory, target);
               const command =
                 "/usr/bin/pdftotext -l 10 '" + workspacePath.replaceAll("'", "'\"'\"'") + "' -";
               await this.permissions.request(
                 run,
-                project.path,
+                workingDirectory,
                 {
                   toolCallId: id,
                   kind: 'command',
@@ -1022,9 +1029,10 @@ export class AgentRunner implements Runner {
                 toolSignal(),
               );
               verifyBinding();
-              await resolveProjectPath(project.path, args.path);
+              await resolveProjectPath(workingDirectory, args.path);
+              await verifyDispatch();
               verifyBinding();
-              const result = await runCommand(project.path, command, toolSignal());
+              const result = await runCommand(workingDirectory, command, toolSignal());
               if (result.code !== 0)
                 throw new AppError('COMMAND_FAILED', `PDF 文本提取失败：${result.output}`);
               return result;
@@ -1083,7 +1091,7 @@ export class AgentRunner implements Runner {
               if (initial.grant.access === 'approval')
                 await this.permissions.request(
                   run,
-                  project.path,
+                  workingDirectory,
                   {
                     toolCallId: id,
                     kind: 'mcp',
@@ -1095,11 +1103,14 @@ export class AgentRunner implements Runner {
               recheck();
               return callMcp(
                 initial.service,
-                project.path,
+                workingDirectory,
                 binding.tool,
                 args,
                 AbortSignal.any([toolSignal(), AbortSignal.timeout(45_000)]),
-                recheck,
+                async () => {
+                  await verifyDispatch();
+                  recheck();
+                },
                 this.mcpSessions,
                 publishScreenshot,
               );
@@ -1127,7 +1138,7 @@ export class AgentRunner implements Runner {
           async (args, id) => {
             await this.permissions.request(
               run,
-              project.path,
+              workingDirectory,
               {
                 toolCallId: id,
                 kind: 'command',
@@ -1136,8 +1147,8 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            const work = writes.run(verifyCurrent, () =>
-              runCommand(project.path, args.command, toolSignal()),
+            const work = writes.run(verifyDispatch, () =>
+              runCommand(workingDirectory, args.command, toolSignal()),
             );
             commands.add(work);
             try {
@@ -1197,7 +1208,7 @@ export class AgentRunner implements Runner {
       ) => {
         await this.permissions.request(
           run,
-          project.path,
+          workingDirectory,
           {
             toolCallId: id,
             kind: 'command',
@@ -1376,7 +1387,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   throw new AppError('MCP_TOOL_NOT_ALLOWED', '此工具需要受控修改模式。', 403);
                 await this.permissions.request(
                   run,
-                  project.path,
+                  workingDirectory,
                   {
                     toolCallId: id,
                     kind: 'mcp',
@@ -1405,11 +1416,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               try {
                 const result = await callMcp(
                   server,
-                  project.path,
+                  workingDirectory,
                   selected.name,
                   args,
                   AbortSignal.any([toolSignal(), AbortSignal.timeout(45_000)]),
-                  recheck,
+                  async () => {
+                    await verifyDispatch();
+                    recheck();
+                  },
                   this.mcpSessions,
                   publishScreenshot,
                 );
@@ -1469,6 +1483,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       try {
         signal.throwIfAborted();
         if (event.hook_event_name !== 'PreToolUse') return {};
+        if (run.workspacePath) await this.verifyWorkspace?.(run);
         verifyCurrent();
         const { atelierTicket: _untrustedTicket, ...args } = z
           .record(z.string(), z.unknown())
@@ -1508,7 +1523,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               throw new AppError('ATTACHMENT_UNAVAILABLE', '附件读取视图不可用。', 404);
           } else if (!native) {
             if (!allowed('read')) throw new Error('工具未开放。');
-            await readProjectText(project.path, args.file_path);
+            await readProjectText(workingDirectory, args.file_path);
           }
           signal.throwIfAborted();
         } else if (event.tool_name === 'TodoWrite') {
@@ -1564,7 +1579,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
     };
     try {
       signal.throwIfAborted();
-      await resolveProjectPath(project.path, '', { directory: true });
+      if (run.workspacePath) await this.verifyWorkspace?.(run);
+      await resolveProjectPath(workingDirectory, '', { directory: true });
       const sdkDirectory = join(this.store.directory, 'sdk', session.id);
       const sdkSessionId = resumeExisting ? session.sdkSessionId! : randomUUID();
       await mkdir(sdkDirectory, { recursive: true, mode: 0o700 });
@@ -1655,7 +1671,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       if (automaticSkills.length)
         pluginDirectory = await mountRunSkills(sdkDirectory, automaticSkills);
       signal.throwIfAborted();
-      if (native) hostSkillPlugins = await mountHostSkills(sdkDirectory, project.path);
+      if (native) hostSkillPlugins = await mountHostSkills(sdkDirectory, workingDirectory);
       const env: NodeJS.ProcessEnv = native ? hostEnvironment(process.env) : {};
       for (const key of [
         'PATH',
@@ -1695,7 +1711,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       connection = query({
         prompt: input,
         options: {
-          cwd: project.path,
+          cwd: workingDirectory,
           model: modelId,
           ...(run.config.effort ? { effort: run.config.effort } : {}),
           tools: [
@@ -1944,7 +1960,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         ? '用户请求实时天气或近期预报时，先调用 weather_lookup。可以使用城市的常用英文名（如昆山用 Kunshan）或用户提供的坐标。回复中注明来源、匹配地点和观测时间。\n\n'
         : '';
       input.push(
-        `${native ? projectInstructionContext(project.path) : ''}${checkpoint ? checkpoint + '\n\n' : ''}${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}${weatherGuidance}${bindingGuidance.length ? `本轮 Skill 工具绑定（优先使用绑定工具，无需照抄 Skill 中的命令）：\n${bindingGuidance.join('\n')}\n\n` : ''}${attachmentGuidance}用户本轮任务：\n${inputText}`,
+        `${native ? projectInstructionContext(workingDirectory) : ''}${checkpoint ? checkpoint + '\n\n' : ''}${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}${weatherGuidance}${bindingGuidance.length ? `本轮 Skill 工具绑定（优先使用绑定工具，无需照抄 Skill 中的命令）：\n${bindingGuidance.join('\n')}\n\n` : ''}${attachmentGuidance}用户本轮任务：\n${inputText}`,
         images,
         promptMessageId,
       );
