@@ -104,8 +104,30 @@ test('Git board reads the exact stage, file diff, local refs, and paged commits'
         const diff = await request<{ text: string }>(files + '/diff?path=same.txt&layer=' + layer);
         assert.ok(diff.text.includes('+' + added));
       }
-      const empty = await request<{ items: unknown[] }>(url + '/history?oid=' + head + '&offset=1');
+      const empty = await request<{ items: unknown[]; authors?: string[] }>(
+        url + '/history?oid=' + head + '&offset=1',
+      );
       assert.deepEqual(empty.items, []);
+      const byQuery = await request<{ items: { oid: string; subject: string }[]; totalCount?: number }>(
+        url + '/history?oid=' + head + '&query=' + encodeURIComponent('initial'),
+      );
+      assert.equal(byQuery.items.length, 1);
+      assert.equal(byQuery.items[0]?.oid, head);
+      const byAuthor = await request<{ items: { oid: string }[] }>(
+        url + '/history?oid=' + head + '&author=' + encodeURIComponent('fixture'),
+      );
+      assert.equal(byAuthor.items.length, 1);
+      assert.equal(byAuthor.items[0]?.oid, head);
+      const byHash = await request<{ items: { oid: string }[] }>(
+        url + '/history?oid=' + head + '&query=' + head.slice(0, 7),
+      );
+      assert.equal(byHash.items.length, 1);
+      assert.equal(byHash.items[0]?.oid, head);
+      const noMatch = await request<{ items: unknown[]; totalCount?: number }>(
+        url + '/history?oid=' + head + '&query=' + encodeURIComponent('nonexistent-term-xyz'),
+      );
+      assert.deepEqual(noMatch.items, []);
+      assert.equal(noMatch.totalCount, 0);
       const commit = await request<{ text: string }>(url + '/commits/' + head);
       assert.match(commit.text, /\+base/);
       assert.deepEqual(await readFile(join(repo, '.git/index')), originalIndex);

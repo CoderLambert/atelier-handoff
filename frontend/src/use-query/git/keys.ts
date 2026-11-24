@@ -3,7 +3,7 @@
  * @implementation 按项目、工作树、提交和差异层隔离缓存，按分析编号与快照版本区分进度。
  * @updated 2026-11-24T22:06:05+08:00
  */
-import type { GitDiffLayer } from '@shared/git-workbench';
+import type { GitDiffLayer, GitHistoryQuery } from '@shared/git-workbench';
 
 const project = (id: string) => ['git', id] as const;
 const diffs = (id: string, tree?: string) => [...project(id), 'diff', tree] as const;
@@ -14,7 +14,15 @@ export const gitKeys = {
   diffs,
   diff: (id: string, tree?: string, path?: string, layer?: GitDiffLayer) =>
     [...diffs(id, tree), path, layer] as const,
-  history: (id: string, oid?: string) => [...project(id), 'history', oid] as const,
+  history: (id: string, oid?: string, filters?: GitHistoryQuery) =>
+    [
+      ...project(id),
+      'history',
+      oid,
+      filters?.query ?? '',
+      filters?.author ?? '',
+      filters?.since ?? '',
+    ] as const,
   commit: (id: string, oid?: string) => [...project(id), 'commit', oid] as const,
   analysisProgress: (id: string, tree: string, analysisId?: string, version?: string) =>
     [...project(id), 'analysis-progress', tree, analysisId, version] as const,

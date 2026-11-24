@@ -1690,7 +1690,13 @@ export async function createApp(options: {
                 .min(0)
                 .max(100_000)
                 .parse(url.searchParams.get('offset') ?? '0');
-              return json(res, await readGitHistory(git, oid, offset, abort.signal));
+              const query = url.searchParams.get('query')?.trim() || undefined;
+              const author = url.searchParams.get('author')?.trim() || undefined;
+              const since = url.searchParams.get('since')?.trim() || undefined;
+              return json(
+                res,
+                await readGitHistory(git, oid, offset, { query, author, since }, abort.signal),
+              );
             }
             if (parts.length === 6 && parts[4] === 'commits')
               return json(res, await readCommitDiff(git, gitOid.parse(parts[5]), abort.signal));

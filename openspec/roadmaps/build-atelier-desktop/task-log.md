@@ -2,6 +2,14 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-25 · Git 分支侧栏重构、提交历史无限滚动与多维检索（已验证并切换）
+
+- 重构 Git 工作区「分支与提交」面板：移除手动加载更多按钮，改用 `IntersectionObserver` 哨兵实现触底自动无限加载（240px 预取、状态锁、轻量骨架屏、初始提交分割线及重试条）；重构左侧栏信息层级，新增固定 HEAD 状态卡片、可折叠分组、选中深绿指示条、微型检出 HEAD 标签、紧凑 Worktree 路径胶囊（悬浮 Tooltip 绝对路径）及远端前缀弱化；增加左侧纯前端 0 延迟即时模糊搜索与右侧防抖（250ms）关键词（信息/Hash/作者）、作者与时间范围多维检索。[技术决策](../../../docs/decisions/2026-11-25-git-history-and-branch-workbench.md)
+- 按照 React 最佳实践与单一职责拆分前端组件目录 `frontend/src/features/git/git-history/`（提取 `useGitCommitFilters` 自定义 Hook 隔离状态与防抖副作用，抽取 `GitHeadCard`、`GitBranchGroup`、`GitBranchItem`、`GitCommitRow`、`GitCommitSkeleton` 等纯展示子组件并使用 `React.memo` 优化长列表重绘开销）；后端提取 `queryGitLogCommits` 与时间区间校验，消除重复参数与容错逻辑。
+- 自动化检查与测试全量通过：`npm run check` 零错误通过；`npm run check:headers` 对新增及修改源码通过；`node --import tsx --test tests/git-workbench.test.ts`（11 项通过）；`npm run test:frontend`（119 项通过）；`npm test` 全量通过。
+- 桌面端平滑切换：通过 `npm run build && npm run build:desktop` 完成生产构建，在当前运行的 Linux x64 Electron 实例中热切换生效，无缝保留既有数据目录与配置。现场核对分支过滤、提交多维筛选、短 Hash 复制及触底无限加载均正常运转。
+- **开发过程 review**。针对搜索检索体验，将「前端 0 延迟防御性即时过滤」与「后端 `git log` 全量深层检索」结合，彻底消除了输入过程中的不匹配提交闪烁与网络滞后竞态。拆分出单一职责的 memo 纯组件后，无限滚动滚动过程中仅受影响行重新渲染，性能显著提升。下一轮若有类似列表检索需求，优先沿用本套组合式 Hook 与防御过滤模式。
+
 ## 2026-11-25 · 凭据测试样例可预览（隔离验证通过）
 
 - 用临时 Git 仓库复现截图中五个测试文件的凭据命中。测试改用运行时构造的合成样例，以及用于回环认证的明确占位符。生产快照复验五个文件均可进入模型候选和提交预览，独立凭据阳性对照仍同时被这两道检查拦截。复跑 `node --import tsx .local/ai-commit-test-fixtures/verify.mts`，输出为同目录 `red.log` 和 `snapshot.log`。[决策与回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md#2026-11-25--凭据回归测试样例)
