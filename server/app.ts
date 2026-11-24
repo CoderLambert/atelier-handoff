@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 处理配对、会话、网关与队列，校验桌面执行范围，冻结每次运行的执行器，并核对实时插入与子任务停止的归属。
- * @updated 2026-11-22T16:25:00+08:00
+ * @implementation 组织会话、Git、审批和运行接口。协调多提交计划、恢复和进度读取，按所选模型路由分析请求。
+ * @updated 2026-11-24T22:06:05+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -16,7 +16,7 @@ import { desktopBrowserEnabled } from './desktop-browser.js';
 import { DesktopBrowserAccess } from './desktop-browser-access.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, lstat, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, lstat, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { prepareDocumentView } from './attachment-document-reader.js';
@@ -38,11 +38,52 @@ import {
   authorizeRoot,
   readProjectText,
   listProjectFiles,
+  findProjectFiles,
   fingerprint,
   resolveProjectPath,
   inside,
 } from './files.js';
 import { commandsAvailable } from './commands.js';
+import {
+  developmentCreate,
+  developmentPreview,
+  gitCacheRequest,
+  gitCommitDraftRequest,
+  gitCommitRequest,
+  gitDiffLayer,
+  gitOid,
+  gitPath,
+  gitReclaimRequest,
+  gitRestoreRequest,
+} from '../shared/git-workbench.js';
+import { fileIdentity, gitError, LocalGit } from './modules/git/git-cli.js';
+import { CommitJournal } from './modules/git/commit-journal.js';
+import { commitPlanCoordinator } from './modules/git/commit-plan-coordinator.js';
+import { executeCommitPlan } from './modules/git/commit-plan-execution.js';
+import { abandonCommitPlan, recoverCommitPlan } from './modules/git/commit-plan-recovery.js';
+import { hashCommitRepositoryIdentity } from './modules/git/commit-operation-repository.js';
+import { DevelopmentWorktrees, directoriesOverlap } from './modules/git/development-worktrees.js';
+import { commitStagedChanges, readStagedChanges } from './modules/git/staged-commit.js';
+import { suggestCommitMessage } from './modules/git/commit-suggestion.js';
+import {
+  multiCommitDraftRequest,
+  multiCommitProgressRequest,
+  multiCommitSubmit,
+  multiCommitValidate,
+} from '../shared/git-multi-commit.js';
+import { readCommitPlanSnapshot } from './modules/git/commit-plan-snapshot.js';
+import { commitPlanUnits } from './modules/git/commit-plan-view.js';
+import {
+  CommitAnalysisSessions,
+  commitAnalysisCandidates,
+} from './modules/git/commit-analysis-sessions.js';
+import { validateCommitPlan } from './modules/git/commit-plan-preview.js';
+import {
+  readCommitDiff,
+  readFileDiff,
+  readGitHistory,
+  readGitStatus,
+} from './modules/git/git-reader.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { gatewayModelId, gatewayModels } from './gateway-models.js';
@@ -222,9 +263,49 @@ export async function createApp(options: {
   const store = new Store(options.data);
   store.recover();
   const messageQueue = new MessageQueue(store);
-  const forks = new SessionForks(store, undefined, (id) => messageQueue.hasPending(id));
+  const directoryInUse = (path: string) => {
+    const sessions = new Set(
+      store
+        .list('sessions')
+        .filter((session) => directoriesOverlap(path, worktrees.directory(session)))
+        .map((session) => session.id),
+    );
+    return (
+      store
+        .list('runs')
+        .some(
+          (run) =>
+            activeStatuses.includes(run.status) &&
+            directoriesOverlap(
+              path,
+              run.workspacePath ?? store.get('projects', run.projectId).path,
+            ),
+        ) ||
+      store
+        .list('permissions')
+        .some(
+          (permission) => permission.status === 'pending' && sessions.has(permission.sessionId),
+        ) ||
+      [...sessions].some((id) => messageQueue.hasPending(id) || forks.usingSource(id))
+    );
+  };
+  const mcpSessions = new McpSessions();
+  const commitAnalyses = new CommitAnalysisSessions();
+  const worktrees = new DevelopmentWorktrees(store, await realpath(store.directory), {
+    inUse: directoryInUse,
+    closeDirectory: (path) => mcpSessions.closeDirectory(path),
+    released: () => wakeQueue(),
+  });
+  const forks = new SessionForks(
+    store,
+    undefined,
+    (id) => messageQueue.hasPending(id),
+    (session) => worktrees.resolveSession(session),
+  );
   await forks.recover();
-  const permissions = new PermissionService(store, options.permissionTtlMs);
+  await worktrees.recover();
+  const verifyWorkspace = (run: Run) => worktrees.verifyRun(run);
+  const permissions = new PermissionService(store, options.permissionTtlMs, verifyWorkspace);
   const files = new FileRecords(store);
   const browserAccess = new DesktopBrowserAccess(
     store,
@@ -233,10 +314,9 @@ export async function createApp(options: {
   const extensions = new ProjectExtensions(store, Boolean(options.desktopPairing));
   extensions.assignLegacyProviders();
   const agents = new AgentProfiles(store, extensions);
-  const mcpSessions = new McpSessions();
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
-    new AgentRunner(store, permissions, files, mcpSessions, browserAccess);
+    new AgentRunner(store, permissions, files, mcpSessions, browserAccess, verifyWorkspace);
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const gatewayLogin = new ManagedGatewayLogin();
@@ -320,11 +400,12 @@ export async function createApp(options: {
   const sameSessionRunning = (id: string) =>
     store.list('runs').some((run) => run.sessionId === id && activeStatuses.includes(run.status));
   function assertExecutionSlot(sessionId: string, path: string) {
+    worktrees.assertUnlocked(path);
     const active = store.list('runs').filter((run) => activeStatuses.includes(run.status));
     if (
       active.some((run) => {
-        const other = store.get('projects', run.projectId);
-        return run.sessionId === sessionId || inside(path, other.path) || inside(other.path, path);
+        const other = run.workspacePath ?? store.get('projects', run.projectId).path;
+        return run.sessionId === sessionId || directoriesOverlap(path, other);
       })
     )
       throw new AppError(
@@ -333,7 +414,7 @@ export async function createApp(options: {
         409,
       );
     if (active.length >= 3)
-      throw new AppError('SERVER_BUSY', '同时最多执行 3 个不同项目，请稍后发送。', 409, true);
+      throw new AppError('SERVER_BUSY', '同时最多执行 3 个独立目录，请稍后发送。', 409, true);
   }
   const queueChanged = (id: string) => store.event('session-' + id, id, 'session.queue_changed');
   function insertionMode(
@@ -417,7 +498,8 @@ export async function createApp(options: {
     if (session.status !== 'active')
       throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
     const project = store.get('projects', session.projectId);
-    await resolveProjectPath(project.path, '', { directory: true });
+    const workspacePath = await worktrees.resolveSession(session);
+    const binding = store.gitWorktrees.forSession(session.id);
     const revision = session.agentRevisionId
       ? agents.requireReady(project.id, session.agentRevisionId)
       : undefined;
@@ -496,6 +578,7 @@ export async function createApp(options: {
           skills,
           browserRevision,
           ...(executor === 'native-v1' ? { executor } : {}),
+          ...(binding ? { worktree: [binding.id, binding.branch, workspacePath] } : {}),
         }),
       );
       return { skills, browserRevision, scope };
@@ -506,6 +589,7 @@ export async function createApp(options: {
       if (deletingSessions.has(sessionId))
         throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
       if (usingMagpie) requireMagpieEnabled();
+      worktrees.assertUnlocked(workspacePath);
       const latest = store.get('sessions', sessionId);
       if (latest.status !== 'active') throw new AppError('SESSION_ARCHIVED', '会话已归档。', 409);
       if (latest.agentRevisionId !== session.agentRevisionId)
@@ -591,7 +675,7 @@ export async function createApp(options: {
     let context = '';
     let contextBytes = Buffer.byteLength(resolvedInput);
     for (const path of [...new Set(request.contextPaths)]) {
-      const text = await readProjectText(project.path, path, 128 * 1024);
+      const text = await readProjectText(workspacePath, path, 128 * 1024);
       contextBytes += Buffer.byteLength(text);
       context += `\n<project_context path=${JSON.stringify(path)}>\n${text}\n</project_context>\n`;
     }
@@ -617,8 +701,11 @@ export async function createApp(options: {
     }
     if (contextBytes > 128 * 1024)
       throw new AppError('CONTEXT_TOO_LARGE', '本轮附件与附加上下文总量不能超过 128 KiB。', 413);
+    if (binding && (await worktrees.resolveSession(session)) !== workspacePath)
+      throw gitError('WORKTREE_CHANGED', '工作树已变化，请重新发送。');
     const promptMessageId = randomUUID();
     const run: Run = {
+      ...(binding ? { workspacePath } : {}),
       id: randomUUID(),
       sessionId,
       projectId: project.id,
@@ -657,7 +744,7 @@ export async function createApp(options: {
           409,
         );
       if (shouldQueue()) return sendToQueue(latest);
-      assertExecutionSlot(sessionId, project.path);
+      assertExecutionSlot(sessionId, workspacePath);
       if (pending) messageQueue.consume(pending);
       for (const id of run.attachmentIds) {
         const a = store.get('attachments', id);
@@ -746,14 +833,15 @@ export async function createApp(options: {
             if (shuttingDown) break;
             try {
               const session = store.get('sessions', item.session_id);
-              const project = store.get('projects', session.projectId);
-              assertExecutionSlot(session.id, project.path);
+              assertExecutionSlot(session.id, worktrees.directory(session));
               await createRun(session.id, undefined, null, item);
             } catch (error) {
               if (shuttingDown) break;
               if (
                 error instanceof AppError &&
-                ['RUN_ACTIVE', 'SERVER_BUSY', 'QUEUE_CHANGED'].includes(error.code)
+                ['RUN_ACTIVE', 'SERVER_BUSY', 'QUEUE_CHANGED', 'GIT_DIRECTORY_BUSY'].includes(
+                  error.code,
+                )
               )
                 continue;
               const reason =
@@ -1155,7 +1243,7 @@ export async function createApp(options: {
         if (parts.length === 2 && method === 'POST') {
           const input = z.object({ path: z.string().min(1).max(2000) }).parse(await body(req));
           const path = await authorizeRoot(input.path);
-          if (path === options.data || path.startsWith(options.data + '/'))
+          if (inside(await realpath(store.directory), path))
             throw new AppError('PATH_DENIED', '不能把工作台私有数据目录绑定为项目。', 403);
           const existing = store.list('projects').find((p) => p.path === path);
           const project =
@@ -1178,12 +1266,436 @@ export async function createApp(options: {
             return json(res, browserAccess.update(parts[2], input));
           }
         }
-        if (parts.length === 4 && method === 'GET') {
+        if (parts[2] && parts[3] === 'git' && method === 'POST' && parts.length === 5) {
+          const project = store.get('projects', parts[2]);
+          if (parts[4] === 'preview')
+            return json(
+              res,
+              await worktrees.preview(project, developmentPreview.parse(await body(req))),
+            );
+          if (parts[4] === 'sessions') {
+            const session = await worktrees.create(
+              project,
+              developmentCreate.parse(await body(req)),
+            );
+            return json(
+              res,
+              {
+                session: publicSession(session),
+                workspace: await worktrees.sessionWorkspace(session),
+              },
+              201,
+            );
+          }
+        }
+        if (
+          parts[2] &&
+          parts[3] === 'git' &&
+          parts[4] === 'worktrees' &&
+          parts[5] &&
+          parts.length === 7 &&
+          method === 'POST'
+        ) {
+          const project = store.get('projects', parts[2]);
+          const id = z.uuid().parse(parts[5]);
+          if (parts[6] === 'commit-plan') {
+            const input = multiCommitDraftRequest.parse(await body(req));
+            const abort = new AbortController();
+            const disconnect = () => abort.abort();
+            res.once('close', disconnect);
+            try {
+              const { git } = await worktrees.checkout(project, id, abort.signal);
+              const snapshot = await readCommitPlanSnapshot(git, abort.signal);
+              if (input.version !== undefined && input.version !== snapshot.version)
+                throw gitError('PLAN_STALE', '工作树已变化，请重新读取提交快照。');
+              const units = commitPlanUnits(snapshot);
+              if (units.length > 4096)
+                throw gitError('PLAN_LIMIT', '变更单元过多，请缩小本次工作区范围后重试。', 413);
+              const candidates = commitAnalysisCandidates(units);
+              const defaults = effectiveConfig();
+              const model = input.model ?? defaults.model;
+              const nativeMagpieModel = magpieModel(model);
+              let config: AppConfig | undefined = { ...defaults, model };
+              if (nativeMagpieModel !== undefined) {
+                const validModel = gatewayModelId.safeParse(nativeMagpieModel).success;
+                if (input.generate && input.model !== undefined) {
+                  requireMagpieEnabled();
+                  if (!magpie || !validModel)
+                    throw new AppError(
+                      'MAGPIE_UNAVAILABLE',
+                      'Magpie 网关未配置或模型 ID 无效。',
+                      400,
+                    );
+                }
+                config =
+                  defaults.magpieEnabled && magpie && validModel
+                    ? { ...config, gateway: magpie, managedGateway: false }
+                    : undefined;
+              }
+              if (input.resume && !config)
+                throw gitError('PLAN_ANALYSIS_STALE', '模型接入配置已变化，请重新开始。');
+              const analyzed =
+                config && ((input.generate && candidates.length > 0) || input.resume)
+                  ? await commitAnalyses.analyze({
+                      scope: {
+                        projectId: project.id,
+                        worktreeId: id,
+                        version: snapshot.version,
+                        repositoryId: snapshot.repositoryId,
+                        rootIdentity: snapshot.rootIdentity,
+                        adminIdentity: snapshot.adminIdentity,
+                      },
+                      config,
+                      locale: input.locale,
+                      candidates,
+                      analysisId: input.analysisId,
+                      resume: input.resume,
+                      generate: input.generate,
+                      signal: abort.signal,
+                    })
+                  : undefined;
+              const suggestion = analyzed?.result;
+              const ready = analyzed?.analysis.state === 'complete';
+              const groups = analyzed?.groups ?? [];
+              const assigned = new Set(groups.flatMap((group) => group.unitIds));
+              return json(res, {
+                version: snapshot.version,
+                branch: snapshot.target.ref.startsWith('refs/heads/')
+                  ? snapshot.target.ref.slice('refs/heads/'.length)
+                  : null,
+                units: units.map(({ diff: _diff, ...unit }) => unit),
+                groups,
+                modelCandidateIds: candidates.map((candidate) => candidate.id),
+                unassignedUnitIds: units
+                  .filter((unit) => !assigned.has(unit.id))
+                  .map((unit) => unit.id),
+                suggestionStatus: ready ? 'ready' : analyzed ? 'partial' : 'manual',
+                ...(analyzed ? { analysis: analyzed.analysis } : {}),
+                ...(suggestion && suggestion.coverage.batchCount > 0
+                  ? { analysisModel: model }
+                  : {}),
+                suggestionReason: analyzed
+                  ? analyzed.analysis.reason
+                  : input.generate
+                    ? 'unavailable'
+                    : 'manual',
+                coverage: {
+                  analyzed: ready
+                    ? candidates.length
+                    : (suggestion?.coverage.completedUnitIds.length ?? 0),
+                  metadataOnly: candidates.filter((candidate) => !candidate.diff).length,
+                  excluded: units.length - candidates.length,
+                },
+              });
+            } catch (error) {
+              if (!abort.signal.aborted) throw error;
+              return;
+            } finally {
+              res.off('close', disconnect);
+            }
+          }
+          if (parts[6] === 'commit-plan-validate') {
+            const input = multiCommitValidate.parse(await body(req));
+            const { git } = await worktrees.checkout(project, id);
+            const snapshot = await readCommitPlanSnapshot(git);
+            return json(res, validateCommitPlan(snapshot, input).preview);
+          }
+          if (parts[6] === 'commit-plan-execute') {
+            const input = multiCommitSubmit.parse(await body(req));
+            const plan = multiCommitValidate.parse({
+              version: input.version,
+              groups: input.groups,
+              excludedUnitIds: input.excludedUnitIds,
+            });
+            if (fingerprint(JSON.stringify(plan)) !== input.digest)
+              throw gitError('PLAN_STALE', '提交计划已变化，请重新核对。');
+            const result = await worktrees.writeCheckout(project, id, async (git) => {
+              const rootIdentity = await fileIdentity(git.root);
+              const adminIdentity = await fileIdentity(git.admin);
+              const journal = new CommitJournal(await realpath(store.directory));
+              const coordinator = commitPlanCoordinator(
+                store,
+                journal,
+                project.id,
+                git.repositoryId,
+                rootIdentity,
+                adminIdentity,
+                input.digest,
+              );
+              const scope = {
+                projectId: project.id,
+                repositoryId: hashCommitRepositoryIdentity(git.repositoryId),
+                worktreeIdentity: rootIdentity,
+                adminIdentity,
+              };
+              const prior = store.gitCommitOperations.get(scope, input.operationId);
+              if (prior) {
+                const evidence = await coordinator.read(input.operationId);
+                if (!evidence || evidence.state !== 'completed')
+                  throw gitError('PLAN_RECOVERY_REQUIRED', '提交尚需恢复核对，不能重复执行。');
+                return { operationId: input.operationId, commits: evidence.commits };
+              }
+              // Reject an orphaned durable log before taking another snapshot or writing objects.
+              if (await coordinator.read(input.operationId))
+                throw gitError('PLAN_RECOVERY_REQUIRED', '提交尚需恢复核对，不能重复执行。');
+              const snapshot = await readCommitPlanSnapshot(git);
+              const { compiled, preview } = validateCommitPlan(snapshot, plan);
+              if (preview.digest !== input.digest)
+                throw gitError('PLAN_STALE', '提交计划已变化，请重新核对。');
+              const executed = await executeCommitPlan(git, snapshot, compiled, {
+                operationId: input.operationId,
+                coordinator,
+              });
+              if (executed.state !== 'completed')
+                throw gitError('PLAN_RECOVERY_REQUIRED', '提交尚需恢复核对，不能重复执行。');
+              return { operationId: input.operationId, commits: executed.commits };
+            });
+            return json(res, result, 201);
+          }
+          if (parts[6] === 'commit-plan-recover' || parts[6] === 'commit-plan-abandon') {
+            const { operationId } = z
+              .strictObject({ operationId: z.uuid() })
+              .parse(await body(req));
+            const result = await worktrees.writeCheckout(project, id, async (git) => {
+              const rootIdentity = await fileIdentity(git.root);
+              const adminIdentity = await fileIdentity(git.admin);
+              const scope = {
+                projectId: project.id,
+                repositoryId: hashCommitRepositoryIdentity(git.repositoryId),
+                worktreeIdentity: rootIdentity,
+                adminIdentity,
+              };
+              const record = store.gitCommitOperations.get(scope, operationId);
+              const journal = new CommitJournal(await realpath(store.directory));
+              const evidence = record ? undefined : await journal.read(operationId);
+              const digest =
+                record?.requestHash ??
+                (evidence?.owner?.projectId === project.id
+                  ? evidence.owner.requestDigest
+                  : undefined);
+              if (!digest)
+                throw gitError(
+                  'PLAN_RECOVERY_REQUIRED',
+                  '无法确认操作归属，请保留现场并人工核对。',
+                );
+              const coordinator = commitPlanCoordinator(
+                store,
+                journal,
+                project.id,
+                git.repositoryId,
+                rootIdentity,
+                adminIdentity,
+                digest,
+              );
+              // A prepared file log may have been durable before the SQLite claim was written.
+              // Recreate only its project-bound metadata; recovery still verifies real Git state.
+              if (!record) await coordinator.adoptOrphan(operationId);
+              if (parts[6] === 'commit-plan-abandon') {
+                const abandoned = await abandonCommitPlan(git, {
+                  operationId,
+                  journal,
+                  coordinator,
+                });
+                if (abandoned.state !== 'aborted')
+                  throw gitError(
+                    'PLAN_RECOVERY_REQUIRED',
+                    '无法确认操作尚未执行，未修改索引或引用。',
+                  );
+                return { operationId, aborted: true as const };
+              }
+              const recovered = await recoverCommitPlan(git, { operationId, journal, coordinator });
+              if (recovered.state !== 'completed')
+                throw gitError('PLAN_RECOVERY_REQUIRED', '提交需要人工核对，未覆盖索引或引用。');
+              return { operationId, commits: recovered.commits };
+            });
+            return json(res, result);
+          }
+          if (parts[6] === 'commit-draft') {
+            const input = gitCommitDraftRequest.parse(await body(req));
+            const abort = new AbortController();
+            const disconnect = () => abort.abort();
+            res.once('close', disconnect);
+            try {
+              const { git } = await worktrees.checkout(project, id, abort.signal);
+              const { draft, patch } = await readStagedChanges(git, input.generate, abort.signal);
+              const defaults = effectiveConfig();
+              const config =
+                magpieModel(defaults.model) === undefined
+                  ? defaults
+                  : defaults.magpieEnabled && magpie
+                    ? { ...defaults, gateway: magpie, managedGateway: false }
+                    : undefined;
+              if (config && input.generate)
+                draft.suggestion = await suggestCommitMessage(
+                  config,
+                  input.locale,
+                  draft,
+                  patch,
+                  abort.signal,
+                );
+              return json(res, draft);
+            } catch (error) {
+              if (!abort.signal.aborted) throw error;
+              return;
+            } finally {
+              res.off('close', disconnect);
+            }
+          }
+          if (parts[6] === 'commit') {
+            const input = gitCommitRequest.parse(await body(req));
+            const receipt = await worktrees.writeCheckout(project, id, (git) =>
+              commitStagedChanges(git, input),
+            );
+            return json(res, receipt, 201);
+          }
+          if (parts[6] === 'cache') {
+            const { path, rebuildable } = gitCacheRequest.parse(await body(req));
+            return json(res, await worktrees.markRebuildable(project, id, path, rebuildable));
+          }
+          if (parts[6] === 'reclaim') {
+            const { requestId } = gitReclaimRequest.parse(await body(req));
+            return json(res, { workspace: await worktrees.reclaim(project, id, requestId) });
+          }
+        }
+        if (parts[2] && parts[3] === 'git' && method === 'GET') {
+          const project = store.get('projects', parts[2]);
+          if (
+            parts.length === 7 &&
+            parts[4] === 'worktrees' &&
+            parts[5] &&
+            parts[6] === 'commit-analysis-progress'
+          ) {
+            const worktreeId = z.uuid().parse(parts[5]);
+            const { analysisId, version } = multiCommitProgressRequest.parse({
+              analysisId: url.searchParams.get('analysisId'),
+              version: url.searchParams.get('version'),
+            });
+            return json(res, {
+              progress: commitAnalyses.progress(
+                { projectId: project.id, worktreeId, version },
+                analysisId,
+              ),
+            });
+          }
+          const abort = new AbortController();
+          const disconnect = () => abort.abort();
+          res.once('close', disconnect);
+          try {
+            if (parts.length === 7 && parts[4] === 'worktrees' && parts[5]) {
+              const { git, rebuildable } = await worktrees.checkout(
+                project,
+                parts[5],
+                abort.signal,
+              );
+              if (parts[6] === 'commit-plan-pending') {
+                const rootIdentity = await fileIdentity(git.root);
+                const adminIdentity = await fileIdentity(git.admin);
+                const scope = {
+                  projectId: project.id,
+                  repositoryId: hashCommitRepositoryIdentity(git.repositoryId),
+                  worktreeIdentity: rootIdentity,
+                  adminIdentity,
+                };
+                const records = store.gitCommitOperations.listUnfinished(scope, { limit: 200 });
+                const journal = new CommitJournal(await realpath(store.directory));
+                const evidence = (await journal.pending()).filter(
+                  (entry) =>
+                    entry.repositoryId === git.repositoryId &&
+                    entry.worktreeIdentity === rootIdentity &&
+                    entry.adminIdentity === adminIdentity &&
+                    (!entry.owner || entry.owner.projectId === project.id),
+                );
+                const ids = new Set([
+                  ...records.map((record) => record.operationId),
+                  ...evidence.map((entry) => entry.operationId),
+                ]);
+                const items = await Promise.all(
+                  [...ids].map(async (operationId) => {
+                    const record = records.find((item) => item.operationId === operationId);
+                    const entry = await journal.read(operationId);
+                    let state = 'recovery_required';
+                    if (
+                      !record &&
+                      entry?.state === 'prepared' &&
+                      entry.owner?.projectId === project.id
+                    ) {
+                      state = 'prepared';
+                    }
+                    if (record && entry) {
+                      try {
+                        const coordinator = commitPlanCoordinator(
+                          store,
+                          journal,
+                          project.id,
+                          git.repositoryId,
+                          rootIdentity,
+                          adminIdentity,
+                          record.requestHash,
+                        );
+                        await coordinator.readAllowAhead(operationId);
+                        state = record.state;
+                      } catch {
+                        // Keep unmatched evidence visible for manual review; never synchronize here.
+                      }
+                    }
+                    return { operationId, state, commits: record?.commits ?? entry?.commits ?? [] };
+                  }),
+                );
+                return json(res, { items });
+              }
+              if (parts[6] === 'status')
+                return json(res, { ...(await readGitStatus(git, abort.signal)), rebuildable });
+              if (parts[6] === 'diff') {
+                const path = gitPath.parse(url.searchParams.get('path'));
+                const layer = gitDiffLayer.parse(url.searchParams.get('layer'));
+                return json(res, await readFileDiff(git, path, layer, abort.signal));
+              }
+            }
+            const git = await LocalGit.open(project.path, abort.signal);
+            if (parts.length === 4)
+              return json(res, await worktrees.overview(project, git, abort.signal));
+            if (parts.length === 5 && parts[4] === 'history') {
+              const oid = gitOid.parse(url.searchParams.get('oid'));
+              const offset = z.coerce
+                .number()
+                .int()
+                .min(0)
+                .max(100_000)
+                .parse(url.searchParams.get('offset') ?? '0');
+              return json(res, await readGitHistory(git, oid, offset, abort.signal));
+            }
+            if (parts.length === 6 && parts[4] === 'commits')
+              return json(res, await readCommitDiff(git, gitOid.parse(parts[5]), abort.signal));
+            throw gitError('WORKTREE_MISSING', '所选工作树不属于此项目。', 404);
+          } catch (error) {
+            if (!abort.signal.aborted) throw error;
+            return;
+          } finally {
+            res.off('close', disconnect);
+          }
+        }
+        if (
+          parts.length === 4 &&
+          method === 'GET' &&
+          (parts[3] === 'file' || parts[3] === 'files')
+        ) {
           const project = store.get('projects', parts[2]!);
           const path = url.searchParams.get('path') || '';
-          if (parts[3] === 'files') return json(res, await listProjectFiles(project.path, path));
-          if (parts[3] === 'file')
-            return json(res, { path, text: await readProjectText(project.path, path) });
+          const sessionId = url.searchParams.get('sessionId');
+          const session = sessionId ? store.get('sessions', z.uuid().parse(sessionId)) : undefined;
+          if (session && session.projectId !== project.id)
+            throw new AppError('CONTEXT_DENIED', '会话不属于此项目。', 403);
+          const directory = session ? await worktrees.resolveSession(session) : project.path;
+          if (parts[3] === 'files') {
+            const query = url.searchParams.get('query');
+            return json(
+              res,
+              query === null
+                ? await listProjectFiles(directory, path)
+                : await findProjectFiles(directory, query),
+            );
+          }
+          return json(res, { path, text: await readProjectText(directory, path) });
         }
       }
       if (parts[0] === 'api' && parts[1] === 'sessions') {
@@ -1248,7 +1760,9 @@ export async function createApp(options: {
         if (parts.length === 3 && method === 'GET') {
           const snapshot = sessionSnapshot(id);
           const restored = await forks.restoreLegacyAnchors(snapshot);
-          return json(res, restored ? sessionSnapshot(id) : snapshot);
+          const records = restored ? sessionSnapshot(id) : snapshot;
+          const workspace = await worktrees.sessionWorkspace(records.session);
+          return json(res, { ...records, ...(workspace ? { workspace } : {}) });
         }
         if (parts.length === 4 && parts[3] === 'upgrade-agent' && method === 'POST') {
           const { revisionId } = z.object({ revisionId: z.string().uuid() }).parse(await body(req));
@@ -1279,6 +1793,21 @@ export async function createApp(options: {
           store.event('session-' + id, id, 'session.updated', {});
           return json(res, { session: publicSession(session) });
         }
+        if (
+          parts.length === 5 &&
+          parts[3] === 'worktree' &&
+          parts[4] === 'restore' &&
+          method === 'POST'
+        ) {
+          const session = await worktrees.restore(
+            store.get('sessions', id),
+            gitRestoreRequest.parse(await body(req)),
+          );
+          return json(res, {
+            session: publicSession(session),
+            workspace: await worktrees.sessionWorkspace(session),
+          });
+        }
         if (parts.length === 3 && method === 'PATCH') {
           const update = z
             .object({
@@ -1292,9 +1821,20 @@ export async function createApp(options: {
             assertNativeExecution(prior, update.draft.mode, update.draft.approvalMode);
           if (
             update.status === 'archived' &&
-            (sameSessionRunning(id) || messageQueue.hasPending(id))
+            (sameSessionRunning(id) ||
+              messageQueue.hasPending(id) ||
+              forks.usingSource(id) ||
+              store
+                .list('permissions')
+                .some(
+                  (permission) => permission.sessionId === id && permission.status === 'pending',
+                ))
           )
-            throw new AppError('RUN_ACTIVE', '请先处理活动运行和待处理消息再归档。', 409);
+            throw new AppError('RUN_ACTIVE', '请先处理活动运行、审批及待处理消息再归档。', 409);
+          if (update.status === 'active' && store.gitWorktrees.forSession(id)) {
+            const path = await worktrees.resolveSession(prior);
+            worktrees.assertUnlocked(path);
+          }
           if (update.draft)
             for (const attachmentId of update.draft.attachmentIds) {
               const a = store.get('attachments', attachmentId);
@@ -1305,8 +1845,17 @@ export async function createApp(options: {
             ...update,
             updatedAt: update.title || update.status ? now() : prior.updatedAt,
           });
+          const workspace =
+            update.status === 'archived'
+              ? await worktrees.archive(session)
+              : update.status === 'active'
+                ? await worktrees.sessionWorkspace(session)
+                : undefined;
           if (!update.draft) store.event('session-' + id, id, 'session.updated', {});
-          return json(res, { session: publicSession(session) });
+          return json(res, {
+            session: publicSession(session),
+            ...(workspace ? { workspace } : {}),
+          });
         }
         if (parts.length === 3 && method === 'DELETE') {
           store.get('sessions', id);
@@ -1440,6 +1989,7 @@ export async function createApp(options: {
             z.strictObject({}).parse(await body(req));
             if (session.status !== 'active')
               throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
+            if (store.gitWorktrees.forSession(id)) await worktrees.resolveSession(session);
             messageQueue.resume(id);
           } else throw new AppError('NOT_FOUND', '接口不存在。', 404);
           queueChanged(id);
@@ -1810,6 +2360,7 @@ export async function createApp(options: {
       (close ??= (async () => {
         shuttingDown = true;
         directoryPicker?.abort();
+        commitAnalyses.close();
         const networkClosed = new Promise<void>((resolve) => server.close(() => resolve()));
         try {
           store.events.off('event', wakeAfterRun);
