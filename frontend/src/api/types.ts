@@ -3,6 +3,7 @@
  * @implementation 组合共享领域记录，描述启动信息、含兼容性可选消息队列及子任务的会话快照和内置网关状态。
  * @updated 2026-11-21T02:17:11+08:00
  */
+import type { GitSessionWorkspace } from '@shared/git-workbench';
 import type { Subagent } from '@shared/subagents';
 import type {
   AppConfig,
@@ -44,6 +45,7 @@ export interface Bootstrap extends ConfigInfo {
 }
 
 export interface Snapshot {
+  workspace?: GitSessionWorkspace;
   agent?: AgentSessionInfo;
   session: Session;
   messageQueue?: SessionMessageQueue;

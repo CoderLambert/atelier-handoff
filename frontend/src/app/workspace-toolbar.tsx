@@ -4,7 +4,7 @@
  * @updated 2026-11-23T04:49:37+08:00
  */
 import type { Ref } from 'react';
-import { ArrowLeft, ArrowRight, FileDiff, Globe, Menu, Settings2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileDiff, GitBranch, Globe, Menu, Settings2 } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import * as m from 'motion/react-m';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,12 @@ interface WorkspaceToolbarProps {
   onForward: () => void;
   onOpenNavigation: () => void;
   onOpenSettings: () => void;
+  gitAction?: {
+    open: boolean;
+    busy: boolean;
+    trigger: Ref<HTMLButtonElement>;
+    onToggle: () => void;
+  };
   sessionActions?: {
     pendingPermissions: number;
     browserOpen: boolean;
@@ -38,9 +44,11 @@ export function WorkspaceToolbar({
   onForward,
   onOpenNavigation,
   onOpenSettings,
+  gitAction,
   sessionActions,
 }: WorkspaceToolbarProps) {
   const { t } = useUiTranslation('workbench');
+  const { t: git } = useUiTranslation('git');
   const reduceMotion = useReducedMotion();
   const changesLabel = sessionActions?.pendingPermissions
     ? t('changes.pending', { count: sessionActions.pendingPermissions })
@@ -109,6 +117,21 @@ export function WorkspaceToolbar({
         >
           <Settings2 aria-hidden="true" />
         </Button>
+        {gitAction ? (
+          <Button
+            ref={gitAction.trigger}
+            size="sm"
+            variant={gitAction.open ? 'secondary' : 'ghost'}
+            aria-label={git('title')}
+            aria-pressed={gitAction.open}
+            title={git('title')}
+            disabled={gitAction.busy}
+            onClick={gitAction.onToggle}
+          >
+            <GitBranch data-icon="inline-start" aria-hidden="true" />
+            <span className="workspace-action-label">{git('title')}</span>
+          </Button>
+        ) : null}
         {sessionActions ? (
           <>
             <Button

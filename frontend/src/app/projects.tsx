@@ -3,7 +3,7 @@
  * @implementation 展示已有项目，调用项目选择 hook 处理路径、选择与绑定。
  * @updated 2026-11-20T02:00+08:00
  */
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, GitBranch } from 'lucide-react';
 import { useProjectSelection } from '@/features/projects/hooks/use-project-selection';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,13 +21,16 @@ export function ProjectsDialog({
   onOpenChange,
   projects,
   onChoose,
+  onGit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projects: Project[];
   onChoose: (id: string) => Promise<void>;
+  onGit: (project: Project) => void;
 }) {
   const { t } = useUiTranslation('navigation');
+  const { t: git } = useUiTranslation('git');
   const { path, setPath, busy, picking, error, close, pickDirectory, openProject } =
     useProjectSelection(onChoose, onOpenChange);
   return (
@@ -39,16 +42,29 @@ export function ProjectsDialog({
         </DialogHeader>
         <div className="grid gap-2">
           {projects.map((project) => (
-            <Button
-              key={project.id}
-              variant="secondary"
-              className="justify-start break-all"
-              disabled={busy || !project.available}
-              onClick={() => void openProject(project.id)}
-            >
-              {project.name} · {project.path}
-              {project.available ? '' : t('projects.unavailable')}
-            </Button>
+            <div key={project.id} className="flex min-w-0 items-center gap-2">
+              <Button
+                variant="secondary"
+                className="min-w-0 flex-1 justify-start"
+                disabled={busy || !project.available}
+                title={project.path}
+                onClick={() => void openProject(project.id)}
+              >
+                <span className="truncate">
+                  {project.name} · {project.path}
+                  {project.available ? '' : t('projects.unavailable')}
+                </span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy || !project.available}
+                onClick={() => onGit(project)}
+              >
+                <GitBranch data-icon="inline-start" aria-hidden="true" />
+                {git('title')}
+              </Button>
+            </div>
           ))}
         </div>
         <form

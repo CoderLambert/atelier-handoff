@@ -1,13 +1,19 @@
+/**
+ * @file 订阅运行事件并刷新工作台数据。
+ * @implementation 从游标建立 SSE，合并查询失效请求，并维护连接状态与结束通知。
+ * @updated 2026-11-24T03:39:03+08:00
+ */
 import { useEffect } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import type { RunEvent, RunStatus } from '@shared/types';
+import { sessionKeys } from '@/use-query/sessions/keys';
 import { notifyRunFinished } from '@/notifications';
 import { actions, store } from './store';
 
 export const keys = {
   bootstrap: ['bootstrap'] as const,
   sessions: ['sessions'] as const,
-  snapshot: (id?: string) => ['snapshot', id] as const,
+  snapshot: sessionKeys.snapshot,
   runs: ['runs'] as const,
   artifacts: ['artifacts'] as const,
   trace: ['trace'] as const,
