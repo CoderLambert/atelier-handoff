@@ -1,7 +1,7 @@
 /**
- * @file 提供可嵌入的流式 Markdown 渲染。
- * @implementation 组合 Streamdown、格式插件及 URL 过滤，支持调用方接管网页链接的打开行为。
- * @updated 2026-11-20T17:57:00+08:00
+ * @file 提供流式 Markdown 渲染和共享代码高亮加载器。
+ * @implementation 组合 Streamdown、格式插件及 URL 过滤，允许调用方接管网页链接。按需加载高亮器并缓存，失败后可重试。
+ * @updated 2026-11-24T04:13:00+08:00
  */
 import {
   createContext,
@@ -28,6 +28,22 @@ import { markdownMessages, type MarkdownLocale, type MarkdownMessages } from './
 export { markdownMessages } from './messages.js';
 export type { MarkdownLocale, MarkdownMessages } from './messages.js';
 export type { CustomRenderer, CustomRendererProps } from 'streamdown';
+export type { HighlightResult } from '@streamdown/code';
+
+type CodeHighlighter = ReturnType<typeof import('@streamdown/code').createCodePlugin>;
+let codeHighlighter: Promise<CodeHighlighter> | undefined;
+
+export function loadCodeHighlighter(): Promise<CodeHighlighter> {
+  codeHighlighter ??= import('@streamdown/code')
+    .then(({ createCodePlugin }) =>
+      createCodePlugin({ themes: ['github-light-high-contrast', 'github-dark-high-contrast'] }),
+    )
+    .catch((error: unknown) => {
+      codeHighlighter = undefined;
+      throw error;
+    });
+  return codeHighlighter;
+}
 
 const MessageContext = createContext<MarkdownMessages>(markdownMessages['zh-CN']);
 function ImageFallback({ alt }: { alt?: string }) {
@@ -182,15 +198,9 @@ export const Markdown = memo(function Markdown({
   useEffect(() => {
     if (!needsCode) return;
     let active = true;
-    void import('@streamdown/code').then(
-      ({ createCodePlugin }) => {
-        if (active) {
-          setCode(
-            createCodePlugin({
-              themes: ['github-light-high-contrast', 'github-dark-high-contrast'],
-            }),
-          );
-        }
+    void loadCodeHighlighter().then(
+      (highlighter) => {
+        if (active) setCode(highlighter);
       },
       () => {},
     );
