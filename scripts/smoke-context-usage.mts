@@ -310,6 +310,7 @@ try {
     async () =>
       (await browser
         .locator('.desktop-browser-tab-select')
+        .first()
         .evaluate((element) => element === document.activeElement)) || undefined,
     2_000,
     'tab close returns focus to the remaining tab',
