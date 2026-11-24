@@ -522,7 +522,7 @@ test('a genuine v5 database migrates without changing JSON, rowids or snapshots 
     for (let opening = 0; opening < 2; opening++) {
       const store = new Store(data);
       try {
-        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 7);
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 10);
         for (const table of jsonTables)
           assert.deepEqual(
             rows(store.db, `SELECT rowid,id,data FROM ${table} ORDER BY rowid`),
@@ -945,7 +945,7 @@ test('v7 subagent migration upgrades v6, preserves records and enforces cascades
     for (let opening = 0; opening < 2; opening++) {
       const store = new Store(data);
       try {
-        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 7);
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 10);
         assert.deepEqual(
           store.sessionSnapshots.read(fixture.first.id),
           legacySnapshot(store.db, fixture.first.id),

@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 管理记录、配置、事件与数据库迁移，让会话快照仓储和既有写操作共享连接，并在重启时处理运行中断与审批失效。
- * @updated 2026-11-21T01:12:55+08:00
+ * @implementation 管理会话、Git 工作树和多提交操作仓储的共享连接与版本迁移，并在运行中断后使相关审批失效。
+ * @updated 2026-11-24T16:15:02+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +33,9 @@ const tables: Table[] = [
 export class Store {
   readonly db: LegacyDatabase;
   readonly readTransaction: <T>(work: () => T) => T;
+  readonly assertForeignKeyIntegrity: () => void;
+  readonly gitWorktrees: ReturnType<typeof openWorkbenchDatabase>['gitWorktrees'];
+  readonly gitCommitOperations: ReturnType<typeof openWorkbenchDatabase>['gitCommitOperations'];
   readonly sessionSnapshots: SessionSnapshotRepository;
   readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
   readonly events = new EventEmitter();
@@ -43,21 +46,36 @@ export class Store {
     chmodSync(directory, 0o700);
     const connection = openWorkbenchDatabase(join(directory, 'atelier.sqlite'));
     this.db = connection.db;
+    this.gitWorktrees = connection.gitWorktrees;
+    this.gitCommitOperations = connection.gitCommitOperations;
     this.sessionSnapshots = connection.sessionSnapshots;
     this.workspaceLayout = connection.workspaceLayout;
     this.readTransaction = connection.readTransaction;
+    this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
     this.subagents = connection.subagents;
     try {
-      this.initialize(connection.applySnapshotIndexes, connection.applySubagents);
+      this.initialize(
+        connection.applySnapshotIndexes,
+        connection.applySubagents,
+        connection.applyGitWorktrees,
+        connection.applyGitCommitOperations,
+        connection.applyGitCommitOperationLifecycle,
+      );
     } catch (error) {
       this.db.close();
       throw error;
     }
   }
-  private initialize(applySnapshotIndexes: () => void, applySubagents: () => void): void {
+  private initialize(
+    applySnapshotIndexes: () => void,
+    applySubagents: () => void,
+    applyGitWorktrees: () => void,
+    applyGitCommitOperations: () => void,
+    applyGitCommitOperationLifecycle: () => void,
+  ): void {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
     const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 7) throw new Error('Database schema is newer than this application.');
+    if (version > 10) throw new Error('Database schema is newer than this application.');
     if (version === 0)
       this.transaction(() => {
         for (const table of tables)
@@ -130,6 +148,9 @@ export class Store {
       );
     if (version < 6) this.transaction(applySnapshotIndexes);
     if (version < 7) this.transaction(applySubagents);
+    if (version < 8) this.transaction(applyGitWorktrees);
+    if (version < 9) this.transaction(applyGitCommitOperations);
+    if (version < 10) this.transaction(applyGitCommitOperationLifecycle);
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {
