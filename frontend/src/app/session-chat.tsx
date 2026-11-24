@@ -97,6 +97,7 @@ export default function SessionChat({
         nativeAvailable,
       );
     } catch (error) {
+      if (snapshot.workspace) void onSent(id).catch(() => {});
       onError(translateError(error, t('session.sendUnconfirmed')));
       return;
     }

@@ -1,7 +1,7 @@
 /**
- * @file 编排工作区、会话及各功能页面。
- * @implementation 按路由装配会话、执行轨迹和设置，保存浏览器返回位置，并按需打开网页面板或会话变更记录。
- * @updated 2026-11-22T18:47:41+08:00
+ * @file 编排工作区、会话及功能面板。
+ * @implementation 管理路由、Git 侧栏宽度和全窗口切换，协调浏览器显示、焦点恢复和开发会话。
+ * @updated 2026-11-24T04:13:00+08:00
  */
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import {
 } from '@tanstack/react-router';
 import { isWorkspaceLocation, workspaceSessionId } from '@shared/workspace-location';
 import { useRememberWorkspaceLocation } from '@/use-query/settings/use-remember-workspace-location';
-import type { Run, Session } from '@shared/types';
+import type { Project, Run, Session } from '@shared/types';
 import { initialWorkspaceLayout, type WorkspaceLayout } from '@shared/workspace-layout';
 import { useWorkspaceLayout } from '@/use-query/settings/use-workspace-layout';
 import { useUpdateWorkspaceLayout } from '@/use-query/settings/use-update-workspace-layout';
@@ -27,8 +27,13 @@ import { useUpdateSession } from '@/use-query/sessions/use-update-session';
 import { useDeleteSession } from '@/use-query/sessions/use-delete-session';
 import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
 import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
-import { api, bootstrap } from '@/api/client';
-import type { Snapshot } from '@/api/types';
+import { bootstrap } from '@/api/client';
+import {
+  sessionSnapshotOptions,
+  useSessionSnapshot,
+} from '@/use-query/sessions/use-session-snapshot';
+import { gitKeys } from '@/use-query/git/keys';
+import { SessionWorktree } from '@/features/git/session-worktree';
 import { Button } from '@/components/ui/button';
 import { translateError, useUiTranslation } from '@/i18n';
 import {
@@ -52,6 +57,7 @@ import { DesktopBrowser, useDesktopBrowser } from './desktop-browser';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 import type { SessionAction, SettingsSection } from './types';
 
+const GitBoard = lazy(() => import('@/features/git'));
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
@@ -110,6 +116,7 @@ const sessionActions = {
 
 export default function Workspace() {
   const { t, locale } = useUiTranslation('workbench');
+  const { t: git } = useUiTranslation('git');
   const sessionContentId = useId();
   const numberFormat = new Intl.NumberFormat(locale);
   const loading = (
@@ -154,17 +161,7 @@ export default function Workspace() {
   const drawer = useWorkspace((state) => state.workspace.drawer);
   const connected = useWorkspace((state) => state.workspace.connected);
   const ready = useQuery({ queryKey: keys.bootstrap, queryFn: bootstrap, staleTime: 30_000 });
-  const session = useQuery({
-    queryKey: keys.snapshot(sessionId),
-    enabled: !!sessionId,
-    queryFn: ({ signal }) =>
-      api<Snapshot>(`/api/sessions/${encodeURIComponent(sessionId!)}`, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
-      }),
-    // Keep approvals visible if the browser temporarily misses an event.
-    refetchInterval: ({ state }) =>
-      state.data?.runs.some((run) => active.has(run.status)) ? 3000 : false,
-  });
+  const session = useSessionSnapshot(sessionId);
   const snapshot = session.data;
   const selectedRun =
     snapshot?.runs.find((run) => run.id === trace) ??
@@ -179,15 +176,56 @@ export default function Workspace() {
   const previewProject = view === 'chat' ? project?.id : undefined;
   const desktop = Boolean(window.atelierDesktop);
   const nativeBrowser = useDesktopBrowser(desktop ? previewProject : undefined);
-  const browser = useBrowserPreview(desktop || !browserOpen ? undefined : previewProject, true);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [gitBoard, setGitBoard] = useState<{
+    key: number;
+    project: Project;
+    tree?: string;
+    tab?: 'files' | 'worktrees';
+    trigger: HTMLElement | null;
+  }>();
+  const [gitExpanded, expandGit] = useState(false);
+  const [gitBusy, setGitBusy] = useState(false);
+  const [gitWidth, setGitWidth] = useState<number>();
+  const gitTrigger = useRef<HTMLButtonElement>(null);
+  const browserActive = browserOpen && !gitBoard;
+  const browser = useBrowserPreview(desktop || !browserActive ? undefined : previewProject, true);
+  function openGit(target: Project, tab?: 'files' | 'worktrees') {
+    if (gitBusy) return;
+    const binding = snapshot?.workspace;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setGitBoard((current) => ({
+      key: (current?.key ?? 0) + 1,
+      project: target,
+      tab,
+      tree:
+        snapshot?.project.id === target.id && binding?.mode === 'linked' ? binding.id : undefined,
+      trigger,
+    }));
+  }
+  function closeGit(restoreFocus = true) {
+    const trigger = gitBoard?.trigger;
+    setGitBoard(undefined);
+    expandGit(false);
+    setGitBusy(false);
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        const target =
+          trigger?.isConnected && trigger !== document.body ? trigger : gitTrigger.current;
+        target?.focus({ preventScroll: true });
+      });
+    }
+  }
   const layoutQuery = useWorkspaceLayout();
   const updateLayout = useUpdateWorkspaceLayout();
   const [localLayout, setLocalLayout] = useState<WorkspaceLayout>();
   const width = useWorkspaceViewport();
   const layout = localLayout ?? layoutQuery.data ?? initialWorkspaceLayout;
   const showLeft = width >= 768;
-  const showRight = view === 'chat' && browserOpen && (width > 1120 || (width >= 900 && desktop));
+  const canDockGit = width >= 1120;
+  const gitFullWindow = Boolean(gitBoard && (gitExpanded || !canDockGit));
+  const showBrowserRight =
+    view === 'chat' && browserActive && (width > 1120 || (width >= 900 && desktop));
   const browserTrigger = useRef<HTMLButtonElement>(null);
   const drawerTrigger = useRef<HTMLElement | null>(null);
   function openDrawer(next: 'navigation' | 'details') {
@@ -390,6 +428,14 @@ export default function Workspace() {
         client.removeQueries({ queryKey: keys.snapshot(target.id), exact: true });
         void client.invalidateQueries({ queryKey: keys.sessions });
       } else {
+        if (type === 'restore') {
+          const { workspace } = await client.fetchQuery(sessionSnapshotOptions(target.id));
+          if (workspace && workspace.state !== 'ready') {
+            openSession(target.id);
+            setSessionChange(undefined);
+            return;
+          }
+        }
         await updateSession.mutateAsync({
           id: target.id,
           ...(type === 'rename'
@@ -397,6 +443,7 @@ export default function Workspace() {
             : { status: type === 'archive' ? 'archived' : 'active' }),
         });
         void revalidate(target.id);
+        void client.invalidateQueries({ queryKey: gitKeys.project(target.projectId) });
       }
       setSessionChange(undefined);
       await client.invalidateQueries({ queryKey: keys.bootstrap });
@@ -501,14 +548,26 @@ export default function Workspace() {
       className={cn(
         'app react-workspace',
         desktop && 'desktop-workspace',
-        browserOpen && 'browser-preview-open',
+        browserActive && 'browser-preview-open',
       )}
     >
       <WorkspacePanels
         layout={layout}
         width={width}
         showLeft={showLeft}
-        showRight={showRight}
+        showRight={Boolean(gitBoard) || showBrowserRight}
+        focusRight={gitFullWindow}
+        rightPane={
+          gitBoard
+            ? {
+                width: gitWidth ?? Math.min(1030, Math.max(550, Math.round(width * 0.46))),
+                minWidth: 450,
+                maxWidth: 1440,
+                resizeLabel: git('board.resize'),
+                onResize: setGitWidth,
+              }
+            : undefined
+        }
         onChange={changeLayout}
         left={
           <Sidebar
@@ -518,9 +577,39 @@ export default function Workspace() {
           />
         }
         right={
-          <aside className="react-side" aria-label={t('browser.title')}>
-            {showRight ? browserPanel : null}
-          </aside>
+          gitBoard ? (
+            <Suspense
+              fallback={
+                gitFullWindow ? (
+                  <div className="fixed inset-0 z-40 bg-card">{loading}</div>
+                ) : (
+                  loading
+                )
+              }
+            >
+              <GitBoard
+                key={gitBoard.key}
+                project={gitBoard.project}
+                initialTree={gitBoard.tree}
+                initialTab={gitBoard.tab}
+                expanded={gitFullWindow}
+                onToggleExpanded={canDockGit ? () => expandGit((current) => !current) : undefined}
+                busy={gitBusy}
+                onBusy={setGitBusy}
+                onClose={() => closeGit()}
+                onCreated={(id) => {
+                  closeGit(false);
+                  openSession(id);
+                  void client.invalidateQueries({ queryKey: keys.bootstrap });
+                  void client.invalidateQueries({ queryKey: keys.sessions });
+                }}
+              />
+            </Suspense>
+          ) : (
+            <aside className="react-side" aria-label={t('browser.title')}>
+              {showBrowserRight ? browserPanel : null}
+            </aside>
+          )
         }
         center={
           <main className="main">
@@ -531,6 +620,17 @@ export default function Workspace() {
               }
               connected={connected}
               canGoBack={canGoBack}
+              gitAction={
+                project
+                  ? {
+                      open: gitBoard?.project.id === project.id,
+                      busy: gitBusy,
+                      trigger: gitTrigger,
+                      onToggle: () =>
+                        gitBoard?.project.id === project.id ? closeGit() : openGit(project),
+                    }
+                  : undefined
+              }
               onBack={() => router.history.back()}
               onForward={() => router.history.forward()}
               onOpenNavigation={() => openDrawer('navigation')}
@@ -539,16 +639,21 @@ export default function Workspace() {
                 view === 'chat' && sessionId
                   ? {
                       pendingPermissions,
-                      browserOpen,
+                      browserOpen: browserActive,
                       browserTrigger,
                       onOpenChanges: () => openDrawer('details'),
-                      onToggleBrowser: browserOpen ? closeBrowser : openBrowser,
+                      onToggleBrowser: () => {
+                        if (gitBusy) return;
+                        if (gitBoard) closeGit(false);
+                        if (!browserOpen) openBrowser();
+                        else if (!gitBoard) closeBrowser();
+                      },
                     }
                   : undefined
               }
             />
             <div className="react-center">
-              {browserOpen && !showRight ? (
+              {browserActive && !showBrowserRight ? (
                 browserPanel
               ) : (
                 <>
@@ -660,7 +765,17 @@ export default function Workspace() {
                                   </Button>
                                 ) : null}
                               </div>
-                              {project ? (
+                              {snapshot?.workspace ? (
+                                <SessionWorktree
+                                  session={snapshot.session}
+                                  workspace={snapshot.workspace}
+                                  onShowTree={() => openGit(snapshot.project, 'worktrees')}
+                                  onRefresh={async () => {
+                                    await revalidate(snapshot.session.id);
+                                    void client.invalidateQueries({ queryKey: keys.bootstrap });
+                                  }}
+                                />
+                              ) : project ? (
                                 <p className="session-meta">
                                   {project.branch || t('session.localDirectory')} <span>·</span>{' '}
                                   {snapshot?.session.fork
@@ -917,6 +1032,10 @@ export default function Workspace() {
           projects={ready.data?.projects ?? []}
           onChoose={async (id) => {
             await createProjectSession(id);
+          }}
+          onGit={(project) => {
+            openGit(project);
+            setProjectsOpen(false);
           }}
         />
       ) : null}
