@@ -566,8 +566,10 @@ export const extensions = {
     'This Skill stays in the session. Click × to remove it.',
   ],
   'picker.heading': ['Commands & Skills', 'Commands & Skills'],
+  'picker.filesHeading': ['项目文件', 'Project files'],
   'picker.chooseCommand': ['选择命令或 Skill', 'Choose a command or Skill'],
   'picker.chooseMcp': ['选择 MCP 工具', 'Choose an MCP tool'],
+  'picker.chooseFile': ['选择要引用的项目文件', 'Choose a project file to reference'],
   'picker.noTools': [
     '没有可用工具。请先测试 MCP 并允许工具。',
     'No tools available. Test the MCP and allow tools first.',
@@ -575,6 +577,10 @@ export const extensions = {
   'picker.noCommands': [
     '此项目暂无已启用的命令或可手动调用的 Skill。',
     'This project has no enabled commands or manually invocable Skills.',
+  ],
+  'picker.noFiles': [
+    '没有匹配的项目文件。',
+    'No matching project files found.',
   ],
   'picker.selectHint': ['↑ ↓ 选择', '↑ ↓ Select'],
   'picker.confirmHint': ['Enter / Tab 确认', 'Enter / Tab Confirm'],
