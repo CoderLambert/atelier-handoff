@@ -1,0 +1,348 @@
+/**
+ * @file 定义多提交计划编辑器的独立布局与滚动区域。
+ * @implementation 使用工作台主题和容器查询，在窄弹窗内将编辑与候选清单堆叠，并把操作区保留在滚动正文之外。
+ * @updated 2026-11-24T14:50:21+08:00
+ */
+@layer components {
+  .git-multi-commit {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    min-height: 0;
+    max-height: min(82dvh, 940px);
+    color: var(--ui-foreground);
+    container-type: inline-size;
+  }
+
+  .git-multi-commit-heading,
+  .git-multi-commit-unit-heading,
+  .git-multi-commit-actions,
+  .git-multi-commit-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .git-multi-commit-heading {
+    justify-content: space-between;
+  }
+
+  .git-multi-commit-heading,
+  .git-multi-commit-actions,
+  .git-multi-commit-footer {
+    flex-wrap: wrap;
+    flex: none;
+  }
+
+  .git-multi-commit h3,
+  .git-multi-commit h4,
+  .git-multi-commit h5 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-scroll {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 3px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-border) transparent;
+  }
+
+  .git-multi-commit-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  .git-multi-commit-plan,
+  .git-multi-commit-inventory,
+  .git-multi-commit-inventory > div,
+  .git-multi-commit-field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .git-multi-commit-plan,
+  .git-multi-commit-inventory {
+    gap: 12px;
+  }
+
+  .git-multi-commit-groups {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    max-height: min(26dvh, 240px);
+    overflow: auto;
+    scrollbar-width: thin;
+    list-style: none;
+    margin: 0;
+    padding: 3px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+  }
+
+  .git-multi-commit-groups [data-slot='button'] {
+    width: 100%;
+    height: auto;
+    min-height: var(--ui-size-sm);
+    gap: 10px;
+    text-align: start;
+    white-space: normal;
+  }
+
+  .git-multi-commit-groups [data-slot='button'] > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-views {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .git-multi-commit-view {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .git-multi-commit-view input {
+    accent-color: var(--ui-primary);
+  }
+
+  .git-multi-commit-category {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding-block: 12px;
+    border-block-start: 1px solid var(--ui-border);
+  }
+
+  .git-multi-commit-category-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .git-multi-commit-category-heading h5 {
+    min-width: 0;
+  }
+
+  .git-multi-commit-category-heading [data-slot='button'] {
+    height: auto;
+    min-height: var(--ui-size-sm);
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .git-multi-commit-category-heading [aria-expanded='true'] > svg {
+    transform: rotate(90deg);
+  }
+
+  .git-multi-commit-units[hidden] {
+    display: none;
+  }
+
+  .git-multi-commit-field label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .git-multi-commit-field :is(input, textarea) {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--ui-input);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    background: var(--ui-card);
+    color: var(--ui-card-foreground);
+    font: 13px / 1.6 var(--font-mono);
+  }
+
+  .git-multi-commit-field textarea {
+    min-height: 112px;
+    max-height: 32dvh;
+    resize: vertical;
+  }
+
+  .git-multi-commit-field :is(input, textarea):disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .git-multi-commit-field input[aria-invalid='true'] {
+    border-color: var(--ui-destructive);
+  }
+
+  .git-multi-commit-hint,
+  .git-multi-commit-field-error,
+  .git-multi-commit-blocked {
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-hint {
+    color: var(--ui-muted-foreground);
+  }
+
+  .git-multi-commit-field-error {
+    color: var(--ui-destructive);
+  }
+
+  .git-multi-commit-blocked {
+    color: var(--ui-warning);
+  }
+
+  .git-multi-commit-units {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .git-multi-commit-unit {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+    background: var(--ui-background);
+  }
+
+  .git-multi-commit-unit-heading {
+    flex-wrap: wrap;
+  }
+
+  .git-multi-commit-unit code {
+    min-width: 0;
+    font: 12px / 1.6 var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-status {
+    margin-block-end: 16px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--ui-info-soft);
+    color: var(--ui-info);
+  }
+
+  .git-multi-commit-status svg {
+    flex: none;
+    width: var(--ui-icon-size);
+    height: var(--ui-icon-size);
+  }
+
+  .git-multi-commit-previews,
+  .git-multi-commit-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .git-multi-commit-previews {
+    margin-block-start: 20px;
+  }
+
+  .git-multi-commit-diff {
+    position: relative;
+    min-width: 0;
+    max-height: 320px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+  }
+
+  .git-multi-commit-preview-file > code,
+  .git-multi-commit-preview-file > p {
+    display: block;
+    margin: 0;
+    padding: 8px 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-preview-file + .git-multi-commit-preview-file {
+    border-block-start: 1px solid var(--ui-border);
+  }
+
+  .git-multi-commit-footer {
+    justify-content: flex-end;
+  }
+
+  .git-multi-commit-blocking {
+    flex: 1 0 100%;
+    max-height: 120px;
+    overflow: auto;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--ui-warning-soft);
+    color: var(--ui-warning);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-blocking ul {
+    margin: 4px 0 0;
+    padding-inline-start: 20px;
+  }
+
+  .git-multi-commit-footer > [data-slot='button'],
+  .git-multi-commit-heading > [data-slot='button'] {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .git-multi-commit-options {
+    max-width: min(520px, calc(100vw - 32px));
+  }
+
+  .git-multi-commit-option {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @container (min-width: 720px) {
+    .git-multi-commit-columns {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    }
+  }
+}

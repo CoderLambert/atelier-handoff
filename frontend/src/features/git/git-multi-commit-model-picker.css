@@ -1,0 +1,42 @@
+/**
+ * @file 定义多提交弹窗模型选择区的紧凑布局。
+ * @implementation 使用主题变量和可换行控件，保持长模型 ID 与手动输入在弹窗内可访问。
+ * @updated 2026-11-24T18:00:00+08:00
+ */
+@layer components {
+  .git-multi-commit-model-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .git-multi-commit-model-picker > label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .git-multi-commit-model-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  }
+  .git-multi-commit-model-controls [data-slot='select-trigger'] {
+    flex: 1 1 240px;
+    max-width: 100%;
+  }
+  .git-multi-commit-model-controls [data-slot='select-value'] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .git-multi-commit-model-picker p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ui-muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .git-multi-commit-model-picker [role='alert'] {
+    color: var(--ui-destructive);
+  }
+}
