@@ -10,5 +10,29 @@
     "key": "driver-call:32f79dd292f5d6e4",
     "decision": "docs/decisions/2026-11-21-subagents.md",
     "test": "tests/session-snapshot-orm.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-git-worktrees.ts",
+    "key": "driver-call:20c533a01219769a",
+    "decision": "docs/decisions/2026-11-24-git-development-sessions.md",
+    "test": "tests/git-workbench.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-git-commit-operations.ts",
+    "key": "driver-call:e191b101b96f39b5",
+    "decision": "docs/decisions/2026-11-24-ai-multi-commit.md",
+    "test": "tests/git-commit-operations.test.ts"
+  },
+  {
+    "file": "server/db/maintenance/foreign-key-integrity.ts",
+    "key": "sql:db3dd82a257d4b7c",
+    "decision": "docs/decisions/2026-11-21-orm-architecture.md",
+    "test": "tests/git-commit-operations.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-git-commit-operation-lifecycle.ts",
+    "key": "driver-call:add172deab3d920c",
+    "decision": "docs/decisions/2026-11-24-ai-multi-commit.md",
+    "test": "tests/git-commit-operations.test.ts"
   }
 ]
