@@ -9,6 +9,7 @@ import { chat } from './catalogs/chat.js';
 import { common } from './catalogs/common.js';
 import { desktop } from './catalogs/desktop.js';
 import { extensions } from './catalogs/extensions.js';
+import { git } from './catalogs/git.js';
 import { inspector } from './catalogs/inspector.js';
 import { navigation } from './catalogs/navigation.js';
 import { workbench } from './catalogs/workbench.js';
@@ -23,6 +24,7 @@ export const catalogs = {
   desktop,
   browser,
   navigation,
+  git,
 };
 export type UiNamespace = keyof typeof catalogs;
 
