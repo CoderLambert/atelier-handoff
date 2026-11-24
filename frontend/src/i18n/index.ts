@@ -116,13 +116,72 @@ const errors = new Map<string, keyof typeof import('@shared/i18n/catalogs/common
   ['INVALID_MODEL_CATALOG', 'errors.modelCatalogInvalid'],
   ['UPLOAD_TOO_LARGE', 'errors.fileTooLarge'],
   ['ARTIFACT_TOO_LARGE', 'errors.fileTooLarge'],
+  ['FILE_TOO_LARGE', 'errors.fileTooLarge'],
+  ['CONTEXT_TOO_LARGE', 'errors.fileTooLarge'],
   ['PATH_DENIED', 'errors.pathDenied'],
   ['SESSION_ARCHIVED', 'errors.sessionArchived'],
   ['RUN_ACTIVE', 'errors.runActive'],
 ]);
 
+type GitErrorKey = Extract<
+  keyof typeof import('@shared/i18n/catalogs/git').git,
+  `errors.${string}`
+>;
+
+const gitErrors = new Map<string, GitErrorKey>([
+  ['GIT_UNAVAILABLE', 'errors.unavailable'],
+  ['GIT_NOT_REPOSITORY', 'errors.notRepository'],
+  ['GIT_INVALID_BRANCH', 'errors.invalidBranch'],
+  ['GIT_BRANCH_EXISTS', 'errors.branchExists'],
+  ['GIT_BASE_MISSING', 'errors.baseMissing'],
+  ['GIT_BASE_CHANGED', 'errors.baseChanged'],
+  ['GIT_DIRECTORY_DIRTY', 'errors.dirty'],
+  ['GIT_DIRECTORY_BUSY', 'errors.busy'],
+  ['GIT_DIRECTORY_OVERLAP', 'errors.overlap'],
+  ['GIT_WORKTREE_CHANGED', 'errors.changed'],
+  ['GIT_WORKTREE_MISSING', 'errors.missing'],
+  ['GIT_RESTORE_BRANCH_REQUIRED', 'errors.branchRequired'],
+  ['GIT_SNAPSHOT_CORRUPT', 'errors.snapshotCorrupt'],
+  ['GIT_RESTORE_UNAVAILABLE', 'errors.occupied'],
+  ['GIT_DESTINATION_EXISTS', 'errors.occupied'],
+  ['GIT_IN_PROGRESS', 'errors.inProgress'],
+  ['GIT_OUTPUT_LIMIT', 'errors.outputLimit'],
+  ['GIT_FILE_CHANGED', 'errors.fileChanged'],
+  ['GIT_OPERATION_FAILED', 'errors.previousFailed'],
+  ['GIT_PLAN_STALE', 'errors.planStale'],
+  ['GIT_PLAN_DEPENDENCY', 'errors.planDependency'],
+  ['GIT_PLAN_UNSUPPORTED', 'errors.planUnsupported'],
+  ['GIT_PLAN_CREDENTIAL', 'errors.planCredential'],
+  ['GIT_PLAN_ANALYSIS_EXPIRED', 'errors.planAnalysisExpired'],
+  ['GIT_PLAN_ANALYSIS_STALE', 'errors.planAnalysisStale'],
+  ['GIT_PLAN_UNSAFE_HUNK', 'errors.planUnsupported'],
+  ['GIT_PLAN_INVALID', 'errors.planInvalid'],
+  ['GIT_PLAN_UNKNOWN_UNIT', 'errors.planInvalid'],
+  ['GIT_PLAN_DUPLICATE_UNIT', 'errors.planInvalid'],
+  ['GIT_PLAN_UNASSIGNED_UNIT', 'errors.planInvalid'],
+  ['GIT_PLAN_EMPTY_GROUP', 'errors.planInvalid'],
+  ['GIT_PLAN_PREVIEW_LIMIT', 'errors.planLimit'],
+  ['GIT_PLAN_LIMIT', 'errors.planLimit'],
+  ['GIT_PLAN_RECOVERY_REQUIRED', 'errors.planRecovery'],
+  ['GIT_PLAN_UNFINISHED', 'errors.planRecovery'],
+  ['GIT_PLAN_LOCK_LOST', 'errors.planRecovery'],
+  ['GIT_PLAN_COORDINATION', 'errors.planRecovery'],
+  ['GIT_PLAN_DETACHED_HEAD', 'errors.planDetached'],
+  ['GIT_PLAN_INDEX_UNSUPPORTED', 'errors.planIndex'],
+  ['GIT_PLAN_INDEX_UNSAFE', 'errors.planIndex'],
+  ['GIT_PLAN_PLATFORM', 'errors.planPlatform'],
+  ['GIT_PLAN_REQUEST_CONFLICT', 'errors.planConflict'],
+  ['GIT_COMMIT_EMPTY', 'errors.commitEmpty'],
+  ['GIT_COMMIT_STALE', 'errors.commitStale'],
+  ['GIT_COMMIT_IDENTITY', 'errors.commitIdentity'],
+  ['GIT_COMMIT_SIGNING', 'errors.commitSigning'],
+  ['GIT_COMMIT_WRITE', 'errors.commitWrite'],
+]);
+
 export function translateError(error: unknown, fallback: string): string {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  if (typeof code === 'string' && code.startsWith('GIT_'))
+    return getTranslator('git')(gitErrors.get(code) ?? 'errors.failed');
   const key = typeof code === 'string' ? errors.get(code) : undefined;
   return key ? getTranslator('common')(key) : fallback;
 }
