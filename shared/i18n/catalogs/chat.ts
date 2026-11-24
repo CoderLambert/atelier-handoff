@@ -174,6 +174,8 @@ export const chat = {
   'composer.uploadingFile': ['{{name}} · 上传中…', '{{name}} · Uploading…'],
   'composer.writeTask': ['撰写任务', 'Write a task'],
   'context.backToDirectory': ['返回目录', 'Back to directory'],
+  'context.close': ['完成', 'Done'],
+  'context.currentPath': ['当前目录路径', 'Current directory path'],
   'context.description': [
     '选择的 UTF-8 文本文件会随下次任务一起读取，最多 30 个。',
     'Selected UTF-8 text files will be read with the next task, up to 30 files.',
@@ -181,6 +183,9 @@ export const chat = {
   'context.directory': ['目录', 'Directory'],
   'context.empty': ['目录为空', 'Directory is empty'],
   'context.file': ['文件', 'File'],
+  'context.fileTooLarge': ['超过 128 KiB 限制', 'Exceeds 128 KiB limit'],
+  'context.itemsCount_one': ['{{count}} 个条目', '{{count}} item'],
+  'context.itemsCount_other': ['{{count}} 个条目', '{{count}} items'],
   'context.limit': [
     '已达到 30 个上下文文件的上限，请先移除部分文件。',
     'The limit of 30 context files has been reached. Remove some files first.',
@@ -194,6 +199,7 @@ export const chat = {
   'context.reload': ['重新加载', 'Reload'],
   'context.select': ['选择', 'Select'],
   'context.selected': ['已选择', 'Selected'],
+  'context.selectedCount': ['已选 {{count}} / {{max}}', 'Selected {{count}} / {{max}}'],
   'context.selectFile': ['选择文件', 'Select file'],
   'context.title': ['选择项目上下文', 'Choose project context'],
   'window.title': ['上下文详情', 'Context details'],
