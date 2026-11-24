@@ -4,7 +4,7 @@
  * @updated 2026-11-20T23:09:03+08:00
  */
 export const sessionKeys = {
-  snapshot: (id: string) => ['snapshot', id] as const,
+  snapshot: (id?: string) => ['snapshot', id] as const,
   sendMessage: ['sessions', 'send-message'] as const,
   updateDraft: ['sessions', 'update-draft'] as const,
   messageQueue: (id: string) => ['sessions', id, 'message-queue'] as const,
