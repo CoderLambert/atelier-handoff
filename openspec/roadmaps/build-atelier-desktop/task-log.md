@@ -2,6 +2,82 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-24 · 重新打开后的多提交复测
+
+- 用户要求重新打开并测试；启动前未发现运行中的 Atelier 桌面或运行时，使用 `npm run desktop` 沿用原有数据目录启动。实际窗口显示原工作区及会话列表；只读 SQLite `quick_check=ok`，2 个项目和 14 个会话可读取。
+- 使用 `node .local/multi-commit-electron-smoke.mjs`、隔离项目/profile 和本地回环模型，验证缺失编号提示、继续分析、完整围栏输出、核对和创建两条测试提交，中英文主流程通过。截图和合成夹具在 `/tmp/atelier-multi-electron-B5B9PZ/`；未调用真实模型，也未向外部发送真实工作区差异，因此不能证明 GPT-6-Luna 原问题已解决。
+
+## 2026-11-24 · 多提交响应兼容与诊断（隔离验证通过）
+
+- 完整单层 JSON 围栏及 `stop_sequence` 完成响应经过现有 schema、凭据和 ID 完整性校验后可用；不修复截断或忽略任何变更。网关消息、JSON、分组字段、长度和 ID 错误分别提示；零批失败后可更换模型重新开始。保留已有成功批次与手动编辑，不自动付费重试。[决策](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- `npm run check` 通过；`npm test` 运行时 651 通过、1 跳过，前端 119 通过。后续新增 390 合成项的七批覆盖测试以及 `tsc --noEmit` 通过；`npm run build` 通过。隔离 Electron 使用回环网关先返回缺失 ID，然后返回完整 JSON 围栏，验证明确错误、继续分析、逐组预览及创建两条测试提交；截图：[缺失编号提示](../../../docs/evidence/ai-multi-commit/planner-missing-id-1280.png)。未调用真实 GPT-6-Luna；此次实际失败的具体错误仍未知。
+- 开发过程 review：先按失败类别复用本地回环测试，再用隔离 Electron 验证真正入口；旧桌面夹具因界面流程更新而首次失效，改用当前先规划后审查的入口后通过。大批次自动拆分需单独设计检查点和费用上限，不在无真实原因证据时引入。
+
+## 2026-11-24 · AI 多提交实时进度（隔离验证通过）
+
+- 分析中显示当前批次、进度条、已验证变更块和建议组数量。全部批次完成后单独显示最终整理。统计来自运行时冻结分析会话，专用只读查询不重读 Git 或增加推理请求，关闭或分析结束即停止查询。[决策与回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- Chromium 先复现只有等待提示，修复后在回执仍挂起时读到批次进度，并验证快照版本、分析编号、查询关闭与推理次数。运行时定向测试 71 项通过，覆盖跨项目、工作树、版本和不同分析编号的进度隔离。原始证据为 `.local/ai-multi-commit-progress/{workflow-red,workflow,server-targeted}.log`。
+- 在隔离源码副本依次运行 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build` 和 `npm run build:desktop`。运行时 646 通过、1 个既有 WebFetch 用例跳过，前端 119 通过。全量复验曾有既有 Skill 代理请求体测试偶发 `Broken pipe`，同源码复跑通过。原始输出为同目录 `{check,test,build,build-desktop}.log`、`test-broken-pipe.log`。
+- Linux x64 Electron 45.4.1、独立 profile 和回环模型夹具在请求挂起时验证第 1 / 3 批、第 2 / 3 批和已分析 64 / 129 项，随后观察全部 129 项完成并进入整理，整理失败后仍能续跑、保留编辑和本地创建 3 条提交。检查英文单批进度及中文 1280×800、英文 1440×900 视口。真实模型调用为 0。复跑入口 `node --import tsx .local/ai-multi-commit-progress/electron-smoke.mts <隔离源码副本> .local/ai-multi-commit-progress`。[实时批次](../../../docs/evidence/ai-multi-commit/progress/analyzing-zh-1280.png) · [最终整理](../../../docs/evidence/ai-multi-commit/progress/organizing-zh-1280.png) · [机器结果](../../../docs/evidence/ai-multi-commit/progress/electron-result.json)。
+- 验收源码与工作区 12 份源码哈希一致，原仓库 HEAD 及暂存区指纹一致。用户运行窗口未切换。单批复核并应用 9 份文件说明，独立 `check:headers` 覆盖 12 份源码并通过。证据为 `.local/ai-multi-commit-progress/{source-receipt.json,headers.log,headers/}`。
+- **开发过程 review**。复用 131 项 Electron 夹具，在第二批和最终整理的实际请求挂起时读取进度，避免使用计时推测。发现实时计数和上一版计划的待分析数字会同时出现，调整为分析期间显示进度、返回后恢复原编辑视图，并增加可见性断言。
+
+## 2026-11-24 · AI 多提交审查与凭据误判（隔离验证通过）
+
+- 点击「AI 提交」先读取本地快照，展示变更块总数、可规划数量和本次模型选择。明确开始后才请求模型。审查优先显示提交组和组内变更，未分析、模型未分组和受限项各有状态。续跑绑定快照、模型和语言，断线可只读查询，过期可保留草稿后重新开始。点击预览直接定位到首组差异。
+- 区分源码引用、调用、明确占位符和疑似凭据。命中时显示格式和路径或行位置，相关单元及依赖不发给模型。新增行与路径命中阻止本流程提交，删除与既有上下文命中可按本地预览确认。预览与执行重新校验冻结单元和实际提交差异。保留受保护路径、二进制仅发送元数据、冲突索引和跨层依赖限制。[技术决策与回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- 合成差异复现旧判断。普通引用、两种函数调用、`test-token`、可能凭据字面值和 PEM 标记均判为不可发送，删除与上下文也判为不可发送。本机原始记录 `.local/ai-multi-commit-review/baseline-privacy.log`。
+- 实施前，合成凭据回归因普通引用误判和含空格字面值漏判失败，Chromium 回归因初始状态缺失失败，见 `privacy-red.log`、`workflow-red.log`。定向修复后，真实 Git 与回环网关共 15 项通过，Chromium 审查流程通过。凭据场景覆盖删除和上下文仅供本地审查、隔离同文件块、暂存依赖、二进制只传元数据以及预览和执行双侧拒绝伪造选择。浏览器覆盖 245 个单元只留下 5 项决定、失联只读查询、最终整理失败及过期后保留编辑。证据位于同一目录的 `privacy-api.log`、`workflow-chromium.log`。
+- 基线 `0d3b184` 加工作区源码校验值。最终在隔离源码副本依次运行 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build`、`npm run build:desktop`，均通过。运行时 646 通过、1 个既有 WebFetch 用例跳过，前端 119 通过。完整输出为 `.local/ai-multi-commit-review/{check,test,build,build-desktop}.log`，源码副本位置见 `candidate-path.txt`。较早的定向运行把网关探活误计成推理，改按 `POST /v1/messages` 核对；失败输出保存在 `server-targeted.log`。
+- Linux x64 Electron 45.4.1 使用独立 Git 仓库、运行时数据根、profile 和回环网关。131 个变更块中 129 个可规划。第二个分析批次和最终整理各注入一次 HTTP 503，分别只重试失败的批次及整理请求。保留标题、正文、手动分组和明确保留项。首轮确认前 HEAD 与暂存区逐字节一致，确认后生成 3 条提交，留下 2 个明确保留的文件。检查中文 1280×800、1440×900 与英文深色 1920×1080 渲染视口，实际原生内容窗口 2560×1440，并核对预览首组差异可见及 Esc 焦点恢复。[机器结果](../../../docs/evidence/ai-multi-commit/planning-review/electron-result.json) · [选择模型](../../../docs/evidence/ai-multi-commit/planning-review/setup-zh-1280.png) · [最终整理失败](../../../docs/evidence/ai-multi-commit/planning-review/partial-zh-1280.png) · [逐组预览](../../../docs/evidence/ai-multi-commit/planning-review/preview-zh-1440.png) · [英文审查](../../../docs/evidence/ai-multi-commit/planning-review/review-en-dark-1920.png)。
+- Electron 复跑入口为 `node --import tsx .local/ai-multi-commit-review/electron-smoke.mts <隔离源码副本> .local/ai-multi-commit-review`，原始输出 `electron.log`。首轮平铺窗口未保持预设几何，随后按实际原生内容边界设渲染视口，断言截图尺寸。旧输出保存在 `electron-native-first.log`、`electron-viewport-first.log` 和 `electron-before-preview-scroll.log`。真实模型分组质量、本机截图中其余凭据提示以及安装件均未在本轮验证。
+- 用户窗口保留运行，真实仓库 HEAD 和暂存区指纹一致，164 个任务外原有改动路径的内容一致，未暂存、提交或推送任务改动。当前会话无 OpenWiki MCP，本次取舍和验证已记录在源码决策与执行日志。文件说明单批按 16 个输入的哈希核对，应用 4 份说明，独立 `check:headers` 通过。输入、应用记录和工作区对照见 `.local/ai-multi-commit-review/headers/` 和 `worktree-preservation.json`。
+- **开发过程 review**。合并真实 Git 和回环网关验证，让披露、预览及执行共用同一组凭据与跨层变更。桌面先按实际内容尺寸校验，再断言第一组差异进入可视区域。后续在第一次桌面复验就把视口、截图尺寸和差异可见性三项纳入同一断言。
+
+## 2026-11-24 · 多提交问题分类（隔离验证通过）
+
+- 多提交弹窗扩展为桌面大尺寸，默认按原因分开列出待处理项，支持查看全部、已保留及逐类批量保留，保留逐项撤回和提交前预览。大量项目默认收合；有冲突时即使保留也提示先解决冲突。沿用服务端安全检查。
+- `npm run check`、`npm test`（运行时 643 通过、1 跳过，前端 119 通过）和 `npm run build` 通过；调整模型设置区高度后 `check:ui`、构建与隔离 Electron 验收通过。浏览器替身覆盖 240 个已分组项与凭据、冲突、可提交的完整文件和普通待分配项，检查分类、批量保留、逐项恢复与冲突门禁。隔离 Electron 使用本地网关及合成文件验证分类和两次提交，截图：[问题分类](../../../docs/evidence/ai-multi-commit/issue-groups-1280.png)。未操作用户窗口或真实模型。
+- 开发过程 review：复用现有大批量浏览器和隔离桌面夹具；桌面截图暴露设置区占高问题，缩小后复测，后续提前在 1280×800 核对可见区域。
+
+## 2026-11-24 · 多提交待分配提示（隔离验证通过）
+
+- 在长变更列表提供“只看待分配”筛选，底部显示不可预览或提交的原因、数量和定位入口；受保护且已保留的项不计入待分配。过期计划会禁用预览并提示重新打开。筛选不修改用户计划。
+- `npm run check` 与 `npm test`（运行时 643 通过、1 跳过；前端 119 通过）在最后调整中英文数量文案及补充排除项测试之前通过；随后受影响浏览器测试、前端类型检查、`check:i18n` 和 `npm run build` 通过。隔离 Electron 用本地模型替身验证两个待分配项的底部提示、筛选和提交主流程，截图：[待分配提示](../../../docs/evidence/ai-multi-commit/unassigned-reasons-1280.png)。未读取用户正在编辑的计划或关闭其窗口。
+- 开发过程 review：优先复用已有多提交浏览器及 Electron 夹具；列表筛选与底栏提示复用同一归属判定，避免两套计数发生偏差。
+
+## 2026-11-24 · 多提交分析超时与续跑（隔离验证通过）
+
+- 分析按批次独立限时；成功批次的分组保留在绑定项目、工作树、快照、模型和披露策略的短期内存会话中。失败后可继续剩余批次，最终整理失败时可保留批次分组。超过分组上限时明确提示并保留未分配项。运行时重启或会话过期后需重新分析。[决策](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- 独立审查发现连续断线后的重复分析、追加分组超限、全局整理遗漏曾分析但未分配单元的问题，已分别修复；`frontend/src/features/git/git-multi-commit-model-picker.test.ts` 使用本地替身验证编辑保留、续跑及连续断线恢复。`tests/git-commit-analysis-sessions.test.ts` 与 `tests/git-commit-planner.test.ts` 覆盖逐批时限、恢复、会话隔离及敏感内容；`tests/git-multi-commit-api.test.ts` 使用隔离真实 Git 仓库验证接口。未调用真实模型。
+- 项目 `npm run check`、`npm test`（运行时 641 通过、1 跳过；前端 119 通过）在最后一轮界面审查修复前通过；最终修复后受影响前端测试、前端类型检查及 `npm run build` 通过。隔离 Electron 的原有主流程验收通过，覆盖两次提交、双语和 1280×800/1440×900；本次恢复交互由隔离 Chromium 替身测试，未在 Electron 中实测超时。
+- 后续审查补充凭据切换与容量边界：会话使用进程密钥 HMAC 绑定实际认证令牌，凭据变化时拒绝复用；容量耗尽时保留未过期的未完成会话并拒绝新会话。`node --import tsx --test tests/git-commit-analysis-sessions.test.ts tests/git-commit-planner.test.ts` 共 59 项通过；修改后 `npm run check`、`npm test`（运行时 643 通过、1 跳过；前端 119 通过）与 `npm run build` 通过。旧 API 可省略分析 ID，断线后无法凭 ID 找回；当前界面已在请求前生成 ID。
+- 开发过程 review：复用真实 Git API 和 Electron 夹具，使用独立审查针对续跑编辑合并及连续断线发现边界问题；后续应尽早把批次失败和界面编辑合并到同一端到端夹具。
+
+## 2026-11-24 · 多提交分析模型选择（已验证并切换）
+
+- 多提交弹窗先读取本地工作树快照，用户选择工作台默认、目录模型或手动输入模型 ID 后才发起 AI 分析；该选择仅影响本次弹窗。请求按所选模型分流至已配置的 Shunt 或 Magpie，服务端返回本次尝试的模型 ID，不改变聊天草稿或全局配置。处理中隐藏旧超时提示，覆盖率文案区分已完成项与全体元数据项。[决策](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- 用户反馈 373 个变更单元仅完成 64 项后超时：源码固定每批最多 64 项并顺序分析，整个多批流程共用 120 秒上限；64 是完成批次累计，不能仅凭截图断言是哪次请求慢。本次未调整限时或声称换模型一定能避免超时。
+- `npm run check` 通过；`npm test` 运行时 630 通过、1 跳过，前端 119 通过；`npm run build` 通过。`tests/git-multi-commit-api.test.ts` 用双本地网关验证默认/所选模型、Shunt/Magpie 切换及不修改配置；`git-multi-commit-model-picker.test.ts` 覆盖选择前无推理、超时重试提示和草稿保留。真实 Electron 隔离测试验证选择前无模型请求、指定模型实际到达回环网关、默认模型回退及两条提交，检查中文/英文和深浅主题。[模型选择截图](../../../docs/evidence/ai-multi-commit/model-picker-20261124.png)；脚本 `.local/multi-commit-electron-smoke.mjs`。未调用真实付费模型。
+- 已检查旧窗口没有已分组的计划和活动会话任务，正常切换新版；数据库仍为 v10、`quick_check=ok`，2 个项目及 14 个会话可读取。未触碰用户工作区暂存或提交。
+- 文件说明维护批次 `multi-commit-model-selection / 0d3b184 + 未提交工作区` 已完成；7 个输入文件的哈希均匹配，已核对并应用其中 4 个文件的说明建议，`npm run check:headers` 通过。输入校验值、brief 和建议保存在 `.local/model-selection-20261124.*`。本功能尚未提交。
+- 开发过程 review：复用多提交的隔离 Electron 验收脚本及本地双网关，避免重复对实际模型发请求；先直接读取批处理与时限代码，再解释截图，不将超时误判为某个来源故障。
+
+## 2026-11-24 · AI 多提交规划（已验证并切换）
+
+- 将单条暂存提交扩展为扫描已暂存、未暂存和未跟踪改动，生成可编辑的有序提交分组，核对逐组差异后确认；支持可安全拆分的文本块、明确排除及同文件两层依赖。高置信凭据变更不会发给模型或自动提交。签名、游离 HEAD、分离索引和无法安全处理的文件有明确限制。[决策与回退](../../../docs/decisions/2026-11-24-ai-multi-commit.md)
+- 服务端冻结工作树/索引/HEAD，使用临时索引构造提交链，持久化 SQLite 操作和独立索引日志，按预期旧值推进分支。真实 Git 测试覆盖已暂存与工作区内容不同、重复确认、强制中断后恢复和两阶段安全放弃。独立审查发现 JSON 凭据过滤及 journal/SQLite 双写间中断两项问题，修复后分别由 `tests/git-commit-plan-privacy.test.ts`、`tests/git-multi-commit-api.test.ts` 和 `tests/git-commit-plan-recovery.test.ts` 回归。
+- 数据库新增 v10 迁移，以隔离 SQLite 测试覆盖旧四态 v9、新式 v9、WAL、记录/rowid 保留和故障回滚；迁入测试覆盖日志/备份校验。自动权限审查最初拒绝复制真实数据库；随后用户明确授权将 `.data/atelier.sqlite` 一致性备份至 `.local/atelier-v9-backup-20261124/atelier.sqlite` 并重启。备份 `quick_check=ok`、版本 9；升级后版本 10、`quick_check=ok`，2 个项目、14 个会话、250 条消息和 122 次运行数量保持一致。
+- `npm run check` 通过；`npm test` 运行时 621 通过、1 跳过，前端 118 通过；`npm run build` 和 `npm run build:desktop` 通过。Electron 隔离测试使用真实桌面、临时 Git 仓库及本地模型替身：自动生成两组、编辑第一条、预览并创建两条提交；再检查英文深色界面。未调用真实付费模型。截图：[中文 1280×800](../../../docs/evidence/ai-multi-commit/zh-light-1280.png)、[中文 1440×900](../../../docs/evidence/ai-multi-commit/zh-light-1440.png)、[英文深色 1440×900](../../../docs/evidence/ai-multi-commit/en-dark-1440.png)。测试脚本保存在 `.local/multi-commit-electron-smoke.mjs`。
+- 已启动新版用户实例，真实窗口显示原有项目和会话；升级前数据库备份保留在上述私有路径。真实用户工作区未进行 AI 模型调用、暂存或提交。
+- 文件说明维护批次 `ai-multi-commit / 0d3b184 + 未提交工作区` 已完成；20 个输入文件的校验值均匹配，只读整理建议对其中 6 个文件做说明更新，已核对并应用。`npm run check:headers` 通过。输入校验值、brief 与建议保存在 `.local/multi-commit-20261124.*`；尚无本功能验收提交，不将基线提交冒充本次提交。
+- 开发过程 review：用相同的真实 Git 恢复夹具覆盖执行、崩溃和 HTTP 入口，避免只看模拟结果；复用隔离 Electron 的双语截图。之后先确认实际数据库版本再定迁移版本，避免运行中的旧版 v9 与开发中调整约束产生冲突；继续顺序运行共享构建目录的检查。
+
+## 2026-11-24 · Git 面板页面滚动排查
+
+- 使用隔离数据根启动本地服务和 Vite，在 2000×1125 视口打开本项目 Git 面板（129 条文件变动）。浏览器测得文档 `scrollHeight=6373`、视口 `clientHeight=1126`，`.git-list` 本身仍按预期可滚动。
+- 129 个列表项里的 `.sr-only` 元素使用绝对定位，原定位参照为 `body`。为 `.git-list` 增加 `position: relative` 后复测：文档高度和视口均为 1126，尝试滚动外层时 `scrollY=0`；文件列表内容高度 6259、可视高度 980，可滚动至底部。`npm run check:ui` 通过；验证使用隔离数据根的 Vite 页面，未在 Electron 窗口验证。
+
 ## 2026-11-23 · 会话工具证据恢复
 
 - 用户反馈后续细化剧情时重复抓取网页。排查真实本地 transcript：旧轮央视 WebFetch 已有剧情，新 SDK 上下文的检查点只有工具 ID 和搜索来源，没有已抓取网页与结果的关联。
@@ -406,3 +482,28 @@
 - Chromium 检查六套主题、四种运行模式的实际计算颜色，24 组通过。用 `.local/frontend-regression-20261123/mode-colors.mts` 可复跑实际页面夹具。`npm run check:ui` 与前端构建通过。
 
 - 实机复查后调整全工具自动化触发器，改与菜单当前项的高亮共用主题强调底色和前景色。本机信任继续使用警告色。六主题、四种模式的 Chromium 回归通过，并直接比较了六主题全工具自动化触发器与展开菜单当前项的计算前景及底色。复跑夹具为 `.local/frontend-regression-20261123/mode-colors-accent.mts`。
+
+## 2026-11-24 · Git 看板与开发会话 · 已验证
+
+- 项目选择器和会话顶部均可打开 Git 看板。Node 运行时读取暂存、未暂存、未跟踪、冲突、分支占用及分页提交。独立开发会话可用当前工作树的 HEAD、本机分支或提交创建。显式原目录切分支检查工作区和待处理任务。并发和上下文引用按实际目录解析，历史分出的会话继承工作树。[使用说明](../../../README.md#git-看板与开发会话) · [技术决策与回退](../../../docs/decisions/2026-11-24-git-development-sessions.md)
+- 最后一个关联会话归档才尝试回收。验证失败时保留目录。已验证的快照能还原 Git 索引、未暂存内容和未跟踪文件。真实本机 Git 加临时 SQLite 覆盖了 Git 归一化隐藏的字节差异、忽略文件、占用分支、缺失目录、受损快照、回收中断、v7 升级与跨数据根迁入。Linux bubblewrap 用例验证受控命令可以在 linked worktree 执行，且 Git 元数据被遮蔽。
+- 基线 `0d3b184`，最终运行 `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`、`npm run build`、`npm run build:desktop`。运行时 315 通过、1 个既有用例跳过，前端 115 通过。文件说明按源码哈希与单批只读建议核对，68 份源码头检查通过。
+- Linux x64 Arch 工件 SHA-256 为 `e624dbb79be2044fc1a78dc9d06c2c90d79d93eb4c455f65be5571223b825301`。用实际工件解出的 Electron 45.4.1、Claude Agent SDK 0.3.326 和本地回环模型走通中英文创建、差异及提交浏览、按工作树补全文件、两个并行审批中的相对读取与同名文件写入、重开恢复和历史分支继承。验收入口为 `node --import tsx scripts/smoke-git-workbench.mts <Arch 包路径>`，本机工件、截图和原始日志位于 `.local/git-workbench-20261124/`。回环仅替代模型传输。
+- 旧窗口正常退出后验证了 v7 SQLite 的可恢复副本。活动窗口随后使用当前源码的开发态重开，542 个 renderer 文件与已验收安装件逐个字节相同。保留原数据目录和 Chromium profile，本机网关健康检查返回 200。确认 2 个项目、12 个会话、119 条运行、9 个附件、12 个交付物与副本一致，6 个设置键值逐字节相同。当前 `.data` 与一处已绑定项目重叠，创建独立工作树需使用与所有项目检出分离的数据根。
+- **开发过程 review**。先用本机 Git 对照索引和文件，再用同一个安装态夹具覆盖两个会话、审批和恢复，避免用替身的模型回答代替工具证据。审查用例促成了完整文件字节校验和实际分派前复核。工作台同期的 OpenWiki 任务已生成 Git 专页。下次应在第一次安装态验收中把截图布局和文件引用断言一起核对。
+
+## 2026-11-24 · Git 差异侧栏与高亮
+
+- Git 在桌面宽窗口打开右侧分栏，支持鼠标和键盘调宽。全窗口和侧栏共用同一内容实例，切换时保留工作树、文件和提交选择。窄窗口直接使用全窗口。关闭 Git 后恢复内置浏览器的原生标签。文件和提交差异展示原、新行号及增删统计，按语言加载语法高亮。[技术决策与回退](../../../docs/decisions/2026-11-24-git-diff-panel.md)
+- 基线为 `0d3b184` 加工作区源码哈希。通过 `npm run check`、`npm test`、`npm run build`、`npm run build:desktop`。运行时 315 项通过、1 项既有 WebFetch 用例跳过，前端 118 项通过。文件说明单批只读核对 12 份输入，复核边界修正后 `npm run check:headers` 检查 12 份通过。
+- Linux x64 Arch 安装件 SHA-256 为 `7b94cb6b805fa2701358ba5380d819b67be22451332849d2314f461cd35e23c8`。隔离 Electron 核对 1280×800、1440×900、1920×1080 和 1000×720，覆盖中英文、TypeScript 和 Markdown 高亮、增删行号、明暗配色、鼠标和键盘拖动、全窗口和焦点恢复。真实 WebContentsView 隐藏后恢复到原标签和地址。真实 SDK 与本地回环模型复验独立工作树和归档恢复。工件、截图、构建和安装烟测原始日志位于本机 `.local/git-diff-panel-20261124/`。
+- 原窗口正常退出后用原数据目录和浏览器 profile 打开新版。542 个 renderer 文件与安装件逐项一致，运行时页面和本机网关均返回 200。保留 2 个项目、12 个会话、119 条运行、9 个附件和 12 个交付物，网关及工具设置字节一致。在线核对期间写入了工作区布局和位置，保留实时偏好。
+- **开发过程 review**。在现有安装烟测集中验证分栏、原生浏览器和会话，再用相同布局复现极限拖动把 408px 导航压到 190px。修正右栏上限后确认导航和浏览器偏好稳定，并把极限拖动纳入既有烟测。下次在首轮安装验收直接验证默认宽度和用户已保存的宽布局。
+
+## 2026-11-24 · Git 文件视图与 AI 提交
+
+- 文件视图按暂存状态组织文件，显示类型图标、名称、目录、变动标记和语法高亮。选定工作树后可用 AI 起草暂存提交说明。用户核对清单，按需编辑标题和正文，再确认由本机 Git 提交。暂存或分支变化时重新核对，手写内容继续保留。[技术决策与回退](../../../docs/decisions/2026-11-24-ai-git-commit.md)
+- 基线 `0d3b184` 加本次源码哈希。通过 `npm run check`、`npm test`、`npm run build`、`npm run build:desktop`。运行时 316 项、前端 118 项通过，1 项既有 WebFetch 用例跳过。单批文件说明整理后 `npm run check:headers` 检查 19 份通过。
+- Linux x64 Arch 安装件 SHA-256 为 `32ef9fb05abd8cc758cd8cb56e069c48e073b1db799f6a07b16820c90701a9de`。真实 Electron、系统 Git 和回环模型验证中文生成、英文手填降级、旧暂存版本拒绝、编辑内容逐项落入提交、所选独立工作树作用域、未暂存内容保留和提交阶段的零模型请求。另用真实 Git 验证 SHA-256 首次提交、分离索引、改名与分离 HEAD。工件、截图和原始日志位于 `.local/ai-git-commit-20261124/`。
+- 旧窗口正常退出后用原数据根和浏览器 profile 打开新版。545 个 renderer 文件与安装件逐项一致，运行时页面与本机网关均返回 200。核对 2 个项目、13 个会话、120 条运行、9 个附件、12 个交付物与 6 个设置记录。
+- **开发过程 review**。API 回环夹具审计模型输入和确认次数，安装烟测再核对同一份草稿的实际编辑与 Git 结果。正文字段标签在有草稿时超时，使用最小 Chromium 页面确认嵌套标签混入了值，再验证分离后的标签。英文入口的点击验收用 Electron 实际内容尺寸，避免在超过原生窗口的模拟坐标上判断控件。
