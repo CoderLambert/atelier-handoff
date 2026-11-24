@@ -237,6 +237,7 @@ export interface Usage {
   complete: boolean;
 }
 export interface Run {
+  workspacePath?: string;
   executor?: 'native-v1' | 'project-v1';
   approvalMode?: 'automatic';
   maxSearchChargeFen?: number;
