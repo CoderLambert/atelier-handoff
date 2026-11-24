@@ -1,7 +1,7 @@
 /**
- * @file 提供旧版工作台数据的原生迁入流程。
- * @implementation 通过原生对话框确认来源，调用随包 Node 迁入并展示回退副本位置。
- * @updated 2026-11-20T02:00+08:00
+ * @file 提供本机工作台数据的原生迁入流程。
+ * @implementation 确认目录后调用随包运行时，显示数据副本、回退位置或未完成的工作树操作。
+ * @updated 2026-11-24T03:39:03+08:00
  */
 import { execFile } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -93,12 +93,17 @@ export async function importWorkspace(options: {
         ? error.stderr.trim()
         : diagnosticText(error);
     const detail = desktopT('host.migration.failedDetail');
+    const explanation = diagnostic?.startsWith('GIT_MIGRATION_LIVE ')
+      ? desktopT('host.migration.worktreesLive')
+      : diagnostic?.startsWith('GIT_SNAPSHOT_CORRUPT ')
+        ? desktopT('host.migration.worktreeSnapshotInvalid')
+        : diagnostic;
     await dialog.showMessageBox({
       type: 'error',
       title: desktopT('host.migration.failedTitle'),
       message: desktopT('host.migration.failedMessage'),
-      detail: diagnostic
-        ? `${detail}\n\n${desktopT('host.recovery.diagnostic', { diagnostic })}`
+      detail: explanation
+        ? `${detail}\n\n${desktopT('host.recovery.diagnostic', { diagnostic: explanation })}`
         : detail,
       buttons: [desktopT('host.action.ok')],
       signal,
