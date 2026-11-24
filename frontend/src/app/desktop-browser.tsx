@@ -56,6 +56,7 @@ export function DesktopBrowser({
   const slot = useRef<HTMLDivElement>(null);
   const selectedTab = useRef<HTMLButtonElement>(null);
   const newTab = useRef<HTMLButtonElement>(null);
+  const shouldFocusTabAfterClose = useRef(false);
   const [addresses, setAddresses] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ cause: unknown } | null>(null);
   const [pending, setPending] = useState<BrowserAction | null>(null);
@@ -120,7 +121,11 @@ export function DesktopBrowser({
     selectedTab.current
       ?.closest('.desktop-browser-tab')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [state?.activeTabId]);
+    if (shouldFocusTabAfterClose.current) {
+      shouldFocusTabAfterClose.current = false;
+      requestAnimationFrame(() => (selectedTab.current ?? newTab.current)?.focus());
+    }
+  }, [state?.activeTabId, state?.tabs]);
 
   useEffect(() => {
     const element = slot.current;
@@ -181,6 +186,7 @@ export function DesktopBrowser({
         });
       }
       if (action === 'close-tab') {
+        shouldFocusTabAfterClose.current = true;
         requestAnimationFrame(() => (selectedTab.current ?? newTab.current)?.focus());
       }
     } catch (cause) {
