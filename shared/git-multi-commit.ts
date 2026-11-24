@@ -1,12 +1,18 @@
 /**
- * @file 定义多提交分析、审查、预览和执行的共享契约。
- * @implementation 以服务端变更单元 ID 关联分组，定义分析覆盖、恢复、进度统计和凭据位置。确认请求只接收计划和摘要。
- * @updated 2026-11-24T22:06:05+08:00
+ * @file 定义多提交分析、对话修改、审查、预览和执行的共享契约。
+ * @implementation 以服务端变更单元 ID 关联分组，定义分析恢复、对话上下文和凭据位置。确认请求携带计划、摘要及操作 ID。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 import { z } from 'zod';
 import { gitCommitMessage, gitDiffLayer, gitPath, gitOid } from './git-workbench.js';
 import { uiLocaleSchema } from './i18n/locale.js';
-import { gatewayModelSchema } from './types.js';
+import { gatewayModelSchema, reasoningEfforts } from './types.js';
+
+export const gitMultiCommitPreferences = z.strictObject({
+  model: gatewayModelSchema.shape.id.nullable(),
+  effort: z.enum(reasoningEfforts).nullable(),
+});
+export type GitMultiCommitPreferences = z.infer<typeof gitMultiCommitPreferences>;
 
 const unitId = z.string().min(1).max(256);
 const version = z.string().min(1).max(256);
@@ -42,11 +48,38 @@ export const multiCommitGroup = gitCommitMessage.extend({
   id: z.uuid(),
   unitIds: z.array(unitId).min(1).max(4096),
 });
+export const multiCommitInstruction = z.string().trim().min(1).max(2000);
+const editableCommitGroup = multiCommitGroup.extend({
+  title: z.string().max(240),
+  unitIds: z.array(unitId).max(4096),
+});
+const editableCommitPlan = z.strictObject({
+  groups: z.array(editableCommitGroup).max(120),
+  excludedUnitIds: z.array(unitId).max(4096),
+});
+export const multiCommitRevisionRequest = editableCommitPlan.extend({
+  version,
+  locale: uiLocaleSchema,
+  model: gatewayModelSchema.shape.id,
+  effort: z.enum(reasoningEfforts).optional(),
+  instruction: multiCommitInstruction,
+  previousTurns: z
+    .array(z.strictObject({ instruction: multiCommitInstruction, note: z.string().max(1000) }))
+    .max(3)
+    .optional(),
+});
+export const multiCommitRevisionResponse = editableCommitPlan.extend({
+  note: z.string().max(1000),
+});
+export type MultiCommitRevisionRequest = z.infer<typeof multiCommitRevisionRequest>;
+
 export const multiCommitDraftRequest = z
   .strictObject({
     locale: uiLocaleSchema,
     generate: z.boolean(),
     model: gatewayModelSchema.shape.id.optional(),
+    effort: z.enum(reasoningEfforts).optional(),
+    instruction: multiCommitInstruction.optional(),
     /** Generate and resume against the snapshot the user chose to analyze. */
     version: version.optional(),
     /** A client-created ID lets cancellation recover an attempt whose response was disconnected. */

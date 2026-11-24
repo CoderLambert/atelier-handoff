@@ -1,7 +1,7 @@
 /**
- * @file 验证多提交模型选择与显式分析流程。
- * @implementation 在隔离 Chromium 和本机 HTTP 替身中验证双语、模型选择、实时进度、关闭后停止查询、续跑和编辑保留。
- * @updated 2026-11-24T22:06:05+08:00
+ * @file 验证多提交的分析、对话审查和手动编辑交互。
+ * @implementation 在隔离 Chromium 和本机 HTTP 替身中验证双语、模型选择、分析进度与续跑，以及对话修改、撤销、详细编辑和批量分配。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -65,7 +65,7 @@ test(
       function App() {
         const review = useGitMultiCommitReview('fixture-project','fixture-tree',()=>{});
         window.fixture = {review, language: value => uiI18n.changeLanguage(value)};
-        return <><button onClick={review.start}>Open fixture</button><GitMultiCommitDialog review={review} restoreFocus={()=>{}}/><output id="groups">{JSON.stringify(review.groups)}</output></>;
+        return <><button onClick={review.start}>Open fixture</button><button onClick={review.startManual}>Open manual fixture</button><GitMultiCommitDialog review={review} restoreFocus={()=>{}}/><output id="groups">{JSON.stringify(review.groups)}</output></>;
       }
       createRoot(document.getElementById('app')).render(<QueryClientProvider client={client}><App/></QueryClientProvider>);
     `,
@@ -81,6 +81,15 @@ test(
     assert.ok(bundle);
     const requests: Array<{ path: string; method: string; body: Record<string, unknown> }> = [];
     let analysisCount = 0;
+    let savedPreferences: { model: string | null; effort: string | null } = {
+      model: null,
+      effort: null,
+    };
+    let failPreferenceSave = false;
+    let holdPreferenceSave = false;
+    let heldPreference:
+      | { response: ServerResponse; value: { model: string | null; effort: string | null } }
+      | undefined;
     let partialMode = false;
     let issueMode = false;
     let failureReason: string | undefined;
@@ -114,6 +123,27 @@ test(
         res.end(JSON.stringify({ csrfToken: 'fixture' }));
         return;
       }
+      if (path === '/api/settings/git-multi-commit-preferences') {
+        if (req.method === 'PATCH' && failPreferenceSave) {
+          res.statusCode = 503;
+          res.end(JSON.stringify({ error: { code: 'UNAVAILABLE' } }));
+          return;
+        }
+        if (req.method === 'PATCH') {
+          const value = {
+            model: typeof body.model === 'string' ? body.model : null,
+            effort: typeof body.effort === 'string' ? body.effort : null,
+          };
+          if (holdPreferenceSave) {
+            holdPreferenceSave = false;
+            heldPreference = { response: res, value };
+            return;
+          }
+          savedPreferences = value;
+        }
+        res.end(JSON.stringify(savedPreferences));
+        return;
+      }
       if (path === '/api/config') {
         res.end(
           JSON.stringify({
@@ -135,6 +165,12 @@ test(
             routesAvailable: true,
             models: [
               { id: 'other-model', displayName: 'Other model' },
+              {
+                id: 'fixed-model',
+                displayName: 'Fixed model',
+                effort: 'high',
+                supportedEfforts: ['high'],
+              },
               { id: 'magpie:disabled', source: 'magpie' },
             ],
             discovery: {
@@ -158,6 +194,16 @@ test(
                   suggestedGroups: 0,
                 }
               : null,
+          }),
+        );
+        return;
+      }
+      if (path.endsWith('/commit-plan-revise')) {
+        res.end(
+          JSON.stringify({
+            groups: [{ ...group, title: '对话修改后的标题' }],
+            excludedUnitIds: [],
+            note: '',
           }),
         );
         return;
@@ -216,6 +262,12 @@ test(
             { ...snapshot.units[0], id: 'pending-1', path: 'pending.ts' },
             {
               ...snapshot.units[0],
+              id: 'pending-3',
+              path: 'pending.ts',
+              description: '@@ -21,3 +21,3 @@',
+            },
+            {
+              ...snapshot.units[0],
               id: 'pending-2',
               path: 'atomic.ts',
               kind: 'atomic',
@@ -228,7 +280,12 @@ test(
               ...snapshot,
               units: [...regular, ...issues],
               groups: generated ? [{ ...group, unitIds: regular.map((unit) => unit.id) }] : [],
-              modelCandidateIds: [...regular.map((unit) => unit.id), 'pending-1', 'pending-2'],
+              modelCandidateIds: [
+                ...regular.map((unit) => unit.id),
+                'pending-1',
+                'pending-2',
+                'pending-3',
+              ],
               unassignedUnitIds: generated
                 ? issues.map((unit) => unit.id)
                 : [...regular, ...issues].map((unit) => unit.id),
@@ -361,6 +418,9 @@ test(
       const analyze = page.getByRole('button', { name: '让 AI 规划分组', exact: true });
       await analyze.waitFor();
       await page.getByText('尚未开始 AI 规划', { exact: true }).waitFor({ timeout: 1000 });
+      await page
+        .getByRole('textbox', { name: '补充提交要求（可选）', exact: true })
+        .fill('代码和文档分开', { timeout: 1500 });
       assert.equal(await page.locator('.git-multi-commit-unit').count(), 0);
       assert.equal(await page.getByRole('button', { name: '核对提交预览' }).count(), 0);
       assert.equal(analysisCount, 0);
@@ -371,14 +431,31 @@ test(
           .map((request) => request.body),
         [{ locale: 'zh-CN', generate: false }],
       );
-      const picker = page.getByRole('combobox', { name: '本次分析模型', exact: true });
+      const picker = page.getByRole('combobox', { name: '选择模型', exact: true });
       assert.match((await picker.textContent()) ?? '', /workspace-default/);
       await picker.click();
       assert.equal(
         await page.getByRole('option', { name: 'magpie:disabled', exact: true }).isDisabled(),
         true,
       );
-      await page.getByRole('option', { name: 'Other model', exact: true }).click();
+      holdPreferenceSave = true;
+      const firstPreferenceRequest = page.waitForRequest(
+        (request) =>
+          request.url().endsWith('/api/settings/git-multi-commit-preferences') &&
+          request.method() === 'PATCH',
+      );
+      await page.getByRole('option', { name: /Other model/ }).click();
+      await firstPreferenceRequest;
+      await page.getByRole('combobox', { name: '选择推理深度' }).click();
+      await page.getByRole('option', { name: '高', exact: true }).click();
+      await page.waitForFunction("window.fixture.review.effort === 'high'");
+      assert.equal(await analyze.isDisabled(), true);
+      assert.ok(heldPreference);
+      savedPreferences = heldPreference.value;
+      heldPreference.response.end(JSON.stringify(savedPreferences));
+      heldPreference = undefined;
+      await page.waitForFunction('window.fixture.review.preferencesSaving === false');
+      assert.deepEqual(savedPreferences, { model: 'other-model', effort: 'high' });
       assert.equal(analysisCount, 0);
       await analyze.click();
       await page
@@ -389,6 +466,12 @@ test(
         'other-model',
       );
       assert.equal(requests.find((request) => request.body.generate === true)?.body.version, 'v1');
+      assert.equal(requests.find((request) => request.body.generate === true)?.body.effort, 'high');
+      assert.equal(
+        requests.find((request) => request.body.generate === true)?.body.instruction,
+        '代码和文档分开',
+      );
+      assert.deepEqual(savedPreferences, { model: 'other-model', effort: 'high' });
       hold = true;
       await page.getByRole('button', { name: '重新开始 AI 规划', exact: true }).click();
       await page.getByText('正在分析工作区改动…', { exact: true }).first().waitFor();
@@ -419,6 +502,11 @@ test(
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Open fixture' }).click();
       await analyze.waitFor();
+      assert.match((await picker.textContent()) ?? '', /other-model|Other model/);
+      assert.match(
+        (await page.getByRole('combobox', { name: '选择推理深度' }).textContent()) ?? '',
+        /高/,
+      );
       const progressAtClose = progressReads;
       held?.end(
         JSON.stringify({
@@ -434,12 +522,30 @@ test(
       await page.waitForTimeout(1100); // One poll interval must pass without another progress request.
       assert.equal(progressReads, progressAtClose);
       await picker.click();
-      await page.getByRole('option', { name: '手动输入模型 ID…', exact: true }).click();
+      await page.getByRole('option', { name: '手动输入 ID…', exact: true }).click();
       const manual = page.getByRole('textbox', { name: '模型 ID', exact: true });
       await manual.fill('magpie:disabled');
-      assert.equal(await analyze.isDisabled(), true);
+      assert.equal(
+        await page.getByRole('button', { name: '使用此模型', exact: true }).isDisabled(),
+        true,
+      );
+      assert.deepEqual(savedPreferences, { model: 'other-model', effort: 'high' });
       await manual.fill('custom-model');
+      await page.getByRole('button', { name: '使用此模型', exact: true }).click();
       await analyze.click();
+      await page
+        .getByRole('textbox', { name: '告诉 AI 怎么改', exact: true })
+        .fill('改写第一条标题');
+      await page.getByRole('button', { name: '发送修改要求', exact: true }).click();
+      await page.getByRole('button', { name: '撤销上次 AI 修改', exact: true }).waitFor();
+      assert.match(await page.locator('#groups').innerText(), /对话修改后的标题/);
+      assert.equal(
+        requests.find((request) => request.path.endsWith('/commit-plan-revise'))?.body.version,
+        'v1',
+      );
+      await page.getByRole('button', { name: '撤销上次 AI 修改', exact: true }).click();
+      assert.match(await page.locator('#groups').innerText(), /Generated plan/);
+      await page.getByRole('button', { name: '展开详细编辑与差异', exact: true }).click();
       const subject = page.getByRole('textbox', { name: '提交标题', exact: true });
       await subject.waitFor();
       await subject.fill('Keep my edited plan');
@@ -458,6 +564,10 @@ test(
         requests.filter((request) => request.body.generate === true).at(-1)?.body.model,
         'custom-model',
       );
+      assert.equal(
+        requests.filter((request) => request.body.generate === true).at(-1)?.body.effort,
+        undefined,
+      );
       await page.keyboard.press('Escape');
       partialMode = true;
       await page.getByRole('button', { name: 'Open fixture' }).click();
@@ -471,6 +581,7 @@ test(
         .getByText('Analyzed 1 of 2 eligible changes. Metadata only: 0.', { exact: true })
         .isVisible();
       assert.equal(analyzedCount, true);
+      await page.getByRole('button', { name: 'Open detailed review', exact: true }).click();
       await page.getByRole('radio', { name: 'Needs a decision', exact: true }).check();
       const blockedRow = page.locator('.git-multi-commit-unit').filter({ hasText: 'blocked.ts' });
       assert.match(await blockedRow.innerText(), /Added line 1.*known credential format/);
@@ -519,7 +630,7 @@ test(
         .at(-1)?.body;
       assert.equal(resumedRequest?.analysisId, previousAnalysis);
       assert.equal(resumedRequest?.resume, true);
-      assert.equal(resumedRequest?.model, 'workspace-default');
+      assert.equal(resumedRequest?.model, 'custom-model');
       // Final grouping retry stays bound to the language the initial attempt used.
       await page.evaluate("window.fixture.language('zh-CN')");
       failFinal = false;
@@ -551,6 +662,7 @@ test(
         requests.filter((request) => request.body.generate === true).length,
         generationCount,
       );
+      await page.getByRole('button', { name: 'Open detailed review', exact: true }).click();
       const preserved = page.getByRole('textbox', { name: 'Commit subject', exact: true });
       await preserved.fill('Edited before expiry');
       expireNext = true;
@@ -569,7 +681,7 @@ test(
       issueMode = true;
       await page.getByRole('button', { name: 'Open fixture' }).click();
       await page.getByText('AI planning has not started', { exact: true }).waitFor();
-      assert.match(await page.getByRole('dialog').innerText(), /Changes in this worktree: 245/);
+      assert.match(await page.getByRole('dialog').innerText(), /Changes in this worktree: 246/);
       assert.equal(await page.locator('.git-multi-commit-unit').count(), 0);
       await page.getByRole('button', { name: 'Plan groups with AI', exact: true }).click();
       await page.waitForFunction(
@@ -577,6 +689,7 @@ test(
           JSON.parse(document.querySelector('#groups')?.textContent ?? '[]')[0]?.unitIds.length ===
           240,
       );
+      await page.getByRole('button', { name: 'Open detailed review', exact: true }).click();
       assert.equal(await page.getByRole('radio', { name: 'Group changes' }).isChecked(), true);
       await page.getByRole('radio', { name: 'Needs a decision' }).check();
       await page
@@ -592,15 +705,21 @@ test(
       assert.equal(await page.getByRole('button', { name: /Read \/ size \/ budget/ }).count(), 0);
       assert.match(
         await page.getByRole('button', { name: /^Ungrouped by the model/ }).innerText(),
-        /2 changes/,
+        /3 changes/,
       );
       assert.deepEqual(visibleIssues.sort(), [
         'atomic.ts',
         'conflict.ts',
         'pending.ts',
+        'pending.ts',
         'tests/secret-one.ts',
         'tests/secret-two.ts',
       ]);
+      const fileSelection = page.getByRole('checkbox', {
+        name: 'Select changes in pending.ts',
+        exact: true,
+      });
+      await fileSelection.waitFor({ timeout: 1500 });
       await page
         .getByRole('button', { name: 'Retain pending items in Possible credentials (2)' })
         .click();
@@ -608,7 +727,7 @@ test(
       assert.deepEqual(retained.sort(), ['secret-1', 'secret-2']);
       assert.deepEqual(
         (await page.locator('.git-multi-commit-unit:visible code').allTextContents()).sort(),
-        ['atomic.ts', 'conflict.ts', 'pending.ts'],
+        ['atomic.ts', 'conflict.ts', 'pending.ts', 'pending.ts'],
       );
       const remainingGroups = JSON.parse(
         (await page.locator('#groups').textContent()) ?? '[]',
@@ -633,9 +752,51 @@ test(
           .count(),
         1,
       );
-      await page.evaluate(`window.fixture.review.update(
-        window.fixture.review.groups.map(group => ({...group, unitIds: [...group.unitIds, 'pending-1', 'pending-2']})),
-        ['secret-1', 'secret-2', 'conflict-1'])`);
+      const modelSelection = page.getByRole('checkbox', {
+        name: 'Select Ungrouped by the model',
+        exact: true,
+      });
+      const credentialSelection = page.getByRole('checkbox', {
+        name: 'Select Possible credentials',
+        exact: true,
+      });
+      const destination = page.getByRole('combobox', { name: 'Batch destination', exact: true });
+      const applyBatch = page.getByRole('button', { name: 'Apply to selection', exact: true });
+      await fileSelection.check();
+      assert.equal(
+        await modelSelection.evaluate(
+          (input) => input instanceof HTMLInputElement && input.indeterminate,
+        ),
+        true,
+      );
+      await credentialSelection.check();
+      await destination.click();
+      assert.equal(
+        await page
+          .getByRole('option', { name: 'Commit 1: Generated plan', exact: true })
+          .isDisabled(),
+        true,
+      );
+      await page.keyboard.press('Escape');
+      await credentialSelection.uncheck();
+      await destination.click();
+      await page.getByRole('option', { name: 'Commit 1: Generated plan', exact: true }).click();
+      assert.equal(await page.locator('#groups').textContent(), JSON.stringify(remainingGroups));
+      await applyBatch.click();
+      const assigned = JSON.parse((await page.locator('#groups').textContent()) ?? '[]') as Array<{
+        unitIds: string[];
+      }>;
+      assert.deepEqual(assigned[0]?.unitIds.slice(-2), ['pending-1', 'pending-3']);
+      await modelSelection.check();
+      await credentialSelection.check();
+      await page.getByRole('checkbox', { name: 'Select Conflicts', exact: true }).check();
+      await destination.click();
+      await page.getByRole('option', { name: 'Keep uncommitted', exact: true }).click();
+      await applyBatch.click();
+      const newlyRetained = (await page.evaluate(
+        'window.fixture.review.excludedUnitIds',
+      )) as string[];
+      assert.deepEqual(newlyRetained.sort(), ['conflict-1', 'pending-2', 'secret-1', 'secret-2']);
       assert.equal(
         await page.getByRole('button', { name: 'Review commit previews' }).isDisabled(),
         true,
@@ -646,6 +807,34 @@ test(
       );
       await page.keyboard.press('Escape');
       issueMode = false;
+      const inferenceBeforeManual = requests.filter(({ body }) => body.generate === true).length;
+      await page.getByRole('button', { name: 'Open manual fixture' }).click();
+      const manualPlan = page.getByRole('dialog', { name: 'Manual commit', exact: true });
+      await manualPlan
+        .getByRole('textbox', { name: 'Commit subject', exact: true })
+        .fill('Manual title');
+      await manualPlan.getByRole('radio', { name: 'Needs a decision' }).check();
+      await manualPlan
+        .locator('.git-multi-commit-unit')
+        .filter({ hasText: 'sample.ts' })
+        .getByRole('checkbox')
+        .check();
+      await manualPlan.getByRole('combobox', { name: 'Batch destination', exact: true }).click();
+      await page.getByRole('option', { name: 'Commit 1: Manual title', exact: true }).click();
+      await manualPlan.getByRole('button', { name: 'Apply to selection' }).click();
+      assert.equal(
+        await manualPlan.getByRole('button', { name: 'Review commit previews' }).isEnabled(),
+        true,
+      );
+      assert.equal(
+        await manualPlan.getByRole('button', { name: 'Plan groups with AI' }).count(),
+        0,
+      );
+      assert.equal(
+        requests.filter(({ body }) => body.generate === true).length,
+        inferenceBeforeManual,
+      );
+      await page.keyboard.press('Escape');
       for (const [reason, text] of [
         ['invalid-response', 'The model returned commit groups with invalid fields.'],
         [
@@ -667,11 +856,11 @@ test(
           const first = requests.filter((request) => request.body.generate === true).at(-1)
             ?.body.analysisId;
           const retryPicker = page.getByRole('combobox', {
-            name: 'Model for this analysis',
+            name: 'Choose model',
             exact: true,
           });
           await retryPicker.click();
-          await page.getByRole('option', { name: 'Other model', exact: true }).click();
+          await page.getByRole('option', { name: /Other model/ }).click();
           await page.getByRole('button', { name: 'Start AI planning again', exact: true }).click();
           await page.getByText(text, { exact: false }).waitFor();
           const retry = requests.filter((request) => request.body.generate === true).at(-1)?.body;
@@ -680,8 +869,63 @@ test(
         }
         await page.keyboard.press('Escape');
       }
+      await page.getByRole('button', { name: 'Open fixture' }).click();
+      await page.getByRole('combobox', { name: 'Choose reasoning effort' }).click();
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/settings/git-multi-commit-preferences') &&
+            response.request().method() === 'PATCH',
+        ),
+        page.getByRole('option', { name: 'Medium', exact: true }).click(),
+      ]);
+      assert.deepEqual(savedPreferences, { model: 'other-model', effort: 'medium' });
+      await page.reload();
+      await page.getByRole('button', { name: 'Open fixture' }).click();
+      await page.getByRole('button', { name: '让 AI 规划分组', exact: true }).waitFor();
+      assert.match(
+        (await page.getByRole('combobox', { name: '选择模型', exact: true }).textContent()) ?? '',
+        /other-model|Other model/,
+      );
+      assert.match(
+        (await page.getByRole('combobox', { name: '选择推理深度' }).textContent()) ?? '',
+        /中/,
+      );
+      await page.getByRole('combobox', { name: '选择模型', exact: true }).click();
+      await page.getByRole('option', { name: /Fixed model/ }).click();
+      const fixed = page.getByRole('combobox', { name: '选择推理深度' });
+      assert.equal(await fixed.isDisabled(), true);
+      assert.match((await fixed.textContent()) ?? '', /高/);
+      await page.getByRole('button', { name: '让 AI 规划分组', exact: true }).click();
+      await page.getByText('模型遗漏了本批次的一些变更，请重试。', { exact: true }).waitFor();
+      const fixedRequest = requests
+        .filter((request) => request.body.generate === true)
+        .at(-1)?.body;
+      assert.equal(fixedRequest?.model, 'fixed-model');
+      assert.equal(fixedRequest?.effort, undefined);
+      failPreferenceSave = true;
+      await page.getByRole('combobox', { name: '选择模型', exact: true }).click();
+      await page.getByRole('option', { name: /Other model/ }).click();
+      const saveError = page.getByRole('alert').filter({ hasText: '当前选择尚未保存' });
+      await saveError.waitFor();
+      assert.match(
+        (await page.getByRole('combobox', { name: '选择模型', exact: true }).textContent()) ?? '',
+        /other-model|Other model/,
+      );
+      failPreferenceSave = false;
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/settings/git-multi-commit-preferences') &&
+            response.request().method() === 'PATCH' &&
+            response.ok(),
+        ),
+        saveError.getByRole('button', { name: '重试' }).click(),
+      ]);
+      assert.deepEqual(savedPreferences, { model: 'other-model', effort: null });
       assert.deepEqual(errors, []);
     } finally {
+      heldPreference?.response.end();
       held?.end();
       await browser.close();
       server.closeAllConnections();

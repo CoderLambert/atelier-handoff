@@ -1,9 +1,9 @@
 /**
  * @file 提供独立受控的多提交计划编辑视图。
- * @implementation 优先展示有序提交组，将待决定和未分析项分开，并校验预览仍对应当前计划。
- * @updated 2026-11-24T14:50:21+08:00
+ * @implementation 展示有序提交组和待决定项，支持批量分配或保留，并校验预览仍对应当前计划。
+ * @updated 2026-11-25T00:55:36+08:00
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -23,7 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/components/ui/utils';
 import './git-multi-commit-editor.css';
 
 export type GitMultiCommitLayer = 'staged' | 'unstaged' | 'untracked' | 'conflict';
@@ -40,7 +39,7 @@ export interface GitMultiCommitUnit {
   readonly blockedReason?: string;
   readonly credential: boolean;
   readonly note?: string;
-  readonly analysis: 'unanalyzed' | 'withheld' | 'modelUnassigned' | 'assigned';
+  readonly analysis: 'unanalyzed' | 'withheld' | 'modelUnassigned' | 'assigned' | 'manual';
 }
 
 export interface GitMultiCommitGroup {
@@ -92,6 +91,17 @@ export interface GitMultiCommitEditorMessages {
     readonly assignedTo: (group: string) => string;
   };
   readonly contentLabel: string;
+  readonly batch: {
+    readonly all: string;
+    readonly destination: string;
+    readonly apply: string;
+    readonly clear: string;
+    readonly blocked: string;
+    readonly selected: (count: number) => string;
+    readonly category: (category: string) => string;
+    readonly file: (path: string) => string;
+    readonly unit: (unit: GitMultiCommitUnit) => string;
+  };
   readonly groups: string;
   readonly activeGroup: string;
   readonly addGroup: string;
@@ -152,7 +162,7 @@ export interface GitMultiCommitEditorProps {
   /** Parent-owned reason that blocks both preview and confirmation. */
   readonly previewBlockedReason?: string;
   readonly disabled?: boolean;
-  readonly className?: string;
+  readonly hidden?: boolean;
   /** Apply both arrays atomically so moving a unit between commits and exclusion has one owner. */
   readonly onGroupsChange: (groups: GitMultiCommitGroup[], excludedUnitIds: string[]) => void;
   readonly onActiveGroupChange: (groupId: string | null) => void;
@@ -186,7 +196,7 @@ function unitCategory(unit: GitMultiCommitUnit, assigned: boolean): GitMultiComm
   if (unit.blockedReason === undefined) {
     if (assigned) return 'assigned';
     if (unit.analysis === 'withheld') return 'dependency';
-    if (unit.analysis === 'assigned') return 'unassigned';
+    if (unit.analysis === 'assigned' || unit.analysis === 'manual') return 'unassigned';
     return unit.analysis;
   }
   switch (unit.reason) {
@@ -279,7 +289,7 @@ export function GitMultiCommitEditor({
   canConfirm,
   previewBlockedReason,
   disabled = false,
-  className,
+  hidden,
   onGroupsChange,
   onActiveGroupChange,
   onAddGroup,
@@ -289,6 +299,8 @@ export function GitMultiCommitEditor({
 }: GitMultiCommitEditorProps) {
   const fields = useId();
   const [selectedView, setView] = useState<InventoryView>();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [destination, setDestination] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<
     Partial<Record<GitMultiCommitCategory, boolean>>
   >({});
@@ -307,6 +319,13 @@ export function GitMultiCommitEditor({
   const unresolved = units.filter((unit) => !ownerByUnit.has(unit.id) && !excludedIds.has(unit.id));
   const unanalyzed = unresolved.filter((unit) => unit.analysis === 'unanalyzed');
   const pendingUnits = unresolved.filter((unit) => unit.analysis !== 'unanalyzed');
+  const selection = pendingUnits.filter((unit) => selectedIds.has(unit.id));
+  const canAssignBatch = selection.every((unit) => unit.blockedReason === undefined);
+  const batchTarget =
+    destination === excludedValue ||
+    (canAssignBatch && groups.some((group) => groupValue(group.id) === destination))
+      ? destination
+      : '';
   const retainedCount = units.filter((unit) => excludedIds.has(unit.id)).length;
   const groupUnits = activeGroup
     ? units.filter((unit) => ownerByUnit.get(unit.id) === activeGroup.id)
@@ -318,25 +337,23 @@ export function GitMultiCommitEditor({
     all: units,
     retained: units.filter((unit) => excludedIds.has(unit.id)),
   };
-  const defaultView = activeGroup ? 'group' : pendingUnits.length ? 'pending' : 'unanalyzed';
+  const defaultView =
+    activeGroup && (activeGroup.unitIds.length || !pendingUnits.length)
+      ? 'group'
+      : pendingUnits.length
+        ? 'pending'
+        : 'unanalyzed';
   const view =
     (selectedView === 'group' && !activeGroup) ||
     (selectedView === 'unanalyzed' && !unanalyzed.length)
       ? defaultView
       : (selectedView ?? defaultView);
   const unitsByCategory = new Map<GitMultiCommitCategory, GitMultiCommitUnit[]>();
-  const pendingByCategory = new Map<GitMultiCommitCategory, GitMultiCommitUnit[]>();
   for (const unit of visible[view]) {
     const category = unitCategory(unit, ownerByUnit.has(unit.id));
     const candidates = unitsByCategory.get(category) ?? [];
     candidates.push(unit);
     unitsByCategory.set(category, candidates);
-  }
-  for (const unit of pendingUnits) {
-    const category = unitCategory(unit, false);
-    const candidates = pendingByCategory.get(category) ?? [];
-    candidates.push(unit);
-    pendingByCategory.set(category, candidates);
   }
   const previewCurrent = matchesPreview(groups, excludedUnitIds, preview);
   useEffect(() => {
@@ -421,13 +438,26 @@ export function GitMultiCommitEditor({
     onActiveGroupChange(next[Math.min(activeIndex, next.length - 1)]?.id ?? null);
   }
 
-  function moveUnit(unitId: string, value: string) {
+  function selectUnits(candidates: readonly GitMultiCommitUnit[], checked: boolean) {
     if (locked) return;
-    const unit = units.find((candidate) => candidate.id === unitId);
-    if (!unit) return;
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const { id } of candidates) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  function moveUnits(ids: readonly string[], value: string) {
+    if (locked || !ids.length) return;
+    const moving = new Set(ids);
+    const candidates = units.filter(({ id }) => moving.has(id));
+    if (candidates.length !== moving.size) return;
     const target = groups.find((group) => groupValue(group.id) === value);
     if (value !== unassignedValue && value !== excludedValue && !target) return;
-    if (target && unit.blockedReason !== undefined) return;
+    if (target && candidates.some((unit) => unit.blockedReason !== undefined)) return;
     if (
       (view === 'pending' && value !== unassignedValue) ||
       (view === 'unanalyzed' && value !== unassignedValue) ||
@@ -435,32 +465,23 @@ export function GitMultiCommitEditor({
       (view === 'group' && target?.id !== activeGroup?.id)
     )
       focusInventoryView();
-    const excluded = excludedUnitIds.filter((id) => id !== unitId);
-    if (value === excludedValue) excluded.push(unitId);
+    const excluded = excludedUnitIds.filter((id) => !moving.has(id));
+    if (value === excludedValue) excluded.push(...ids);
+    selectUnits(candidates, false);
     onGroupsChange(
       groups.map((group) => {
-        const unitIds = group.unitIds.filter((id) => id !== unitId);
-        if (target?.id === group.id) unitIds.push(unitId);
+        const unitIds = group.unitIds.filter((id) => !moving.has(id));
+        if (target?.id === group.id) unitIds.push(...ids);
         return { ...group, unitIds };
       }),
       excluded,
     );
   }
 
-  function retainCategory(category: GitMultiCommitCategory) {
-    if (locked || view !== 'pending') return;
-    const retained = pendingByCategory.get(category)?.filter((unit) => unit.blockedReason) ?? [];
-    if (retained.length === 0) return;
-    focusInventoryView();
-    onGroupsChange(
-      groups.map((group) => ({ ...group, unitIds: [...group.unitIds] })),
-      [...excludedUnitIds, ...retained.map((unit) => unit.id)],
-    );
-  }
-
   return (
     <section
-      className={cn('git-multi-commit', className)}
+      className="git-multi-commit"
+      hidden={hidden}
       aria-labelledby={fields + '-groups'}
       aria-busy={busy}
     >
@@ -644,6 +665,74 @@ export function GitMultiCommitEditor({
                   </label>
                 ))}
             </fieldset>
+            {view === 'pending' && pendingUnits.length > 1 ? (
+              <BatchCheckbox
+                label={messages.batch.all}
+                candidates={pendingUnits}
+                selectedIds={selectedIds}
+                disabled={locked}
+                onSelect={selectUnits}
+              />
+            ) : null}
+            {view === 'pending' && selection.length ? (
+              <div className="git-multi-commit-batch">
+                <p role="status">{messages.batch.selected(selection.length)}</p>
+                <div>
+                  <Select value={batchTarget} onValueChange={setDestination} disabled={locked}>
+                    <SelectTrigger aria-label={messages.batch.destination} size="sm">
+                      <SelectValue placeholder={messages.batch.destination} />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="git-multi-commit-options">
+                      <SelectGroup>
+                        <SelectItem value={excludedValue}>{messages.excluded}</SelectItem>
+                        {groups.map((group, index) => (
+                          <SelectItem
+                            key={group.id}
+                            value={groupValue(group.id)}
+                            disabled={!canAssignBatch}
+                          >
+                            {messages.groupLabel(
+                              index + 1,
+                              group.title || messages.titlePlaceholder,
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={locked || !batchTarget}
+                    onClick={() => {
+                      moveUnits(
+                        selection.map(({ id }) => id),
+                        batchTarget,
+                      );
+                      setDestination('');
+                    }}
+                  >
+                    {messages.batch.apply}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={locked}
+                    onClick={() => {
+                      focusInventoryView();
+                      setSelectedIds(new Set());
+                      setDestination('');
+                    }}
+                  >
+                    {messages.batch.clear}
+                  </Button>
+                </div>
+                {!canAssignBatch ? (
+                  <p className="git-multi-commit-hint">{messages.batch.blocked}</p>
+                ) : null}
+              </div>
+            ) : null}
             {units.length === 0 ? (
               <p className="git-multi-commit-hint">{messages.noUnits}</p>
             ) : view === 'pending' && pendingUnits.length === 0 ? (
@@ -657,11 +746,19 @@ export function GitMultiCommitEditor({
               {categories.map((category) => {
                 const candidates = unitsByCategory.get(category) ?? [];
                 if (candidates.length === 0) return null;
-                const retainable =
-                  pendingByCategory.get(category)?.filter((unit) => unit.blockedReason).length ?? 0;
+                const selecting = view === 'pending';
+                const retainable = selecting ? candidates.filter((unit) => unit.blockedReason) : [];
                 const { title, reason } = inventory.categories[category];
                 const expanded = expandedCategories[category] ?? candidates.length <= 20;
                 const categoryId = fields + '-category-' + category;
+                const byPath = new Map<string, GitMultiCommitUnit[]>();
+                if (selecting && expanded) {
+                  for (const unit of candidates) {
+                    const samePath = byPath.get(unit.path) ?? [];
+                    samePath.push(unit);
+                    byPath.set(unit.path, samePath);
+                  }
+                }
                 return (
                   <section
                     className="git-multi-commit-category"
@@ -688,15 +785,29 @@ export function GitMultiCommitEditor({
                           <Badge variant="outline">{messages.unitCount(candidates.length)}</Badge>
                         </Button>
                       </h5>
-                      {view === 'pending' && retainable > 0 ? (
+                      {selecting ? (
+                        <BatchCheckbox
+                          label={messages.batch.category(title)}
+                          candidates={candidates}
+                          selectedIds={selectedIds}
+                          disabled={locked}
+                          onSelect={selectUnits}
+                        />
+                      ) : null}
+                      {retainable.length ? (
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           disabled={locked}
-                          aria-label={inventory.retainCategoryLabel(title, retainable)}
+                          aria-label={inventory.retainCategoryLabel(title, retainable.length)}
                           aria-describedby={categoryId + '-reason'}
-                          onClick={() => retainCategory(category)}
+                          onClick={() =>
+                            moveUnits(
+                              retainable.map(({ id }) => id),
+                              excludedValue,
+                            )
+                          }
                         >
                           {inventory.retainCategory}
                         </Button>
@@ -713,20 +824,37 @@ export function GitMultiCommitEditor({
                       hidden={!expanded}
                     >
                       {expanded
-                        ? candidates.map((unit) => (
-                            <UnitAssignmentRow
-                              key={unit.id}
-                              unit={unit}
-                              groups={groups}
-                              ownerId={ownerByUnit.get(unit.id)}
-                              excluded={excludedIds.has(unit.id)}
-                              layerLabelId={categoryId}
-                              view={view}
-                              messages={messages}
-                              disabled={locked}
-                              onMove={moveUnit}
-                              onRestoreFocus={focusInventoryView}
-                            />
+                        ? (selecting ? [...byPath.values()] : [candidates]).map((fileUnits) => (
+                            <Fragment key={fileUnits[0]?.id}>
+                              {selecting && fileUnits.length > 1 && fileUnits[0] ? (
+                                <li className="git-multi-commit-file-select">
+                                  <BatchCheckbox
+                                    label={messages.batch.file(fileUnits[0].path)}
+                                    candidates={fileUnits}
+                                    selectedIds={selectedIds}
+                                    disabled={locked}
+                                    onSelect={selectUnits}
+                                  />
+                                </li>
+                              ) : null}
+                              {fileUnits.map((unit) => (
+                                <UnitAssignmentRow
+                                  key={unit.id}
+                                  unit={unit}
+                                  groups={groups}
+                                  ownerId={ownerByUnit.get(unit.id)}
+                                  excluded={excludedIds.has(unit.id)}
+                                  layerLabelId={categoryId}
+                                  view={view}
+                                  messages={messages}
+                                  disabled={locked}
+                                  selected={selectedIds.has(unit.id)}
+                                  onSelect={selectUnits}
+                                  onMove={(id, value) => moveUnits([id], value)}
+                                  onRestoreFocus={focusInventoryView}
+                                />
+                              ))}
+                            </Fragment>
                           ))
                         : null}
                     </ul>
@@ -836,6 +964,36 @@ export function GitMultiCommitEditor({
   );
 }
 
+function BatchCheckbox({
+  label,
+  candidates,
+  selectedIds,
+  disabled,
+  onSelect,
+}: {
+  label: string;
+  candidates: readonly GitMultiCommitUnit[];
+  selectedIds: ReadonlySet<string>;
+  disabled: boolean;
+  onSelect: (candidates: readonly GitMultiCommitUnit[], checked: boolean) => void;
+}) {
+  const count = candidates.filter(({ id }) => selectedIds.has(id)).length;
+  return (
+    <label className="git-multi-commit-selection">
+      <input
+        type="checkbox"
+        ref={(input) => {
+          if (input) input.indeterminate = count > 0 && count < candidates.length;
+        }}
+        checked={count === candidates.length}
+        disabled={disabled}
+        onChange={(event) => onSelect(candidates, event.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+
 function UnitAssignmentRow({
   unit,
   groups,
@@ -845,6 +1003,8 @@ function UnitAssignmentRow({
   view,
   messages,
   disabled,
+  selected,
+  onSelect,
   onMove,
   onRestoreFocus,
 }: {
@@ -856,6 +1016,8 @@ function UnitAssignmentRow({
   view: InventoryView;
   messages: GitMultiCommitEditorMessages;
   disabled: boolean;
+  selected: boolean;
+  onSelect: (candidates: readonly GitMultiCommitUnit[], checked: boolean) => void;
   onMove: (unitId: string, target: string) => void;
   onRestoreFocus: () => void;
 }) {
@@ -867,6 +1029,16 @@ function UnitAssignmentRow({
   return (
     <li className="git-multi-commit-unit">
       <div className="git-multi-commit-unit-heading">
+        {view === 'pending' ? (
+          <input
+            type="checkbox"
+            className="git-multi-commit-unit-select"
+            aria-label={messages.batch.unit(unit)}
+            checked={selected}
+            disabled={disabled}
+            onChange={(event) => onSelect([unit], event.target.checked)}
+          />
+        ) : null}
         <code id={field + '-path'}>{unit.path}</code>
         <Badge variant="outline">{messages.layers[unit.layer]}</Badge>
         {blocked ? <Badge variant="warning">{messages.blocked}</Badge> : null}

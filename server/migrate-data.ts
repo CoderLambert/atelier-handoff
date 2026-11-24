@@ -3,6 +3,7 @@
  * @implementation 解析来源和目标，输出校验通过后的记录数和回退副本位置。
  * @updated 2026-11-20T02:00+08:00
  */
+import { AppError } from '../shared/types.js';
 import { migrateWorkspace } from './data-migration.js';
 
 const [source, target, ...rest] = process.argv.slice(2);
@@ -15,7 +16,8 @@ if (!source || !target || rest.length > 0) {
   try {
     console.log(JSON.stringify(await migrateWorkspace(source, target)));
   } catch (error) {
-    console.error(error instanceof Error ? error.message : '迁入工作台数据失败。');
+    const message = error instanceof Error ? error.message : '迁入工作台数据失败。';
+    console.error(error instanceof AppError ? error.code + ' ' + message : message);
     process.exitCode = 1;
   }
 }

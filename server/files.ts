@@ -32,6 +32,9 @@ export const blockedNames = new Set([
   '.netrc',
   '.pypirc',
   'node_modules',
+  'dist',
+  '.cache',
+  '.gemini',
 ]);
 const sensitive = (part: string) =>
   blockedNames.has(part) ||
@@ -162,6 +165,178 @@ export async function listProjectFiles(root: string, input = '') {
     if (items.length >= 500) break;
   }
   return { path: relative(root, target), items };
+}
+export async function findProjectFiles(root: string, query = '', limit = 50) {
+  const toPosix = (p: string) => p.replace(/\\/g, '/');
+  const rawQuery = query.trim().replace(/^[/\\]+/, '');
+  const normalized = toPosix(rawQuery);
+
+  const hasSlash = normalized.includes('/');
+  let startDir = '';
+  let filter = normalized.toLowerCase();
+
+  if (hasSlash) {
+    const lastSlash = normalized.lastIndexOf('/');
+    const candidateDir = normalized.slice(0, lastSlash);
+    const filterPart = normalized.slice(lastSlash + 1).toLowerCase();
+    try {
+      await resolveProjectPath(root, candidateDir, { directory: true });
+      startDir = candidateDir;
+      filter = filterPart;
+    } catch {
+      startDir = '';
+      filter = normalized.toLowerCase();
+    }
+  }
+
+  const directDirs: { name: string; path: string; isDirectory: boolean; size: number }[] = [];
+  const directFiles: { name: string; path: string; isDirectory: boolean; size: number }[] = [];
+  const nestedMatches: { name: string; path: string; isDirectory: boolean; size: number }[] = [];
+  let examined = 0;
+
+  let startEntries;
+  try {
+    const target = await resolveProjectPath(root, startDir, { directory: true });
+    startEntries = await readdir(target, { withFileTypes: true });
+  } catch {
+    return { path: startDir, items: [] };
+  }
+
+  const sortedStart = [...startEntries].sort(
+    (a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name),
+  );
+
+  for (const entry of sortedStart) {
+    if (
+      sensitive(entry.name) ||
+      entry.isSymbolicLink() ||
+      (!entry.isDirectory() && !entry.isFile())
+    )
+      continue;
+
+    examined++;
+    const rel = startDir ? `${startDir}/${entry.name}` : entry.name;
+    const lowerName = entry.name.toLowerCase();
+    const isMatch = !filter || lowerName.includes(filter);
+
+    if (entry.isDirectory()) {
+      if (isMatch) {
+        directDirs.push({
+          name: entry.name,
+          path: rel,
+          isDirectory: true,
+          size: 0,
+        });
+      }
+    } else if (entry.isFile()) {
+      if (isMatch) {
+        let size = 0;
+        try {
+          const stat = await lstat(join(root, rel));
+          if (stat.isFile() && stat.nlink === 1) size = stat.size;
+        } catch {}
+        directFiles.push({
+          name: entry.name,
+          path: rel,
+          isDirectory: false,
+          size,
+        });
+      }
+    }
+  }
+
+  const walk = async (dir: string, depth: number) => {
+    if (
+      depth > 8 ||
+      examined >= 2000 ||
+      directDirs.length + directFiles.length + nestedMatches.length >= limit
+    )
+      return;
+
+    let entries;
+    try {
+      const target = await resolveProjectPath(root, dir, { directory: true });
+      entries = await readdir(target, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (
+        sensitive(entry.name) ||
+        entry.isSymbolicLink() ||
+        (!entry.isDirectory() && !entry.isFile())
+      )
+        continue;
+
+      examined++;
+      const rel = `${dir}/${entry.name}`;
+      const lowerName = entry.name.toLowerCase();
+      const lowerRel = rel.toLowerCase();
+      const isMatch = !filter || lowerName.includes(filter) || lowerRel.includes(filter);
+
+      if (entry.isDirectory()) {
+        if (isMatch && filter) {
+          nestedMatches.push({
+            name: entry.name,
+            path: rel,
+            isDirectory: true,
+            size: 0,
+          });
+        }
+        await walk(rel, depth + 1);
+        if (directDirs.length + directFiles.length + nestedMatches.length >= limit) return;
+      } else if (entry.isFile()) {
+        if (isMatch) {
+          let size = 0;
+          try {
+            const stat = await lstat(join(root, rel));
+            if (stat.isFile() && stat.nlink === 1) size = stat.size;
+          } catch {}
+          nestedMatches.push({
+            name: entry.name,
+            path: rel,
+            isDirectory: false,
+            size,
+          });
+          if (directDirs.length + directFiles.length + nestedMatches.length >= limit) return;
+        }
+      }
+    }
+  };
+
+  for (const entry of sortedStart) {
+    if (entry.isDirectory() && !sensitive(entry.name) && !entry.isSymbolicLink()) {
+      const rel = startDir ? `${startDir}/${entry.name}` : entry.name;
+      await walk(rel, 1);
+      if (directDirs.length + directFiles.length + nestedMatches.length >= limit) break;
+    }
+  }
+
+  let results: { name: string; path: string; isDirectory: boolean; size: number }[];
+  if (filter) {
+    const combined = [...directDirs, ...directFiles, ...nestedMatches];
+    combined.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aExact = aName === filter;
+      const bExact = bName === filter;
+      if (aExact !== bExact) return aExact ? -1 : 1;
+      const aStarts = aName.startsWith(filter);
+      const bStarts = bName.startsWith(filter);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      const aContains = aName.includes(filter);
+      const bContains = bName.includes(filter);
+      if (aContains !== bContains) return aContains ? -1 : 1;
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.path.localeCompare(b.path);
+    });
+    results = combined.slice(0, limit);
+  } else {
+    results = [...directDirs, ...directFiles, ...nestedMatches].slice(0, limit);
+  }
+
+  return { path: startDir, items: results };
 }
 export async function searchProject(root: string, query: string, signal: AbortSignal) {
   const matches: { path: string; line: number; text: string }[] = [];

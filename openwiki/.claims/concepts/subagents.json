@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:d90a08081ca4185dcd11130359eb105c1e6ed5bc8bb4ce826bc07266559be99e",
+  "pageVersion": "sha256:238bf83b63ec2eef4fc919cf6cb944c191ee66d62c64c63625dc059af6196f39",
   "claims": [
     {
       "id": "claim_deee2ff3fb1c4b238fd6a255dd55c2e6",
       "statement": "SDK Agent 注册 Explore 与 Worker 子代理，运行时从其事件生成关联父轮次的持久记录。",
       "evidence": [
         {
-          "resource": "repo://server/agent.ts#L1704-L1733",
+          "resource": "repo://server/agent.ts#L1695-L1724",
           "version": "repo-lines-v1:sha256:01ae1c9a323f5134857a312a412b7dd55f6be0471e60fec12d8bf2ab3f350798:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0ZTJmMzdjNDY5NzRkZmY4YjdlNWZlZTcwNjAzNGU5YWU4MGMxNWRmZWM4ZmYyMGY5M2Y1ZTk3NTNjODZiOWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxY2E3YWJiNzg3Mzc2NTY1ODQxNzRlNjcyMGIwYjk1MGU3NmU0ZDlkNjJlMjdhODJiYWNkY2I4NGViNTZkYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5Njk2NzEwNTE4NDRlNDQ3YmFiM2IwMTU5YzNkZTMzYzM5N2ViMDg3ZDU2NjFkYzY2YTk1ZTJkMDQ0NGY4ZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5OTA2MGZhNGNiMGVkZDAzOWEzOGNmNTkwMDU2MDJlZDZlZTU0ZTc1MTc2NzE4ZDA0Y2Y2OTA0MTljMjg3MjkifQ"
         },
         {

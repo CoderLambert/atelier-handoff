@@ -54,6 +54,12 @@ Renderer 先展示快照摘要和本次模型选择。只有明确开始或续�
 
 参考 [Messages API 结束原因](https://platform.claude.com/docs/en/api/messages) 的 `end_turn`、`stop_sequence`、`max_tokens` 和流中 `null` 定义；完整非流式输出在保持严格 JSON 和 ID 校验的前提下可接受 `stop_sequence`，`null` 不作为完成凭据。[LangChain JSON 解析器](https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/utils/json.py) 可从围栏提取 JSON，但也支持修补不完整 JSON；本功能只接受完整、单层围栏，不采用修补或提取前后自然语言。模型响应、校验细节和凭据不写日志。使用合成回环响应和隔离 Git 验证，无真实模型行为保证；如错误接受无效计划，回退围栏兼容，仍维持严格校验。
 
+## 2026-11-25 · 多提交模型与推理偏好
+
+多提交之前只在弹窗保存模型，且没有将推理等级传给规划请求。沿用聊天的模型/推理选择器和目录能力，使用 SQLite settings 独立键保存多提交偏好，缺省沿用工作台默认模型和网关默认等级，不修改聊天草稿。每次分析冻结模型与等级并绑定分析会话；不同等级不得续用先前批次。固定路由优先于请求配置，能力未知时不能保证上游采纳，默认等级不发送覆盖字段。
+
+沿用 [会话推理深度决策](2026-11-20-session-reasoning-effort.md)：Shunt 0.64.0 将 `output_config.effort` 转换至下游的 `reasoning.effort`，路由固定值优先。[Messages API effort](https://platform.claude.com/docs/en/build-with-claude/effort) 使用 `output_config.effort`；[Codex 模型目录与档位](https://deepwiki.com/openai/codex#3.8) 提供模型能力。上游来源只作协议依据，模型实际接受程度不由本地替身证明。测试覆盖偏好跨重启、路由约束、分析绑定与网关请求；若发现档位传递不一致，回退多提交偏好和等级请求，不变更聊天默认值。
+
 ## 2026-11-24 · 显示进行中的分析进度
 
 分析 POST 等所有模型请求完成后返回。运行时已经记录通过校验的批次，弹窗缺少只读进度通路，故进行中只有等待文案。用户需要知道正在分析第几批、已完成多少项，以及何时进入最终分组整理。
@@ -61,3 +67,23 @@ Renderer 先展示快照摘要和本次模型选择。只有明确开始或续�
 [TanStack Query v5 的查询选项](https://tanstack.com/query/v5/docs/framework/react/reference/useQuery)和[上游 QueryObserver](https://github.com/TanStack/query/blob/main/packages/query-core/src/queryObserver.ts)支持按活跃查询状态更新轮询定时器。项目锁定 5.108.0，已有会话和浏览器预览使用相同方式。[taskforcesh/bullmq 的 Job.updateProgress](https://github.com/taskforcesh/bullmq/blob/master/src/classes/job.ts)把进度和最终返回值独立保存，并发布变动。借鉴独立进度值，进度仍随应用已有的短期分析会话消失，避免新增存储和队列。复用全局 SSE 会使临时状态进入持久化事件日志，修改分析 POST 为流会改变现有 JSON 恢复契约和测试客户端。
 
 选择在现有工作树 API 增加轻量 GET。只按项目、工作树、分析编号和冻结版本读取内存中的批次数、已验证项数和建议组数，禁止读取或返回差异、提交文案、模型原始输出。开始、恢复和最终结果继续走原有 POST。Renderer 在活跃弹窗内间隔约一秒读取，关闭或完成即停。进度读取不重新扫描 Git，也不发起推理。最终整理单独显示阶段，批次数反映实际验证完成数。回退可移除进度 GET、统计通知和对应视图，继续保留提交计划与恢复行为。
+
+## 2026-11-25 · 对话修改提交草稿
+
+用户可在首次规划前提供补充要求，并围绕结果继续要求改名、归组、合并或保留。现有模型只返回完整规划，工作区快照、待分配项和用户改过的标题已由审查用例持有。完整重写会覆盖无关决定，逐项编辑也无法解决同目录几十个变更块的操作负担。
+
+[Claude Messages API](https://platform.claude.com/docs/en/api/messages) 的请求明确承载上下文。沿用当前网关的有界 JSON 传输。对照 [Aider v0.86.2 的 EditBlockCoder](https://github.com/Aider-AI/aider/blob/v0.86.2/aider/coders/editblock_coder.py) 将模型输出解析为局部编辑，以及 [Codex apply-patch](https://github.com/openai/codex/blob/main/codex-rs/apply-patch/src/lib.rs) 将编辑表示、解析和文件执行分开。两者的执行对象是文件。本功能只为当前草稿应用结构化变更，沿用已有提交执行器和恢复机制，无需引入文件编辑器、Shell 权限或通用对话 Agent。
+
+首轮要求随分析身份绑定，恢复继续用原要求。每次明确发送补充请求用当前提交草稿、合法单元元数据及分组文案做一次模型调用。模型只能返回有界增量，受保护、已保留及未披露项不会交给模型，未涉及的现有分组和说明继续保留。服务端检查工作树版本及所有操作 ID，再原子应用到内存结果。编辑中的短期历史和撤销保存在弹窗里。确认可依据摘要直接发起一次本地校验及提交，也能展开既有逐组差异和手工编辑。真实 Git 编译、权限、恢复及显式执行的边界沿用。先在本地替身验证 25 个 OpenWiki 单元归一组、改名、撤销和连续追问，再从独立 Electron 核对。回退可移除首次要求、草稿修订入口和对话区，恢复已有手动审查。
+
+后续指示可能使用「上一条说的组」这样的指代。仅附带本窗口最近三轮的修改要求与澄清文字，服务端在披露前检查，并以当前分组作为唯一操作依据。用户撤销的轮次退出上下文，预览读取不创建草稿修改。继续使用已有网关协议和大小上限。
+
+摘要确认在发起执行前保留本地验证结果。若执行响应断开，沿用同一个操作 ID 和已验证摘要读取执行回执。工作树经本次提交更新后仍可重试，晚到或重复确认不会重复创建提交。
+
+## 2026-11-25 · 凭据回归测试样例
+
+临时 Git 仓库复现了五个测试文件被归为「可能凭据」。这些测试使用的示例有完整的凭据赋值或固定格式，其中包含用于验证拒绝分支的值，以及回环传输使用的认证占位符。检测器只看到冻结文本，无法从测试文件名核实值的来源。
+
+[Gitleaks v8.30.0 的 `GenericCredential`](https://github.com/gitleaks/gitleaks/blob/v8.30.0/cmd/generate/config/rules/generic.go#L120-L149) 会构造样例来核对规则，也为部分样例使用行内例外。[detect-secrets v1.5.0 的 `keyword_test.py`](https://github.com/Yelp/detect-secrets/blob/v1.5.0/tests/plugins/keyword_test.py#L10-L41) 把模拟值和赋值语法分别声明，在运行时构造检测输入。沿用运行时构造方式，把明确的回环占位符用于仅验证传输的测试，把须匹配凭据规则的合成输入留在本地检测内存或临时 Git 夹具。生产扫描、模型披露和提交预览的权限沿用既有规则。
+
+通过同一生产快照、模型候选和提交预览函数核对这五个测试文件。临时仓库增加一个独立的凭据阳性对照，确认候选和预览仍分别拦截。既有回归继续覆盖拒绝、移除已有凭据、跨层依赖和模型响应的披露限制。需要回退时仅恢复这些测试样例输入。

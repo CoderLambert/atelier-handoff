@@ -1,0 +1,24 @@
+{
+  "result": "passed",
+  "locales": [
+    "zh-CN",
+    "en"
+  ],
+  "native": "2560x1440",
+  "rendererSizes": [
+    "1280x800",
+    "1440x900"
+  ],
+  "sameFileHunks": 3,
+  "manualCommits": 1,
+  "modelRequests": {
+    "aiLoopback": 1,
+    "manual": 0,
+    "real": 0
+  },
+  "screenshots": [
+    "bulk-assignment-zh-1280.png",
+    "manual-preview-zh-1440.png",
+    "manual-en-dark-1440.png"
+  ]
+}

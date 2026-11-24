@@ -220,6 +220,7 @@ export function ModelPicker({
                   <SelectItem
                     key={entry.id}
                     value={modelValue(entry.id)}
+                    disabled={magpieDisabled(entry.id)}
                     textValue={[entry.displayName, entry.id].filter(Boolean).join(' ')}
                     title={entry.id}
                     className="[&>span:last-child]:min-w-0"

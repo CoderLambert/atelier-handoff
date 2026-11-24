@@ -1,7 +1,7 @@
 /**
- * @file 展示 AI 多提交的分析进度、可编辑计划和确认前差异。
- * @implementation 连接模型选择器、分析统计与计划编辑器，按阶段展示实时批次、审查分组和本地提交预览。
- * @updated 2026-11-24T22:06:05+08:00
+ * @file 展示手动及 AI 多提交的分析、对话审查和详细计划编辑。
+ * @implementation 按入口和分析阶段组合模型选择、补充要求与实时进度，在对话摘要和逐组差异编辑之间切换。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 import { useState } from 'react';
 import { GitCommitHorizontal, LoaderCircle, Sparkles } from 'lucide-react';
@@ -19,6 +19,7 @@ import { cn } from '@/components/ui/utils';
 import { commitCredentialBlocksLocal } from '@shared/git-multi-commit';
 import { GitPatch } from './git-diff';
 import { GitMultiCommitModelPicker } from './git-multi-commit-model-picker';
+import { GitMultiCommitConversation } from './git-multi-commit-conversation';
 import { GitMultiCommitEditor, type GitMultiCommitEditorMessages } from './git-multi-commit-editor';
 import type { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
 
@@ -41,6 +42,8 @@ export function GitMultiCommitDialog({
         ? t('multi.model.magpieUnavailable')
         : translateError(review.error, t('errors.failed'));
   const busy = Boolean(review.preparing || review.validating || review.committing);
+  const conversational = review.canRevise || review.turns.length > 0;
+  const showConversation = conversational && !analyzing && !review.details;
   const picker =
     review.analysisAction === 'start' ||
     review.analysisAction === 'retry' ||
@@ -156,6 +159,22 @@ export function GitMultiCommitDialog({
           reason: t('multi.category.unassignedReason'),
         },
       },
+    },
+    batch: {
+      all: t('multi.batch.all'),
+      destination: t('multi.batch.destination'),
+      apply: t('multi.batch.apply'),
+      clear: t('multi.batch.clear'),
+      blocked: t('multi.batch.blocked'),
+      selected: (count) => t('multi.batch.selected', { count }),
+      category: (category) => t('multi.batch.category', { category }),
+      file: (path) => t('multi.batch.file', { path }),
+      unit: (unit) =>
+        t('multi.batch.unit', {
+          path: unit.path,
+          layer: t(`layer.${unit.layer}`),
+          change: unit.description,
+        }),
     },
     contentLabel: t('multi.groups'),
     groups: t('multi.groups'),
@@ -287,11 +306,13 @@ export function GitMultiCommitDialog({
           credential: Boolean(credential),
           analysis: !modelCandidates.has(unit.id)
             ? ('withheld' as const)
-            : !analyzed.has(unit.id)
-              ? ('unanalyzed' as const)
-              : !suggested.has(unit.id)
-                ? ('modelUnassigned' as const)
-                : ('assigned' as const),
+            : review.manual
+              ? ('manual' as const)
+              : !analyzed.has(unit.id)
+                ? ('unanalyzed' as const)
+                : !suggested.has(unit.id)
+                  ? ('modelUnassigned' as const)
+                  : ('assigned' as const),
         };
       })
     : undefined;
@@ -316,9 +337,11 @@ export function GitMultiCommitDialog({
         <DialogHeader>
           <DialogTitle className="git-board-title">
             <GitCommitHorizontal aria-hidden="true" />
-            {t('multi.heading')}
+            {t(review.manual ? 'multi.manualHeading' : 'multi.heading')}
           </DialogTitle>
-          <DialogDescription>{t('multi.description')}</DialogDescription>
+          <DialogDescription>
+            {t(review.manual ? 'multi.manualDescription' : 'multi.description')}
+          </DialogDescription>
         </DialogHeader>
         <div className="git-multi-commit-setup">
           {review.preparing === 'snapshot' ? <p role="status">{t('multi.reading')}</p> : null}
@@ -349,12 +372,58 @@ export function GitMultiCommitDialog({
                 <>
                   <GitMultiCommitModelPicker
                     model={review.model}
+                    effort={review.effort}
                     defaultModel={review.defaultModel}
-                    catalog={review.catalog}
-                    disabled={busy}
+                    disabled={busy || review.preferencesLoading || review.preferencesError}
                     onModelChange={review.selectModel}
+                    onEffortChange={review.selectEffort}
                   />
+                  {review.preferencesLoading ? (
+                    <p role="status">{t('multi.model.preferencesLoading')}</p>
+                  ) : null}
+                  {review.preferencesSaving ? (
+                    <p role="status">{t('multi.model.preferencesSaving')}</p>
+                  ) : null}
+                  {review.preferencesError ? (
+                    <p role="alert">
+                      {t('multi.model.preferencesLoadFailed')}{' '}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={review.retryPreferences}
+                      >
+                        {t('board.retry')}
+                      </Button>
+                    </p>
+                  ) : null}
+                  {review.preferencesSaveError ? (
+                    <p role="alert">
+                      {t('multi.model.preferencesSaveFailed')}{' '}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={review.retrySavePreferences}
+                      >
+                        {t('board.retry')}
+                      </Button>
+                    </p>
+                  ) : null}
                   <p>{t('multi.disclosure')}</p>
+                  {!review.canResume ? (
+                    <label className="git-commit-conversation-input">
+                      {t('multi.conversation.initial')}
+                      <textarea
+                        rows={2}
+                        maxLength={2000}
+                        value={review.instruction}
+                        disabled={busy}
+                        placeholder={t('multi.conversation.initialPlaceholder')}
+                        onChange={(event) => review.setInstruction(event.target.value)}
+                      />
+                    </label>
+                  ) : null}
                 </>
               ) : null}
               {analyzing ? (
@@ -470,9 +539,30 @@ export function GitMultiCommitDialog({
             ) : null}
           </div>
         </div>
+        {conversational ? (
+          <GitMultiCommitConversation
+            review={review}
+            busy={busy}
+            hidden={!showConversation}
+            onDetails={() => review.setDetails(true)}
+          />
+        ) : null}
+        {conversational && review.details && !analyzing ? (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => review.setDetails(false)}
+            >
+              {t('multi.conversation.back')}
+            </Button>
+          </div>
+        ) : null}
         {draft && units ? (
           <GitMultiCommitEditor
-            className={analyzing ? 'hidden' : undefined}
+            hidden={analyzing || showConversation}
             units={units}
             groups={review.groups}
             excludedUnitIds={review.excludedUnitIds}

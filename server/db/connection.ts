@@ -10,6 +10,7 @@ import { applySnapshotIndexes } from './migrations/apply-snapshot-indexes.js';
 import { applySubagents } from './migrations/apply-subagents.js';
 import { subagentRepository } from './repositories/subagents.js';
 import { workspaceLayoutRepository } from './repositories/workspace-layout.js';
+import { gitMultiCommitPreferencesRepository } from './repositories/git-multi-commit-preferences.js';
 
 import { applyGitWorktrees } from './migrations/apply-git-worktrees.js';
 import { gitWorktreeRepository } from './repositories/git-worktrees.js';
@@ -41,6 +42,7 @@ export function openWorkbenchDatabase(path: string) {
     sessionSnapshots: sessionSnapshotRepository(orm),
     subagents: subagentRepository(orm),
     workspaceLayout: workspaceLayoutRepository(orm),
+    gitMultiCommitPreferences: gitMultiCommitPreferencesRepository(orm),
     applySnapshotIndexes: () => applySnapshotIndexes(db),
     applySubagents: () => applySubagents(db),
     gitWorktrees: gitWorktreeRepository(orm),

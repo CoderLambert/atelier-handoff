@@ -4,6 +4,10 @@
  * @updated 2026-11-24T14:50:21+08:00
  */
 @layer components {
+  .git-multi-commit[hidden] {
+    display: none;
+  }
+
   .git-multi-commit {
     position: relative;
     display: flex;
@@ -127,8 +131,38 @@
     cursor: pointer;
   }
 
-  .git-multi-commit-view input {
+  .git-multi-commit-view input,
+  .git-multi-commit-selection input,
+  .git-multi-commit-unit-select {
     accent-color: var(--ui-primary);
+  }
+
+  .git-multi-commit-selection {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--ui-size-sm);
+    min-width: 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .git-multi-commit-batch {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+    background: var(--ui-card);
+    font-size: 13px;
+  }
+
+  .git-multi-commit-batch > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
 
   .git-multi-commit-category {

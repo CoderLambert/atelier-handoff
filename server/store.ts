@@ -38,6 +38,9 @@ export class Store {
   readonly gitCommitOperations: ReturnType<typeof openWorkbenchDatabase>['gitCommitOperations'];
   readonly sessionSnapshots: SessionSnapshotRepository;
   readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
+  readonly gitMultiCommitPreferences: ReturnType<
+    typeof openWorkbenchDatabase
+  >['gitMultiCommitPreferences'];
   readonly events = new EventEmitter();
   private readonly subagents: SubagentRepository;
   private pendingEvents: RunEvent[] | undefined;
@@ -50,6 +53,7 @@ export class Store {
     this.gitCommitOperations = connection.gitCommitOperations;
     this.sessionSnapshots = connection.sessionSnapshots;
     this.workspaceLayout = connection.workspaceLayout;
+    this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
     this.readTransaction = connection.readTransaction;
     this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
     this.subagents = connection.subagents;

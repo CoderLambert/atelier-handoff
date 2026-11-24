@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 组织会话、Git、审批和运行接口。协调多提交计划、恢复和进度读取，按所选模型路由分析请求。
- * @updated 2026-11-24T22:06:05+08:00
+ * @implementation 组织会话、Git、审批和运行接口。校验多提交快照，按所选模型分派分析或对话修改，并协调恢复与进度读取。
+ * @updated 2026-11-25T01:22:11+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -66,10 +66,13 @@ import { DevelopmentWorktrees, directoriesOverlap } from './modules/git/developm
 import { commitStagedChanges, readStagedChanges } from './modules/git/staged-commit.js';
 import { suggestCommitMessage } from './modules/git/commit-suggestion.js';
 import {
+  gitMultiCommitPreferences,
   multiCommitDraftRequest,
   multiCommitProgressRequest,
+  multiCommitRevisionRequest,
   multiCommitSubmit,
   multiCommitValidate,
+  type MultiCommitDraftRequest,
 } from '../shared/git-multi-commit.js';
 import { readCommitPlanSnapshot } from './modules/git/commit-plan-snapshot.js';
 import { commitPlanUnits } from './modules/git/commit-plan-view.js';
@@ -78,6 +81,8 @@ import {
   commitAnalysisCandidates,
 } from './modules/git/commit-analysis-sessions.js';
 import { validateCommitPlan } from './modules/git/commit-plan-preview.js';
+import { canSendCommitDiff } from './modules/git/commit-plan-privacy.js';
+import { reviseCommitPlan } from './modules/git/commit-plan-revision.js';
 import {
   readCommitDiff,
   readFileDiff,
@@ -967,6 +972,14 @@ export async function createApp(options: {
             store.workspaceLayout.save(workspaceLayoutSchema.parse(await body(req))),
           );
       }
+      if (url.pathname === '/api/settings/git-multi-commit-preferences') {
+        if (method === 'GET') return json(res, store.gitMultiCommitPreferences.read());
+        if (method === 'PATCH')
+          return json(
+            res,
+            store.gitMultiCommitPreferences.save(gitMultiCommitPreferences.parse(await body(req))),
+          );
+      }
       if (url.pathname === '/api/settings/ui-theme') {
         if (method === 'GET') return json(res, { theme: store.workspaceLayout.readTheme() });
         if (method === 'PATCH') {
@@ -1298,8 +1311,15 @@ export async function createApp(options: {
         ) {
           const project = store.get('projects', parts[2]);
           const id = z.uuid().parse(parts[5]);
-          if (parts[6] === 'commit-plan') {
-            const input = multiCommitDraftRequest.parse(await body(req));
+          if (parts[6] === 'commit-plan' || parts[6] === 'commit-plan-revise') {
+            const raw = await body(req);
+            const revision =
+              parts[6] === 'commit-plan-revise' ? multiCommitRevisionRequest.parse(raw) : undefined;
+            const input: MultiCommitDraftRequest = revision
+              ? { ...revision, generate: true }
+              : multiCommitDraftRequest.parse(raw);
+            if (input.instruction && !canSendCommitDiff(input.instruction))
+              throw gitError('PLAN_INSTRUCTION_PRIVATE', '补充要求可能包含凭据，请删除后重试。');
             const abort = new AbortController();
             const disconnect = () => abort.abort();
             res.once('close', disconnect);
@@ -1315,7 +1335,7 @@ export async function createApp(options: {
               const defaults = effectiveConfig();
               const model = input.model ?? defaults.model;
               const nativeMagpieModel = magpieModel(model);
-              let config: AppConfig | undefined = { ...defaults, model };
+              let config: AppConfig | undefined = { ...defaults, model, effort: input.effort };
               if (nativeMagpieModel !== undefined) {
                 const validModel = gatewayModelId.safeParse(nativeMagpieModel).success;
                 if (input.generate && input.model !== undefined) {
@@ -1334,6 +1354,13 @@ export async function createApp(options: {
               }
               if (input.resume && !config)
                 throw gitError('PLAN_ANALYSIS_STALE', '模型接入配置已变化，请重新开始。');
+              if (revision) {
+                if (!config) throw gitError('PLAN_REVISION_FAILED', 'AI 修改请求未完成。', 502);
+                return json(
+                  res,
+                  await reviseCommitPlan(config, revision, units, candidates, abort.signal),
+                );
+              }
               const analyzed =
                 config && ((input.generate && candidates.length > 0) || input.resume)
                   ? await commitAnalyses.analyze({
@@ -1348,6 +1375,7 @@ export async function createApp(options: {
                       config,
                       locale: input.locale,
                       candidates,
+                      instruction: input.instruction,
                       analysisId: input.analysisId,
                       resume: input.resume,
                       generate: input.generate,
