@@ -1,7 +1,7 @@
 /**
- * @file 展示会话消息、运行进度与历史、浏览器异常及网页链接选择入口。
- * @implementation 按运行组织消息，以状态和耗时汇总结束的运行。通过统一入口展开工具、任务清单和子任务，并提供审批、输出及历史操作入口。
- * @updated 2026-11-25T18:35:00+08:00
+ * @file 展示会话消息、运行进度与历史，以及审批和异常入口。
+ * @implementation 按运行选择有序对话或旧历史展示，组合消息操作、工具、任务和运行结束摘要。
+ * @updated 2026-11-26T01:17:56+08:00
  */
 import { useUiTranslation, getTranslator } from '@/i18n';
 import {
@@ -43,6 +43,8 @@ import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
 import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from './message-actions';
 import { RunToolActivity } from './run-tool-activity';
+import { OrderedRun } from './ordered-run';
+import { RunLiveStatus } from './run-live-status';
 import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
 import { TaskPlan } from './task-plan';
 const ToolOutputDialog = lazy(() => import('@/features/inspector/tool-output-dialog'));
@@ -701,6 +703,162 @@ export function Conversation({
         ) : null}
         {messages.length ? (
           messages.map((message, index) => {
+            const orderedRun = indexes.runs.get(message.runId);
+            if (orderedRun?.transcript?.version === 1) {
+              if (messages.findIndex((item) => item.runId === message.runId) !== index) return null;
+              const run = orderedRun;
+              const tools = indexes.tools.get(run.id) || EMPTY_TOOLS;
+              const artifacts = indexes.artifacts.get(run.id) || EMPTY_ARTIFACTS;
+              const hasText = snapshot.messages.some(
+                (item) => item.runId === run.id && item.role === 'assistant' && item.text.trim(),
+              );
+              return (
+                <OrderedRun
+                  key={`ordered:${run.id}`}
+                  snapshot={snapshot}
+                  run={run}
+                  onPermission={(item) => setPermissionId(item.id)}
+                  onOutput={(tool) => setOutputToolId(tool.id)}
+                  onTrace={() => onTrace(run.id)}
+                  renderPermission={(item) => (
+                    <ChatApproval permission={item} onOpen={() => setPermissionId(item.id)} />
+                  )}
+                  renderMessage={(row, latest) => {
+                    const original = row.message;
+                    const assistant = row.kind === 'text';
+                    return (
+                      <article
+                        className={cn('message', assistant ? 'assistant-message' : 'user-message')}
+                        aria-label={t(assistant ? 'conversation.assistant' : 'conversation.you')}
+                        data-message-id={original.id}
+                        data-run-id={run.id}
+                        data-transcript-kind={row.kind}
+                        data-last-message={
+                          (latest && messages.at(-1)?.runId === run.id) || undefined
+                        }
+                        data-transcript-order={row.order}
+                        data-transcript-part-id={assistant ? row.key : undefined}
+                      >
+                        <div className="message-body">
+                          {assistant ? (
+                            <Markdown
+                              text={row.text}
+                              streaming={isActive(run) && row.footer}
+                              onLinkClick={onOpenLink ? chooseWebLink : undefined}
+                            />
+                          ) : (
+                            <div className="user-message-bubble">
+                              <div className="message-text">
+                                <FormattedUserMessage text={row.text} />
+                              </div>
+                              <MessageContext run={run} attachments={indexes.attachments} />
+                              {snapshot.session.fork &&
+                              indexes.events
+                                .get(run.id)
+                                ?.some((event) => event.type === 'sdk.context_restarted') ? (
+                                <p className="message-placeholder">
+                                  {t('conversation.branchRestored')}
+                                </p>
+                              ) : null}
+                            </div>
+                          )}
+                          {row.footer ? (
+                            <footer className="message-footer">
+                              <time dateTime={row.at} title={date(row.at, timeFormat)}>
+                                {date(row.at, shortTimeFormat)}
+                              </time>
+                              <MessageActions
+                                message={original}
+                                disabled={submitting || snapshot.session.status === 'archived'}
+                                onEdit={onEditMessage}
+                                onQuote={onQuoteMessage}
+                                onFork={onForkMessage}
+                                onRewind={onRewindMessage}
+                                subsequentMessageCount={subsequentMessageCounts.get(original.id)}
+                                rewindDisabledReason={rewindDisabledReason}
+                                forking={forkingMessageId === original.id}
+                                forkDisabled={submitting || Boolean(forkingMessageId)}
+                              />
+                            </footer>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  }}
+                  summary={
+                    <div
+                      className="transcript-run-end"
+                      data-transcript-kind={!isActive(run) ? 'summary' : undefined}
+                      data-run-id={run.id}
+                    >
+                      {run.id !== composerPlanRunId && run.plan.length > 0 ? (
+                        <TaskPlan steps={run.plan} embedded={!isActive(run)} />
+                      ) : null}
+                      <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
+                      {!isActive(run) ? (
+                        <div className="transcript-summary">
+                          <span>
+                            {run.startedAt && run.endedAt
+                              ? t('progress.historyDuration', {
+                                  status: statusLabel(run.status),
+                                  duration: formatDuration(
+                                    Math.max(
+                                      0,
+                                      Date.parse(run.endedAt) - Date.parse(run.startedAt),
+                                    ),
+                                    locale,
+                                  ),
+                                })
+                              : statusLabel(run.status)}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => onTrace(run.id)}
+                          >
+                            <Activity data-icon="inline-start" aria-hidden="true" />
+                            {t('conversation.viewTrace')}
+                          </Button>
+                        </div>
+                      ) : null}
+                      <RunResult
+                        run={run}
+                        tools={tools}
+                        hasArtifacts={artifacts.length > 0}
+                        hasText={hasText}
+                        retryDisabled={retryDisabled}
+                        onRetry={onRetry}
+                        onTrace={onTrace}
+                      />
+                      {!isActive(run) && artifacts.length ? (
+                        <section
+                          className="chat-deliverables"
+                          aria-label={t('conversation.deliverables')}
+                        >
+                          <h3>{t('conversation.deliverables')}</h3>
+                          <ul>
+                            {artifacts.map((artifact) => (
+                              <li key={artifact.id}>
+                                <ArtifactAction artifact={artifact} showDownload />
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ) : null}
+                      {isActive(run) ? (
+                        <RunLiveStatus
+                          run={run}
+                          tools={tools}
+                          events={indexes.events.get(run.id) || EMPTY_EVENTS}
+                          subagents={snapshot.subagents}
+                        />
+                      ) : null}
+                    </div>
+                  }
+                />
+              );
+            }
             const assistant = message.role === 'assistant';
             const run = indexes.runs.get(message.runId);
             const tools = indexes.tools.get(message.runId) || EMPTY_TOOLS;

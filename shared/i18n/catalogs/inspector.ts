@@ -205,7 +205,10 @@ export const inspector = {
   'settings.layout': ['工作区布局', 'Workspace layout'],
   'settings.layoutNavDescription': ['面板宽度与默认布局', 'Panel widths and default layout'],
   'settings.notifications': ['提示音与通知', 'Sound & Notifications'],
-  'settings.notificationsNavDescription': ['完成提示音与窗口唤醒', 'Completion chime and window focus'],
+  'settings.notificationsNavDescription': [
+    '完成提示音与窗口唤醒',
+    'Completion chime and window focus',
+  ],
   'settings.diagnostics': ['诊断', 'Diagnostics'],
   'settings.diagnosticsNavDescription': ['导出本机诊断文件', 'Export local diagnostic files'],
   'settings.title': ['设置', 'Settings'],
@@ -254,7 +257,10 @@ export const inspector = {
     'Play a subtle alert when a task fails or is interrupted.',
   ],
   'settings.notificationsVolume': ['提示声音量', 'Chime Volume'],
-  'settings.notificationsVolumeDescription': ['调整提示音播放音量。', 'Adjust the playback volume of audio chimes.'],
+  'settings.notificationsVolumeDescription': [
+    '调整提示音播放音量。',
+    'Adjust the playback volume of audio chimes.',
+  ],
   'settings.notificationsTestSound': ['试听音效', 'Test Sound'],
   'settings.notificationsWindowGroup': ['窗口与焦点', 'Window & Focus'],
   'settings.notificationsWindowGroupDescription': [
@@ -429,6 +435,9 @@ export const inspector = {
   'tool.sdkPreviewWithSpace': [' SDK 回执预览', ' SDK receipt preview'],
   'tool.parameters': ['参数', 'Parameters'],
   'tool.command': ['命令', 'Command'],
+  'tool.builtinRtk': ['RTK · 内置 Hook', 'RTK · Built-in hook'],
+  'tool.originalCommand': ['原始命令', 'Original command'],
+  'tool.executedCommand': ['实际执行命令', 'Executed command'],
   'tool.commandNotRecorded': [
     '命令未单独记录，请查看下方参数原文。',
     'The command was not recorded separately. See the raw parameters below.',
@@ -561,10 +570,7 @@ export const inspector = {
     'Glacial blue · Crisp engineering clarity',
   ],
   'layout.themeRose': ['晨曦蔷薇 (Rosé Pine)', 'Rosé Pine'],
-  'layout.themeRoseDesc': [
-    '落日浅樱粉 · 文艺复古柔和舒缓',
-    'Dusty rose · Subdued retro elegance',
-  ],
+  'layout.themeRoseDesc': ['落日浅樱粉 · 文艺复古柔和舒缓', 'Dusty rose · Subdued retro elegance'],
   'layout.themeMidnight': ['深空墨夜 (Midnight Slate)', 'Midnight Slate'],
   'layout.themeMidnightDesc': [
     '深邃墨蓝黑 · 夜间沉浸重度专注',
@@ -786,6 +792,7 @@ export const inspector = {
   'event.sdkResult': ['SDK 返回结果', 'SDK result received'],
   'event.sdkNotice': ['SDK 通知', 'SDK notice'],
   'event.contextRestarted': ['重新建立上下文', 'Context restarted'],
+  'event.toolAnnounced': ['工具调用已发出', 'Tool call announced'],
   'event.toolStarted': ['工具开始', 'Tool started'],
   'event.toolFinished': ['工具结束', 'Tool finished'],
   'event.toolBlocked': ['工具被拦截', 'Tool blocked'],

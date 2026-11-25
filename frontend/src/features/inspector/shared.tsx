@@ -200,6 +200,7 @@ export function eventName(type: string) {
     'sdk.result': t('event.sdkResult'),
     'sdk.notice': t('event.sdkNotice'),
     'sdk.context_restarted': t('event.contextRestarted'),
+    'tool.announced': t('event.toolAnnounced'),
     'tool.started': t('event.toolStarted'),
     'tool.finished': t('event.toolFinished'),
     'tool.blocked': t('event.toolBlocked'),

@@ -2,6 +2,10 @@
 
 本文件是项目级 Agent 规则的唯一入口，适用于主会话、子代理及人工协作。先读[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)和[当前阶段日志](openspec/roadmaps/build-atelier-desktop/task-log.md)。以用户要求的桌面体验、数据可靠性和可验证行为判断复用还是重写。当前优先开发与验收 Linux x64 功能。Windows 和 macOS 各完成一轮候选构建，后续平台验收与发行按用户安排推进。UI 优先中、大尺寸 PC，默认复用 shadcn/ui，内容以清楚的层级、舒展的宽度和克制的留白呈现。
 
+## DSH Bash 输出
+
+- 查 Git 概览（状态、日志、变更统计）时优先显式使用 `rtk git …`；若 `rtk` 不在 `PATH`，用可执行的 `"$HOME/.local/bin/rtk"`。未安装、需要完整输出或机器可读格式时，直接用 Git。沿用 Bash 审批，不启用改写 Hook。
+
 ## 编辑前
 
 1. 重要技术决策遵循[调研与决策规则](.claude/rules/technical-decisions.md)。先查官方资料并读可对比的成熟项目源码，写入 `docs/decisions/` 的取舍、依据及验证计划，再开始实现。没有合适方案时记录检索范围和自研理由。

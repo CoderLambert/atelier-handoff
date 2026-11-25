@@ -1,8 +1,8 @@
 #!/usr/bin/env -S tsx
 /**
  * @file 组织已安装 Linux 应用的冒烟验收。
- * @implementation 在隔离环境运行验收驱动并核对清单、SQLite 驱动与数据库迁移资源。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 在隔离环境运行验收驱动，核对 SQLite、迁移及固定 RTK 二进制、启动器、许可证和静态插件资源的完整清单。
+ * @updated 2026-11-26T01:32:35+08:00
  */
 // Controller only. esbuild emits the driver into a private test-resource directory;
 // neither the driver nor its dependencies are copied into the distributed app.
@@ -26,6 +26,7 @@ import { arch, cpus, release, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { rtkLauncher, rtkRelease } from '../shared/builtin-rtk.js';
 import {
   array,
   errorText,
@@ -226,6 +227,42 @@ async function verifyResources(
   const release = record(
     JSON.parse(await readFile(join(install, 'resources/release.json'), 'utf8')) as unknown,
   );
+  const rtk = record(release.rtk);
+  const rtkBinary = `resources/${rtkRelease.resourcePath}`;
+  const rtkLauncherPath = `resources/${rtkRelease.launcherPath}`;
+  const rtkLicense = 'resources/licenses/rtk/LICENSE';
+  const rtkPlugin = 'resources/runtime/server/rtk-plugin/register.js';
+  assert.equal(rtk.version, rtkRelease.version);
+  assert.equal(rtk.license, rtkRelease.license);
+  assert.equal(rtk.archiveSha256, rtkRelease.archiveSha256);
+  assert.equal(rtk.path, rtkBinary);
+  assert.equal(rtk.sha256, rtkRelease.binarySha256);
+  for (const [name, digest, mode] of [
+    [rtkBinary, rtkRelease.binarySha256, '755'],
+    [rtkLauncherPath, createHash('sha256').update(rtkLauncher).digest('hex'), '755'],
+    [rtkLicense, rtkRelease.licenseSha256, '644'],
+  ]) {
+    assert.ok(name && digest && mode);
+    const resource = entries.find((item) => item.path === name);
+    assert.ok(resource, `RTK resource must be distributed: ${name}`);
+    assert.equal(resource.sha256, digest, `Pinned RTK resource: ${name}`);
+    assert.equal(resource.mode, mode, `RTK resource mode: ${name}`);
+  }
+  assert.ok(seen.has(rtkPlugin), 'Static RTK plugin payload must be distributed');
+  assert.deepEqual(record(rtk.launcher), {
+    path: rtkLauncherPath,
+    sha256: createHash('sha256').update(rtkLauncher).digest('hex'),
+    mode: '755',
+  });
+  assert.deepEqual(array(rtk.texts), [
+    { path: rtkLicense, sha256: rtkRelease.licenseSha256, source: rtkRelease.source.archive },
+  ]);
+  const licenses = record(
+    JSON.parse(
+      await readFile(join(install, 'resources/licenses/inventory.json'), 'utf8'),
+    ) as unknown,
+  );
+  assert.deepEqual(licenses.rtk, rtk, 'RTK license and release inventories must agree');
   const sqlite = record(release.sqlite);
   const binding = record(sqlite.nativeBinding);
   assert.equal(binding.path, nativeBinding);
@@ -266,6 +303,7 @@ async function verifyResources(
     complete: true,
     testDriverDistributed: false,
     sqlite: { ...sqlite, manifestsVerified: true, exclusiveNativePrebuild: true },
+    rtk: { ...rtk, manifestsVerified: true, pinnedResourcesVerified: true, plugin: rtkPlugin },
   };
 }
 
@@ -306,9 +344,27 @@ async function packageEntry(install: string): Promise<PackageEntry | null> {
   }
   assert.equal(await hashFile(icon), await hashFile(join(install, 'atelier.svg')));
   assert.equal(await hashFile(desktop), await hashFile(join(install, 'atelier.desktop')));
-  const metadata = await readFile(join(prefix, '.PKGINFO'), 'utf8');
-  assert.match(metadata, /^pkgname = atelier$/m);
-  assert.match(metadata, /^arch = x86_64$/m);
+  let metadataPath = join(prefix, '.PKGINFO');
+  if (existsSync(metadataPath)) {
+    const metadata = await readFile(metadataPath, 'utf8');
+    assert.match(metadata, /^pkgname = atelier$/m);
+    assert.match(metadata, /^arch = x86_64$/m);
+  } else {
+    // pacman stores installed metadata in its local database, not at the system root.
+    const db = join(prefix, 'var/lib/pacman/local');
+    const candidates = (await readdir(db, { withFileTypes: true })).filter(
+      (entry) => entry.isDirectory() && entry.name.startsWith('atelier-'),
+    );
+    const matches: string[] = [];
+    for (const entry of candidates) {
+      const path = join(db, entry.name, 'desc');
+      const metadata = await readFile(path, 'utf8');
+      if (/^%NAME%\natelier$/m.test(metadata) && /^%ARCH%\nx86_64$/m.test(metadata))
+        matches.push(path);
+    }
+    assert.equal(matches.length, 1, 'Installed atelier must have one x86_64 pacman record');
+    metadataPath = string(matches[0]);
+  }
   return {
     launcher,
     evidence: {
@@ -321,7 +377,7 @@ async function packageEntry(install: string): Promise<PackageEntry | null> {
       launcherSha256: await hashFile(launcher),
       desktopSha256: await hashFile(desktop),
       iconSha256: await hashFile(icon),
-      packageMetadataSha256: await hashFile(join(prefix, '.PKGINFO')),
+      packageMetadataSha256: await hashFile(metadataPath),
     },
   };
 }

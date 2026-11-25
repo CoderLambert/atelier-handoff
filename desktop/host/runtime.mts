@@ -1,11 +1,12 @@
 /**
  * @file 监督独立的 Node 工作台运行时。
- * @implementation 启动私有 IPC、校验就绪握手，向运行时传递内置网关连接信息，并按连接代次撤销与清理子进程。
- * @updated 2026-11-20T17:32:12+08:00
+ * @implementation 校验私有 IPC 就绪握手，传递内置网关及可信 RTK 资源路径，清除继承的 RTK 覆盖，并按连接代次清理子进程。
+ * @updated 2026-11-26T01:32:35+08:00
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { delimiter, join } from 'node:path';
+import { delimiter, isAbsolute, join } from 'node:path';
+import { clearRtkEnvironment } from '../../shared/builtin-rtk.js';
 import type { ManagedShuntConnection } from './managed-shunt.mjs';
 import {
   desktopHostDeadlines,
@@ -28,6 +29,7 @@ interface LaunchOptions {
   packaged: boolean;
   root: string;
   dataDir: string;
+  rtkBinary?: string;
 }
 interface Launch {
   child: ChildProcess;
@@ -67,7 +69,9 @@ export class RuntimeSupervisor {
 
   async start(gateway?: ManagedShuntConnection): Promise<{ origin: string; pairing: string }> {
     if (this.current) throw new DesktopHostError('host.failure.notStopped');
-    const { root, packaged, dataDir } = this.options;
+    const { root, packaged, dataDir, rtkBinary } = this.options;
+    if (rtkBinary !== undefined && !isAbsolute(rtkBinary))
+      throw new DesktopHostError('host.failure.startupFailed');
     const nodeBin = join(root, 'bin');
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -84,21 +88,26 @@ export class RuntimeSupervisor {
           }
         : {}),
     };
+    clearRtkEnvironment(env);
     if (packaged) {
       env.PATH = [nodeBin, process.env.PATH].filter(Boolean).join(delimiter);
       delete env.NODE_PATH;
       delete env.NODE_OPTIONS;
     }
-    const child = fork(join(root, packaged ? 'server/main.js' : 'server/main.ts'), [], {
-      cwd: root,
-      execPath: packaged
-        ? join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node')
-        : process.env.npm_node_execpath || 'node',
-      execArgv: packaged ? [] : ['--env-file-if-exists=.env', '--import', 'tsx'],
-      env,
-      detached: process.platform !== 'win32',
-      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-    });
+    const child = fork(
+      join(root, packaged ? 'server/main.js' : 'server/main.ts'),
+      rtkBinary ? ['--rtk-binary', rtkBinary] : [],
+      {
+        cwd: root,
+        execPath: packaged
+          ? join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node')
+          : process.env.npm_node_execpath || 'node',
+        execArgv: packaged ? [] : ['--env-file-if-exists=.env', '--import', 'tsx'],
+        env,
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      },
+    );
     const exited = new Promise<void>((resolve) => {
       child.once('exit', () => resolve());
       child.once('close', () => resolve());

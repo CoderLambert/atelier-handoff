@@ -1,7 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+/**
+ * @file 准备运行所需的 Skill 及 SDK 临时插件。
+ * @implementation 筛选已安装 Skill，并分别为安装项和本机目录项创建临时插件；失败时清理已创建目录。
+ * @updated 2026-11-26T00:06:59+08:00
+ */
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Extension, SkillPackage, UsedExtension } from '../shared/types.js';
 import { inspectMarkdown } from './extensions.js';
+import type { LocalSkill } from './local-skill-catalog.js';
 
 const pluginName = 'atelier-skills';
 export type RunSkill = UsedExtension & {
@@ -10,6 +16,7 @@ export type RunSkill = UsedExtension & {
   text: string;
   package?: SkillPackage;
   manual?: boolean;
+  local?: LocalSkill;
 };
 
 export function selectRunSkills(installed: Extension[], selected: UsedExtension[]): RunSkill[] {
@@ -44,7 +51,49 @@ export function selectRunSkills(installed: Extension[], selected: UsedExtension[
 }
 
 export function sdkSkillName(skill: RunSkill) {
-  return `${pluginName}:${skill.name}`;
+  return skill.local
+    ? `${skill.local.source}-skills:${skill.local.slug}`
+    : `${pluginName}:${skill.name}`;
+}
+
+export async function mountLocalRunSkills(sdkDirectory: string, skills: RunSkill[]) {
+  const directories: string[] = [];
+  try {
+    for (const source of ['host', 'workspace'] as const) {
+      const locals = skills.flatMap(({ local }) => (local?.source === source ? [local] : []));
+      if (!locals.length) continue;
+      const name = `${source}-skills`;
+      const root = await mkdtemp(join(sdkDirectory, `${name}-`));
+      directories.push(root);
+      const manifest = join(root, '.claude-plugin');
+      await mkdir(manifest, { mode: 0o700 });
+      await writeFile(join(manifest, 'plugin.json'), JSON.stringify({ name }), { mode: 0o600 });
+      for (const skill of locals) {
+        const destination = join(root, 'skills', skill.slug);
+        await mkdir(destination, { recursive: true, mode: 0o700 });
+        await writeFile(join(destination, 'SKILL.md'), skill.document, { mode: 0o600, flag: 'wx' });
+        const entries = await readdir(skill.directory, { withFileTypes: true });
+        for (const entry of entries) {
+          if (
+            entry.name === 'SKILL.md' ||
+            !(entry.isFile() || entry.isDirectory() || entry.isSymbolicLink())
+          )
+            continue;
+          await symlink(
+            join(skill.directory, entry.name),
+            join(destination, entry.name),
+            entry.isDirectory() ? 'dir' : undefined,
+          );
+        }
+      }
+    }
+    return directories;
+  } catch (error) {
+    await Promise.all(
+      directories.map((directory) => rm(directory, { recursive: true, force: true })),
+    );
+    throw error;
+  }
 }
 
 export async function mountRunSkills(sdkDirectory: string, skills: RunSkill[]) {
