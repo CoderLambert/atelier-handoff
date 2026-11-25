@@ -1,6 +1,6 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 协调 SDK 子任务、工作树核对和后台 Bash，持久化正文、工具及通知的顺序。按项目设置规划原生 Bash 的 RTK 包装并核对实际回执。
+ * @implementation 协调 SDK 子任务、插话、工作树和后台 Bash，记录运行顺序与回执，并按项目设置规划 RTK 包装。
  * @updated 2026-11-26T03:01:01+08:00
  */
 import { randomUUID } from 'node:crypto';
@@ -450,16 +450,27 @@ export class AgentRunner implements Runner {
     let lastHeartbeat = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const commands = new Set<Promise<unknown>>();
-    const toolWork = new Set<Promise<unknown>>();
+    const toolWork = new Map<Promise<unknown>, string | undefined>();
     const delegate = process.env.ATELIER_DISABLE_SUBAGENTS !== '1';
-    const subagents = new SubagentRun(run, this.store, (id) => {
-      branchControllers.get(id)?.abort();
-      branchControllers.delete(id);
-    });
+    const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
+    const subagents = new SubagentRun(
+      run,
+      sdkSessionId,
+      native,
+      this.store,
+      (id, status, summary) => {
+        branchControllers.get(id)?.abort();
+        branchControllers.delete(id);
+        finishTool(
+          id,
+          status === 'stopped' || status === 'interrupted' ? 'stopped' : status === 'completed',
+          summary ?? (status === 'completed' ? '子任务已返回报告。' : '子任务未完成。'),
+        );
+      },
+    );
     const writeProject = <T>(effect: () => Promise<T>) =>
       this.writes.run(verifyDispatch, effect, workingDirectory);
-    const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
-    const runningTools = new Set<string>();
+    const runningTools = new Map<string, { useId?: string; subagentId?: string }>();
     const bash = native
       ? new NativeBashTasks(sdkSessionId, (id, execution) => {
           const record = this.store.get('tools', id);
@@ -530,12 +541,27 @@ export class AgentRunner implements Runner {
     };
     let atToolBoundary = false;
     let awaitingModel = true;
+    const hasDeferredWork = () => bash?.hasDeferredReceipt || subagents.hasBackground;
     const blockedByLocalWork = () =>
-      subagents.active ||
-      toolWork.size > 0 ||
+      (!native && subagents.active) ||
+      [...toolWork.values()].some((subagentId) => !native || !subagentId) ||
       commands.size > 0 ||
       this.store.get('runs', run.id).status === 'awaiting_permission';
-    const foregroundTools = () => [...runningTools].filter((id) => !bash?.isBackground(id));
+    const foregroundTools = () =>
+      [...runningTools]
+        .filter(
+          ([id, { subagentId }]) =>
+            !subagentId && !bash?.isBackground(id) && !subagents.isBackground(id),
+        )
+        .map(([id]) => id);
+    const canBackground = (id: string) => {
+      const useId = runningTools.get(id)?.useId;
+      return (
+        !!useId &&
+        (subagents.canMove(id) || bash?.canMove(id)) &&
+        [...runningTools.values()].filter((call) => call.useId === useId).length === 1
+      );
+    };
     const sendInsertion = () => {
       if (
         closing ||
@@ -692,7 +718,7 @@ export class AgentRunner implements Runner {
         if (noticeIndex !== -1 || removedDenial) saveTranscript();
       });
       seenTools.add(id);
-      runningTools.add(id);
+      runningTools.set(id, { useId, subagentId });
       progress.started(value);
       this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
       return value;
@@ -722,7 +748,7 @@ export class AgentRunner implements Runner {
         return;
       bash?.complete(id);
       runningTools.delete(id);
-      atToolBoundary = true;
+      if (!prior.subagentId) atToolBoundary = true;
       const skill = skillCalls.get(id);
       if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
       if (output.length > 32000) this.files.saveOutput(id, output);
@@ -828,7 +854,7 @@ export class AgentRunner implements Runner {
               };
             }
           });
-          toolWork.add(work);
+          toolWork.set(work, entry.subagentId);
           try {
             return await work;
           } finally {
@@ -1702,11 +1728,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           throw new Error('子任务未获此工具权限。');
         if (event.tool_name === 'Agent') {
           if (!delegate || actor) throw new Error('本轮未开放此委派。');
-          const request = subagents.reserve(id, args);
-          createTool(id, 'Agent', {
-            description: request.description,
-            subagent_type: request.subagent_type,
-          });
+          const request = subagents.reserve(id, event.tool_use_id, args);
+          createTool(
+            id,
+            'Agent',
+            { description: request.description, subagent_type: request.subagent_type },
+            undefined,
+            event.tool_use_id,
+          );
           return decision('allow', '允许本轮本地子代理任务。', request);
         }
         if (event.tool_name === 'Read') {
@@ -1853,7 +1882,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                 sdkActorId,
               )
             : Promise.resolve<ToolCall['bashLog']>({ status: 'unavailable' });
-        toolWork.add(work);
+        toolWork.set(work, call.subagentId);
         let captured: ToolCall['bashLog'];
         let committed = false;
         try {
@@ -2081,13 +2110,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (event.hook_event_name !== 'PostToolUse') return {};
                     if (event.tool_name === 'Agent') {
                       const id = appToolId(event.tool_use_id, event.agent_id);
-                      const completed = subagents.report(id, event.tool_response);
-                      if (!completed) subagents.finish(id, 'failed', '子代理未返回已完成的报告。');
-                      finishTool(
-                        id,
-                        completed,
-                        completed ? '子任务已返回报告。' : '子任务未完成。',
-                      );
+                      subagents.report(id, event.tool_response);
+                      atToolBoundary = true;
                       sendInsertion();
                       return {};
                     }
@@ -2111,7 +2135,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                       const raw = JSON.stringify(response) ?? '';
                       if (event.tool_name === 'Bash' && bash && event.session_id === sdkSessionId) {
                         recordRtkReceipt(id, event.tool_input);
-                        atToolBoundary = true;
+                        if (!event.agent_id) atToolBoundary = true;
                         const handoff = bash.handedOff(id, response);
                         if (handoff) {
                           if (handoff.terminal) await finishBashTask(handoff.terminal);
@@ -2173,8 +2197,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                       if (event.tool_name === 'Bash' && bash?.deferFailureDuringStop(id, error))
                         return {};
                       if (event.tool_name === 'Agent') {
-                        subagents.finish(id, signal.aborted ? 'stopped' : 'failed', error);
+                        subagents.finish(
+                          id,
+                          signal.aborted || event.is_interrupt === true ? 'stopped' : 'failed',
+                          error,
+                        );
                         sendInsertion();
+                        return {};
                       }
                       const saved = finishTool(
                         id,
@@ -2288,14 +2317,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         input.end();
       };
       const awaitInsertionReceipt = () => {
-        if (!insertion || bash?.hasDeferredReceipt || insertionIdleTimer) return;
+        if (!insertion || hasDeferredWork() || insertionIdleTimer) return;
         insertionIdleTimer = setTimeout(() => {
           insertionIdleTimer = undefined;
-          if (!bash?.hasDeferredReceipt && (!bash || !foregroundTools().length)) drainInput();
+          if (!hasDeferredWork() && (!bash || !foregroundTools().length)) drainInput();
         }, 120_000);
       };
       const afterDeferredWork = () => {
-        if (bash?.hasDeferredReceipt || !finalResult || subagents.active) return;
+        if (hasDeferredWork() || !finalResult || subagents.active) return;
         if (insertion) awaitInsertionReceipt();
         else if (!awaitingModel) drainInput();
       };
@@ -2331,7 +2360,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               }
             };
             live.canInsertNow = () =>
-              !blockedByLocalWork() && foregroundTools().every((id) => bash.canMove(id));
+              !blockedByLocalWork() && foregroundTools().every(canBackground);
             live.canInsertNext = () =>
               !!live.insert &&
               !insertion &&
@@ -2352,15 +2381,23 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               try {
                 if (bash && (message.priority ?? 'now') === 'now') {
                   if (!live.canInsertNow?.())
-                    throw new AppError('BASH_CONTROL_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
+                    throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
                   if (message.canDispatch?.() === false)
                     throw new AppError('QUEUE_CHANGED', '队列或执行范围已变化。', 409);
                   const sdk = connection;
                   if (sdk)
                     for (const id of foregroundTools()) {
                       signal.throwIfAborted();
-                      if (runningTools.has(id) && !bash.isBackground(id))
-                        await bash.control(sdk, id, 'background');
+                      if (
+                        !runningTools.has(id) ||
+                        bash.isBackground(id) ||
+                        subagents.isBackground(id)
+                      )
+                        continue;
+                      if (!canBackground(id))
+                        throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
+                      if (subagents.canMove(id)) await subagents.moveToBackground(sdk, id);
+                      else await bash.control(sdk, id, 'background');
                     }
                 }
                 current.preparing = false;
@@ -2401,9 +2438,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           subagents.started(message);
           bash?.started(message);
         } else if (message.type === 'system' && message.subtype === 'task_updated') {
+          subagents.updated(message);
           bash?.updated(message);
+          sendInsertion();
         } else if (message.type === 'system' && message.subtype === 'task_notification') {
-          subagents.notify(message);
+          if (subagents.notify(message)) {
+            sendInsertion();
+            afterDeferredWork();
+          }
           const task = bash?.terminal(message);
           if (task && !capturing.has(task.id)) {
             await finishBashTask(task);
@@ -2522,7 +2564,12 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                 }
                 continue;
               }
-              if (record.status === 'running' && !capturing.has(id) && !bash?.awaitingTerminal(id))
+              if (
+                record.status === 'running' &&
+                record.name !== 'Agent' &&
+                !capturing.has(id) &&
+                !bash?.awaitingTerminal(id)
+              )
                 finishTool(
                   id,
                   !block.is_error,
@@ -2581,7 +2628,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             // Tell the SDK there is no more input if it becomes idle without acknowledging a delivery.
             // Closing input still allows an already accepted response to finish.
             awaitInsertionReceipt();
-          } else if (bash?.hasDeferredReceipt) {
+          } else if (hasDeferredWork()) {
             flush();
             sendInsertion();
           } else {
@@ -2602,6 +2649,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       if (insertion?.sent && !signal.aborted) failure = '补充消息未收到 SDK 回执。';
       else if (bash?.hasDeferredReceipt && !signal.aborted)
         failure = 'SDK 连接结束，Bash 命令未返回终态。';
+      else if (subagents.active && !signal.aborted) failure = '主会话结束时仍有未收尾的子任务。';
       else if (!finalResult && !signal.aborted) failure = 'SDK 连接已结束，但未返回终态。';
       else if (finalResult?.is_error)
         failure =
@@ -2673,7 +2721,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       }
       clearTimeout(cancelChildTimer);
       signal.removeEventListener('abort', boundSdkCancellation);
-      await Promise.allSettled([...commands, ...toolWork]);
+      await Promise.allSettled([...commands, ...toolWork.keys()]);
       subagents.close(
         live.reason === 'user' ? 'stopped' : 'interrupted',
         failure ?? '父运行结束，子任务已清理。',
