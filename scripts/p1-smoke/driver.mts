@@ -1,7 +1,7 @@
 /**
  * @file 执行 Linux 安装态验收。
- * @implementation 驱动隔离界面和回环夹具，验证浏览器及进程流程、队列与实时插入，并核对大文档的原件下载及 SDK 读取。
- * @updated 2026-11-21T00:28:46+08:00
+ * @implementation 驱动隔离窗口和回环 SDK，从自动审批与有序工具明细验证到原生浏览器、离线重开、托管网关和进程回收。
+ * @updated 2026-11-26T02:21:29+08:00
  */
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';
@@ -22,6 +22,7 @@ import {
   browserAccess,
   config,
   errorText,
+  positive,
   record,
   redact,
   string,
@@ -406,13 +407,14 @@ async function launch(
         append(Buffer.from(`\nRenderer ${message.type()}: ${message.text()}\n`));
     });
     const initialProjectDialog = page.getByRole('dialog', { name: '绑定项目目录', exact: true });
-    if (!reopen || managed) {
+    if (!reopen) {
       await initialProjectDialog.waitFor({
         state: 'visible',
         timeout: Math.max(1, cfg.startupMs - (performance.now() - started)),
       });
       await initialProjectDialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
     }
+    await initialProjectDialog.waitFor({ state: 'hidden' });
     await page
       .getByRole('button', { name: '工作台设置', exact: true })
       .waitFor({ state: 'visible' });
@@ -1151,7 +1153,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   await page.getByRole('button', { name: '浏览器', exact: true }).click();
   await page.getByRole('button', { name: '人工接管', exact: true }).waitFor({ state: 'visible' });
   const mode = page.getByRole('combobox', { name: '运行模式', exact: true });
-  await mode.getByText('只读', { exact: true }).waitFor({ state: 'visible' });
+  await mode.getByText('本机信任', { exact: true }).waitFor({ state: 'visible' });
   const file = join(directory, 'project', automaticReceiptName);
   assert.equal((await lstat(join(directory, 'project'))).isSymbolicLink(), false);
   assert.equal(automaticReceiptName.includes('/'), false, 'Receipt stays in the isolated project');
@@ -1161,8 +1163,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('textbox', { name: '继续对话', exact: true }).fill(automaticPrompt);
   const chat = await thread.evaluateHandle((element) => {
-    const selectors =
-      '.chat-approval, .tool-card, .chat-tool-call, [data-tool-call-id], [data-tool-id]';
+    const selectors = '.chat-approval';
     const violations: string[] = [];
     const inspect = (node: Node) => {
       if (!(node instanceof Element)) return;
@@ -1250,7 +1251,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       observer.disconnect();
       return violations;
     });
-    assert.deepEqual(violations, [], 'No approval or per-tool cards may appear in automatic chat');
+    assert.deepEqual(violations, [], 'Automatic chat must never show a manual approval card');
     const permissions = array(state.permissions).map((value) => record(value));
     assert.equal(
       permissions.length,
@@ -1282,6 +1283,43 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
           (tool) => tool.id === permission.toolCallId && tool.permissionId === permission.id,
         ),
       );
+    const transcript = thread.locator(`.ordered-run[data-run-id="${runId}"]`);
+    const shownTools = await until(
+      async () => {
+        const rows = await transcript
+          .locator('[data-transcript-kind="tool"] > details[data-tool-id]')
+          .evaluateAll((details) =>
+            details.map((detail) => ({
+              id: detail.getAttribute('data-tool-id'),
+              order: Number(detail.parentElement?.getAttribute('data-transcript-order')),
+              automaticallyApproved: detail.querySelector('.tool-detail__approval') !== null,
+            })),
+          );
+        return rows.length === automaticToolCount ? rows : undefined;
+      },
+      10_000,
+      'all automatic tools appear at their transcript positions',
+    );
+    const expectedTools = tools
+      .map((tool) => ({
+        id: string(tool.id),
+        order: positive(tool.transcriptOrder, 'tool transcript position'),
+        automaticallyApproved: permissions.some((permission) => permission.toolCallId === tool.id),
+      }))
+      .sort((left, right) => left.order - right.order);
+    assert.deepEqual(
+      shownTools,
+      expectedTools,
+      'Tool identity, order and approval badge match the audit trail',
+    );
+    const finalReply = transcript
+      .locator('[data-transcript-kind="text"]')
+      .filter({ hasText: automaticAnswer });
+    const replyOrder = Number(await finalReply.getAttribute('data-transcript-order'));
+    assert.ok(
+      replyOrder > (expectedTools.at(-1)?.order ?? 0),
+      'The final reply follows the tool calls',
+    );
     assert.equal((await lstat(file)).isFile(), true);
     assert.equal(await readFile(file, 'utf8'), automaticReceipt);
     const native = run.browser
@@ -1322,9 +1360,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     await page.screenshot({ path: join(root, 'session-model-picker.png') });
     await modelOption.click();
     await models.waitFor({ state: 'hidden' });
-    await modelButton
-      .getByText(alternateModel, { exact: true })
-      .waitFor({ state: 'visible' });
+    await modelButton.getByText(alternateModel, { exact: true }).waitFor({ state: 'visible' });
     const effortButton = page.getByRole('combobox', { name: '选择推理深度', exact: true });
     await effortButton.click();
     await page.getByRole('option', { name: '很高', exact: true }).click();
@@ -1373,7 +1409,9 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       followupModel: alternateModel,
       followupEffort: 'xhigh',
       pendingApprovals: 0,
-      chatCardsObserved: violations.length,
+      manualApprovalCardsObserved: violations.length,
+      orderedToolDetails: shownTools.length,
+      automaticApprovalBadges: shownTools.filter((tool) => tool.automaticallyApproved).length,
       permissions: permissions.map(({ id, kind, status, decisionSource }) => ({
         id,
         kind,
@@ -1453,6 +1491,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   }, projectId);
   assert.equal(rejected, true);
   assert.equal(await readFile(externalLog, 'utf8'), external);
+  await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+  await page.getByRole('textbox', { name: '网页地址', exact: true }).waitFor({ state: 'hidden' });
   evidence.checks.chatWebLinks = {
     explicitChoice: true,
     keyboardAndFocus: true,
@@ -1873,10 +1913,12 @@ async function reopen(
     .click();
   await run.page.getByText(automaticFollowupAnswer, { exact: true }).waitFor({ state: 'visible' });
   await mode.getByText('全工具自动化', { exact: true }).waitFor({ state: 'visible' });
+  await run.page.getByRole('button', { name: '模型与推理深度', exact: true }).click();
   await run.page
     .getByRole('combobox', { name: '选择模型', exact: true })
-    .getByText(`模型 · ${alternateModel}`, { exact: true })
+    .getByText(alternateModel, { exact: true })
     .waitFor({ state: 'visible' });
+  await run.page.keyboard.press('Escape');
   await settings(run.page, true);
   assert.equal(fixture.evidence.requests, 2, 'Offline reopen must make no receipt model request');
   assert.equal(

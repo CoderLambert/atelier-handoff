@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 组织会话、Git、审批和运行接口。校验多提交快照和命令归属，并向所属运行投递原生 Bash 操作和队列消息。
- * @updated 2026-11-25T22:48:09+08:00
+ * @implementation 组织会话、Git、审批和运行接口，校验多提交与命令归属，并解析 Skill 继承设置及运行范围。
+ * @updated 2026-11-26T00:06:59+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -107,7 +107,12 @@ import { workspaceLayoutSchema } from '../shared/workspace-layout.js';
 import { uiThemeSchema } from '../shared/desktop-ui-theme.js';
 import { ManagedGatewayLogin } from './managed-gateway-login.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
-import { selectRunSkills, type RunSkill } from './run-skills.js';
+import type { RunSkill } from './run-skills.js';
+import { applySkillScope, resolveSkillSelections, SkillInheritance } from './skill-inheritance.js';
+import { skillInheritancePatchSchema } from '../shared/skill-inheritance.js';
+import { rtkSettingsPatchSchema, rtkSettingsScopeSchema } from '../shared/rtk-settings.js';
+import { RtkSettings } from './rtk-settings.js';
+import { builtinRtkAvailable } from './builtin-rtk.js';
 import { McpSessions, testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
 import { searchSkillHub } from './skillhub.js';
@@ -146,6 +151,7 @@ const queuedIntent = z.object({
   model: gatewayModelId,
   scope: z.string(),
   executor: executorSchema.optional(),
+  skillScope: z.string().optional(),
 });
 const draftSchema = z
   .object({
@@ -252,6 +258,7 @@ export async function createApp(options: {
   desktopPairing?: string;
   nativeExecution?: boolean;
   magpie?: string;
+  rtkBinary?: string;
   pickDirectory?: typeof pickProjectDirectory;
 }) {
   const nativeExecution =
@@ -274,6 +281,7 @@ export async function createApp(options: {
       );
   }
   const store = new Store(options.data);
+  const rtkSettings = new RtkSettings(store);
   store.recover();
   const messageQueue = new MessageQueue(store);
   const directoryInUse = (path: string) => {
@@ -327,12 +335,34 @@ export async function createApp(options: {
   const extensions = new ProjectExtensions(store, Boolean(options.desktopPairing));
   extensions.assignLegacyProviders();
   const agents = new AgentProfiles(store, extensions);
+  const inheritance = new SkillInheritance(store.skillInheritance);
+  function skillContext(projectId: string, session: Session | undefined, native: boolean, directory?: string) {
+    const project = store.get('projects', projectId);
+    const revision = session?.agentRevisionId ? agents.requireReady(projectId, session.agentRevisionId) : undefined;
+    const all = extensions.list(projectId);
+    const bound = revision && new Map(revision.config.skills.map((skill) => [skill.id, skill]));
+    return {
+      projectId,
+      sessionId: session?.id,
+      directory: directory ?? (session ? worktrees.directory(session) : project.path),
+      native: native && nativeExecution && !session?.agentRevisionId,
+      installed: bound ? all.filter((item) => bound.get(item.id)?.version === item.version) : all,
+      boundAuto: bound && new Set([...bound.values()].filter(({ activation }) => activation === 'auto').map(({ id }) => id)),
+    };
+  }
+  function automaticSkillScope(context: ReturnType<typeof skillContext>, snapshot = inheritance.snapshot(context, true)) {
+    return fingerprint(JSON.stringify(snapshot.view.items
+      .filter(({ effective }) => effective === 'auto')
+      .map(({ id, version }) => [id, version])
+      .sort(([left], [right]) => String(left).localeCompare(String(right)))));
+  }
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
     new AgentRunner(store, permissions, files, mcpSessions, browserAccess, verifyWorkspace,
       (sessionId) => {
         if (messageQueue.hasPending(sessionId)) wakeQueue();
       },
+      options.rtkBinary ? { binary: options.rtkBinary, enabled: (id) => rtkSettings.enabled(id) } : undefined,
     );
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
@@ -441,7 +471,7 @@ export async function createApp(options: {
   ) {
     const parsed = queuedIntent.safeParse(item.intent);
     if (!parsed.success) return undefined;
-    const { request, model, scope, executor = 'project-v1' } = parsed.data;
+    const { request, model, scope, skillScope, executor = 'project-v1' } = parsed.data;
     if (executor === 'native-v1' && !nativeExecution) return undefined;
     const usesMagpie = magpieModel(model) !== undefined;
     if (usesMagpie && current.magpieEnabled !== true) return undefined;
@@ -462,7 +492,16 @@ export async function createApp(options: {
       !request.attachmentIds.length &&
       !request.extensionSelections.length &&
       !/^\s*[/!]/u.test(request.text);
-    return compatible && runner.canInsertNow?.(run.id) !== false ? 'live' : 'priority';
+    if (!compatible || runner.canInsertNow?.(run.id) === false) return 'priority';
+    const session = store.get('sessions', run.sessionId);
+    if (!skillScope) {
+      // Older project intents had no local Skill catalog. Preserve their ordinary live behavior
+      // unless a new session restriction could make their frozen scope obsolete.
+      const restricted = [...store.skillInheritance.sessionModes(session.id).values()].some((mode) => mode !== 'follow');
+      return executor === 'project-v1' && !restricted ? 'live' : 'priority';
+    }
+    return skillScope === automaticSkillScope(skillContext(run.projectId, session, executor === 'native-v1', run.workspacePath))
+      ? 'live' : 'priority';
   }
   async function insertLive(item: PendingSessionMessage, run: Run, priority: 'next' | 'now') {
     const intent = queuedIntent.parse(item.intent);
@@ -570,17 +609,19 @@ export async function createApp(options: {
         (request.attachmentIds.length && !capabilities.includes('attachments')))
     )
       throw new AppError('AGENT_CAPABILITY_DENIED', '此智能体未启用所选上下文或附件能力。', 403);
-    const bundle = retryOf
-      ? null
-      : revision
-        ? resolveAgentExtensions(
-            extensions,
-            revision,
-            request.mode,
-            request.text,
-            request.extensionSelections,
-          )
-        : extensions.resolve(project.id, request.mode, request.text, request.extensionSelections);
+    const skillInputs = () => skillContext(project.id, session, executor === 'native-v1', workspacePath);
+    const resolveExtensions = () => {
+      if (retryOf) return null;
+      const context = skillInputs();
+      const snapshot = inheritance.snapshot(context, true);
+      const selections = resolveSkillSelections(snapshot, request.extensionSelections);
+      const bundle = revision
+        ? resolveAgentExtensions(extensions, revision, request.mode, request.text, selections.project)
+        : extensions.resolve(project.id, request.mode, request.text, selections.project);
+      const scoped = applySkillScope(snapshot, bundle, context.installed, selections.local, request.text);
+      return { ...bundle, ...scoped, skillScope: automaticSkillScope(context, snapshot) };
+    };
+    const bundle = resolveExtensions();
     const profilePrompt = revision
       ? `智能体 ${revision.config.name} 的任务说明（受本轮工具与权限约束）：\n${revision.config.instructions}\n\n`
       : '';
@@ -600,26 +641,8 @@ export async function createApp(options: {
       selectedConfig.gateway = magpie;
       selectedConfig.managedGateway = false;
     }
-    const resolveScope = () => {
-      let skills: RunSkill[] = [];
-      if (bundle) {
-        const catalog = extensions.list(project.id);
-        const auto =
-          revision &&
-          new Set(
-            revision.config.skills
-              .filter((skill) => skill.activation === 'auto')
-              .map((skill) => skill.id),
-          );
-        skills = selectRunSkills(
-          auto
-            ? catalog.filter(
-                (item) => auto.has(item.id) || bundle.used.some((ref) => ref.id === item.id),
-              )
-            : catalog,
-          bundle.used,
-        );
-      }
+    const resolveScope = (currentBundle: ReturnType<typeof resolveExtensions>) => {
+      const skills: RunSkill[] = currentBundle?.skills ?? [];
       const policy =
         !retryOf && (!capabilities || capabilities.includes('browser'))
           ? browserAccess.read(project.id)
@@ -629,8 +652,8 @@ export async function createApp(options: {
       const scope = fingerprint(
         JSON.stringify({
           agent: revision?.id,
-          used: bundle?.used,
-          mcp: bundle?.mcp,
+          used: currentBundle?.used,
+          mcp: currentBundle?.mcp,
           skills,
           browserRevision,
           ...(executor === 'native-v1' ? { executor } : {}),
@@ -639,7 +662,7 @@ export async function createApp(options: {
       );
       return { skills, browserRevision, scope };
     };
-    const planned = resolveScope();
+    const planned = resolveScope(bundle);
     const validateSession = () => {
       if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
       if (deletingSessions.has(sessionId))
@@ -651,11 +674,6 @@ export async function createApp(options: {
       if (latest.agentRevisionId !== session.agentRevisionId)
         throw new AppError('AGENT_CHANGED', '会话的智能体版本已变化，请重试。', 409);
       if (revision) agents.requireReady(project.id, revision.id);
-      for (const extension of bundle?.used ?? []) {
-        const current = extensions.get(project.id, extension.id);
-        if (!current.enabled || current.version !== extension.version)
-          throw new AppError('EXTENSION_CHANGED', '扩展配置已变化，请重新选择。', 409);
-      }
       return latest;
     };
     const accepted = (latest: Session) =>
@@ -702,7 +720,7 @@ export async function createApp(options: {
         key,
         bodyHash,
         { text: request.text, ...(bundle?.used.length ? { extensions: bundle.used } : {}) },
-        { request, model, scope: planned.scope, executor },
+        { request, model, scope: planned.scope, executor, skillScope: bundle?.skillScope },
       );
       accepted(latest);
       const active = store
@@ -800,7 +818,7 @@ export async function createApp(options: {
       const duplicate = existingReceipt();
       if (duplicate) return duplicate;
       const latest = validateSession();
-      const currentScope = resolveScope();
+      const currentScope = resolveScope(resolveExtensions());
       if (currentScope.scope !== planned.scope)
         throw new AppError(
           'QUEUE_SCOPE_CHANGED',
@@ -1033,6 +1051,33 @@ export async function createApp(options: {
           streams.delete(res);
         });
         return;
+      }
+      if (url.pathname === '/api/skill-inheritance' && (method === 'GET' || method === 'PATCH')) {
+        const patch = method === 'PATCH' ? skillInheritancePatchSchema.parse(await body(req)) : undefined;
+        const scope = z.strictObject({
+          projectId: z.string().uuid().optional(),
+          sessionId: z.string().uuid().optional(),
+          native: z.literal('1').optional(),
+        }).parse(Object.fromEntries(url.searchParams));
+        if ((scope.sessionId && scope.projectId) || (scope.native && !scope.sessionId))
+          throw new AppError('EXTENSION_UNAVAILABLE', 'Skill 设置范围无效。', 400);
+        const session = scope.sessionId ? store.get('sessions', scope.sessionId) : undefined;
+        if (session && patch && session.status !== 'active')
+          throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
+        const projectId = session?.projectId ?? scope.projectId;
+        const context = projectId
+          ? skillContext(projectId, session, session ? scope.native === '1' : true)
+          : { native: nativeExecution };
+        const view = patch ? inheritance.update(context, patch) : inheritance.snapshot(context).view;
+        if (patch) wakeQueue();
+        return json(res, view);
+      }
+      if (url.pathname === '/api/rtk-settings' && (method === 'GET' || method === 'PATCH')) {
+        const { projectId } = rtkSettingsScopeSchema.parse(Object.fromEntries(url.searchParams));
+        if (projectId) store.get('projects', projectId);
+        const available = await builtinRtkAvailable(options.rtkBinary);
+        if (method === 'PATCH') rtkSettings.update(projectId, rtkSettingsPatchSchema.parse(await body(req)));
+        return json(res, rtkSettings.view(projectId, available, nativeExecution));
       }
       if (url.pathname === '/api/settings/workspace-location' && method === 'PATCH') {
         const { path } = workspaceLocationSchema.parse(await body(req));

@@ -1001,3 +1001,50 @@ test('v7 subagent migration upgrades v6, preserves records and enforces cascades
       }
     }
   }));
+
+test('recovery promotes saved hook positions and closes prepared tools from an interrupted run', async () =>
+  temporary(async (directory) => {
+    const data = join(directory, 'data');
+    let store = new Store(data);
+    try {
+      const { first } = seed(store.put.bind(store), directory);
+      const fixture = records(first, 0);
+      const toolId = fixture.tools.id;
+      store.update('runs', fixture.runs.id, {
+        status: 'running',
+        transcript: {
+          version: 1,
+          notices: [
+            { kind: 'tool_preparing', toolCallId: 'preparing', toolName: 'Read', order: 4, at },
+          ],
+          pendingDenials: [
+            { kind: 'tool_blocked', toolCallId: 'blocked', toolName: 'Bash', order: 3, at },
+          ],
+        },
+      });
+      store.update('tools', toolId, {
+        status: 'running',
+        endedAt: null,
+        transcriptHookOrder: 2,
+      });
+      store.close();
+      store = new Store(data);
+      store.recover();
+      const reopened = store.sessionSnapshots.read(first.id);
+      const tool = reopened.tools.find(({ id }) => id === toolId);
+      const transcript = reopened.runs.find(({ id }) => id === fixture.runs.id)?.transcript;
+      assert.equal(tool?.transcriptOrder, 2);
+      assert.equal(tool?.transcriptHookOrder, undefined);
+      assert.equal(tool?.status, 'canceled');
+      assert.equal(transcript?.pendingDenials, undefined);
+      assert.deepEqual(
+        transcript?.notices.map(({ kind, order }) => [kind, order]),
+        [
+          ['tool_interrupted', 4],
+          ['tool_blocked', 3],
+        ],
+      );
+    } finally {
+      store.close();
+    }
+  }));

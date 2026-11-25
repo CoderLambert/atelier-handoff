@@ -105,7 +105,7 @@ function packagedReference(reference: string, files: ReadonlySet<string>): boole
   }
 }
 
-export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
+export function inspectMarkdown(body: string, skillPackage?: SkillPackage, localReferences = false) {
   const normalized = body.replace(/^﻿/, '').replaceAll('\r\n', '\n');
   const frontmatter = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   let metadata: Record<string, unknown> = {};
@@ -134,7 +134,7 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage) {
     for (const reference of text.matchAll(/\$\{CLAUDE_SKILL_DIR\}(?:\/[^\s"'`<>(){}]*)?/g)) {
       if (!packagedReference(reference[0], files)) unsupportedReference = true;
     }
-  } else {
+  } else if (!localReferences) {
     unsupportedReference =
       /\$\{CLAUDE_SKILL_DIR\}|\]\((?:\.\/|\.\.\/|(?:scripts|references|assets)\/)/m.test(text);
   }

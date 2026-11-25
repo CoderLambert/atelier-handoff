@@ -1,9 +1,11 @@
 /**
  * @file 启动和关闭工作台服务。
- * @implementation 配对桌面宿主，独占数据目录，本地监听并统一清理业务和持久化资源。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 配对桌面宿主，独占数据目录，并从私有启动参数注入 RTK 资源。清除环境覆盖，本地监听并统一释放业务和持久化资源。
+ * @updated 2026-11-26T01:32:35+08:00
  */
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
+import { parseArgs } from 'node:util';
+import { clearRtkEnvironment } from '../shared/builtin-rtk.js';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { acquireDataOwner, DataOwnerError } from './data-owner.js';
@@ -11,6 +13,14 @@ import { desktopBrowserEnabled } from './desktop-browser.js';
 import { receiveDesktopHost, sendDesktopHost } from './desktop-host.js';
 import { desktopHostDeadlines } from '../shared/desktop-host.js';
 
+// Startup argv is supplied by the private desktop supervisor. Environment files
+// and inherited shell variables cannot select RTK resources or its writable state.
+const { values: startup } = parseArgs({
+  options: { 'rtk-binary': { type: 'string' } },
+  strict: true,
+  allowPositionals: false,
+});
+clearRtkEnvironment(process.env);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const data = process.env.ATELIER_DATA_DIR || join(root, '.data');
 const desktopIpc = desktopBrowserEnabled();
@@ -49,12 +59,16 @@ function exit(): void {
 }
 
 try {
+  const rtkBinary = startup['rtk-binary'];
+  if (rtkBinary !== undefined && (!host || !isAbsolute(rtkBinary)))
+    throw new Error('RTK resource requires an absolute path from the private desktop host.');
   if (!/^(0|[1-9]\d{0,4})$/.test(portSetting) || port > 65535 || (port === 0 && !host))
     throw new Error('ATELIER_PORT must be a valid port; 0 requires desktop IPC.');
   release = acquireDataOwner(data);
   const app = await createApp({
     root,
     data,
+    rtkBinary,
     desktopPairing: host?.pairing,
     nativeExecution:
       Boolean(host) && process.platform === 'linux' && process.env.ATELIER_NATIVE_EXECUTION !== '0',

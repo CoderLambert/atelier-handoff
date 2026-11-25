@@ -1,10 +1,9 @@
 /**
- * @file 装配桌面本机执行所用的 SDK 工具、工作上下文和技能目录。
- * @implementation 按 SDK 的原生工具名配置预授权，从当前工作区读取指令，并将本机技能目录挂载到本轮临时插件中。
- * @updated 2026-11-22T16:00:00+08:00
+ * @file 配置桌面本机执行所用的 SDK 工具、环境和项目指令。
+ * @implementation 定义原生工具策略，过滤子进程环境，并有界读取项目协作指令。
+ * @updated 2026-11-26T00:06:59+08:00
  */
 import { closeSync, constants, openSync, readSync, fstatSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
@@ -111,32 +110,4 @@ export function projectInstructionContext(root: string): string {
     ),
   ].filter(Boolean);
   return blocks.length ? `项目协作说明（用户本轮指令优先）\n${blocks.join('\n\n')}\n\n` : '';
-}
-
-export async function mountHostSkills(
-  sdkRoot: string,
-  project: string,
-  home = homedir(),
-): Promise<string[]> {
-  const plugins: string[] = [];
-  try {
-    for (const [name, source] of [
-      ['host-skills', join(home, '.claude', 'skills')],
-      ['workspace-skills', join(project, '.claude', 'skills')],
-    ] as const) {
-      if (!(await stat(source).catch(() => undefined))?.isDirectory()) continue;
-      const directory = await mkdtemp(join(sdkRoot, `${name}-`));
-      plugins.push(directory);
-      await mkdir(join(directory, '.claude-plugin'));
-      await writeFile(
-        join(directory, '.claude-plugin', 'plugin.json'),
-        JSON.stringify({ name, version: '1.0.0' }),
-      );
-      await symlink(source, join(directory, 'skills'), 'dir');
-    }
-    return plugins;
-  } catch (error) {
-    await Promise.all(plugins.map((directory) => rm(directory, { recursive: true, force: true })));
-    throw error;
-  }
 }

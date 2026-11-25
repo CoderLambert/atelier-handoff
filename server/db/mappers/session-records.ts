@@ -6,7 +6,14 @@
 import { z } from 'zod';
 import { contextUsageSchema } from '../../../shared/context-usage.js';
 import { bashExecutionSchema } from '../../../shared/bash-execution.js';
+import { rtkTraceSchema } from '../../../shared/rtk-trace.js';
 import { messageQuotesSchema } from '../../../shared/message-quotes.js';
+import { skillInheritanceSourceSchema } from '../../../shared/skill-inheritance.js';
+import {
+  runTranscriptSchema,
+  transcriptOrderSchema,
+  transcriptPartsSchema,
+} from '../../../shared/ordered-transcript.js';
 import {
   AppError,
   agentCapabilities,
@@ -102,6 +109,7 @@ export const records = {
     }),
   }),
   runs: obj({
+    transcript: runTranscriptSchema.optional(),
     ...scoped,
     projectId: str,
     prompt: str,
@@ -134,7 +142,14 @@ export const records = {
     browserRevision: str.optional(),
     inputScope: str.optional(),
     extensions: z
-      .array(obj({ ...selection, name: str, kind: z.enum(['skill', 'command', 'mcp']) }))
+      .array(
+        obj({
+          ...selection,
+          name: str,
+          kind: z.enum(['skill', 'command', 'mcp']),
+          source: skillInheritanceSourceSchema.optional(),
+        }),
+      )
       .optional(),
     agent: obj({
       id: str,
@@ -145,6 +160,8 @@ export const records = {
     }).optional(),
   }),
   messages: obj({
+    transcriptOrder: transcriptOrderSchema.optional(),
+    transcriptParts: transcriptPartsSchema.optional(),
     ...toolScope,
     role: z.enum(['user', 'assistant']),
     text: str,
@@ -152,10 +169,13 @@ export const records = {
     forkAnchor: obj({ sdkSessionId: str, messageId: str, configKey: str.optional() }).optional(),
   }),
   tools: obj({
+    transcriptOrder: transcriptOrderSchema.optional(),
+    transcriptHookOrder: transcriptOrderSchema.optional(),
     ...toolScope,
     name: str,
     inputSummary: str,
     command: str.optional(),
+    rtk: rtkTraceSchema.optional(),
     status: z.enum(['running', 'awaiting_permission', 'succeeded', 'failed', 'denied', 'canceled']),
     output: str,
     startedAt: str,

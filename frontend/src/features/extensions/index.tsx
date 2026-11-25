@@ -1,14 +1,16 @@
 /**
- * @file 提供按项目管理扩展的目录页面。
- * @implementation 按类型、搜索词和状态展示扩展，并协调编辑、导入、市场和删除入口。
- * @updated 2026-11-23T04:54:16+08:00
+ * @file 提供项目扩展目录、Skill 继承与内置 Hooks 设置页面。
+ * @implementation 按类型、搜索词和状态展示项目扩展，在相应标签内加载 Skill 继承或项目 RTK 设置。
+ * @updated 2026-11-26T02:07:02+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useDeferredValue, useId, useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import type { Extension, Project } from '@shared/types';
-import { FolderPlus, Plus, RefreshCw, Store, Trash2 } from 'lucide-react';
+import { FolderPlus, Monitor, Plus, RefreshCw, Store, Trash2, Webhook } from 'lucide-react';
 import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
   ActionButton,
@@ -31,6 +33,8 @@ import {
   type StartSkill,
 } from './api';
 import { ExtensionEditor } from './editor';
+import { GlobalSkillInheritance, ProjectSkillInheritance } from './inheritance-settings';
+import { RtkHookSettings } from './rtk-settings';
 import { SkillMarket } from './market';
 import { PublicImport } from './public-import';
 import './extensions.css';
@@ -46,7 +50,8 @@ type Modal =
   | { type: 'market' }
   | { type: 'public'; kind: ExtensionKind; item?: Extension }
   | { type: 'delete'; item: Extension };
-const tabs: ExtensionKind[] = ['skill', 'command', 'mcp'];
+type ExtensionTab = ExtensionKind | 'hook';
+const tabs: ExtensionTab[] = ['skill', 'command', 'mcp', 'hook'];
 export interface ExtensionsPageProps {
   projects: Project[];
   projectId?: string;
@@ -55,6 +60,7 @@ export interface ExtensionsPageProps {
 export default function ExtensionsPage({ projects, projectId, onStartSkill }: ExtensionsPageProps) {
   const { t } = useUiTranslation('extensions');
   const [pinnedId, setPinnedId] = useState<string>();
+  const [globalSkills, setGlobalSkills] = useState(false);
   const project =
     projects.find((value) => value.id === pinnedId) ??
     projects.find((value) => value.id === projectId) ??
@@ -67,23 +73,27 @@ export default function ExtensionsPage({ projects, projectId, onStartSkill }: Ex
           <h1>{t('extensions.pageTitle')}</h1>
           <p className="ext-subtitle">{t('extensions.subtitle')}</p>
         </div>
-        <CatalogProjectSelect
-          className="ext-project-label"
-          label={t('common.currentProject')}
-          selectLabel={t('extensions.projectSelector')}
-          value={project?.id ?? ''}
-          options={projects.map((value) => ({
-            value: value.id,
-            label: value.name || value.path || value.id,
-          }))}
-          emptyLabel={t('common.noProjects')}
-          onValueChange={setPinnedId}
-        />
+        {!globalSkills ? (
+          <CatalogProjectSelect
+            className="ext-project-label"
+            label={t('common.currentProject')}
+            selectLabel={t('extensions.projectSelector')}
+            value={project?.id ?? ''}
+            options={projects.map((value) => ({
+              value: value.id,
+              label: value.name || value.path || value.id,
+            }))}
+            emptyLabel={t('common.noProjects')}
+            onValueChange={setPinnedId}
+          />
+        ) : null}
       </header>
       <ProjectExtensions
         key={project?.id ?? 'none'}
         project={project}
         onStartSkill={onStartSkill}
+        globalSkills={globalSkills}
+        onSkillScopeChange={setGlobalSkills}
       />
     </section>
   );
@@ -91,16 +101,25 @@ export default function ExtensionsPage({ projects, projectId, onStartSkill }: Ex
 function ProjectExtensions({
   project,
   onStartSkill,
+  globalSkills,
+  onSkillScopeChange,
 }: {
   project?: Project;
   onStartSkill?: ExtensionsPageProps['onStartSkill'];
+  globalSkills: boolean;
+  onSkillScopeChange: (global: boolean) => void;
 }) {
   const { t } = useUiTranslation('extensions');
   const projectId = project?.id ?? '';
   const query = useExtensions(projectId);
   const toggle = useExtensionMutation(projectId);
   const pending = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
-  const [kind, setKind] = useState<ExtensionKind>('skill');
+  const [kind, setKind] = useState<ExtensionTab>('skill');
+  const showGlobal = kind === 'skill' && globalSkills;
+  function selectKind(value: ExtensionTab) {
+    setKind(value);
+    if (value !== 'skill') onSkillScopeChange(false);
+  }
   const [search, setSearch] = useState('');
   const searchText = useDeferredValue(search.trim().toLocaleLowerCase());
   const [filter, setFilter] = useState('all');
@@ -144,7 +163,7 @@ function ProjectExtensions({
       setErrors((value) => ({ ...value, [item.id]: messageOf(cause) }));
     }
   }
-  return (
+  const navigation = (
     <>
       <div className="ext-tabs" role="tablist" aria-label={t('extensions.tabsLabel')}>
         {tabs.map((value, index) => (
@@ -159,7 +178,7 @@ function ProjectExtensions({
             aria-controls={`${id}-results`}
             aria-selected={kind === value}
             tabIndex={kind === value ? 0 : -1}
-            onClick={() => setKind(value)}
+            onClick={() => selectKind(value)}
             onKeyDown={(event) => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
               event.preventDefault();
@@ -169,20 +188,63 @@ function ProjectExtensions({
                   : event.key === 'End'
                     ? tabs.length - 1
                     : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-              setKind(tabs[next]!);
+              const nextKind = tabs[next];
+              if (nextKind) selectKind(nextKind);
               tabRefs.current[next]?.focus();
             }}
           >
             <span className="ext-tab-mark" aria-hidden="true">
-              <ExtensionKindIcon kind={value} />
+              {value === 'hook' ? <Webhook /> : <ExtensionKindIcon kind={value} />}
             </span>
-            {kinds[value]}
-            <span className="ext-count">
-              {query.data ? items.filter((item) => item.kind === value).length : '—'}
-            </span>
+            {value === 'hook' ? t('hooks.tab') : kinds[value]}
+            {value !== 'hook' ? (
+              <span className="ext-count">
+                {query.data ? items.filter((item) => item.kind === value).length : '—'}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
+      {kind === 'skill' ? (
+        <div className="my-4 flex flex-wrap gap-2" role="group" aria-label={t('inheritance.scopeLabel')}>
+          <Button type="button" size="sm" variant={showGlobal ? 'ghost' : 'secondary'}
+            aria-pressed={!showGlobal} onClick={() => onSkillScopeChange(false)}>
+            <FolderPlus data-icon="inline-start" aria-hidden="true" />
+            {t('inheritance.projectSkills')}
+          </Button>
+          <Button type="button" size="sm" variant={showGlobal ? 'secondary' : 'ghost'}
+            aria-pressed={showGlobal} onClick={() => onSkillScopeChange(true)}>
+            <Monitor data-icon="inline-start" aria-hidden="true" />
+            {t('inheritance.local')}
+            <Badge variant="outline" aria-hidden="true">{t('inheritance.global')}</Badge>
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+  if (kind === 'hook') {
+    return (
+      <>
+        {navigation}
+        <section id={`${id}-results`} role="tabpanel" aria-labelledby={`${id}-hook`} tabIndex={0}>
+          <RtkHookSettings projectId={project?.id} />
+        </section>
+      </>
+    );
+  }
+  if (showGlobal) {
+    return (
+      <>
+        {navigation}
+        <section id={`${id}-results`} role="tabpanel" aria-labelledby={`${id}-${kind}`} tabIndex={0}>
+          <GlobalSkillInheritance />
+        </section>
+      </>
+    );
+  }
+  return (
+    <>
+      {navigation}
       <CatalogToolbar
         className="ext-toolbar"
         search={{
@@ -263,6 +325,7 @@ function ProjectExtensions({
         tabIndex={0}
         aria-busy={query.isFetching}
       >
+        {project && kind === 'skill' ? <ProjectSkillInheritance projectId={projectId} /> : null}
         {!project ? (
           <div className="ext-empty">
             <span aria-hidden="true">

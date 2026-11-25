@@ -7,6 +7,8 @@ import { z } from 'zod';
 import type { MessageQuote } from './message-quotes.js';
 import type { ContextUsage } from './context-usage.js';
 import type { BashExecution } from './bash-execution.js';
+import type { RtkTrace } from './rtk-trace.js';
+import type { RunTranscript, TranscriptPart } from './ordered-transcript.js';
 
 export type RunStatus =
   | 'queued'
@@ -101,6 +103,7 @@ export interface UsedExtension {
   kind: Extension['kind'];
   name: string;
   version: number;
+  source?: 'atelier' | 'workspace' | 'host';
   tools?: string[];
 }
 export function retainedSkillSelections(
@@ -238,6 +241,7 @@ export interface Usage {
   complete: boolean;
 }
 export interface Run {
+  transcript?: RunTranscript;
   workspacePath?: string;
   executor?: 'native-v1' | 'project-v1';
   approvalMode?: 'automatic';
@@ -282,6 +286,8 @@ export type SendSessionMessageResult =
   { run: Run; queuedMessage?: never } | { queuedMessage: QueuedSessionMessage; run?: never };
 
 export interface Message {
+  transcriptOrder?: number;
+  transcriptParts?: TranscriptPart[];
   id: string;
   sessionId: string;
   runId: string;
@@ -292,6 +298,9 @@ export interface Message {
 }
 export type InheritedMessage = Pick<Message, 'id' | 'role' | 'text' | 'createdAt'>;
 export interface ToolCall {
+  transcriptOrder?: number;
+  /** Promoted if the run closes before consuming the native call frame. */
+  transcriptHookOrder?: number;
   id: string;
   runId: string;
   sessionId: string;
@@ -300,6 +309,8 @@ export interface ToolCall {
   inputSummary: string;
   /** Original command when the general input preview would truncate it. */
   command?: string;
+  /** Added only after a matching receipt confirms the rewritten command executed. */
+  rtk?: RtkTrace;
   status: 'running' | 'awaiting_permission' | 'succeeded' | 'failed' | 'denied' | 'canceled';
   output: string;
   outputLength?: number;

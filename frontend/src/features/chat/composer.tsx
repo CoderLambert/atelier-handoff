@@ -1,7 +1,7 @@
 /**
  * @file 提供任务输入、引用和附件编辑。
- * @implementation 按会话状态控制上下文选择及统一提交入口，协调发送、入队、实时插入、停止与草稿。
- * @updated 2026-11-25T17:48:40+08:00
+ * @implementation 按会话状态控制上下文和 Skill 选择，协调选择器与会话弹窗，并统一处理发送、入队、停止及草稿。
+ * @updated 2026-11-26T00:06:59+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
@@ -13,6 +13,9 @@ import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
 import { ExtensionPicker } from '@/features/extensions/picker';
+import { mergePickerSelections } from '@/features/extensions/inheritance-model';
+import { DraftSessionSkills, SessionSkillsControl } from '@/features/extensions/session-skills';
+import { useSessionSkills } from '@/features/extensions/use-session-skills';
 import { AttachmentPreview } from './attachment-preview';
 import { ContextPicker } from './context-picker';
 import { selectContextUsage } from './context-usage-model';
@@ -105,6 +108,14 @@ export function Composer({
   const contextAllowed = !agent || agent.capabilities.includes('context');
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
+  const skillsDisabled = archived || submitting;
+  const sessionSkills = useSessionSkills({
+    sessionId,
+    native: mode === 'native',
+    selections: draft.extensionSelections,
+    disabled: skillsDisabled,
+    onDraftChange,
+  });
   const run = snapshot.runs.find(isActive);
   const hasQueuedMessages = Boolean(snapshot.messageQueue?.items.length);
   const queueing = Boolean(run || hasQueuedMessages || snapshot.messageQueue?.paused);
@@ -444,20 +455,32 @@ export function Composer({
         />
         <fieldset className="chat-extension-fieldset" disabled={archived || submitting}>
           <legend className="sr-only">{t('composer.extensions')}</legend>
+          <DraftSessionSkills skills={sessionSkills} disabled={skillsDisabled} />
           <ExtensionPicker
             projectId={archived ? undefined : snapshot.project.id}
             agent={agent}
             sessionId={snapshot.workspace ? sessionId : undefined}
             contextAllowed={contextAllowed && directoryAvailable}
-            draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
+            draft={{
+              ...draft,
+              mode: mode === 'readonly' ? 'readonly' : 'edit',
+              extensionSelections: draft.extensionSelections?.filter(
+                ({ id }) => !sessionSkills.dialogSelectionIds.has(id),
+              ),
+            }}
             onChange={(next: Draft) => {
-              if (!archived && !submitting)
-                onDraftChange({
+              if (!skillsDisabled)
+                onDraftChange((previous) => ({
                   ...next,
-                  mode: draft.mode,
-                  approvalMode: draft.approvalMode,
-                  executionPreference: draft.executionPreference,
-                });
+                  mode: previous.mode,
+                  approvalMode: previous.approvalMode,
+                  executionPreference: previous.executionPreference,
+                  extensionSelections: mergePickerSelections(
+                    previous.extensionSelections,
+                    next.extensionSelections,
+                    sessionSkills.dialogSelectionIds,
+                  ),
+                }));
             }}
             inputRef={inputRef}
             onSubmit={() => void submit()}
@@ -495,6 +518,12 @@ export function Composer({
             >
               <Paperclip data-icon="inline-start" aria-hidden="true" />
             </Button>
+            <SessionSkillsControl
+              skills={sessionSkills}
+              activeRun={run?.startedAt ? run : undefined}
+              disabled={skillsDisabled}
+              selectionCount={draft.extensionSelections?.length ?? 0}
+            />
             <ComposerModeSelector
               mode={mode}
               nativeExecution={nativeAvailable}
