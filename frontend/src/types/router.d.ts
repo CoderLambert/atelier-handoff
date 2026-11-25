@@ -6,6 +6,8 @@
 declare module '@tanstack/react-router' {
   interface HistoryState {
     workspaceBrowserReturn?: string;
+    workspacePanelReturn?: string;
+    workspacePanelReturnIndex?: number;
   }
 }
 

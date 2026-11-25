@@ -1,3 +1,8 @@
+/**
+ * @file 验证人工终端的身份与传输契约。
+ * @implementation 使用共享 schema 检查未知执行参数、帧大小和二进制输入，核对 Unicode 输入分块不损坏字符或突破完整 JSON 限额。
+ * @updated 2026-11-26T04:09:19+08:00
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {

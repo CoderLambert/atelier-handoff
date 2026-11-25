@@ -35,6 +35,12 @@
 
 ## Review Focus
 
+### 实施状态（2026-11-26）
+
+Task 0–5 的协议、后端、面板接入、客户端、打包适配和烟测代码已落地。真实 PTY/HTTP/WS/Git 聚焦测试 39 项通过，main 兼容回归 18 通过与 1 项既有跳过。完整 npm 门禁、真实 Electron 和安装件的环境限制分别记录在[验证证据](../../evidence/terminal-workbench/2026-11-26-implementation.md)，下文计划中的真实桌面/安装件要求仍是待完成门槛。
+
+集成审查补充了 in_place 工作区身份、面板历史索引、关闭/失联缓存释放、慢创建附着 gate 与 shutdown 失败报告。首期公共 API 是静态受信面板合同；新增面板仍显式接入导航动作与工作区渲染，不能承诺“只登记一个 manifest 即可运行任意插件”。实际开发步骤以[面板开发说明](../../panel-development.md)为准。
+
 - create 响应丢失、重复调用、close 先到及 spawn 期间 close：不重复创建、不留下幽灵 PTY。
 - 切换 A/B 会话与 sidecar 重启：旧回调、旧票据、旧输入、旧 create 重试不能操作新目标。
 - Terminal 存在时仍能 stage/commit；终端创建与 worktree reclaim 的竞态必须互斥。
@@ -62,7 +68,7 @@
 
 ### 1.1 本轮的架构收益
 
-- 新增使用既有服务的面板，应只新增 feature 与一个注册项，无需继续修改工作区大组件的分支、焦点和布局逻辑。
+- 新增面板有固定的 feature、注册项、命名导航动作和 Host 接口；加载失败与公共布局不再由每个 feature 重复实现。首期仍保留少量工作区显式接线，自动导航注册另行扩展。
 - UI 生命周期与系统资源生命周期分开；组件卸载不再隐含“结束任务”。
 - Agent 开发时有稳定的入口、目标类型、示例和验收要求。
 - 问题能落到注册、加载、绑定、连接、进程或清理的具体阶段。
@@ -380,6 +386,8 @@ Vite 的 /api proxy 增加 ws:true，保留实际 Host/Origin，不使用 rewrit
 | client → server | resize | attachmentId、commandSeq、cols、rows |
 | server → client | inputAccepted / commandResult | 已交给 PTY/尺寸应用的结果；不表示命令执行完成 |
 | server → client | readyAccepted | 当前 attachment 已可消费 live；writable 指示是否可输入，exited 屏幕保持只读 |
+
+2026-11-26 实施统一：output、resized、state 三类有序帧都递增 seq；snapshot.seq 是三者的共同水位。客户端按相邻序号消费并在解析或应用完成后 ACK；readyAccepted/inputAccepted/commandResult/error 不占 seq。这样尺寸和退出状态也不能越过尚未解析的输出。
 
 首期使用一个 WS 承载一个 attachment，关闭/创建仍走 HTTP。输入不做跨连接重传；连接不确定时禁用输入并提示，不缓存按键给重连后的目标。
 

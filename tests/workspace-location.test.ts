@@ -1,3 +1,8 @@
+/**
+ * @file 验证工作区位置白名单与跨运行时恢复。
+ * @implementation 覆盖合法会话路由（含终端）、非法子路径，以及隔离数据根中保存位置后重启运行时的恢复行为。
+ * @updated 2026-11-26T04:17:21+08:00
+ */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -13,6 +18,7 @@ const routes = [
   (id: string) => `/sessions/${id}/messages/${randomUUID()}`,
   (id: string) => `/sessions/${id}/artifacts`,
   (id: string) => `/sessions/${id}/browser`,
+  (id: string) => `/sessions/${id}/terminal`,
 ];
 
 test('only typed workspace destinations can be remembered', () => {
@@ -27,6 +33,7 @@ test('only typed workspace destinations can be remembered', () => {
     '/sessions/unknown',
     `/sessions/${id}/messages`,
     `/sessions/${id}/browser/extra`,
+    `/sessions/${id}/terminal/extra`,
   ]) {
     assert.equal(isWorkspaceLocation(path), false, path);
   }

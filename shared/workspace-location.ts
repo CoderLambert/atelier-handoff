@@ -1,7 +1,12 @@
+/**
+ * @file 定义可恢复的工作区位置及会话身份解析。
+ * @implementation 通过固定页面和会话路由白名单校验位置，允许终端面板路由并拒绝额外子路径，导出共享 schema。
+ * @updated 2026-11-26T04:17:21+08:00
+ */
 import { z } from 'zod';
 
 const sessionRoute =
-  /^\/sessions\/([^/]+)(?:\/(trace|artifacts|messages|browser)(?:\/([^/]+))?)?$/u;
+  /^\/sessions\/([^/]+)(?:\/(trace|artifacts|messages|browser|terminal)(?:\/([^/]+))?)?$/u;
 const pages = [
   '/sessions',
   '/runs',

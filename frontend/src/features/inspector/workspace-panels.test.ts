@@ -1,7 +1,7 @@
 /**
- * @file 验证浏览器按需布局、路由返回与变更记录入口。
- * @implementation 使用合成快照、隔离 Chromium 和原生桥替身检查中栏宽度、尺寸保留、窄屏槽位及弹窗遮挡，不启动 Electron 或读取用户数据。
- * @updated 2026-11-22T00:00:00+08:00
+ * @file 验证浏览器与终端面板的工作区交互。
+ * @implementation 使用合成快照、隔离 Chromium 和原生桥替身检查面板布局、路由返回、尺寸隔离、焦点及弹窗遮挡，不启动 Electron 或读取用户数据。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -88,7 +88,7 @@ const ready: Bootstrap = {
 test(
   'workspace reserves the right pane for an explicitly opened browser and preserves routes, sizes and native slots',
   { skip: !browserPath, timeout: 60000 },
-  async () => {
+  async (context) => {
     const root = fileURLToPath(new URL('../../../', import.meta.url));
     const compiled = await build({
       absWorkingDir: root,
@@ -176,6 +176,17 @@ test(
         }
         res.setHeader('Content-Type', 'application/json');
         if (path === '/api/bootstrap') return void res.end(JSON.stringify(ready));
+        if (path === '/api/terminals/capabilities')
+          return void res.end(
+            JSON.stringify({
+              supported: false,
+              reason: 'desktop-required',
+              runtimeId: '44444444-4444-4444-8444-444444444444',
+              shellName: null,
+              protocolVersion: 1,
+              limits: { perRuntime: 8, perSession: 4 },
+            }),
+          );
         if (path === `/api/sessions/${sessionId}`) return void res.end(JSON.stringify(value));
         if (path === `/api/runs/${runId}/trace`)
           return void res.end(JSON.stringify({ events: [], eventCount: 0 }));
@@ -205,6 +216,10 @@ test(
       res.end(
         `<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>${styles}</style></head><body><div id="root"></div><script type="module" src="/bundle.js"></script></body></html>`,
       );
+    });
+    context.after(async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
@@ -289,6 +304,13 @@ test(
       assert.ok(layout.recent.right > 320);
       const savedRight = layout.recent.right;
       const writesAfterResize = layoutWrites.length;
+      await page.locator('.topbar').getByRole('button', { name: '终端', exact: true }).click();
+      await page.waitForURL((url) => url.hash === `#${sessionPath}/terminal`);
+      await page.waitForFunction(
+        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds === null,
+      );
+      await browserButton.click();
+      await panel.waitFor();
       await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
       await page.waitForURL((url) => url.hash === `#${tracePath}`);
       assert.equal(
@@ -395,12 +417,30 @@ test(
         .getByRole('region', { name: '浏览器实时预览', exact: true })
         .waitFor({ state: 'hidden' });
       assert.equal(previewRequests, previewCount);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const terminalButton = page
+        .locator('.topbar')
+        .getByRole('button', { name: '终端', exact: true });
+      await terminalButton.click();
+      await page.waitForURL((url) => url.hash === `#${sessionPath}/terminal`);
+      await page.getByText('终端仅在已配对的桌面应用中可用。', { exact: true }).waitFor();
+      assert.equal(
+        layout.recent.right,
+        savedRight,
+        'Terminal must not overwrite the Browser width',
+      );
+      await page.reload();
+      await page.getByText('终端仅在已配对的桌面应用中可用。', { exact: true }).waitFor();
+      await page.getByRole('button', { name: '收起终端面板', exact: true }).click();
+      await page.waitForURL((url) => url.hash === `#${sessionPath}`);
+      assert.equal(
+        await terminalButton.evaluate((element) => element === document.activeElement),
+        true,
+      );
       assert.deepEqual(unexpected, []);
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   },
 );

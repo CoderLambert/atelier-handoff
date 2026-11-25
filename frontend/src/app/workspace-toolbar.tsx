@@ -1,10 +1,18 @@
 /**
  * @file 展示工作区路径、连接状态和常用操作。
- * @implementation 使用工作区传入的导航与面板动作，保持浏览器触发点并在稳定的状态标记上应用局部反馈。
- * @updated 2026-11-23T04:49:37+08:00
+ * @implementation 消费工作区传入的导航及面板动作，提供浏览器、终端和 Git 入口，并反馈选中、禁用和连接状态。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 import { useId, type Ref } from 'react';
-import { ArrowLeft, ArrowRight, FileDiff, GitBranch, Globe, Menu } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  FileDiff,
+  GitBranch,
+  Globe,
+  Menu,
+  TerminalSquare,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
 
@@ -28,6 +36,10 @@ interface WorkspaceToolbarProps {
     browserTrigger: Ref<HTMLButtonElement>;
     onOpenChanges: () => void;
     onToggleBrowser: () => void;
+    terminalOpen: boolean;
+    terminalTrigger: Ref<HTMLButtonElement>;
+    terminalDisabled: boolean;
+    onToggleTerminal: () => void;
   };
 }
 
@@ -44,6 +56,7 @@ export function WorkspaceToolbar({
 }: WorkspaceToolbarProps) {
   const { t } = useUiTranslation('workbench');
   const { t: git } = useUiTranslation('git');
+  const { t: terminal } = useUiTranslation('terminal');
   const connectionStatusId = useId();
   const changesLabel = sessionActions?.pendingPermissions
     ? t('changes.pending', { count: sessionActions.pendingPermissions })
@@ -117,6 +130,19 @@ export function WorkspaceToolbar({
         ) : null}
         {sessionActions ? (
           <>
+            <Button
+              ref={sessionActions.terminalTrigger}
+              variant={sessionActions.terminalOpen ? 'secondary' : 'ghost'}
+              size="sm"
+              aria-label={terminal('title')}
+              title={terminal(sessionActions.terminalOpen ? 'hide' : 'open')}
+              aria-pressed={sessionActions.terminalOpen}
+              disabled={sessionActions.terminalDisabled}
+              onClick={sessionActions.onToggleTerminal}
+            >
+              <TerminalSquare data-icon="inline-start" aria-hidden="true" />
+              <span className="workspace-action-label">{terminal('title')}</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

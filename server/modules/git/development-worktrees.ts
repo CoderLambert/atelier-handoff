@@ -1,7 +1,7 @@
 /**
  * @file 绑定开发会话与实际 Git 工作目录。
- * @implementation 验证归属、目录身份与分支，使用操作回执协调 SQLite 和系统 Git 的副作用。
- * @updated 2026-11-24T03:36:56+08:00
+ * @implementation 验证归属、目录身份与分支，以操作回执协调 SQLite 和系统 Git；为终端独立预留目录，阻止占用期间回收而不长期持有 Git 写租约。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir } from 'node:fs/promises';
@@ -64,10 +64,21 @@ interface WorktreeDependencies {
   released(): void;
 }
 
+export interface TerminalWorkspaceReservation {
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly workspaceId: string | null;
+  readonly path: string;
+  resolve(): Promise<string>;
+  assertSpawnAllowed(): void;
+  release(): void;
+}
+
 export class DevelopmentWorktrees {
   readonly managed: string;
   private readonly snapshots: WorktreeSnapshots;
   private readonly leases = new Map<string, string>();
+  private readonly terminalReservations = new Map<symbol, string>();
 
   constructor(
     private readonly store: Store,
@@ -90,6 +101,58 @@ export class DevelopmentWorktrees {
     const project = this.store.get('projects', session.projectId);
     const row = this.records.forSession(session.id);
     return row ? this.path(project, row) : project.path;
+  }
+
+  /** Retain a directory without occupying the short-lived Git write lease. */
+  reserveTerminalWorkspace(
+    session: Session,
+    expectedWorkspaceId: string | null,
+  ): TerminalWorkspaceReservation {
+    const workspaceId = this.records.forSession(session.id)?.id ?? null;
+    if (workspaceId !== expectedWorkspaceId)
+      throw gitError('WORKTREE_CHANGED', '会话工作目录已变化，请重新打开终端。');
+    const path = this.directory(session);
+    this.assertUnlocked(path);
+    const token = Symbol('terminal');
+    this.terminalReservations.set(token, path);
+    const release = () => {
+      this.terminalReservations.delete(token);
+    };
+    const assertSpawnAllowed = () => {
+      const current = this.store.get('sessions', session.id);
+      if (
+        !this.terminalReservations.has(token) ||
+        current.projectId !== session.projectId ||
+        (this.records.forSession(session.id)?.id ?? null) !== workspaceId ||
+        this.directory(current) !== path
+      )
+        throw gitError('WORKTREE_CHANGED', '终端的工作目录预留已失效。');
+      this.assertUnlocked(path);
+    };
+    return {
+      projectId: session.projectId,
+      sessionId: session.id,
+      workspaceId,
+      path,
+      assertSpawnAllowed,
+      release,
+      resolve: async () => {
+        try {
+          assertSpawnAllowed();
+          const resolved = await this.resolveSession(this.store.get('sessions', session.id));
+          assertSpawnAllowed();
+          if (resolved !== path) throw gitError('WORKTREE_CHANGED', '终端的工作目录已变化。');
+          return resolved;
+        } catch (error) {
+          release();
+          throw error;
+        }
+      },
+    };
+  }
+
+  private terminalRetains(path: string): boolean {
+    return [...this.terminalReservations.values()].some((other) => directoriesOverlap(path, other));
   }
 
   assertUnlocked(path: string) {
@@ -223,7 +286,11 @@ export class DevelopmentWorktrees {
         head: listed?.head ?? null,
         locked: listed?.locked ?? false,
         scope: 'managed',
-        canReclaim: state.state === 'ready' && !listed?.locked && this.allArchived(row),
+        canReclaim:
+          state.state === 'ready' &&
+          !listed?.locked &&
+          this.allArchived(row) &&
+          !this.terminalRetains(state.path),
       });
       if (listed)
         for (const branch of overview.branches)
@@ -541,6 +608,8 @@ export class DevelopmentWorktrees {
           this.result(repeated, requestHash);
         return;
       }
+      if (this.terminalRetains(path))
+        throw gitError('DIRECTORY_BUSY', '工作目录仍有未结束的终端。');
       let row = this.owned(project, id);
       if (row.retained === 'relocated' || !row.directoryIdentity || !this.allArchived(row))
         throw gitError('DIRECTORY_BUSY', '所有关联会话均归档后才能回收工作树。');

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * @file 构建 Linux x64 应用发布包。
- * @implementation 校验输入、依赖和许可证，打包运行资源、SQLite 驱动和数据库迁移，并记录哈希。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 校验输入、依赖、许可证和 native，归档 SQLite、终端与运行资源，并用随包 Node 执行探针。
+ * @updated 2026-11-26T01:30:00+08:00
  */
 // Linux x64/glibc only: build the production frontend, then run with tsx.
 // Uses installed inputs only; no downloads, dependency installs, root, or git.
@@ -33,6 +33,14 @@ import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { build, type BuildOptions, type Plugin } from 'esbuild';
 import { z } from 'zod';
+import {
+  ptyPackagePath,
+  selectPtyPackageFiles,
+  terminalNativeResource,
+  terminalProbeResultSchema,
+  terminalReleaseSchema,
+  terminalRuntimeVersions,
+} from './terminal-resources.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const output = join(root, 'dist/linux');
@@ -111,6 +119,7 @@ const runtimeRoots = [
   'yaml',
   'yauzl',
   'zod',
+  ...Object.keys(terminalRuntimeVersions),
 ];
 const nativeCli = '@anthropic-ai/claude-agent-sdk-linux-x64';
 const forbiddenDirectories = new Set([
@@ -460,6 +469,7 @@ async function closure(seeds: string[], lock: Lock, strict = true): Promise<Rele
   return [...packages.values()].sort((a, b) => a.path.localeCompare(b.path, 'en'));
 }
 async function packageFiles(directory: string, value: Manifest, prefix = ''): Promise<string[]> {
+  if (value.name === 'node-pty') return selectPtyPackageFiles(directory);
   const selected: string[] = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     // Package roots may contain development trees; nested names such as
@@ -652,6 +662,13 @@ async function packageRelease(work: string): Promise<string[]> {
   const cli = requirePackage(releasePackages, nativeCli);
   const orm = requirePackage(releasePackages, 'drizzle-orm');
   const sqliteDriver = requirePackage(releasePackages, 'better-sqlite3');
+  for (const [name, version] of Object.entries(terminalRuntimeVersions)) {
+    const dependency = requirePackage(releasePackages, name);
+    if (project.dependencies[name] !== version || dependency.manifest.version !== version)
+      throw new Error(`${name} must be pinned to ${version}.`);
+    if (name === 'node-pty' && dependency.path !== ptyPackagePath)
+      throw new Error(`PTY runtime must resolve from ${ptyPackagePath}.`);
+  }
   for (const [item, version] of [
     [orm, ORM_VERSION],
     [sqliteDriver, SQLITE_DRIVER_VERSION],
@@ -887,6 +904,14 @@ async function packageRelease(work: string): Promise<string[]> {
     },
     migrations,
   };
+  const terminalRelease = terminalReleaseSchema.parse({
+    supported: true,
+    pty: { name: 'node-pty', version: terminalRuntimeVersions['node-pty'] },
+    nativeBinding: {
+      path: terminalNativeResource,
+      sha256: await hash(join(stage, terminalNativeResource)),
+    },
+  });
   await putJson(join(stage, 'resources/release.json'), {
     schemaVersion: 1,
     name: project.name,
@@ -904,6 +929,7 @@ async function packageRelease(work: string): Promise<string[]> {
     },
     shunt: shuntRelease,
     sqlite: sqliteRelease,
+    terminal: terminalRelease,
     sdk: {
       version: sdk.manifest.version,
       cliPackage: nativeCli,
@@ -923,6 +949,19 @@ async function packageRelease(work: string): Promise<string[]> {
   if (pkgbuildTemplate.split('@VERSION@').length !== 2)
     throw new Error('PKGBUILD must contain exactly one version placeholder.');
   await rememberInput(fileURLToPath(import.meta.url), 'packager');
+  await rememberInput(join(root, 'scripts/linux/terminal-resources.mts'), 'packager');
+  const terminalProbe = join(work, 'terminal-probe.mjs');
+  await build({
+    absWorkingDir: root,
+    entryPoints: ['scripts/linux/terminal-probe.mts'],
+    outfile: terminalProbe,
+    bundle: false,
+    platform: 'node',
+    format: 'esm',
+    target: 'node24',
+    sourcemap: false,
+    plugins: [inputPlugin],
+  });
   const inputInventory = {
     schemaVersion: 1,
     sourceDateEpoch: epoch,
@@ -1021,13 +1060,24 @@ async function packageRelease(work: string): Promise<string[]> {
         ),
       ),
     );
+  const terminalIdentity = terminalProbeResultSchema.parse(
+    parseJson(
+      run(
+        join(runtime, 'bin/node'),
+        ['--input-type=module', '-e', await readFile(terminalProbe, 'utf8')],
+        { cwd: runtime, timeout: 20_000 },
+      ),
+    ),
+  );
+  if (terminalIdentity.node !== NODE_VERSION)
+    throw new Error(`Terminal probe must use staged Node ${NODE_VERSION}.`);
   const cliOutput = run(join(runtime, 'node_modules', nativeCli, 'claude'), ['--version'], {
     cwd: runtime,
   });
   if (cliOutput !== `${sdk.manifest.claudeCodeVersion} (Claude Code)`)
     throw new Error(`Staged SDK CLI identity mismatch: ${cliOutput}`);
   console.log(
-    `Verified staged Node ${runtimeIdentity.node}, SQLite, better-sqlite3 ${SQLITE_DRIVER_VERSION}, Drizzle ${ORM_VERSION}, runtime imports and SDK CLI ${sdk.manifest.claudeCodeVersion}.`,
+    `Verified staged Node ${runtimeIdentity.node}, SQLite, better-sqlite3 ${SQLITE_DRIVER_VERSION}, Drizzle ${ORM_VERSION}, PTY/screen/WebSocket, runtime imports and SDK CLI ${sdk.manifest.claudeCodeVersion}.`,
   );
 
   const archiveName = `atelier-${project.version}-linux-x64.tar.zst`;
@@ -1089,6 +1139,7 @@ async function packageRelease(work: string): Promise<string[]> {
     'atelier/resources/input-inventory.json',
     `atelier/resources/runtime/node_modules/${nativeCli}/claude`,
     `atelier/${sqliteRelease.nativeBinding.path}`,
+    `atelier/${terminalRelease.nativeBinding.path}`,
     ...migrations.map((migration) => `atelier/${migration.path}`),
   ])
     if (!portableListing.includes(path)) throw new Error(`Portable archive is missing ${path}`);
@@ -1096,6 +1147,7 @@ async function packageRelease(work: string): Promise<string[]> {
     '.PKGINFO',
     'opt/atelier/atelier',
     `opt/atelier/${sqliteRelease.nativeBinding.path}`,
+    `opt/atelier/${terminalRelease.nativeBinding.path}`,
     ...migrations.map((migration) => `opt/atelier/${migration.path}`),
     ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map(
       (path) => `opt/atelier/${path}`,
@@ -1153,6 +1205,8 @@ async function packageRelease(work: string): Promise<string[]> {
       betterSqlite3: runtimeIdentity.betterSqlite3,
       drizzle: runtimeIdentity.drizzle,
       sqliteResources: sqliteRelease,
+      terminalResources: terminalRelease,
+      terminal: terminalIdentity,
       runtimeImports: true,
       sdkCli: cliOutput,
       shunt: { version: SHUNT.version, sha256: stagedShunt.sha256, mode: stagedShunt.mode },

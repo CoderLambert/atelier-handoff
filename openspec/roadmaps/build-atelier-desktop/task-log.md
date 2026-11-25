@@ -2,6 +2,15 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-26 · 人工终端与面板合同（开发分支；桌面/发行验收阻塞）
+
+- 按用户最新要求从 `main@f48da53d` 新建 `feat/terminal-workbench`。保留最新 Git 文件阅读/引用、任务进度、原生 Bash 控制与同目录会话功能，加入静态 Panel SDK/registry/Host 和会话人工终端。[接入文档](../../../docs/panel-development.md) · [技术决策](../../../docs/decisions/2026-11-26-terminal-workbench.md)
+- Terminal 由 Node sidecar 持有真实 PTY，界面用 xterm，HTTP 管生命周期与单次票据，WS 管交互与屏幕恢复。显示/隐藏与资源生命周期分别管理，未确认输入不重放。独立目录保留阻止回收但允许 Git 写操作；不会占用 Agent 执行槽。
+- 39 项 Terminal 聚焦测试通过；main 兼容回归 18 通过、1 项既有跳过；前端纯状态/路由/目标 7 项通过。类型、架构/Query/i18n/UI 子项和等价前端/桌面构建通过。`npm run check/build` 原入口因 tsx Unix IPC 权限失败，完整 `npm test` 超时；真实 Electron 因 Unix socket 权限中止，完整 Linux 安装件缺构建工具。尚未切换用户运行实例。[分层验证与复跑说明](../../../docs/evidence/terminal-workbench/2026-11-26-implementation.md)
+- 独立审查促成 in_place 目录身份、面板历史返回、关闭/失联客户端回收、慢创建附着时机、烟测新建入口与 shutdown 失败传播修正。源码与固定依赖进入工作分支，真实浏览器/Electron/安装件结果不以替身代替。
+- **开发过程 review（本轮实施）**。先冻结共享协议再并行负责后端、界面和发行，集中审查跨层接口。复用了现有 Git/SDK 测试和 p1 烟测。Unix IPC 与缺显示环境应在首次预检明确，后续不重复尝试依赖相同能力的本地入口；需要窗口的验收集中到已配置的 CI/桌面。完整桌面验收与文件说明收尾状态在证据中持续更新。
+- 文件说明使用 `gpt-6.1-terra` / `xhigh` 对本批 63 份输入按 SHA-256 只读核对，集中应用 9 份必要建议；未将桌面/安装态验收记为完成。
+
 ## 2026-11-25 · Claude CLI Bash 控制与同目录并行（已验证并启动）
 
 - 本机信任使用 Claude SDK 的原生时限、后台任务和逐命令停止。 `Ctrl+Enter` 在 Bash 仍运行时投递同会话消息。运行时按 SDK 会话、任务和执行者确认终态和日志，重启后保留缺少回执的记录。不同会话可以共享一个规范化工作目录，同时保留 Git 租约和受控写入队列。[技术决策](../../../docs/decisions/2026-11-25-claude-bash-and-parallel-sessions.md)
