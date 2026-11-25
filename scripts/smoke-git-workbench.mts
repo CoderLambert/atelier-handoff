@@ -457,10 +457,7 @@ try {
   await browserButton.click();
   console.log('Native browser view detached for Git and remounted with its tab and URL');
 
-  await page
-    .locator('.topbar')
-    .getByRole('button', { name: '模型与网关设置', exact: true })
-    .click();
+  await page.getByRole('button', { name: '工作台设置', exact: true }).click();
   await page.getByLabel('界面语言').click();
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.lang === 'en');

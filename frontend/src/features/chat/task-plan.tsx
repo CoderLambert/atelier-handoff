@@ -1,7 +1,7 @@
 /**
  * @file 展示当前运行及历史消息中的任务清单。
- * @implementation 从运行快照派生完成数量与三种任务状态，用共享按钮控制清单展开。
- * @updated 2026-11-23T13:33:39+08:00
+ * @implementation 根据传入步骤展示完成数量和任务状态。输入区用按钮展开清单，历史清单随运行摘要展开。
+ * @updated 2026-11-25T18:35:00+08:00
  */
 import { useId, useState } from 'react';
 import { Check, ChevronDown, Circle, CircleDot, ListChecks } from 'lucide-react';
@@ -18,34 +18,47 @@ const statuses = {
 export function TaskPlan({
   steps,
   defaultOpen = false,
+  embedded = false,
 }: {
   steps: readonly Step[];
   defaultOpen?: boolean;
+  embedded?: boolean;
 }) {
   const { t } = useUiTranslation('chat');
   const id = useId();
   const [manualOpen, setManualOpen] = useState<boolean>();
-  const open = manualOpen ?? defaultOpen;
+  const open = embedded || (manualOpen ?? defaultOpen);
   const completed = steps.filter((step) => step.status === 'completed').length;
   const counts = { completed, count: steps.length };
 
   return (
     <div className="chat-task-plan">
-      <Button
-        className="chat-task-plan-toggle"
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-expanded={open}
-        aria-controls={id}
-        aria-label={t('progress.planSummary', counts)}
-        onClick={() => setManualOpen(!open)}
-      >
-        <ListChecks data-icon="inline-start" aria-hidden="true" />
-        {t('plan.label')}
-        <span className="chat-task-plan-count">{t('plan.count', counts)}</span>
-        <ChevronDown className="chat-task-plan-chevron" data-icon="inline-end" aria-hidden="true" />
-      </Button>
+      {embedded ? (
+        <p className="run-history-section-label">
+          {t('plan.label')}
+          <span className="chat-task-plan-count">{t('plan.count', counts)}</span>
+        </p>
+      ) : (
+        <Button
+          className="chat-task-plan-toggle"
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={open}
+          aria-controls={id}
+          aria-label={t('progress.planSummary', counts)}
+          onClick={() => setManualOpen(!open)}
+        >
+          <ListChecks data-icon="inline-start" aria-hidden="true" />
+          {t('plan.label')}
+          <span className="chat-task-plan-count">{t('plan.count', counts)}</span>
+          <ChevronDown
+            className="chat-task-plan-chevron"
+            data-icon="inline-end"
+            aria-hidden="true"
+          />
+        </Button>
+      )}
       <ul id={id} className="chat-task-plan-list" role="list" hidden={!open}>
         {open
           ? steps.map((step, index) => {

@@ -106,7 +106,7 @@ try {
   await page.getByRole('region', { name: '运行执行轨迹' }).waitFor();
   assert.equal(await page.locator('#resize-inspector').count(), 0);
   await page.getByRole('tab', { name: '会话', exact: true }).click();
-  await page.getByRole('button', { name: /执行明细/ }).click();
+  await page.getByRole('button', { name: /^已完成 · 用时/ }).click();
   await row.locator(':scope > summary').click();
   await row.getByText(command, { exact: true }).waitFor();
   await row.getByText('branch=fixture', { exact: true }).waitFor();

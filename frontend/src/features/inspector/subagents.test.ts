@@ -390,6 +390,12 @@ test(
       const old = page.locator('[data-subagent-id="old-worker"]');
       const worker = page.locator('[data-subagent-id="worker"]');
       const peer = page.locator('[data-subagent-id="peer"]');
+      const oldHistory = page.locator('[data-message-id="reply-old"]').getByRole('button', {
+        name: /^已完成 · 用时/,
+      });
+      assert.equal(await oldHistory.getAttribute('aria-expanded'), 'false');
+      assert.equal(await old.isVisible(), false);
+      await oldHistory.press('Enter');
       await old.locator('summary').first().click();
       assert.match(await old.innerText(), /结果 old-worker/);
       await worker.locator('summary').first().click();
@@ -467,6 +473,12 @@ test(
       await page.locator('[data-subagent-id="new"]').waitFor();
       assert.equal(await page.locator('[data-subagent-id="worker"]').count(), 1);
       await page.evaluate("window.renderFixture('session-b')");
+      await page
+        .locator('[data-message-id="other-reply"]')
+        .getByRole('button', {
+          name: /^已完成 · 用时/,
+        })
+        .press('Enter');
       await page.locator('[data-subagent-id="other-worker"]').waitFor();
       assert.equal(await worker.count(), 0);
       emit('subagent.finished');

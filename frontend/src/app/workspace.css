@@ -177,26 +177,43 @@
 }
 
 .connection-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--ui-muted);
-  border: 1px solid var(--ui-border-subtle);
-  color: var(--ui-muted-foreground);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--radius-md);
+  color: var(--ui-warning);
+}
+
+.connection-state:focus-visible {
+  outline: 2px solid var(--ui-ring);
+}
+
+.connection-tooltip {
+  position: absolute;
+  z-index: 10;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-md);
+  background: var(--ui-popover);
+  color: var(--ui-popover-foreground);
+  box-shadow: var(--ui-shadow-overlay);
+  font-size: var(--text-xs);
   white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.connection-state:is(:hover, :focus-visible) .connection-tooltip {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .connection-state[data-connected='true'] {
-  background: transparent;
-  border-color: transparent;
-}
-
-.connection-state[data-connected='true'] .connection-dot {
-  background: var(--ui-success);
+  color: var(--ui-success);
 }
 
 .topbar-changes-btn[data-pending='true'] {
@@ -232,7 +249,7 @@
   .react-workspace .topbar-actions {
     gap: 4px;
   }
-  .react-workspace .topbar :is(.connection-state, .workspace-action-label) {
+  .react-workspace .topbar .workspace-action-label {
     display: none;
   }
 }

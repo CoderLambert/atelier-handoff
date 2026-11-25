@@ -1,7 +1,7 @@
 /**
  * @file 在助手消息里展示本轮主助手执行的操作。
- * @implementation 默认展开运行中的明细，保留当前阅读位置，并按需显示较早的调用与完整输出。
- * @updated 2026-11-22T18:35:00+08:00
+ * @implementation 运行中默认展开明细，历史明细随所在运行展开。按需显示更早调用和完整输出，并保留当前阅读位置。
+ * @updated 2026-11-25T18:35:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useState } from 'react';
@@ -11,14 +11,19 @@ import { Button } from '@/components/ui/button';
 import { ToolDetail } from '@/features/inspector/tool-detail';
 import { toolDisplayStatus, toolOutputView } from '@/features/inspector/tool-detail-format';
 
+const recentCallCount = 4;
+const earlierCallPageSize = 12;
+
 export function RunToolActivity({
   tools,
   active,
+  historyOpen,
   approved,
   onOutput,
 }: {
   tools: ToolCall[];
   active: boolean;
+  historyOpen: boolean;
   approved: ReadonlySet<string>;
   onOutput: (tool: ToolCall) => void;
 }) {
@@ -26,52 +31,75 @@ export function RunToolActivity({
   const id = useId();
   const [expanded, setExpanded] = useState<boolean>();
   const [from, setFrom] = useState<number>();
-  const open = expanded ?? active;
+  const open = active ? (expanded ?? true) : historyOpen;
   const failedCount = tools.filter(
     (tool) => toolDisplayStatus(tool, toolOutputView(tool)) === 'failed',
   ).length;
-  const latest = Math.max(0, tools.length - 4);
+  const latest = Math.max(0, tools.length - recentCallCount);
   const start = Math.min(from ?? latest, latest);
-  const visible = open
-    ? tools.filter(
-        (tool, i) =>
-          i >= start || tool.status === 'running' || tool.status === 'awaiting_permission',
-      )
-    : [];
+  const visible: ToolCall[] = [];
+  const hiddenIndices: number[] = [];
+  if (open) {
+    tools.forEach((tool, index) => {
+      if (index >= start || tool.status === 'running' || tool.status === 'awaiting_permission') {
+        visible.push(tool);
+      } else {
+        hiddenIndices.push(index);
+      }
+    });
+  }
+  const nextCount = Math.min(hiddenIndices.length, earlierCallPageSize);
+  const nextStart = hiddenIndices[hiddenIndices.length - nextCount];
+  const label = (
+    <>
+      <span>{t('activity.calls', { count: tools.length })}</span>
+      {failedCount > 0 ? (
+        <span className="run-activity-failed">
+          {t('activity.failedCount', { count: failedCount })}
+        </span>
+      ) : null}
+    </>
+  );
   return (
     <div className="run-tool-activity">
-      <Button
-        className="run-activity-toggle"
-        type="button"
-        variant="ghost"
-        size="xs"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setExpanded(!open)}
-      >
-        <ChevronRight data-icon="inline-start" aria-hidden="true" />
-        {t('activity.details', { count: tools.length })}
-        {failedCount > 0 ? (
-          <span className="run-activity-failed">
-            {t('activity.failedCount', { count: failedCount })}
-          </span>
-        ) : null}
-      </Button>
+      {active ? (
+        <Button
+          className="run-activity-toggle"
+          type="button"
+          variant="ghost"
+          size="xs"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setExpanded(!open)}
+        >
+          <ChevronRight data-icon="inline-start" aria-hidden="true" />
+          {label}
+        </Button>
+      ) : (
+        <p className="run-history-section-label">{label}</p>
+      )}
       <div id={id} hidden={!open}>
         {open ? (
           <>
-            {visible.length < tools.length ? (
-              <Button
-                type="button"
-                variant="link"
-                size="xs"
-                onClick={() => {
-                  setExpanded(true);
-                  setFrom(Math.max(0, start - 12));
-                }}
-              >
-                {t('activity.earlier')}
-              </Button>
+            {tools.length > recentCallCount ? (
+              <div className="run-tool-pagination">
+                <span role="status">
+                  {t('activity.visibleCount', { shown: visible.length, total: tools.length })}
+                </span>
+                {nextStart === undefined ? null : (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    onClick={() => {
+                      setExpanded(true);
+                      setFrom(nextStart);
+                    }}
+                  >
+                    {t('activity.showEarlier', { count: nextCount })}
+                  </Button>
+                )}
+              </div>
             ) : null}
             <div
               className="run-tool-list"

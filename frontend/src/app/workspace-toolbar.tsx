@@ -3,13 +3,10 @@
  * @implementation 使用工作区传入的导航与面板动作，保持浏览器触发点并在稳定的状态标记上应用局部反馈。
  * @updated 2026-11-23T04:49:37+08:00
  */
-import type { Ref } from 'react';
-import { ArrowLeft, ArrowRight, FileDiff, GitBranch, Globe, Menu, Settings2 } from 'lucide-react';
-import { useReducedMotion } from 'motion/react';
-import * as m from 'motion/react-m';
+import { useId, type Ref } from 'react';
+import { ArrowLeft, ArrowRight, FileDiff, GitBranch, Globe, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
-import { feedbackTransition } from './workspace-notice';
 
 interface WorkspaceToolbarProps {
   projectName?: string;
@@ -19,7 +16,6 @@ interface WorkspaceToolbarProps {
   onBack: () => void;
   onForward: () => void;
   onOpenNavigation: () => void;
-  onOpenSettings: () => void;
   gitAction?: {
     open: boolean;
     busy: boolean;
@@ -43,13 +39,12 @@ export function WorkspaceToolbar({
   onBack,
   onForward,
   onOpenNavigation,
-  onOpenSettings,
   gitAction,
   sessionActions,
 }: WorkspaceToolbarProps) {
   const { t } = useUiTranslation('workbench');
   const { t: git } = useUiTranslation('git');
-  const reduceMotion = useReducedMotion();
+  const connectionStatusId = useId();
   const changesLabel = sessionActions?.pendingPermissions
     ? t('changes.pending', { count: sessionActions.pendingPermissions })
     : t('changes.title');
@@ -97,26 +92,14 @@ export function WorkspaceToolbar({
         <span
           className="connection-state"
           data-connected={connected}
-          role="status"
-          title={connected ? t('events.connectedTitle') : t('events.connectingTitle')}
+          tabIndex={0}
+          aria-describedby={connectionStatusId}
         >
-          <m.span
-            aria-hidden="true"
-            className="connection-dot"
-            initial={false}
-            animate={{ opacity: connected ? 1 : 0.55 }}
-            transition={reduceMotion ? { duration: 0 } : feedbackTransition}
-          />
-          {connected ? t('events.connected') : t('events.connecting')}
+          <span className="connection-dot" aria-hidden="true" />
+          <span className="connection-tooltip" id={connectionStatusId} role="status">
+            {t(connected ? 'events.connectedTitle' : 'events.connectingTitle')}
+          </span>
         </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('settings.models')}
-          onClick={onOpenSettings}
-        >
-          <Settings2 aria-hidden="true" />
-        </Button>
         {gitAction ? (
           <Button
             ref={gitAction.trigger}

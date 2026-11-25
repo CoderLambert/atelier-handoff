@@ -468,9 +468,6 @@ dialog.permission-dialog:has(.diff-layout) {
   .session-tabs {
     gap: 20px;
   }
-  .connection-state {
-    display: none;
-  }
   .history-item {
     padding-inline: 10px;
   }

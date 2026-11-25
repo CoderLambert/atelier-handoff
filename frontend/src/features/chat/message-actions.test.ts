@@ -14,7 +14,7 @@ import { chromium } from 'playwright-core';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
-import { activeStatuses, type Draft, type Permission, type Run } from '@shared/types';
+import { activeStatuses, type Draft, type Permission, type Run, type ToolCall } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { MessageActions } from './message-actions';
 import { rewindUnavailableReason } from './message-actions-model';
@@ -314,8 +314,8 @@ test(
             runs: initial.runs.map(run => ({ ...run, sessionId: id })) };
           render();
         },
-        setRuns: (runs) => {
-          current = { ...current, runs };
+        setRuns: (runs, tools) => {
+          current = { ...current, runs, tools };
           render();
         },
         patch: (options) => {
@@ -935,10 +935,11 @@ test(
       const finished: Run = {
         ...running,
         status: 'completed',
+        endedAt: new Date(Date.parse(at) + 10_000).toISOString(),
         plan: steps.map((step) => ({ ...step, status: 'completed' })),
       };
-      const setRuns = (runs: Run[]) =>
-        page.evaluate(`window.fixture.setRuns(${JSON.stringify(runs)})`);
+      const setRuns = (runs: Run[], tools: ToolCall[] = []) =>
+        page.evaluate(`window.fixture.setRuns(${JSON.stringify(runs)}, ${JSON.stringify(tools)})`);
       const dock = page.locator('.chat-composer .chat-task-plan');
       assert.equal(await dock.count(), 0);
       await page.evaluate("window.fixture.switch('session-a')");
@@ -947,6 +948,17 @@ test(
       await toggle.waitFor();
       assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
       assert.equal(await page.locator('.chat-conversation .chat-task-plan').count(), 0);
+      const composerBox = page.locator('.chat-composer .composer-box');
+      const planBounds = await dock.boundingBox();
+      const composerBounds = await composerBox.boundingBox();
+      assert.ok(planBounds && composerBounds);
+      assert.equal(planBounds.x, composerBounds.x);
+      assert.equal(planBounds.width, composerBounds.width);
+      assert.ok(composerBounds.y - (planBounds.y + planBounds.height) >= 8);
+      assert.notEqual(
+        await composerBox.evaluate((element) => getComputedStyle(element).borderTopLeftRadius),
+        '0px',
+      );
       const fade = await page.locator('.chat-composer').evaluate((element) => {
         const style = getComputedStyle(element, '::before');
         return {
@@ -979,15 +991,48 @@ test(
       await finalToggle.press('Enter');
       assert.equal(await dock.getByRole('listitem').count(), 3);
       assert.equal(
+        await dock.getByText('验证结果', { exact: true }).evaluate(
+          (element) => getComputedStyle(element).textDecorationLine,
+        ),
+        'none',
+      );
+      assert.equal(
         await finalToggle.evaluate((element) => document.activeElement === element),
         true,
       );
-      await setRuns([finished, { ...run, id: 'next', status: 'running' }]);
+      const calls: ToolCall[] = Array.from({ length: 17 }, (_, index) => ({
+        id: `tool-${index + 1}`,
+        runId: run.id,
+        sessionId: run.sessionId,
+        name: 'Read',
+        inputSummary: `file-${index + 1}.txt`,
+        status: index < 2 ? 'failed' : 'succeeded',
+        output: '',
+        startedAt: at,
+        endedAt: finished.endedAt,
+      }));
+      await setRuns([finished, { ...run, id: 'next', status: 'running' }], calls);
       await dock.waitFor({ state: 'detached' });
-      const history = assistant.getByRole('button', { name: /3 \/ 3 已完成/ });
+      const history = assistant.getByRole('button', { name: /已完成 · 用时 10(?:\.0)? 秒/ });
       assert.equal(await history.getAttribute('aria-expanded'), 'false');
-      await history.click();
+      assert.equal(await assistant.getByText('验证结果', { exact: true }).count(), 0);
+      await history.press('Enter');
       await assistant.getByText('验证结果', { exact: true }).waitFor();
+      assert.equal(await assistant.getByRole('listitem').count(), 3);
+      assert.equal(await assistant.locator('.chat-task-plan-toggle').count(), 0);
+      assert.equal(await assistant.getByText('工具调用 · 17 次', { exact: true }).count(), 1);
+      assert.equal(await assistant.getByText('2 次失败', { exact: true }).count(), 1);
+      const callRows = assistant.locator('.run-tool-list [data-tool-id]');
+      assert.equal(await callRows.count(), 4);
+      assert.equal(await assistant.getByText('已显示 4 / 17 次', { exact: true }).count(), 1);
+      await assistant.getByRole('button', { name: '再显示 12 次', exact: true }).press('Enter');
+      assert.equal(await callRows.count(), 16);
+      await assistant.getByRole('button', { name: '再显示 1 次', exact: true }).click();
+      assert.equal(await callRows.count(), 17);
+      assert.equal(await assistant.getByText('已显示 17 / 17 次', { exact: true }).count(), 1);
+      assert.equal(await assistant.getByRole('button', { name: /再显示/ }).count(), 0);
+      await history.press('Space');
+      assert.equal(await history.getAttribute('aria-expanded'), 'false');
       await setRuns([finished]);
       await finalToggle.waitFor();
       assert.equal(await finalToggle.getAttribute('aria-expanded'), 'false');

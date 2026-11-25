@@ -4,11 +4,13 @@
  * @updated 2026-11-22T23:00:00+08:00
  */
 export const chat = {
-  'activity.details_one': ['执行明细 · {{count}}', 'Execution details · {{count}}'],
-  'activity.details_other': ['执行明细 · {{count}}', 'Execution details · {{count}}'],
-  'activity.earlier': ['查看更早的调用', 'View earlier calls'],
-  'activity.failedCount_one': ['{{count}} 项失败', '{{count}} failed'],
-  'activity.failedCount_other': ['{{count}} 项失败', '{{count}} failed'],
+  'activity.calls_one': ['工具调用 · {{count}} 次', 'Tool calls · {{count}}'],
+  'activity.calls_other': ['工具调用 · {{count}} 次', 'Tool calls · {{count}}'],
+  'activity.failedCount_one': ['{{count}} 次失败', '{{count}} failed'],
+  'activity.failedCount_other': ['{{count}} 次失败', '{{count}} failed'],
+  'activity.showEarlier_one': ['再显示 {{count}} 次', 'Show {{count}} earlier call'],
+  'activity.showEarlier_other': ['再显示 {{count}} 次', 'Show {{count}} earlier calls'],
+  'activity.visibleCount': ['已显示 {{shown}} / {{total}} 次', 'Showing {{shown}} of {{total}}'],
   'attachment.description': ['会话附件 · {{size}}', 'Session attachment · {{size}}'],
   'attachment.downloadOriginal': ['下载原件', 'Download original'],
   'attachment.imageFailed': [
@@ -553,6 +555,7 @@ export const chat = {
   'progress.awaitingApproval': ['等待操作审批', 'Waiting for action approval'],
   'progress.callingTool': ['正在调用工具 · {{name}}', 'Calling tool · {{name}}'],
   'progress.history': ['本轮执行记录', 'Execution history for this turn'],
+  'progress.historyDuration': ['{{status}} · 用时 {{duration}}', '{{status}} · {{duration}} elapsed'],
   'progress.label': ['本轮执行进度', 'Execution progress for this turn'],
   'progress.minutesAgo_one': [
     '上次更新于 {{count}} 分 {{seconds}} 秒前',

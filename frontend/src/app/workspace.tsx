@@ -651,7 +651,6 @@ export default function Workspace() {
               onBack={() => router.history.back()}
               onForward={() => router.history.forward()}
               onOpenNavigation={() => openDrawer('navigation')}
-              onOpenSettings={sideProps.onSettings}
               sessionActions={
                 view === 'chat' && sessionId
                   ? {
