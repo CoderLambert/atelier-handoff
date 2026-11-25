@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 协调 SDK 子任务、工具回执和工作树核对，持久化正文、工具及通知的运行顺序，并跟踪后台 Bash 直至终态。
- * @updated 2026-11-26T01:17:56+08:00
+ * @implementation 协调 SDK 子任务、工作树核对和后台 Bash，持久化正文、工具及通知的顺序。按项目设置规划原生 Bash 的 RTK 包装并核对实际回执。
+ * @updated 2026-11-26T03:01:01+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';

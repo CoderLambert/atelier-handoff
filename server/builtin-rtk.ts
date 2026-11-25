@@ -1,7 +1,7 @@
 /**
- * @file 验证 Linux RTK 资源并为单次原生 SDK 运行装载内置 Hook。
- * @implementation 校验二进制摘要、启动器内容和执行位，固定命令映射随运行写入独立插件目录。轨迹仅从匹配实际命令的 SDK 回执产生。
- * @updated 2026-11-26T12:00:00+08:00
+ * @file 验证 Linux RTK 资源并为单次原生 SDK 运行装载内置插件。
+ * @implementation 校验二进制摘要、启动器内容和执行位，在隔离插件目录按工具调用写入命令计划，仅确认与 SDK 实际输入匹配的轨迹。
+ * @updated 2026-11-26T03:01:01+08:00
  */
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';

@@ -1766,7 +1766,7 @@
   gap: 8px;
   border-block-start: 1px solid var(--ui-border);
   padding-block-start: 12px;
-  color: var(--ui-info);
+  color: var(--ui-primary);
   font-size: 0.8125rem;
   line-height: 20px;
 }

@@ -1,7 +1,7 @@
 /**
- * @file 固定随包 RTK OSS 的版本、来源与资源身份。
- * @implementation 以发布归档、Linux x64 二进制和原版许可证的 SHA-256 为打包与运行时提供同一份校验依据。
- * @updated 2026-11-26T01:56:41+08:00
+ * @file 定义随包 RTK OSS 的固定资源身份和启动器。
+ * @implementation 共享发布归档、二进制及许可证摘要。启动器隔离 RTK 状态并保留被包装工具的 XDG 环境，清理继承的 RTK 覆盖变量。
+ * @updated 2026-11-26T03:01:01+08:00
  */
 export const rtkRelease = {
   name: 'rtk-oss',
