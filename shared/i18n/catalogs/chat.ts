@@ -250,6 +250,7 @@ export const chat = {
   'window.estimated': ['窗口与分类为 SDK 估算。缓存命中率按输入 token 计算。', 'The SDK estimates window usage and categories. Cache hit rate is based on input tokens.'],
   'conversation.approvalHistory': ['查看审批记录', 'View approval history'],
   'conversation.approvalRequired': ['需要你的审批', 'Your approval is required'],
+  'conversation.assistant': ['助手', 'Assistant'],
   'conversation.attachment': ['附件 · {{name}}', 'Attachment · {{name}}'],
   'conversation.attachmentUnavailable': [
     '附件 · {{name}} · 已不可用',
@@ -278,7 +279,6 @@ export const chat = {
   'conversation.inheritedLabel': ['分支继承的对话', 'Conversation inherited by this branch'],
   'conversation.inheritedTitle': ['继承的对话', 'Inherited conversation'],
   'conversation.label': ['当前会话内容', 'Current conversation'],
-  'conversation.me': ['我', 'Me'],
   'conversation.newMessages': ['查看新消息 ↓', 'View new messages ↓'],
   'conversation.noReply': ['本轮没有文字回复', 'No text reply for this turn'],
   'conversation.openingApproval': ['正在打开审批…', 'Opening approval…'],
@@ -404,6 +404,7 @@ export const chat = {
   'mode.saved': ['运行模式 · 随会话保存', 'Run mode · saved for this session'],
   'model.cancel': ['取消', 'Cancel'],
   'model.choose': ['选择模型', 'Choose model'],
+  'model.settings': ['模型与推理深度', 'Model and reasoning effort'],
   'model.chooseEffort': ['选择推理深度', 'Choose reasoning effort'],
   'model.current': ['模型 · {{model}}', 'Model · {{model}}'],
   'model.default': ['默认', 'Default'],

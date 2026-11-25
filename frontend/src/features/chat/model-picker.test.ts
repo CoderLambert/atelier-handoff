@@ -74,7 +74,7 @@ test(
         function App() {
           const [model,setModel] = useState('saved-manual-id');
           const [effort,setEffort] = useState('low');
-          return <><ModelPicker model={model} effort={effort} defaultModel="workspace-default" disabled={false} onModelChange={setModel} onEffortChange={setEffort}/><output id="selection">{model}:{effort}</output></>;
+          return <><ModelPicker compact model={model} effort={effort} defaultModel="workspace-default" disabled={false} onModelChange={setModel} onEffortChange={setEffort}/><output id="selection">{model}:{effort}</output></>;
         }
         createRoot(document.getElementById('app')).render(<QueryClientProvider client={client}><App/></QueryClientProvider>);
       `,
@@ -129,6 +129,9 @@ test(
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${address.port}`);
+      const settings = page.getByRole('button', { name: '模型与推理深度', exact: true });
+      await settings.waitFor();
+      await settings.click();
       const picker = page.getByRole('combobox', { name: '选择模型', exact: true });
       await picker.click();
       await page
@@ -146,7 +149,7 @@ test(
       );
       assert.equal(
         await page.getByRole('combobox', { name: '选择推理深度', exact: true }).textContent(),
-        '深度 · 高',
+        '高',
       );
       assert.equal(await page.locator('#selection').textContent(), 'shared:low');
       await picker.click();
@@ -155,6 +158,13 @@ test(
       await input.fill('custom-manual');
       await page.getByRole('button', { name: '使用此模型', exact: true }).click();
       assert.equal(await page.locator('#selection').textContent(), 'custom-manual:low');
+      await settings.click();
+      const effort = page.getByRole('combobox', { name: '选择推理深度', exact: true });
+      await effort.click();
+      await page.getByRole('option', { name: '中', exact: true }).click();
+      assert.equal(await page.locator('#selection').textContent(), 'custom-manual:medium');
+      await effort.click();
+      await page.getByRole('option', { name: '低', exact: true }).click();
       await picker.click();
       await page.getByRole('option', { name: '刷新模型列表', exact: true }).click();
       await page.waitForFunction(

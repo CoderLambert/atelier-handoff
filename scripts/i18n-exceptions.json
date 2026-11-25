@@ -25,16 +25,6 @@
     "reason": "历史消息中缺少客户端名称时显示应用品牌"
   },
   {
-    "file": "frontend/src/features/chat/conversation.tsx",
-    "fingerprint": "b81f6e004bb81cfba73f",
-    "reason": "会话消息中的默认助手品牌保持固定拼写"
-  },
-  {
-    "file": "frontend/src/features/chat/conversation.tsx",
-    "fingerprint": "8da96668382a0933f51c",
-    "reason": "应用品牌的单字母头像占位符"
-  },
-  {
     "file": "frontend/src/features/extensions/editor.tsx",
     "fingerprint": "9e9d9d4bdf068e5c2369",
     "reason": "URL 协议格式的技术占位符"

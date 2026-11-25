@@ -1,13 +1,15 @@
 /**
  * @file 为会话选择网关模型和推理深度。
- * @implementation 按来源分组展示模型目录和可选深度，保留路由固定档位。Magpie 关闭时提示既有选择不可用，并在手动输入时校验。
- * @updated 2026-11-24T01:00:00+08:00
+ * @implementation 支持独立控件或组合弹层，按来源展示模型与可选深度，处理固定档位、目录降级和手动 ID 校验。
+ * @updated 2026-11-25T17:48:40+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useId, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { magpieModelPrefix, reasoningEfforts, type ReasoningEffort } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
   DialogClose,
@@ -47,6 +49,7 @@ export function ModelPicker({
   effort,
   defaultModel,
   disabled,
+  compact = false,
   onModelChange,
   onEffortChange,
 }: {
@@ -54,6 +57,7 @@ export function ModelPicker({
   effort?: ReasoningEffort;
   defaultModel: string;
   disabled: boolean;
+  compact?: boolean;
   onModelChange: (model?: string) => void;
   onEffortChange: (effort?: ReasoningEffort) => void;
 }) {
@@ -61,16 +65,18 @@ export function ModelPicker({
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [effortOpen, setEffortOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualInput, setManualInput] = useState('');
-  const catalog = useGatewayModels((open || effortOpen) && !disabled);
+  const catalog = useGatewayModels((settingsOpen || open || effortOpen) && !disabled);
   const workspaceDefault = catalog.data?.defaultModel ?? defaultModel;
   const models = catalog.data?.models ?? [];
   const currentModel = model ?? workspaceDefault;
   const magpieDisabled = (id: string) => !catalog.magpieEnabled && id.startsWith(magpieModelPrefix);
   const modelUnavailable = magpieDisabled(currentModel);
   const currentRoute = models.find((entry) => entry.id === currentModel);
+  const modelName = currentRoute?.displayName || currentModel || t('model.label');
   const fixedEffort = currentRoute?.effort;
   const selectedEffort =
     fixedEffort === undefined ? effort : reasoningEfforts.find((level) => level === fixedEffort);
@@ -126,8 +132,13 @@ export function ModelPicker({
     setOpen(false);
   }
 
-  return (
+  const controls = (
     <>
+      {compact ? (
+        <label htmlFor={`${id}-model`} className="text-sm font-medium">
+          {t('model.label')}
+        </label>
+      ) : null}
       <Select
         value={model === undefined ? defaultValue : modelValue(model)}
         open={open && !disabled}
@@ -139,6 +150,7 @@ export function ModelPicker({
             setManualInput(model ?? '');
             setManualOpen(true);
             setOpen(false);
+            setSettingsOpen(false);
           } else if (value === retryValue) {
             void catalog.refresh();
           } else if (value === defaultValue) {
@@ -150,9 +162,13 @@ export function ModelPicker({
         }}
       >
         <SelectTrigger
-          ref={triggerRef}
+          ref={compact ? undefined : triggerRef}
+          id={`${id}-model`}
           size="sm"
-          className="composer-ghost-select min-w-0 max-w-48 [&_[data-slot=select-value]]:min-w-0"
+          className={cn(
+            'min-w-0 [&_[data-slot=select-value]]:min-w-0',
+            compact ? 'w-full' : 'composer-ghost-select max-w-48',
+          )}
           aria-label={t('model.choose')}
           aria-describedby={modelUnavailable ? `${id}-model-help` : undefined}
           title={
@@ -168,7 +184,9 @@ export function ModelPicker({
             <span className="truncate">
               {modelUnavailable
                 ? t('model.magpieDisabled')
-                : t('model.current', { model: currentRoute?.displayName || currentModel })}
+                : compact
+                  ? modelName
+                  : t('model.current', { model: modelName })}
             </span>
           </SelectValue>
         </SelectTrigger>
@@ -265,6 +283,11 @@ export function ModelPicker({
           </SelectGroup>
         </SelectContent>
       </Select>
+      {compact ? (
+        <label htmlFor={`${id}-effort`} className="text-sm font-medium">
+          {t('model.effort')}
+        </label>
+      ) : null}
       <Select
         value={fixedEffort ?? effort ?? defaultValue}
         open={effortOpen && !effortDisabled}
@@ -280,14 +303,17 @@ export function ModelPicker({
         }}
       >
         <SelectTrigger
+          id={`${id}-effort`}
           size="sm"
-          className="composer-ghost-select shrink-0"
+          className={compact ? 'w-full' : 'composer-ghost-select shrink-0'}
           aria-label={t('model.chooseEffort')}
           aria-describedby={`${id}-effort-help`}
           aria-invalid={fixedEffort === undefined && unsupportedEffort}
           title={effortTitle}
         >
-          <SelectValue>{t('model.effortSummary', { effort: effortLabel })}</SelectValue>
+          <SelectValue>
+            {compact ? effortLabel : t('model.effortSummary', { effort: effortLabel })}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent position="popper" side="top" align="end" sideOffset={4}>
           <SelectGroup>
@@ -301,6 +327,47 @@ export function ModelPicker({
           </SelectGroup>
         </SelectContent>
       </Select>
+    </>
+  );
+
+  return (
+    <>
+      {compact ? (
+        <Popover open={settingsOpen && !disabled} onOpenChange={setSettingsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              ref={triggerRef}
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-label={t('model.settings')}
+              title={`${modelName} · ${effortLabel}`}
+              disabled={disabled}
+              className="max-w-60 min-w-0 gap-1.5"
+            >
+              <span className="truncate">
+                {modelUnavailable ? t('model.magpieDisabled') : modelName}
+              </span>
+              <span className="shrink-0 text-muted-foreground">{effortLabel}</span>
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            aria-label={t('model.settings')}
+            className="grid w-72 max-w-[calc(100vw-24px)] gap-2 p-3"
+            onCloseAutoFocus={(event) => {
+              if (manualOpen) event.preventDefault();
+            }}
+          >
+            {controls}
+            {effortDisabled || unsupportedEffort ? (
+              <p className="text-xs text-muted-foreground">{effortTitle}</p>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      ) : (
+        controls
+      )}
       {modelUnavailable ? (
         <span id={`${id}-model-help`} className="sr-only">
           {magpieNotice}

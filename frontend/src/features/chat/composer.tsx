@@ -1,7 +1,7 @@
 /**
  * @file 提供任务输入、引用和附件编辑。
- * @implementation 按会话工作目录的状态控制发送和上下文选择，保留草稿、队列与实时插入。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 按会话状态控制上下文选择及统一提交入口，协调发送、入队、实时插入、停止与草稿。
+ * @updated 2026-11-25T17:48:40+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
@@ -560,6 +560,7 @@ export function Composer({
               hasRuns={snapshot.runs.length > 0}
             />
             <ModelPicker
+              compact
               model={draft.model}
               effort={draft.effort}
               defaultModel={defaultModel}
@@ -569,30 +570,24 @@ export function Composer({
             />
             <Button
               type="submit"
-              size={queueing ? 'sm' : 'icon'}
+              size="icon"
               className="shrink-0"
               disabled={!canSend}
               aria-label={sendLabel}
-              title={sendLabel}
+              title={t('composer.sendTask') + (insertRunId ? t('composer.insertShortcut') : '')}
             >
-              {queueing ? (
-                t('composer.queue')
-              ) : (
-                <ArrowUp data-icon="inline-start" aria-hidden="true" />
-              )}
+              <ArrowUp aria-hidden="true" />
             </Button>
           </div>
         </div>
       </div>
-      <div className="composer-footer" data-quick-insert={insertRunId ? '' : undefined}>
-        <span id="input-help">
-          {t('composer.keyboardHelp', {
-            action: t(queueing ? 'composer.queueAction' : 'composer.sendAction'),
-            insertHelp: insertRunId ? t('composer.insertShortcut') : '',
-          })}
-        </span>
-        <span>{t(modeFooter[mode])}</span>
-      </div>
+      <p id="input-help" className="sr-only">
+        {t('composer.keyboardHelp', {
+          action: t(queueing ? 'composer.queueAction' : 'composer.sendAction'),
+          insertHelp: insertRunId ? t('composer.insertShortcut') : '',
+        })}{' '}
+        {t(modeFooter[mode])}
+      </p>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
         {draftActionError ||
           (quoteTooLong ? t('composer.quoteTooLong') : '') ||
