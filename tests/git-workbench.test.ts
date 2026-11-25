@@ -1,7 +1,7 @@
 /**
  * @file 验证本机 Git 看板、开发会话和暂存提交。
- * @implementation 使用独立 SQLite、真实 Git 和回环模型验证目录生命周期及暂存核对。
- * @updated 2026-11-24T04:50:56+08:00
+ * @implementation 使用独立 SQLite、真实 Git 和回环模型验证目录生命周期、单文件索引范围及暂存提交核对。
+ * @updated 2026-11-25T13:35:57+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type { Session, Run, Project } from '../shared/types.js';
@@ -131,6 +131,48 @@ test('Git board reads the exact stage, file diff, local refs, and paged commits'
       const commit = await request<{ text: string }>(url + '/commits/' + head);
       assert.match(commit.text, /\+base/);
       assert.deepEqual(await readFile(join(repo, '.git/index')), originalIndex);
+    } finally {
+      await app.close();
+    }
+  }));
+
+test('Git file actions update only the selected index entries and preserve working files', () =>
+  fixture(async (repo, data, base) => {
+    const name = ':(glob)*.txt';
+    await writeFile(join(repo, name), 'new literal path\n');
+    await writeFile(join(repo, 'unrelated.txt'), 'outside selected path\n');
+    git(repo, 'mv', 'same.txt', 'renamed.txt');
+    const initial = join(base, 'initial repository');
+    await mkdir(initial);
+    git(initial, 'init', '-b', 'main');
+    await writeFile(join(initial, 'first.txt'), 'first file\n');
+
+    const app = await createApp({ root, data });
+    try {
+      const request = await client(app);
+      const bind = async (path: string) => {
+        const { project } = await request<{ project: Project }>('/api/projects', 'POST', { path }, 201);
+        return '/api/projects/' + project.id + '/git/worktrees/' + project.id + '/file-index';
+      };
+      const index = await bind(repo);
+      await request(index, 'POST', { path: name, layer: 'untracked' });
+      assert.equal(git(repo, 'diff', '--cached', '--name-only', '-z'), name + '\0renamed.txt\0');
+      await request(index, 'POST', { path: name, layer: 'untracked' }, 404);
+      await request(index, 'POST', { path: 'renamed.txt', layer: 'staged' });
+      assert.equal(git(repo, 'diff', '--cached', '--name-only', '-z'), name + '\0');
+      assert.equal(await readFile(join(repo, 'renamed.txt'), 'utf8'), 'base\n');
+      await request(index, 'POST', { path: 'same.txt', layer: 'unstaged' });
+      assert.equal(git(repo, 'diff', '--cached', '--name-only', '-z'), name + '\0same.txt\0');
+      await request(index, 'POST', { path: name, layer: 'staged' });
+      assert.equal(await readFile(join(repo, name), 'utf8'), 'new literal path\n');
+
+      const firstIndex = await bind(initial);
+      await request(firstIndex, 'POST', { path: 'first.txt', layer: 'untracked' });
+      assert.equal(git(initial, 'diff', '--cached', '--name-only'), 'first.txt\n');
+      await writeFile(join(initial, 'first.txt'), 'first file with a later edit\n');
+      await request(firstIndex, 'POST', { path: 'first.txt', layer: 'staged' });
+      assert.equal(git(initial, 'status', '--short'), '?? first.txt\n');
+      assert.equal(await readFile(join(initial, 'first.txt'), 'utf8'), 'first file with a later edit\n');
     } finally {
       await app.close();
     }
