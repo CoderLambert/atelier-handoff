@@ -6,7 +6,7 @@
 // Adapted from shadcn/ui new-york-v4/select (https://ui.shadcn.com/r/styles/new-york-v4/select.json).
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon } from 'lucide-react';
 import { cn } from './utils';
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -24,15 +24,19 @@ function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.V
 function SelectTrigger({
   className,
   size = 'default',
+  presentation = 'field',
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: 'sm' | 'default';
+  presentation?: 'field' | 'menu';
 }) {
+  const Chevron = presentation === 'menu' ? ChevronRightIcon : ChevronDownIcon;
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
+      data-presentation={presentation}
       className={cn(
         'flex w-fit min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm whitespace-nowrap',
         'transition-colors duration-(--motion-feedback) motion-reduce:transition-none',
@@ -41,13 +45,15 @@ function SelectTrigger({
         'data-[size=default]:h-(--ui-size-md) data-[size=sm]:h-(--ui-size-sm)',
         '*:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2',
         '[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-(--ui-icon-size)',
+        presentation === 'menu' &&
+          'w-full justify-start border-transparent bg-transparent px-2.5 hover:bg-accent *:data-[slot=select-value]:ml-auto *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:justify-end *:data-[slot=select-value]:text-muted-foreground [&[data-disabled]>svg]:invisible',
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="text-muted-foreground" aria-hidden="true" />
+        <Chevron className="text-muted-foreground" aria-hidden="true" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );

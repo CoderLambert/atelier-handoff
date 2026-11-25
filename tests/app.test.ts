@@ -723,12 +723,16 @@ test('real HTTP and SQLite: projects, isolated drafts, idempotent runs, uploads,
         { ...message, text: 'different' },
         409,
       );
-      await request(
+      const sharedRun = (await request(
         `/api/sessions/${s2.id}/messages`,
         'POST',
-        { text: 'conflicting run', idempotencyKey: randomUUID() },
-        409,
-      );
+        { text: 'independent run in the same project', idempotencyKey: randomUUID() },
+        202,
+      )).run;
+      assert.equal(starts, 2);
+      assert.equal(sharedRun.sessionId, s2.id);
+      assert.equal(app.store.get('runs', run.id).status, 'running');
+      await request(`/api/runs/${sharedRun.id}/stop`, 'POST', {});
       await mkdir(join(project, 'nested'));
       const nestedProject = (
         await request('/api/projects', 'POST', { path: join(project, 'nested') }, 201)

@@ -18,6 +18,18 @@ export const common = {
   ],
   'errors.permissionExpired': ['审批已失效。', 'The approval request is no longer active.'],
   'errors.busy': ['工作台正忙，请稍后重试。', 'The workbench is busy. Try again in a moment.'],
+  'errors.bashControlUnavailable': [
+    '当前命令无法接受此操作，请检查运行状态。',
+    'This command cannot accept the action. Check its current status.',
+  ],
+  'errors.bashControlBusy': [
+    '命令正在处理另一项操作。',
+    'Another action is in progress for this command.',
+  ],
+  'errors.bashControlUnconfirmed': [
+    'SDK 未确认命令操作，请检查当前状态。',
+    'The SDK did not confirm the action. Check the current status.',
+  ],
   'errors.fileActionFailed': ['文件操作失败，请重试。', 'The file operation failed. Try again.'],
   'errors.fileActionUnavailable': [
     '当前环境不支持原生文件操作。',

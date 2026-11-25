@@ -35,6 +35,8 @@ export const inspector = {
   'permission.modify': ['修改文件', 'Modify file'],
   'status.queued': ['排队中', 'Queued'],
   'status.running': ['运行中', 'Running'],
+  'status.background': ['后台运行', 'Running in background'],
+  'status.resultUnknown': ['结果待确认', 'Result unconfirmed'],
   'status.awaitingPermission': ['等待审批', 'Awaiting approval'],
   'status.stopping': ['停止中', 'Stopping'],
   'status.completed': ['已完成', 'Completed'],
@@ -502,6 +504,21 @@ export const inspector = {
     'The command is running in the background; waiting for the final receipt.',
   ],
   'tool.commandInterrupted': ['命令已中断。', 'The command was interrupted.'],
+  'tool.moveBashToBackground': ['转到后台', 'Move to background'],
+  'tool.stopBash': ['停止命令', 'Stop command'],
+  'tool.stopAwaitingReceipt': [
+    '已请求停止，等待 SDK 回执。',
+    'Stop requested. Waiting for the SDK receipt.',
+  ],
+  'tool.bashResultUnknown': [
+    '未收到命令终态，请核对实际结果。',
+    'The final command receipt is missing. Check the actual result.',
+  ],
+  'tool.lastBashObservation': ['最近活动 {{time}}', 'Last activity {{time}}'],
+  'tool.bashMovedAtTimeout': [
+    '前台运行 {{duration}} 后转入后台。',
+    'Moved to the background after {{duration}} in the foreground.',
+  ],
   'tool.deniedOutput': [
     '操作已拒绝，未记录输出。',
     'The operation was denied; no output was recorded.',

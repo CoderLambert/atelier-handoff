@@ -4,10 +4,13 @@
  * @updated 2026-11-23T05:10:55+08:00
  */
 .atelier-sidebar {
+  --sidebar-surface: color-mix(in oklab, var(--ui-card) 68%, var(--ui-sidebar));
+  --sidebar-row-hover: color-mix(in oklab, var(--ui-muted-foreground) 7%, var(--sidebar-surface));
+  --sidebar-row-selected: color-mix(in oklab, var(--ui-muted-foreground) 14%, var(--sidebar-surface));
   width: 100%;
   height: 100%;
   padding: var(--space-4) var(--space-3) var(--space-3);
-  background: var(--ui-sidebar);
+  background: var(--sidebar-surface);
   color: var(--ui-sidebar-foreground);
   border-inline-end: 1px solid var(--ui-border);
 }
@@ -106,9 +109,7 @@
 
 .atelier-sidebar .nav-item[aria-current='page'],
 .atelier-sidebar .sidebar-bottom [aria-current='page'] {
-  background: var(--ui-card);
-  border: 1px solid var(--ui-border);
-  box-shadow: 0 1px 2px var(--ui-shadow);
+  background: var(--sidebar-row-selected);
   color: var(--ui-foreground);
   font-weight: 600;
 }
@@ -164,7 +165,7 @@
 }
 
 .sidebar-project + .sidebar-project {
-  margin-block-start: 12px;
+  margin-block-start: 8px;
 }
 
 .sidebar-project-heading {
@@ -249,88 +250,59 @@
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   min-width: 0;
-  min-height: 38px;
+  min-height: 32px;
   padding: 0 4px;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  transition: all var(--motion-feedback) ease;
+  transition: background-color var(--motion-feedback) ease;
 }
 
 .atelier-sidebar .sidebar-session-row:hover,
 .atelier-sidebar .sidebar-session-row:focus-within,
 .sidebar-project-toggle:hover:not(:disabled) {
-  background: var(--ui-accent);
+  background: var(--sidebar-row-hover);
 }
 
 .atelier-sidebar .sidebar-session-row[data-selected] {
-  position: relative;
-  background: var(--ui-card);
-  border-color: var(--ui-border);
-  box-shadow: 0 1px 2px var(--ui-shadow);
+  background: var(--sidebar-row-selected);
   color: var(--ui-foreground);
-}
-
-.atelier-sidebar .sidebar-session-row[data-selected]::before {
-  content: '';
-  position: absolute;
-  inset-block: 7px;
-  inset-inline-start: 0;
-  width: 2.5px;
-  border-radius: var(--radius-pill);
-  background: var(--ui-primary);
-  pointer-events: none;
 }
 
 .atelier-sidebar .history-item,
 .atelier-sidebar .history-item.selected {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   width: 100%;
   min-width: 0;
-  padding: 5px 2px 5px 3px;
-  gap: 2px;
+  min-height: 32px;
+  padding: 4px 3px;
+  gap: 6px;
   margin: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.atelier-sidebar .history-title,
-.atelier-sidebar .history-meta > .truncate {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.atelier-sidebar .history-item:first-child {
+  grid-column: span 2;
+  padding-inline-start: 21px;
 }
 
 .atelier-sidebar .history-title {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.3;
 }
 
 .atelier-sidebar .sidebar-session-row[data-selected] .history-title {
-  font-weight: 650;
-}
-
-.atelier-sidebar .history-disclosure,
-.sidebar-disclosure-space {
-  width: 18px;
-}
-
-.sidebar-disclosure-space {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 27px;
-  align-self: start;
-}
-
-.sidebar-disclosure-space.has-status {
-  cursor: pointer;
+  font-weight: 600;
 }
 
 .atelier-sidebar .history-disclosure {
   position: relative;
+  width: 18px;
   min-height: 24px;
   height: 24px;
   padding: 0;
@@ -349,51 +321,70 @@
   font-size: 11px;
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.atelier-sidebar .history-meta > svg {
+.history-meta-icon {
+  display: inline-flex;
+}
+
+.history-meta-icon > svg {
   flex: none;
   width: 11px;
   height: 11px;
 }
 
-.sidebar-status-ring {
-  display: inline-block;
-  flex: none;
-  width: 10px;
-  height: 10px;
+.sidebar-session-status {
+  position: absolute;
+  inset-block-start: calc(50% - 4px);
+  inset-inline-start: 5px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 1.5px solid var(--ui-success);
-  background: transparent;
-  box-sizing: border-box;
-  transition: all var(--motion-feedback) ease;
+  background: var(--session-status-color, var(--ui-muted-foreground));
 }
 
-.sidebar-status-ring--disclosure {
-  position: absolute;
-  top: 2px;
-  right: 2px;
+.sidebar-session-row[data-status='idle'] .sidebar-session-status {
+  background: color-mix(in oklab, var(--ui-muted-foreground) 48%, var(--sidebar-surface));
+}
+
+.sidebar-session-row[data-status='idle'] .history-item .sidebar-session-status {
+  inset-block-start: calc(50% - 3px);
+  inset-inline-start: 6px;
   width: 6px;
   height: 6px;
-  border-width: 1.2px;
 }
 
-.sidebar-disclosure-space[data-status='running'] .sidebar-status-ring,
-.history-disclosure[data-status='running'] .sidebar-status-ring {
-  border-color: var(--ui-success);
-  animation: herdr-ring-breathe 2s ease-in-out infinite;
+.history-disclosure .sidebar-session-status {
+  inset-block-start: 2px;
+  inset-inline: auto 2px;
+  width: 6px;
+  height: 6px;
 }
 
-.sidebar-disclosure-space[data-status='awaiting_permission'] .sidebar-status-ring,
-.sidebar-disclosure-space[data-status='queued'] .sidebar-status-ring,
-.sidebar-disclosure-space[data-status='stopping'] .sidebar-status-ring,
-.history-disclosure[data-status='awaiting_permission'] .sidebar-status-ring,
-.history-disclosure[data-status='queued'] .sidebar-status-ring,
-.history-disclosure[data-status='stopping'] .sidebar-status-ring {
-  border-color: var(--ui-warning);
+.sidebar-session-row[data-status='completed'] {
+  --session-status-color: var(--ui-success);
 }
 
-@keyframes herdr-ring-breathe {
+.sidebar-session-row[data-status='running'] {
+  --session-status-color: var(--ui-info);
+}
+
+.sidebar-session-row:is([data-status='awaiting_permission'], [data-status='stopping']) {
+  --session-status-color: var(--ui-warning);
+}
+
+.sidebar-session-row:is([data-status='failed'], [data-status='interrupted']) {
+  --session-status-color: var(--ui-destructive);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-session-row[data-status='running'] .sidebar-session-status {
+    animation: sidebar-running-pulse 2s ease-in-out infinite;
+  }
+}
+
+@keyframes sidebar-running-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);

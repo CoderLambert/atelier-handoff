@@ -24,6 +24,7 @@ import { documentAttachmentMime } from '../shared/document-attachments.js';
 import { validateDocumentFile } from './attachment-document-reader.js';
 import {
   captureSdkBashLog,
+  captureSdkBashTaskLog,
   discardCapturedBashLog,
   publishBashLog,
   readCapturedBashLog,
@@ -376,6 +377,7 @@ export class FileRecords {
     response: unknown,
     signal?: AbortSignal,
     sdkActorId?: string,
+    task?: { scratch: string; id: string; outputFile: string },
   ): Promise<ToolCall['bashLog']> {
     try {
       signal?.throwIfAborted();
@@ -397,7 +399,7 @@ export class FileRecords {
           (currentTool.status !== 'running' && currentTool.status !== 'awaiting_permission') ||
           currentRun.sessionId !== session.id ||
           currentRun.projectId !== project.id ||
-          currentRun.status !== 'running' ||
+          !['running', 'awaiting_permission'].includes(currentRun.status) ||
           currentSession.projectId !== project.id ||
           currentSession.sdkSessionId !== sdkSessionId ||
           currentProject.path !== project.path ||
@@ -411,13 +413,10 @@ export class FileRecords {
       assertCurrent();
       // Only the caller can bind the opaque spill filename to this exact SDK Hook.
       // Keep response and toolUseId paired; serialize duplicate completion/cancel cleanup.
-      const snapshot = await captureSdkBashLog(
-        sdkRoot,
-        project.path,
-        sdkSessionId,
-        response,
-        signal,
-      );
+      const cwd = run.workspacePath ?? project.path;
+      const snapshot = task
+        ? await captureSdkBashTaskLog(task.scratch, cwd, sdkSessionId, task, signal)
+        : await captureSdkBashLog(sdkRoot, cwd, sdkSessionId, response, signal);
       if (!snapshot) return undefined;
       return await publishBashLog(
         this.store.directory,

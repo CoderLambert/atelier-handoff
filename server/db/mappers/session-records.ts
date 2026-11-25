@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { contextUsageSchema } from '../../../shared/context-usage.js';
+import { bashExecutionSchema } from '../../../shared/bash-execution.js';
 import { messageQuotesSchema } from '../../../shared/message-quotes.js';
 import {
   AppError,
@@ -161,6 +162,7 @@ export const records = {
     endedAt: nullable,
     outputLength: num.optional(),
     outputTruncated: z.boolean().optional(),
+    bashExecution: bashExecutionSchema.optional(),
     bashLog: obj({
       status: z.enum(['complete', 'partial', 'unavailable', 'receipt-only']),
       bytes: z.int().nonnegative().optional(),

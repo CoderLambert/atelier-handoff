@@ -16,5 +16,6 @@ export const runKeys = {
   trace: (id: string) => ['trace', id] as const,
   stop: (id: string) => ['runs', id, 'stop'] as const,
   stopSubagent: (id: string) => ['runs', id, 'subagents', 'stop'] as const,
+  bash: (id: string) => ['runs', id, 'tools', 'bash'] as const,
   retry: (id: string) => ['runs', id, 'retry'] as const,
 };

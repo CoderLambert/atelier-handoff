@@ -268,6 +268,7 @@ test('a queued write waits for the execution-time authorization check', async ()
   const first = writes.run(
     () => {},
     () => occupied.promise,
+    '/shared',
   );
   let written = false;
   const pending = writes.run(
@@ -278,6 +279,15 @@ test('a queued write waits for the execution-time authorization check', async ()
     async () => {
       written = true;
     },
+    '/shared',
+  );
+  assert.equal(
+    await writes.run(
+      () => {},
+      async () => 'separate',
+      '/independent',
+    ),
+    'separate',
   );
   const rejected = assert.rejects(pending, /workspace moved/u);
   occupied.open();

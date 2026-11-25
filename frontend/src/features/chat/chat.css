@@ -1215,11 +1215,8 @@
 .chat-conversation .run-progress {
   display: grid;
   gap: 8px;
-  margin-block: 12px;
-  padding: 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
-  background: var(--ui-muted);
+  max-inline-size: var(--ui-reading-width);
+  margin-block: 0 12px;
   color: var(--ui-foreground);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
@@ -1227,13 +1224,8 @@
 
 .chat-conversation .run-progress[data-active='false'] {
   gap: 6px;
-  max-inline-size: var(--ui-reading-width);
-  margin-block: 0 12px;
   padding: 0 0 6px;
-  border: 0;
   border-block-end: 1px solid var(--ui-border-subtle);
-  border-radius: 0;
-  background: transparent;
 }
 
 .chat-conversation .run-history-toggle,
@@ -1279,27 +1271,27 @@
 .chat-conversation .run-progress-head {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  min-width: 0;
+  min-height: var(--ui-size-xs);
 }
 
 .chat-conversation .run-progress-head strong {
-  color: var(--ui-info);
+  font-weight: 500;
 }
 
-.chat-conversation .run-progress[data-status='awaiting_permission'] .run-progress-head strong,
-.chat-conversation .run-progress[data-status='stopping'] .run-progress-head strong {
-  color: var(--ui-warning);
+.chat-conversation .run-progress-head strong::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 8px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--run-live-indicator, var(--ui-info));
 }
 
-.chat-conversation .run-progress-head span,
-.chat-conversation .run-progress-tools {
-  color: var(--ui-muted-foreground);
-  font-size: var(--text-xs);
-}
-
-.chat-conversation .run-progress-tools {
-  margin: 0;
+.chat-conversation .run-progress:is([data-status='awaiting_permission'], [data-status='stopping']) {
+  --run-live-indicator: var(--ui-warning);
 }
 
 .chat-task-plan {
@@ -1408,15 +1400,26 @@
   margin-block: 6px 4px;
 }
 
+.run-progress[data-active='true'] .run-tool-activity {
+  margin-block: 0;
+}
+
+.run-live-activity-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-block-end: 4px;
+  border-block-end: 1px solid var(--ui-border-subtle);
+}
+
 .run-activity-toggle {
-  justify-self: start;
-  min-height: var(--ui-size-xs);
-  padding: 0 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
-  background: var(--ui-muted);
-  color: var(--ui-secondary-foreground);
+  flex: none;
+  padding-inline: 6px;
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .run-activity-failed {
@@ -1428,10 +1431,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.run-activity-toggle:hover {
-  background: var(--ui-accent);
-  color: var(--ui-foreground);
-  border-color: var(--ui-border);
+.run-live-activity-bar .run-activity-failed {
+  margin-inline-start: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .run-activity-toggle[aria-expanded='true'] > svg {
@@ -1453,6 +1456,18 @@
   gap: 8px;
   min-width: 0;
   margin-top: 8px;
+}
+
+.run-progress[data-active='true'] .run-tool-list {
+  gap: 0;
+  margin-top: 4px;
+}
+
+.run-progress[data-active='true'] .run-tool-list > .tool-detail {
+  border: 0;
+  border-block-end: 1px solid var(--ui-border-subtle);
+  border-radius: 0;
+  background: transparent;
 }
 
 .chat-conversation .run-recovery {

@@ -1,20 +1,22 @@
 /**
  * @file 管理工作区界面与会话交互状态。
- * @implementation 使用 Redux 保存导航、会话草稿、提交状态和各会话的临时搜索费用上限。
- * @updated 2026-11-20T15:58:31+08:00
+ * @implementation 使用 Redux 保存导航、连接状态、草稿、提交状态、临时搜索费用上限和各会话未查看的运行结果。
+ * @updated 2026-11-25T19:11:00+08:00
  */
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
-import type { Draft } from '@shared/types';
+import type { Draft, RunStatus } from '@shared/types';
 
 export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents' | 'settings';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
+type UnseenRunOutcome = Extract<RunStatus, 'completed' | 'failed' | 'interrupted'>;
 interface WorkspaceState {
   drawer?: 'navigation' | 'details';
   connected: boolean;
   drafts: Record<string, Draft>;
   searchChargeLimits: Record<string, string>;
   submitting: Record<string, boolean>;
+  unseenRunOutcomes: Record<string, UnseenRunOutcome | undefined>;
 }
 
 const initialState: WorkspaceState = {
@@ -22,6 +24,7 @@ const initialState: WorkspaceState = {
   drafts: {},
   searchChargeLimits: {},
   submitting: {},
+  unseenRunOutcomes: {},
 };
 const workspace = createSlice({
   name: 'workspace',
@@ -32,6 +35,12 @@ const workspace = createSlice({
     },
     setConnected(state, action: PayloadAction<boolean>) {
       state.connected = action.payload;
+    },
+    markRunOutcome(state, action: PayloadAction<{ sessionId: string; status: UnseenRunOutcome }>) {
+      state.unseenRunOutcomes[action.payload.sessionId] = action.payload.status;
+    },
+    acknowledgeRunOutcome(state, action: PayloadAction<string>) {
+      delete state.unseenRunOutcomes[action.payload];
     },
     setDraft(state, action: PayloadAction<{ id: string; draft: Draft }>) {
       state.drafts[action.payload.id] = action.payload.draft;

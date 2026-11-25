@@ -326,6 +326,15 @@ export class Store {
     this.transaction(() => {
       for (const subagent of this.subagents.interruptRunning(now()))
         this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
+      for (const tool of this.list('tools')) {
+        if (!tool.bashExecution || tool.endedAt || tool.status !== 'running') continue;
+        this.update('tools', tool.id, {
+          status: 'canceled',
+          endedAt: now(),
+          bashExecution: { ...tool.bashExecution, phase: 'unknown', controllable: false },
+        });
+        this.event(tool.runId, tool.sessionId, 'tool.finished', { toolCallId: tool.id, status: 'canceled' });
+      }
       for (const run of this.list('runs'))
         if (activeStatuses.includes(run.status)) {
           this.update('runs', run.id, {

@@ -121,6 +121,9 @@ const errors = new Map<string, keyof typeof import('@shared/i18n/catalogs/common
   ['PATH_DENIED', 'errors.pathDenied'],
   ['SESSION_ARCHIVED', 'errors.sessionArchived'],
   ['RUN_ACTIVE', 'errors.runActive'],
+  ['BASH_CONTROL_UNAVAILABLE', 'errors.bashControlUnavailable'],
+  ['BASH_CONTROL_BUSY', 'errors.bashControlBusy'],
+  ['BASH_CONTROL_UNCONFIRMED', 'errors.bashControlUnconfirmed'],
 ]);
 
 type GitErrorKey = Extract<

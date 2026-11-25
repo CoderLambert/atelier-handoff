@@ -12,8 +12,51 @@ import { tmpdir } from 'node:os';
 import { Store } from '../server/store.js';
 import { FileRecords } from '../server/artifacts.js';
 import { fingerprint } from '../server/files.js';
-import { MAX_BASH_LOG_BYTES } from '../server/bash-log-capture.js';
+import { MAX_BASH_LOG_BYTES, captureSdkBashTaskLog } from '../server/bash-log-capture.js';
 import { emptyDraft, now } from '../shared/types.js';
+
+test(
+  'Bash task log is bound to its private root, workspace, session and task',
+  {
+    skip: process.platform !== 'linux',
+  },
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'atelier-log-task-'));
+    try {
+      const scratch = await mkdtemp(join(root, 'task-'));
+      const worktree = join(root, 'actual worktree');
+      const sessionId = randomUUID();
+      const id = 'b1-fixture';
+      const directory = join(
+        scratch,
+        'claude-' + process.geteuid?.(),
+        worktree.replace(/[^a-zA-Z0-9]/g, '-'),
+        sessionId,
+        'tasks',
+      );
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      const outputFile = join(directory, id + '.output');
+      const otherFile = join(root, 'other.output');
+      await writeFile(otherFile, 'outside');
+      await symlink(otherFile, outputFile);
+      const capture = () => captureSdkBashTaskLog(scratch, worktree, sessionId, { id, outputFile });
+      await assert.rejects(capture());
+      await unlink(outputFile);
+      await writeFile(outputFile, 'actual result\n', { mode: 0o600 });
+      assert.equal((await capture()).bytes.toString(), 'actual result\n');
+      await assert.rejects(
+        captureSdkBashTaskLog(scratch, worktree, randomUUID(), { id, outputFile }),
+        /outside its session/,
+      );
+      await assert.rejects(
+        captureSdkBashTaskLog(scratch, worktree, sessionId, { id: 'other-task', outputFile }),
+        /outside its session/,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   'large child Bash output is bounded, remains readable after reopen and follows session cleanup',

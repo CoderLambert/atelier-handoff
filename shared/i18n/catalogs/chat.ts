@@ -8,6 +8,8 @@ export const chat = {
   'activity.calls_other': ['工具调用 · {{count}} 次', 'Tool calls · {{count}}'],
   'activity.failedCount_one': ['{{count}} 次失败', '{{count}} failed'],
   'activity.failedCount_other': ['{{count}} 次失败', '{{count}} failed'],
+  'activity.label': ['工具调用', 'Tool calls'],
+  'activity.liveCount': ['{{finished}} / {{total}} 已结束', '{{finished}} / {{total}} finished'],
   'activity.showEarlier_one': ['再显示 {{count}} 次', 'Show {{count}} earlier call'],
   'activity.showEarlier_other': ['再显示 {{count}} 次', 'Show {{count}} earlier calls'],
   'activity.visibleCount': ['已显示 {{shown}} / {{total}} 次', 'Showing {{shown}} of {{total}}'],
@@ -100,7 +102,7 @@ export const chat = {
   'composer.editingLabel': ['编辑后将作为新一轮发送', 'Edits will be sent as a new turn'],
   'composer.extensions': ['任务扩展', 'Task extensions'],
   'composer.failedUpload': ['{{name}} · 失败：{{error}} ×', '{{name}} · Failed: {{error}} ×'],
-  'composer.insertShortcut': [' · Alt + Enter 立即插入', ' · Alt + Enter to insert now'],
+  'composer.insertShortcut': [' · Ctrl + Enter 立即插入', ' · Ctrl + Enter to insert now'],
   'composer.issueSeparator': ['；', '; '],
   'composer.keyboardHelp': [
     'Enter {{action}} · Shift + Enter 换行{{insertHelp}}',
@@ -553,18 +555,13 @@ export const chat = {
   'plan.label': ['任务', 'Tasks'],
   'plan.pending': ['待执行', 'Pending'],
   'progress.awaitingApproval': ['等待操作审批', 'Waiting for action approval'],
-  'progress.callingTool': ['正在调用工具 · {{name}}', 'Calling tool · {{name}}'],
+  'progress.callingTool': ['正在调用 {{name}}', 'Calling {{name}}'],
+  'progress.backgroundBash': ['Bash 在后台运行', 'Bash running in background'],
+  'progress.stoppingBash': ['正在停止 Bash', 'Stopping Bash'],
   'progress.history': ['本轮执行记录', 'Execution history for this turn'],
   'progress.historyDuration': ['{{status}} · 用时 {{duration}}', '{{status}} · {{duration}} elapsed'],
   'progress.label': ['本轮执行进度', 'Execution progress for this turn'],
-  'progress.minutesAgo_one': [
-    '上次更新于 {{count}} 分 {{seconds}} 秒前',
-    'Last updated {{count}} min {{seconds}} sec ago',
-  ],
-  'progress.minutesAgo_other': [
-    '上次更新于 {{count}} 分 {{seconds}} 秒前',
-    'Last updated {{count}} min {{seconds}} sec ago',
-  ],
+  'progress.lastActivity': ['最近活动于 {{time}}', 'Last activity at {{time}}'],
   'progress.planSummary_one': [
     '任务计划 · {{completed}} / {{count}} 已完成',
     'Task plan · {{completed}} / {{count}} complete',
@@ -575,10 +572,6 @@ export const chat = {
   ],
   'progress.queued': ['等待执行', 'Waiting to run'],
   'progress.receiving': ['正在接收回复', 'Receiving reply'],
-  'progress.recentTool': [
-    ' · 最近工具 {{name}}（{{status}}）',
-    ' · Latest tool {{name}} ({{status}})',
-  ],
   'progress.retryingModel': ['等待模型重试结果', 'Waiting for the model retry result'],
   'progress.runningSubtasks_one': [
     '正在执行子任务 · {{count}} 个进行中',
@@ -588,18 +581,8 @@ export const chat = {
     '正在执行子任务 · {{count}} 个进行中',
     'Running subtasks · {{count}} in progress',
   ],
-  'progress.secondsAgo_one': ['上次更新于 {{count}} 秒前', 'Last updated {{count}} second ago'],
-  'progress.secondsAgo_other': ['上次更新于 {{count}} 秒前', 'Last updated {{count}} seconds ago'],
   'progress.starting': ['正在启动模型会话', 'Starting model session'],
   'progress.stopping': ['正在停止', 'Stopping'],
-  'progress.toolsFinished_one': [
-    '工具调用 {{finished}} / {{count}} 已结束{{recent}}',
-    'Tool calls: {{finished}} / {{count}} finished{{recent}}',
-  ],
-  'progress.toolsFinished_other': [
-    '工具调用 {{finished}} / {{count}} 已结束{{recent}}',
-    'Tool calls: {{finished}} / {{count}} finished{{recent}}',
-  ],
   'progress.waitingModel': ['正在等待模型回复', 'Waiting for the model to reply'],
   'queue.deliveryFailed': [
     '消息投递未确认，请检查状态后重试。',
@@ -612,12 +595,15 @@ export const chat = {
   'queue.label': ['待处理消息', 'Pending messages'],
   'queue.ordered': ['按顺序发送', 'Send in order'],
   'queue.paused': ['已暂停', 'Paused'],
-  'queue.prioritize': ['优先执行', 'Prioritize'],
+  'queue.prioritize': ['停止本轮并发送', 'Stop turn and send'],
   'queue.prioritizeFailed': [
     '优先执行失败：请重试',
     'Could not prioritize the message. Try again.',
   ],
-  'queue.prioritizeMessage': ['优先执行消息 {{number}}', 'Prioritize message {{number}}'],
+  'queue.prioritizeMessage': [
+    '停止本轮并发送消息 {{number}}',
+    'Stop turn and send message {{number}}',
+  ],
   'queue.prioritizing': ['正在优先执行…', 'Prioritizing…'],
   'queue.priorityHelp': [
     '优先执行会停止当前轮，再执行这条消息。',
@@ -710,6 +696,10 @@ export const chat = {
   'session.insertUnconfirmed': [
     '消息已提交。立即插入未确认，请在待处理消息中查看状态。',
     'The message was submitted. Insertion is unconfirmed. Check its status in pending messages.',
+  ],
+  'session.insertRequiresStop': [
+    '消息已排队，可选择「停止本轮并发送」。',
+    'Message queued. Select Stop turn and send to continue now.',
   ],
   'session.refreshFailed': [
     '任务已发送，刷新会话失败。',

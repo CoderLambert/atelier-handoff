@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 组织会话、Git、审批和运行接口。校验多提交快照，按所选模型分派分析或对话修改，并协调恢复与进度读取。
- * @updated 2026-11-25T01:22:11+08:00
+ * @implementation 组织会话、Git、审批和运行接口。校验多提交快照和命令归属，并向所属运行投递原生 Bash 操作和队列消息。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -29,6 +29,7 @@ import { publicSession, SessionForks, sessionForkRequest } from './session-forks
 import { MessageQueue, type PendingSessionMessage } from './message-queue.js';
 import { serveClient } from './client-assets.js';
 import { AgentRunner, type AttachmentImages, type Runner } from './agent.js';
+import { bashControlSchema } from '../shared/bash-execution.js';
 import { AgentProfiles } from './agent-profiles.js';
 import { agentCapabilitiesFor, agentRunInfo, resolveAgentExtensions } from './agent-scope.js';
 import { PermissionService } from './permissions.js';
@@ -328,7 +329,11 @@ export async function createApp(options: {
   const agents = new AgentProfiles(store, extensions);
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
-    new AgentRunner(store, permissions, files, mcpSessions, browserAccess, verifyWorkspace);
+    new AgentRunner(store, permissions, files, mcpSessions, browserAccess, verifyWorkspace,
+      (sessionId) => {
+        if (messageQueue.hasPending(sessionId)) wakeQueue();
+      },
+    );
   const csrfToken = randomBytes(32).toString('hex');
   let shuttingDown = false;
   const gatewayLogin = new ManagedGatewayLogin();
@@ -417,7 +422,7 @@ export async function createApp(options: {
     if (
       active.some((run) => {
         const other = run.workspacePath ?? store.get('projects', run.projectId).path;
-        return run.sessionId === sessionId || directoriesOverlap(path, other);
+        return run.sessionId === sessionId || (path !== other && directoriesOverlap(path, other));
       })
     )
       throw new AppError(
@@ -426,7 +431,7 @@ export async function createApp(options: {
         409,
       );
     if (active.length >= 3)
-      throw new AppError('SERVER_BUSY', '同时最多执行 3 个独立目录，请稍后发送。', 409, true);
+      throw new AppError('SERVER_BUSY', '同时最多执行 3 个会话，请稍后发送。', 409, true);
   }
   const queueChanged = (id: string) => store.event('session-' + id, id, 'session.queue_changed');
   function insertionMode(
@@ -457,7 +462,46 @@ export async function createApp(options: {
       !request.attachmentIds.length &&
       !request.extensionSelections.length &&
       !/^\s*[/!]/u.test(request.text);
-    return compatible ? 'live' : 'priority';
+    return compatible && runner.canInsertNow?.(run.id) !== false ? 'live' : 'priority';
+  }
+  async function insertLive(item: PendingSessionMessage, run: Run, priority: 'next' | 'now') {
+    const intent = queuedIntent.parse(item.intent);
+    const { id: runId, sessionId } = run;
+    messageQueue.beginLive(item, runId);
+    try {
+      if (!runner.insert)
+        throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
+      await runner.insert(runId, {
+        id: item.id,
+        text: intent.request.text,
+        priority,
+        canDispatch: () => {
+          const current = store.get('runs', runId);
+          return (
+            ['running', 'awaiting_permission'].includes(current.status) &&
+            insertionMode(item, current) === 'live'
+          );
+        },
+        dispatched() {
+          messageQueue.dispatched(item, runId);
+          queueChanged(sessionId);
+        },
+        confirmed() {
+          messageQueue.confirmLive(item, runId);
+          queueChanged(sessionId);
+          wakeQueue();
+        },
+        released() {
+          messageQueue.releaseLive(item, runId);
+          queueChanged(sessionId);
+        },
+      });
+    } catch (error) {
+      messageQueue.releaseLive(item, runId);
+      queueChanged(sessionId);
+      throw error;
+    }
+    queueChanged(sessionId);
   }
   const createRun = async (
     sessionId: string,
@@ -661,7 +705,15 @@ export async function createApp(options: {
         { request, model, scope: planned.scope, executor },
       );
       accepted(latest);
-      return { queuedMessage };
+      const active = store
+        .list('runs')
+        .find(
+          (run) =>
+            run.sessionId === sessionId && ['running', 'awaiting_permission'].includes(run.status),
+        );
+      const pendingItem = active && messageQueue.pending(sessionId, queuedMessage.id);
+      const insertion = pendingItem && active && insertionMode(pendingItem, active);
+      return { queuedMessage: { ...queuedMessage, ...(insertion && { insertion }) } };
     };
     const shouldQueue = () =>
       !pending && !retryOf && (sameSessionRunning(sessionId) || messageQueue.hasPending(sessionId));
@@ -845,15 +897,31 @@ export async function createApp(options: {
             if (shuttingDown) break;
             try {
               const session = store.get('sessions', item.session_id);
+              const active = store
+                .list('runs')
+                .find((run) => run.sessionId === session.id && activeStatuses.includes(run.status));
+              if (
+                active &&
+                runner.canInsertNext?.(active.id) &&
+                insertionMode(item, active) === 'live'
+              ) {
+                await insertLive(item, active, 'next');
+                continue;
+              }
               assertExecutionSlot(session.id, worktrees.directory(session));
               await createRun(session.id, undefined, null, item);
             } catch (error) {
               if (shuttingDown) break;
               if (
                 error instanceof AppError &&
-                ['RUN_ACTIVE', 'SERVER_BUSY', 'QUEUE_CHANGED', 'GIT_DIRECTORY_BUSY'].includes(
-                  error.code,
-                )
+                [
+                  'RUN_ACTIVE',
+                  'SERVER_BUSY',
+                  'QUEUE_CHANGED',
+                  'GIT_DIRECTORY_BUSY',
+                  'LIVE_INPUT_BUSY',
+                  'LIVE_INPUT_UNAVAILABLE',
+                ].includes(error.code)
               )
                 continue;
               const reason =
@@ -871,7 +939,6 @@ export async function createApp(options: {
         if (wakeRequested) wakeQueue();
       });
   }
-  // Lightweight test runners can signal completion through the existing event stream.
   const wakeAfterRun = (event: RunEvent) => {
     if (event.type === 'run.finished') wakeQueue();
   };
@@ -1732,7 +1799,15 @@ export async function createApp(options: {
               const oid = gitOid.parse(parts[5]);
               const path = gitPath.parse(url.searchParams.get('path'));
               const source = gitCommitFileSource.parse(url.searchParams.get('source'));
-              return json(res, await readGitFileContent(git, path, { oid, parent: source === 'parent' }, abort.signal));
+              return json(
+                res,
+                await readGitFileContent(
+                  git,
+                  path,
+                  { oid, parent: source === 'parent' },
+                  abort.signal,
+                ),
+              );
             }
             if (parts.length === 6 && parts[4] === 'commits')
               return json(res, await readCommitDiff(git, gitOid.parse(parts[5]), abort.signal));
@@ -2015,40 +2090,7 @@ export async function createApp(options: {
             wakeQueue();
             return json(res, { ok: true });
           }
-          const intent = queuedIntent.parse(item.intent);
-          messageQueue.beginLive(item, runId);
-          try {
-            if (!runner.insert)
-              throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
-            runner.insert(runId, {
-              id: item.id,
-              text: intent.request.text,
-              canDispatch: () => {
-                const current = store.get('runs', runId);
-                return (
-                  ['running', 'awaiting_permission'].includes(current.status) &&
-                  insertionMode(item, current) === 'live'
-                );
-              },
-              dispatched() {
-                messageQueue.dispatched(item, runId);
-                queueChanged(id);
-              },
-              confirmed() {
-                messageQueue.confirmLive(item, runId);
-                queueChanged(id);
-              },
-              released() {
-                messageQueue.releaseLive(item, runId);
-                queueChanged(id);
-              },
-            });
-          } catch (error) {
-            messageQueue.releaseLive(item, runId);
-            queueChanged(id);
-            throw error;
-          }
-          queueChanged(id);
+          await insertLive(item, active, 'now');
           return json(res, { ok: true });
         }
         if (parts[3] === 'message-queue' && parts.length === 5) {
@@ -2208,6 +2250,29 @@ export async function createApp(options: {
           });
           res.end(JSON.stringify(diagnostics, null, 2) + '\n');
           return;
+        }
+        if (
+          parts.length === 6 &&
+          parts[3] === 'tools' &&
+          parts[5] === 'bash' &&
+          method === 'POST'
+        ) {
+          const toolId = z.string().min(1).max(500).parse(parts[4]);
+          const { action } = bashControlSchema.parse(await body(req));
+          const tool = store.get('tools', toolId);
+          if (tool.name !== 'Bash' || tool.runId !== run.id || tool.sessionId !== run.sessionId)
+            throw new AppError('NOT_FOUND', '命令不属于当前运行。', 404);
+          if (tool.endedAt) return json(res, { ok: true });
+          if (
+            !nativeExecution ||
+            run.executor !== 'native-v1' ||
+            !tool.bashExecution ||
+            !['running', 'awaiting_permission'].includes(run.status) ||
+            !runner.controlBash
+          )
+            throw new AppError('BASH_CONTROL_UNAVAILABLE', '当前命令无法接受控制请求。', 409);
+          await runner.controlBash(run.id, toolId, action);
+          return json(res, { ok: true });
         }
         if (
           parts.length === 6 &&

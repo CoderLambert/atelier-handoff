@@ -44,6 +44,8 @@ function translatedStatuses() {
   return {
     queued: t('status.queued'),
     running: t('status.running'),
+    background: t('status.background'),
+    unknown: t('status.resultUnknown'),
     awaiting_permission: t('status.awaitingPermission'),
     stopping: t('status.stopping'),
     completed: t('status.completed'),
@@ -76,6 +78,7 @@ export function statusVariant(status: string): NonNullable<BadgeProps['variant']
     case 'pending':
     case 'awaiting_permission':
     case 'stopping':
+    case 'unknown':
     case 'expired':
       return 'warning';
     case 'completed':
@@ -85,6 +88,7 @@ export function statusVariant(status: string): NonNullable<BadgeProps['variant']
     case 'active':
       return 'success';
     case 'running':
+    case 'background':
     case 'queued':
       return 'info';
     default:

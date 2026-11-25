@@ -4,7 +4,7 @@
  * @updated 2026-11-25T18:35:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { ToolCall } from '@shared/types';
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,14 @@ const earlierCallPageSize = 12;
 export function RunToolActivity({
   tools,
   active,
+  liveHeading,
   historyOpen,
   approved,
   onOutput,
 }: {
   tools: ToolCall[];
   active: boolean;
+  liveHeading?: ReactNode;
   historyOpen: boolean;
   approved: ReadonlySet<string>;
   onOutput: (tool: ToolCall) => void;
@@ -50,33 +52,40 @@ export function RunToolActivity({
   }
   const nextCount = Math.min(hiddenIndices.length, earlierCallPageSize);
   const nextStart = hiddenIndices[hiddenIndices.length - nextCount];
-  const label = (
-    <>
-      <span>{t('activity.calls', { count: tools.length })}</span>
-      {failedCount > 0 ? (
-        <span className="run-activity-failed">
-          {t('activity.failedCount', { count: failedCount })}
-        </span>
-      ) : null}
-    </>
-  );
+  const failures =
+    failedCount > 0 ? (
+      <span className="run-activity-failed">
+        {t('activity.failedCount', { count: failedCount })}
+      </span>
+    ) : null;
   return (
     <div className="run-tool-activity">
       {active ? (
-        <Button
-          className="run-activity-toggle"
-          type="button"
-          variant="ghost"
-          size="xs"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setExpanded(!open)}
-        >
-          <ChevronRight data-icon="inline-start" aria-hidden="true" />
-          {label}
-        </Button>
+        <div className="run-live-activity-bar">
+          {liveHeading}
+          <Button
+            className="run-activity-toggle"
+            type="button"
+            variant="ghost"
+            size="xs"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => setExpanded(!open)}
+          >
+            <span className="sr-only">{t('activity.label')}</span>
+            {t('activity.liveCount', {
+              finished: tools.filter((tool) => tool.endedAt).length,
+              total: tools.length,
+            })}
+            {failures}
+            <ChevronRight data-icon="inline-end" aria-hidden="true" />
+          </Button>
+        </div>
       ) : (
-        <p className="run-history-section-label">{label}</p>
+        <p className="run-history-section-label">
+          <span>{t('activity.calls', { count: tools.length })}</span>
+          {failures}
+        </p>
       )}
       <div id={id} hidden={!open}>
         {open ? (

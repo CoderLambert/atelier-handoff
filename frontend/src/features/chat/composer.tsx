@@ -398,7 +398,7 @@ export function Composer({
           value={draft.text}
           disabled={archived}
           aria-invalid={quoteTooLong || undefined}
-          aria-keyshortcuts={insertRunId ? 'Alt+Enter' : undefined}
+          aria-keyshortcuts={insertRunId ? 'Control+Enter Alt+Enter' : undefined}
           aria-describedby={
             editingMessage
               ? 'input-help chat-composer-error composer-edit-help'

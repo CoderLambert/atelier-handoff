@@ -123,8 +123,15 @@ export function ExtensionPicker({
   const lastScope = useRef(projectId);
   const items = scopeExtensions(query.data ?? [], agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
-  const completionKey = JSON.stringify([projectId, sessionId, cursor.text, cursor.start, cursor.end]);
-  const rows = trigger && trigger.symbol !== '@' ? choices(items, trigger, cursor.text, draft.mode) : [];
+  const completionKey = JSON.stringify([
+    projectId,
+    sessionId,
+    cursor.text,
+    cursor.start,
+    cursor.end,
+  ]);
+  const rows =
+    trigger && trigger.symbol !== '@' ? choices(items, trigger, cursor.text, draft.mode) : [];
 
   const fileSearch = useSearchProjectFiles(
     projectId,
@@ -344,8 +351,7 @@ export function ExtensionPicker({
     const state = current.current;
     if (
       event.key === 'Enter' &&
-      event.altKey &&
-      !event.ctrlKey &&
+      event.altKey !== event.ctrlKey &&
       !event.metaKey &&
       !event.shiftKey &&
       !inputRef.current?.disabled &&

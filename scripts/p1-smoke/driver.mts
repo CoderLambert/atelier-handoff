@@ -1304,8 +1304,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     assert.equal(record(state.session).sdkMode, 'edit');
     assert.ok(string(record(state.session).sdkSessionId));
     assert.equal(record(accepted.config).model, model);
-    const modelButton = page.getByRole('combobox', { name: '选择模型', exact: true });
-    const modelBounds = await modelButton.boundingBox();
+    const modelSettings = page.getByRole('button', { name: '模型与推理深度', exact: true });
+    const modelBounds = await modelSettings.boundingBox();
     const sendBounds = await page
       .getByRole('button', { name: '发送任务', exact: true })
       .boundingBox();
@@ -1313,6 +1313,8 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
       modelBounds && sendBounds && Math.abs(modelBounds.y - sendBounds.y) < 6,
       'Model picker and send button share the compact toolbar',
     );
+    await modelSettings.click();
+    const modelButton = page.getByRole('combobox', { name: '选择模型', exact: true });
     await modelButton.click();
     const models = page.getByRole('listbox');
     const modelOption = models.getByRole('option', { name: /sdk-offline-alternate/ });
@@ -1321,12 +1323,13 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
     await modelOption.click();
     await models.waitFor({ state: 'hidden' });
     await modelButton
-      .getByText(`模型 · ${alternateModel}`, { exact: true })
+      .getByText(alternateModel, { exact: true })
       .waitFor({ state: 'visible' });
     const effortButton = page.getByRole('combobox', { name: '选择推理深度', exact: true });
     await effortButton.click();
     await page.getByRole('option', { name: '很高', exact: true }).click();
-    await effortButton.getByText('深度 · 很高', { exact: true }).waitFor({ state: 'visible' });
+    await effortButton.getByText('很高', { exact: true }).waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
     await page
       .getByRole('textbox', { name: '继续对话', exact: true })
       .fill(automaticFollowupPrompt);
