@@ -6,12 +6,14 @@
 import type { DesktopBrowserBridge } from '@shared/desktop-browser';
 import type { DesktopFilesBridge } from '@shared/desktop-files';
 import type { DesktopUiNotificationsBridge } from '@shared/desktop-ui-notifications';
+import type { DesktopGitBridge } from '@shared/desktop-git';
 
 declare global {
   interface Window {
     atelierDesktop?: DesktopBrowserBridge;
     atelierDesktopFiles?: DesktopFilesBridge;
     atelierUiNotifications?: DesktopUiNotificationsBridge;
+    atelierGit?: DesktopGitBridge;
   }
 }
 

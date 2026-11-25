@@ -1,13 +1,18 @@
 /**
  * @file 展示 Git 文件和提交的差异预览。
  * @implementation 保留原始补丁回退，按语言延迟加载高亮，并在同一区域显示原行和新行。
- * @updated 2026-11-24T04:04:00+08:00
+ * @updated 2026-11-25T13:23:00+08:00
  */
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { FileCode2 } from 'lucide-react';
+import { ChevronDown, FileCode2 } from 'lucide-react';
 import { loadCodeHighlighter, type HighlightResult } from '@atelier/markdown';
 import { useUiTranslation } from '@/i18n';
-import { describeGitPatch, type GitDiffHunk, type GitDiffLine } from './git-diff-model';
+import {
+  describeGitPatch,
+  type GitDiffHunk,
+  type GitDiffLine,
+  type PatchFile,
+} from './git-diff-model';
 
 const aliases: Readonly<Record<string, string>> = {
   cjs: 'javascript',
@@ -143,74 +148,141 @@ function PatchHunk({ hunk, path }: { hunk: GitDiffHunk; path: string | undefined
   );
 }
 
-export function GitPatch({ text, path }: { text: string; path?: string }) {
+export interface PatchFileCardProps {
+  file: PatchFile;
+  filename?: string;
+  highlight?: boolean;
+  collapsible?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export function PatchFileCard({
+  file,
+  filename = file.path,
+  highlight = true,
+  collapsible = false,
+  isCollapsed = false,
+  onToggleCollapse,
+}: PatchFileCardProps) {
   const { t, locale } = useUiTranslation('git');
   const { t: diff } = useUiTranslation('inspector');
+  const format = new Intl.NumberFormat(locale);
+
+  return (
+    <div className="git-patch">
+      {filename || file.kind === 'text' ? (
+        <header
+          className={`git-patch-heading ${collapsible ? 'cursor-pointer select-none hover:bg-muted/40 transition-colors' : ''}`}
+          onClick={collapsible ? onToggleCollapse : undefined}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {collapsible && (
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform text-muted-foreground ${isCollapsed ? '-rotate-90' : ''}`}
+                aria-hidden="true"
+              />
+            )}
+            {filename ? (
+              <h4 title={filename} className="flex items-center gap-1.5 truncate">
+                <FileCode2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{filename}</span>
+              </h4>
+            ) : null}
+          </div>
+          {file.kind === 'text' ? (
+            <div className="git-patch-stats flex items-center gap-2">
+              <span className="git-diff-added text-xs" aria-label={diff('diff.addedLines', { count: file.added })}>
+                +{format.format(file.added)}
+              </span>
+              <span className="git-diff-removed text-xs" aria-label={diff('diff.removedLines', { count: file.removed })}>
+                −{format.format(file.removed)}
+              </span>
+            </div>
+          ) : null}
+        </header>
+      ) : null}
+      {isCollapsed ? (
+        <div className="px-3 py-2 text-xs text-muted-foreground flex items-center justify-between bg-muted/10 border-t border-border">
+          <span>{t('diff.expandFile')}</span>
+          <button
+            type="button"
+            className="text-xs text-primary hover:underline"
+            onClick={onToggleCollapse}
+          >
+            {t('diff.expandFile')}
+          </button>
+        </div>
+      ) : file.kind === 'raw' ? (
+        <>
+          {file.binary ? <p className="git-feedback">{t('diff.binary')}</p> : null}
+          <pre className="git-patch-raw">
+            {file.text.split('\n').map((line, i) => {
+              const kind =
+                line.startsWith('+') && !line.startsWith('+++')
+                  ? 'added'
+                  : line.startsWith('-') && !line.startsWith('---')
+                    ? 'removed'
+                    : undefined;
+              return kind ? (
+                <span key={i} className="git-raw-line" data-kind={kind}>
+                  {line + '\n'}
+                </span>
+              ) : (
+                line + '\n'
+              );
+            })}
+          </pre>
+        </>
+      ) : (
+        <>
+          {file.metadata.length ? (
+            <pre className="git-patch-raw">{file.metadata.join('\n')}</pre>
+          ) : null}
+          <table className="git-diff-table" aria-label={filename}>
+            <colgroup>
+              <col className="git-diff-number-column" />
+              <col className="git-diff-number-column" />
+              <col className="git-diff-sign-column" />
+              <col />
+            </colgroup>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">{diff('diff.oldLine')}</th>
+                <th scope="col">{diff('diff.newLine')}</th>
+                <th scope="col">{t('diff.change')}</th>
+                <th scope="col">{t('diff.content')}</th>
+              </tr>
+            </thead>
+            {file.hunks.map((hunk, hunkIndex) => (
+              <PatchHunk
+                key={hunkIndex}
+                hunk={hunk}
+                path={highlight ? file.path : undefined}
+              />
+            ))}
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function GitPatch({ text, path }: { text: string; path?: string }) {
+  const { t } = useUiTranslation('git');
   const files = useMemo(() => describeGitPatch(text, path), [text, path]);
   const highlight = text.length <= 96_000;
-  const format = new Intl.NumberFormat(locale);
   return (
     <div className="git-diff-code" role="region" aria-label={t('diff.preview')} tabIndex={0}>
       {files.map((file, index) => {
         const filename = !path || files.length > 1 ? file.path : undefined;
         return (
-          <div className="git-patch" key={index}>
-            {filename || file.kind === 'text' ? (
-              <header className="git-patch-heading">
-                {filename ? (
-                  <h4 title={filename}>
-                    <FileCode2 aria-hidden="true" />
-                    <span className="truncate">{filename}</span>
-                  </h4>
-                ) : null}
-                {file.kind === 'text' ? (
-                  <div className="git-patch-stats">
-                    <span aria-label={diff('diff.addedLines', { count: file.added })}>
-                      +{format.format(file.added)}
-                    </span>
-                    <span aria-label={diff('diff.removedLines', { count: file.removed })}>
-                      −{format.format(file.removed)}
-                    </span>
-                  </div>
-                ) : null}
-              </header>
-            ) : null}
-            {file.kind === 'raw' ? (
-              <>
-                {file.binary ? <p className="git-feedback">{t('diff.binary')}</p> : null}
-                <pre className="git-patch-raw">{file.text}</pre>
-              </>
-            ) : (
-              <>
-                {file.metadata.length ? (
-                  <pre className="git-patch-raw">{file.metadata.join('\n')}</pre>
-                ) : null}
-                <table className="git-diff-table" aria-label={filename}>
-                  <colgroup>
-                    <col className="git-diff-number-column" />
-                    <col className="git-diff-number-column" />
-                    <col className="git-diff-sign-column" />
-                    <col />
-                  </colgroup>
-                  <thead className="sr-only">
-                    <tr>
-                      <th scope="col">{diff('diff.oldLine')}</th>
-                      <th scope="col">{diff('diff.newLine')}</th>
-                      <th scope="col">{t('diff.change')}</th>
-                      <th scope="col">{t('diff.content')}</th>
-                    </tr>
-                  </thead>
-                  {file.hunks.map((hunk, hunkIndex) => (
-                    <PatchHunk
-                      key={hunkIndex}
-                      hunk={hunk}
-                      path={highlight ? file.path : undefined}
-                    />
-                  ))}
-                </table>
-              </>
-            )}
-          </div>
+          <PatchFileCard
+            key={file.path ?? index}
+            file={file}
+            filename={filename}
+            highlight={highlight}
+          />
         );
       })}
     </div>

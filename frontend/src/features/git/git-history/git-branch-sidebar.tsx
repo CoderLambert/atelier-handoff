@@ -1,30 +1,62 @@
 /**
  * @file 展示 Git 工作树 HEAD 卡片与可筛选的分组分支侧栏。
- * @implementation 组合吸顶模糊筛选、HEAD 状态卡片及本地与远端折叠分组。
- * @updated 2026-11-25T02:49:00+08:00
+ * @implementation 组合吸顶筛选、新建/检出/重命名/删除分支操作、右键菜单与 400ms 悬停信息卡片。
+ * @updated 2026-11-25T03:39:00+08:00
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useUiTranslation } from '@/i18n';
 import type { GitBranch, GitOverview, GitWorktree } from '@shared/git-workbench';
+import type { GitRepoStatus } from '@shared/desktop-git';
+import { getDesktopGitBridge } from '@/desktop-git';
+import { GitContextMenu, type GitContextMenuItem } from '../git-context-menu';
+import {
+  GitCheckoutDirtyModal,
+  GitDeleteBranchModal,
+  GitRenameBranchModal,
+} from '../git-branch-dialogs';
 import { GitBranchGroup } from './git-branch-group';
 import { GitBranchItem } from './git-branch-item';
 import { GitHeadCard } from './git-head-card';
+import { useHoverCard } from './use-hover-card';
+import { GitBranchHoverCard } from './git-branch-hover-card';
+
+interface HoveredBranchData {
+  branch: GitBranch;
+  worktreePath?: string;
+}
 
 export interface GitBranchSidebarProps {
   overview: GitOverview;
   tree: GitWorktree;
   selectedBranch?: GitBranch;
+  repoStatus?: GitRepoStatus | null;
   onSelectHead: () => void;
   onSelectBranch: (branch: GitBranch) => void;
+  onRefreshAll?: () => void;
+  showToast?: (message: string, type?: 'success' | 'error', stderr?: string) => void;
+  onOpenCreateBranch?: (startPoint?: string) => void;
 }
 
 export function GitBranchSidebar({
   overview,
   tree,
   selectedBranch,
+  repoStatus,
   onSelectHead,
   onSelectBranch,
+  onRefreshAll,
+  showToast,
+  onOpenCreateBranch,
 }: GitBranchSidebarProps) {
   const { t } = useUiTranslation('git');
   const [branchQuery, setBranchQuery] = useState('');
@@ -32,6 +64,18 @@ export function GitBranchSidebar({
     local: false,
     remote: false,
   });
+
+  // 分支操作弹窗状态
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    items: GitContextMenuItem[];
+  } | null>(null);
+  const [renameBranch, setRenameBranch] = useState<string | null>(null);
+  const [deleteBranch, setDeleteBranch] = useState<string | null>(null);
+  const [dirtyCheckoutBranch, setDirtyCheckoutBranch] = useState<string | null>(null);
+  const [mergeConfirmBranch, setMergeConfirmBranch] = useState<string | null>(null);
+  const [merging, setMerging] = useState(false);
 
   const bq = branchQuery.trim().toLowerCase();
 
@@ -71,6 +115,129 @@ export function GitBranchSidebar({
     return map;
   }, [overview.worktrees]);
 
+  const { activeItem, handleMouseEnter, handleMouseLeave, handleScroll } =
+    useHoverCard<HoveredBranchData>(400);
+
+  const onBranchEnter = useCallback(
+    (branch: GitBranch, el: HTMLElement, wtPath?: string) => {
+      handleMouseEnter({ branch, worktreePath: wtPath }, el);
+    },
+    [handleMouseEnter],
+  );
+
+  // 双击分支检出切换
+  const handleDoubleClickBranch = useCallback(
+    (branch: GitBranch) => {
+      if (branch.kind !== 'local') return;
+      if (branch.name === tree.branch) return;
+
+      const bridge = getDesktopGitBridge();
+      if (!bridge || !tree.path) return;
+
+      if (repoStatus?.isDirty) {
+        setDirtyCheckoutBranch(branch.name);
+      } else {
+        void (async () => {
+          try {
+            const res = await bridge.checkoutBranch(tree.path, branch.name, false);
+            if (!res.success) {
+              showToast?.('切换分支失败', 'error', res.stderr);
+              return;
+            }
+            showToast?.(`已切换到分支 ${branch.name}`, 'success');
+            onRefreshAll?.();
+          } catch (err) {
+            showToast?.('切换分支异常', 'error', err instanceof Error ? err.message : String(err));
+          }
+        })();
+      }
+    },
+    [tree.branch, tree.path, repoStatus?.isDirty, showToast, onRefreshAll],
+  );
+
+  // 右键弹出分支操作菜单
+  const handleContextMenuBranch = useCallback(
+    (branch: GitBranch, e: React.MouseEvent) => {
+      const isHead = branch.name === tree.branch || branch.oid === tree.head;
+      const bridge = getDesktopGitBridge();
+      if (!bridge || !tree.path) return;
+
+      if (branch.kind === 'local') {
+        const items: GitContextMenuItem[] = [
+          {
+            label: t('branch.contextSwitch'),
+            disabled: isHead,
+            onClick: () => handleDoubleClickBranch(branch),
+          },
+          {
+            label: t('branch.contextMerge'),
+            disabled: isHead,
+            onClick: () => setMergeConfirmBranch(branch.name),
+          },
+          {
+            label: t('branch.contextRename'),
+            onClick: () => setRenameBranch(branch.name),
+          },
+          { divider: true, label: '' },
+          {
+            label: t('branch.contextDelete'),
+            disabled: isHead,
+            danger: true,
+            onClick: () => setDeleteBranch(branch.name),
+          },
+        ];
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      } else {
+        const localTargetName = branch.name.replace(/^[^\/]+\//, '');
+        const items: GitContextMenuItem[] = [
+          {
+            label: t('branch.contextCheckoutRemote'),
+            onClick: () => {
+              void (async () => {
+                const res = await bridge.checkoutBranch(tree.path, localTargetName, false);
+                if (!res.success) {
+                  showToast?.('检出分支失败', 'error', res.stderr);
+                  return;
+                }
+                showToast?.(`已检出分支 ${localTargetName}`, 'success');
+                onRefreshAll?.();
+              })();
+            },
+          },
+          {
+            label: t('branch.contextMerge'),
+            onClick: () => setMergeConfirmBranch(branch.name),
+          },
+        ];
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      }
+    },
+    [tree.branch, tree.head, tree.path, t, handleDoubleClickBranch, showToast, onRefreshAll],
+  );
+
+  // 执行合并操作
+  const handleConfirmMerge = async () => {
+    if (!mergeConfirmBranch || !tree.path) return;
+    const bridge = getDesktopGitBridge();
+    if (!bridge) return;
+
+    setMerging(true);
+    try {
+      const res = await bridge.mergeBranch(tree.path, mergeConfirmBranch);
+      if (!res.success) {
+        showToast?.('合并分支失败', 'error', res.stderr);
+        return;
+      }
+      showToast?.(`已将 ${mergeConfirmBranch} 合并到当前分支`, 'success');
+      onRefreshAll?.();
+    } catch (err) {
+      showToast?.('合并分支异常', 'error', err instanceof Error ? err.message : String(err));
+    } finally {
+      setMerging(false);
+      setMergeConfirmBranch(null);
+    }
+  };
+
   return (
     <div className="git-branch-sidebar">
       {/* 1. 吸顶分支即时筛选框 */}
@@ -87,17 +254,17 @@ export function GitBranchSidebar({
           {branchQuery && (
             <button
               type="button"
-              className="git-clear-btn"
-              title={t('branch.searchClear')}
+              className="git-search-clear-btn"
               onClick={() => setBranchQuery('')}
+              aria-label={t('branch.searchClear')}
             >
-              <X size={12} aria-hidden="true" />
+              <X className="w-3 h-3" aria-hidden="true" />
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. 工作树 HEAD 固定状态卡片 */}
+      {/* 2. HEAD 状态卡片 */}
       <GitHeadCard
         branchName={headDisplayName}
         headOid={tree.head}
@@ -106,7 +273,7 @@ export function GitBranchSidebar({
       />
 
       {/* 3. 可折叠分支列表 */}
-      <div className="git-branch-list-scroll">
+      <div className="git-branch-list-scroll" onScroll={handleScroll}>
         {localBranches.length === 0 && remoteBranches.length === 0 ? (
           <div className="git-empty-branches">
             <p className="git-empty-title">{t('branch.notFound')}</p>
@@ -120,6 +287,22 @@ export function GitBranchSidebar({
                 count={localBranches.length}
                 isCollapsed={isLocalCollapsed}
                 onToggleCollapse={toggleLocal}
+                action={
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCreateBranch?.();
+                    }}
+                    aria-label={t('branch.newBranch')}
+                    title={t('branch.newBranch')}
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  </Button>
+                }
               >
                 {localBranches.map((item) => (
                   <GitBranchItem
@@ -130,6 +313,10 @@ export function GitBranchSidebar({
                     worktreePath={item.worktreeId ? worktreePathMap.get(item.worktreeId) : undefined}
                     searchQuery={branchQuery}
                     onSelect={onSelectBranch}
+                    onDoubleClick={handleDoubleClickBranch}
+                    onContextMenu={handleContextMenuBranch}
+                    onMouseEnter={onBranchEnter}
+                    onMouseLeave={handleMouseLeave}
                   />
                 ))}
               </GitBranchGroup>
@@ -151,6 +338,10 @@ export function GitBranchSidebar({
                       isHead={item.oid === tree.head || item.name === tree.branch}
                       searchQuery={branchQuery}
                       onSelect={onSelectBranch}
+                      onDoubleClick={handleDoubleClickBranch}
+                      onContextMenu={handleContextMenuBranch}
+                      onMouseEnter={onBranchEnter}
+                      onMouseLeave={handleMouseLeave}
                     />
                   ))}
                 </GitBranchGroup>
@@ -159,6 +350,93 @@ export function GitBranchSidebar({
           </>
         )}
       </div>
+
+      {activeItem && (
+        <GitBranchHoverCard
+          branch={activeItem.item.branch}
+          rect={activeItem.rect}
+          worktreePath={activeItem.item.worktreePath}
+        />
+      )}
+
+      {/* 右键上下文菜单 */}
+      {contextMenu && (
+        <GitContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* 分支重命名对话框 */}
+      {renameBranch && (
+        <GitRenameBranchModal
+          open
+          onOpenChange={(o) => !o && setRenameBranch(null)}
+          cwd={tree.path}
+          oldName={renameBranch}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
+
+      {/* 分支删除确认对话框 */}
+      {deleteBranch && (
+        <GitDeleteBranchModal
+          open
+          onOpenChange={(o) => !o && setDeleteBranch(null)}
+          cwd={tree.path}
+          branchName={deleteBranch}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
+
+      {/* 脏工作区检出确认对话框 */}
+      {dirtyCheckoutBranch && (
+        <GitCheckoutDirtyModal
+          open
+          onOpenChange={(o) => !o && setDirtyCheckoutBranch(null)}
+          cwd={tree.path}
+          targetBranch={dirtyCheckoutBranch}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
+
+      {/* 合并分支确认对话框 */}
+      {mergeConfirmBranch && (
+        <Dialog open onOpenChange={(o) => !merging && !o && setMergeConfirmBranch(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('branch.mergeConfirmTitle')}</DialogTitle>
+              <DialogDescription className="text-xs pt-2">
+                {t('branch.mergeConfirmDesc', { name: mergeConfirmBranch })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={merging}
+                onClick={() => setMergeConfirmBranch(null)}
+              >
+                {t('actions.cancel')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={merging}
+                onClick={() => void handleConfirmMerge()}
+              >
+                {merging ? t('branch.merging') : t('branch.mergeSubmit')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

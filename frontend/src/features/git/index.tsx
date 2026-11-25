@@ -1,9 +1,9 @@
 /**
  * @file 组织 Git 侧栏、全窗口和开发会话入口。
- * @implementation 保留工作树及标签选择，并协调弹窗、焦点和提交期间的面板动作。
- * @updated 2026-11-24T04:50:56+08:00
+ * @implementation 保留工作树及标签选择，集成智能远端同步、异常状态横幅、Toast 通知并协调弹窗。
+ * @updated 2026-11-25T03:31:00+08:00
  */
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { GitBranch, Maximize2, Minimize2, Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,10 +22,14 @@ import {
 } from '@/components/ui/select';
 import { useUiTranslation } from '@/i18n';
 import { useGitOverview } from '@/use-query/git/use-git-overview';
+import { useGitRepoStatus } from '@/use-query/git/use-git-repo-status';
 import type { Project } from '@shared/types';
 import { CreateDevelopmentSession } from './create-development-session';
 import { GitFilesView, GitHistoryView, GitQueryFeedback } from './git-views';
 import { GitWorktreesView } from './git-worktrees';
+import { GitSyncButton } from './git-sync-button';
+import { GitStateBanner } from './git-state-banner';
+import { useGitToast } from './hooks/use-git-toast';
 import './git.css';
 
 const tabs = ['files', 'history', 'worktrees'] as const;
@@ -71,6 +75,14 @@ export default function GitBoard({
   const tree =
     data?.worktrees.find(({ id }) => id === selectedTree) ??
     data?.worktrees.find(({ id }) => id === project.id);
+
+  const { status: repoStatus, invalidate: invalidateRepoStatus } = useGitRepoStatus(tree?.path);
+  const { showToast, ToastRenderer } = useGitToast();
+
+  const handleRefreshAll = useCallback(() => {
+    void refresh();
+    void invalidateRepoStatus();
+  }, [refresh, invalidateRepoStatus]);
 
   return (
     <section
@@ -189,6 +201,12 @@ export default function GitBoard({
               </SelectContent>
             </Select>
           ) : null}
+          <GitSyncButton
+            cwd={tree?.path}
+            status={repoStatus}
+            onRefreshAll={handleRefreshAll}
+            showToast={showToast}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -196,7 +214,7 @@ export default function GitBoard({
             disabled={busy || overview.isFetching}
             aria-label={t('board.refresh')}
             title={t('board.refresh')}
-            onClick={() => void refresh()}
+            onClick={handleRefreshAll}
           >
             <RefreshCw aria-hidden="true" />
           </Button>
@@ -212,6 +230,14 @@ export default function GitBoard({
           </Button>
         </div>
       </div>
+      <GitStateBanner
+        cwd={tree?.path}
+        status={repoStatus}
+        onViewConflicts={() => setTab('files')}
+        onRefreshAll={handleRefreshAll}
+        showToast={showToast}
+        onCreateBranch={() => setCreating(true)}
+      />
       <div
         className="git-panel"
         role="tabpanel"
@@ -236,9 +262,20 @@ export default function GitBoard({
             tree={tree}
             busy={busy}
             onBusy={onBusy}
+            repoStatus={repoStatus}
+            onRefreshAll={handleRefreshAll}
+            showToast={showToast}
           />
         ) : (
-          <GitHistoryView key={tree.id} projectId={project.id} overview={data} tree={tree} />
+          <GitHistoryView
+            key={tree.id}
+            projectId={project.id}
+            overview={data}
+            tree={tree}
+            repoStatus={repoStatus}
+            onRefreshAll={handleRefreshAll}
+            showToast={showToast}
+          />
         )}
       </div>
       <Dialog
@@ -275,6 +312,7 @@ export default function GitBoard({
           />
         </DialogContent>
       </Dialog>
+      <ToastRenderer />
     </section>
   );
 }

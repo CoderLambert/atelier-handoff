@@ -1,7 +1,7 @@
 /**
  * @file 呈现 Git 提交时间线列表中的单个提交行。
- * @implementation 渲染时间线节点、高亮匹配信息与一键复制短 Hash 按钮及反馈状态。
- * @updated 2026-11-25T02:49:00+08:00
+ * @implementation 渲染时间线节点、高亮匹配信息、右键菜单与一键复制短 Hash 按钮及反馈状态。
+ * @updated 2026-11-25T03:37:00+08:00
  */
 import { memo } from 'react';
 import { Check } from 'lucide-react';
@@ -17,6 +17,9 @@ export interface GitCommitRowProps {
   searchHighlightQuery: string;
   onSelect: (oid: string) => void;
   onCopyHash: (e: React.MouseEvent, oid: string) => void;
+  onContextMenu?: (commit: GitCommit, e: React.MouseEvent) => void;
+  onMouseEnter?: (commit: GitCommit, el: HTMLElement) => void;
+  onMouseLeave?: () => void;
 }
 
 export const GitCommitRow = memo(function GitCommitRow({
@@ -27,6 +30,9 @@ export const GitCommitRow = memo(function GitCommitRow({
   searchHighlightQuery,
   onSelect,
   onCopyHash,
+  onContextMenu,
+  onMouseEnter,
+  onMouseLeave,
 }: GitCommitRowProps) {
   const { t } = useUiTranslation('git');
 
@@ -38,6 +44,12 @@ export const GitCommitRow = memo(function GitCommitRow({
         tabIndex={0}
         aria-pressed={isSelected}
         onClick={() => onSelect(commit.oid)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onContextMenu?.(commit, e);
+        }}
+        onMouseEnter={(e) => onMouseEnter?.(commit, e.currentTarget)}
+        onMouseLeave={onMouseLeave}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

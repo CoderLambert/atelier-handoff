@@ -36,6 +36,7 @@ import { DesktopUiThemePreferences } from './host/ui-theme.mjs';
 import { bindUiTheme } from './host/ui-theme-ipc.mjs';
 import { DesktopUiNotificationsPreferences } from './host/ui-notifications.mjs';
 import { bindUiNotifications } from './host/ui-notifications-ipc.mjs';
+import { bindDesktopGit } from './host/git-ipc.mjs';
 import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -255,10 +256,16 @@ else {
           () => runtimeConnection,
           () => stopping,
         );
+        const unbindDesktopGit = bindDesktopGit(
+          () => window,
+          () => runtimeConnection,
+          () => stopping,
+        );
         app.once('will-quit', () => {
           unbindUiLanguage();
           unbindUiTheme();
           unbindUiNotifications();
+          unbindDesktopGit();
         });
         return start();
       }

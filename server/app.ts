@@ -51,6 +51,7 @@ import {
   gitCommitDraftRequest,
   gitCommitRequest,
   gitDiffLayer,
+  gitFileIndexRequest,
   gitOid,
   gitPath,
   gitReclaimRequest,
@@ -89,6 +90,7 @@ import {
   readGitHistory,
   readGitStatus,
 } from './modules/git/git-reader.js';
+import { updateGitFileIndex } from './modules/git/git-file-index.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { gatewayModelId, gatewayModels } from './gateway-models.js';
@@ -1536,6 +1538,13 @@ export async function createApp(options: {
                 throw gitError('PLAN_RECOVERY_REQUIRED', '提交需要人工核对，未覆盖索引或引用。');
               return { operationId, commits: recovered.commits };
             });
+            return json(res, result);
+          }
+          if (parts[6] === 'file-index') {
+            const input = gitFileIndexRequest.parse(await body(req));
+            const result = await worktrees.writeCheckout(project, id, (git) =>
+              updateGitFileIndex(git, input),
+            );
             return json(res, result);
           }
           if (parts[6] === 'commit-draft') {

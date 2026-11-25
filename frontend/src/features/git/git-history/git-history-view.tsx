@@ -1,23 +1,36 @@
 /**
  * @file 组合 Git 分支侧栏、提交筛选工具栏、提交历史列表与差异详情。
- * @implementation 协调分支选择、条件防抖、服务端/客户端双重过滤及选中提交的差异展开。
- * @updated 2026-11-25T02:49:00+08:00
+ * @implementation 协调分支选择、提交列表右键菜单、新建分支与 Reset/Revert/Cherry-pick 对话框。
+ * @updated 2026-11-25T12:57:00+08:00
  */
 import { useCallback, useMemo, useState } from 'react';
+import { Copy, GitBranch as BranchIcon, RotateCcw } from 'lucide-react';
 import { useUiTranslation } from '@/i18n';
 import { useGitHistory } from '@/use-query/git/use-git-history';
-import type { GitBranch, GitOverview, GitWorktree } from '@shared/git-workbench';
+import type { GitBranch, GitCommit, GitOverview, GitWorktree } from '@shared/git-workbench';
+import type { GitRepoStatus } from '@shared/desktop-git';
+import { GitContextMenu, type GitContextMenuItem } from '../git-context-menu';
+import { GitCreateBranchModal } from '../git-branch-dialogs';
+import {
+  GitCherryPickModal,
+  GitResetModal,
+  GitRevertModal,
+} from '../git-commit-dialogs';
 import { GitBranchSidebar } from './git-branch-sidebar';
 import { GitCommitList } from './git-commit-list';
 import { GitCommitToolbar } from './git-commit-toolbar';
+import { GitCommitDetailPane } from './git-commit-detail-pane';
 import { useGitCommitFilters } from './use-git-commit-filters';
 
 export interface GitHistoryViewProps {
   projectId: string;
   overview: GitOverview;
   tree: GitWorktree;
-  diffRenderer: (commitOid: string) => React.ReactNode;
+  diffRenderer?: (commitOid: string, commitInfo?: GitCommit, onClose?: () => void) => React.ReactNode;
   feedbackRenderer: (error?: unknown, retry?: () => void) => React.ReactNode;
+  onRefreshAll?: () => void;
+  showToast?: (message: string, type?: 'success' | 'error', stderr?: string) => void;
+  repoStatus?: GitRepoStatus | null;
 }
 
 export function GitHistoryView({
@@ -26,10 +39,39 @@ export function GitHistoryView({
   tree,
   diffRenderer,
   feedbackRenderer,
+  onRefreshAll,
+  showToast,
+  repoStatus,
 }: GitHistoryViewProps) {
   const { t, locale } = useUiTranslation('git');
   const [ref, selectRef] = useState<GitBranch>();
   const [selection, selectCommit] = useState<{ anchor: string; oid: string }>();
+
+  // 快捷操作菜单与弹窗状态
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    items: GitContextMenuItem[];
+  } | null>(null);
+  const [createBranchState, setCreateBranchState] = useState<{
+    open: boolean;
+    startPoint?: string;
+  }>({ open: false });
+  const [resetState, setResetState] = useState<{
+    open: boolean;
+    commitHash: string;
+    commitSubject?: string;
+  } | null>(null);
+  const [revertState, setRevertState] = useState<{
+    open: boolean;
+    commitHash: string;
+    commitSubject?: string;
+  } | null>(null);
+  const [cherryPickState, setCherryPickState] = useState<{
+    open: boolean;
+    commitHash: string;
+    commitSubject?: string;
+  } | null>(null);
 
   // 提交历史检索与筛选状态
   const {
@@ -119,6 +161,60 @@ export function GitHistoryView({
     void history.fetchNextPage();
   }, [history]);
 
+  // 提交行右键快捷菜单
+  const handleContextMenuCommit = useCallback(
+    (commitItem: GitCommit, e: React.MouseEvent) => {
+      const items: GitContextMenuItem[] = [
+        {
+          label: t('commit.menuCreateBranch'),
+          icon: BranchIcon,
+          onClick: () => setCreateBranchState({ open: true, startPoint: commitItem.oid }),
+        },
+        {
+          label: t('commit.menuReset'),
+          icon: RotateCcw,
+          onClick: () =>
+            setResetState({
+              open: true,
+              commitHash: commitItem.oid,
+              commitSubject: commitItem.subject,
+            }),
+        },
+        {
+          label: t('commit.menuRevert'),
+          icon: RotateCcw,
+          onClick: () =>
+            setRevertState({
+              open: true,
+              commitHash: commitItem.oid,
+              commitSubject: commitItem.subject,
+            }),
+        },
+        {
+          label: t('commit.menuCherryPick'),
+          icon: Copy,
+          onClick: () =>
+            setCherryPickState({
+              open: true,
+              commitHash: commitItem.oid,
+              commitSubject: commitItem.subject,
+            }),
+        },
+        { divider: true, label: '' },
+        {
+          label: t('commit.menuCopyHash'),
+          icon: Copy,
+          onClick: () => {
+            void navigator.clipboard.writeText(commitItem.oid);
+            showToast?.(t('history.hashCopied'), 'success');
+          },
+        },
+      ];
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+    },
+    [t, showToast],
+  );
+
   return (
     <div className="git-split">
       {/* 1. 左侧分支栏 */}
@@ -126,8 +222,12 @@ export function GitHistoryView({
         overview={overview}
         tree={tree}
         selectedBranch={branch}
+        repoStatus={repoStatus}
         onSelectHead={handleSelectHead}
         onSelectBranch={handleSelectBranch}
+        onRefreshAll={onRefreshAll}
+        showToast={showToast}
+        onOpenCreateBranch={(startPoint) => setCreateBranchState({ open: true, startPoint })}
       />
 
       {/* 2. 右侧提交历史区 */}
@@ -146,35 +246,110 @@ export function GitHistoryView({
           onResetFilters={resetFilters}
         />
 
-        {anchor && (!history.data || (history.error && !history.isFetchNextPageError)) ? (
-          feedbackRenderer(history.error, () => void history.refetch())
-        ) : (
-          <GitCommitList
-            commits={visibleCommits}
-            selectedCommitOid={commit}
-            onSelectCommit={handleSelectCommit}
-            searchHighlightQuery={searchInput || debouncedSearch}
-            hasActiveFilters={hasActiveFilters}
-            dateFormat={dateFormat}
-            hasNextPage={history.hasNextPage}
-            isFetchingNextPage={history.isFetchingNextPage}
-            isFetchNextPageError={history.isFetchNextPageError}
-            onFetchNextPage={handleFetchNextPage}
-          />
-        )}
+        <div className="git-history-body">
+          {/* 提交列表：居左侧栏，保持 100% 完整垂直高度与独立滚动，不被底部挤压 */}
+          <div className={`git-history-commits-pane ${commit ? 'with-detail' : 'full-width'}`}>
+            {anchor && (!history.data || (history.error && !history.isFetchNextPageError)) ? (
+              feedbackRenderer(history.error, () => void history.refetch())
+            ) : (
+              <GitCommitList
+                commits={visibleCommits}
+                selectedCommitOid={commit}
+                onSelectCommit={handleSelectCommit}
+                searchHighlightQuery={searchInput || debouncedSearch}
+                hasActiveFilters={hasActiveFilters}
+                dateFormat={dateFormat}
+                cwd={tree.path}
+                hasNextPage={history.hasNextPage}
+                isFetchingNextPage={history.isFetchingNextPage}
+                isFetchNextPageError={history.isFetchNextPageError}
+                onFetchNextPage={handleFetchNextPage}
+                onContextMenuCommit={handleContextMenuCommit}
+              />
+            )}
+          </div>
 
-        {/* 选中提交的差异详情 */}
-        {commit ? (
-          <section className="git-detail" aria-label={t('diff.commit', { oid: commit })}>
-            <h3 className="git-detail-title" title={commit}>
-              <code>{commit.slice(0, 12)}</code>
-            </h3>
-            {diffRenderer(commit)}
-          </section>
-        ) : (
-          <p className="git-history-hint">{t('history.choose')}</p>
-        )}
+          {/* 选中提交的差异详情：横向排布在右侧，提供文件过滤导航与超大差异折叠 */}
+          {commit && (
+            <div className="git-history-detail-pane">
+              {diffRenderer ? (
+                diffRenderer(
+                  commit,
+                  visibleCommits.find((c) => c.oid === commit),
+                  () => selectCommit(undefined),
+                )
+              ) : (
+                <GitCommitDetailPane
+                  projectId={projectId}
+                  commitOid={commit}
+                  commitInfo={visibleCommits.find((c) => c.oid === commit)}
+                  onClose={() => selectCommit(undefined)}
+                  showToast={showToast}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* 提交行右键菜单 */}
+      {contextMenu && (
+        <GitContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* 从提交/HEAD 新建分支弹窗 */}
+      <GitCreateBranchModal
+        open={createBranchState.open}
+        onOpenChange={(open) => setCreateBranchState((prev) => ({ ...prev, open }))}
+        cwd={tree.path}
+        startPoint={createBranchState.startPoint}
+        onSuccess={() => onRefreshAll?.()}
+        showToast={showToast ?? (() => {})}
+      />
+
+      {/* Reset 历史回退弹窗 */}
+      {resetState && (
+        <GitResetModal
+          open={resetState.open}
+          onOpenChange={(open) => !open && setResetState(null)}
+          cwd={tree.path}
+          commitHash={resetState.commitHash}
+          commitSubject={resetState.commitSubject}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
+
+      {/* Revert 撤销提交弹窗 */}
+      {revertState && (
+        <GitRevertModal
+          open={revertState.open}
+          onOpenChange={(open) => !open && setRevertState(null)}
+          cwd={tree.path}
+          commitHash={revertState.commitHash}
+          commitSubject={revertState.commitSubject}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
+
+      {/* Cherry-pick 摘取提交弹窗 */}
+      {cherryPickState && (
+        <GitCherryPickModal
+          open={cherryPickState.open}
+          onOpenChange={(open) => !open && setCherryPickState(null)}
+          cwd={tree.path}
+          commitHash={cherryPickState.commitHash}
+          commitSubject={cherryPickState.commitSubject}
+          onSuccess={() => onRefreshAll?.()}
+          showToast={showToast ?? (() => {})}
+        />
+      )}
     </div>
   );
 }

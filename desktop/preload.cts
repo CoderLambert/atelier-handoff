@@ -162,3 +162,171 @@ const uiNotifications: DesktopUiNotificationsBridge = {
   },
 };
 contextBridge.exposeInMainWorld('atelierUiNotifications', uiNotifications);
+
+import {
+  desktopGitChannels,
+  gitCommitStatsSchema,
+  gitOpResultSchema,
+  gitRepoStatusSchema,
+  gitStashItemSchema,
+  type DesktopGitBridge,
+} from '../shared/desktop-git.js';
+
+const gitBridge: DesktopGitBridge = {
+  async getStatus(cwd) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.status, { cwd });
+    return gitRepoStatusSchema.parse(response);
+  },
+  async getCommitStats(cwd, hash) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.commitStats, {
+      cwd,
+      hash,
+    });
+    return gitCommitStatsSchema.parse(response);
+  },
+  async fetch(cwd, options) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.fetch, {
+      cwd,
+      ...options,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async pull(cwd, options) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.pull, {
+      cwd,
+      ...options,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async push(cwd, options) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.push, {
+      cwd,
+      ...options,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async createBranch(cwd, name, startPoint) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.createBranch, {
+      cwd,
+      name,
+      startPoint,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async checkoutBranch(cwd, name, autoStash) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.checkoutBranch, {
+      cwd,
+      name,
+      autoStash,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async renameBranch(cwd, oldName, newName) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.renameBranch, {
+      cwd,
+      oldName,
+      newName,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async deleteBranch(cwd, name, force) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.deleteBranch, {
+      cwd,
+      name,
+      force,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async mergeBranch(cwd, name) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.mergeBranch, {
+      cwd,
+      name,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async reset(cwd, hash, mode) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.reset, {
+      cwd,
+      hash,
+      mode,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async revert(cwd, hash) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.revert, { cwd, hash });
+    return gitOpResultSchema.parse(response);
+  },
+  async cherryPick(cwd, hash) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.cherryPick, {
+      cwd,
+      hash,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async commit(cwd, message, stageAll) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.commit, {
+      cwd,
+      message,
+      stageAll,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async amendCommit(cwd, message, stageAll) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.amendCommit, {
+      cwd,
+      message,
+      stageAll,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async discardFiles(cwd, paths) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.discardFiles, {
+      cwd,
+      paths,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async stashList(cwd) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.stashList, { cwd });
+    if (!Array.isArray(response)) return [];
+    return response.map((item) => gitStashItemSchema.parse(item));
+  },
+  async stashPush(cwd, message) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.stashPush, {
+      cwd,
+      message,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async stashPop(cwd, index) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.stashPop, {
+      cwd,
+      index,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async stashApply(cwd, index) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.stashApply, {
+      cwd,
+      index,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async stashDrop(cwd, index) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.stashDrop, {
+      cwd,
+      index,
+    });
+    return gitOpResultSchema.parse(response);
+  },
+  async continueOp(cwd) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.continueOp, { cwd });
+    return gitOpResultSchema.parse(response);
+  },
+  async abortOp(cwd) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.abortOp, { cwd });
+    return gitOpResultSchema.parse(response);
+  },
+};
+
+contextBridge.exposeInMainWorld('atelierGit', gitBridge);
