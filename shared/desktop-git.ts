@@ -21,7 +21,6 @@ export const desktopGitChannels = {
   cherryPick: 'git:cherry-pick',
   commit: 'git:commit',
   amendCommit: 'git:amend-commit',
-  discardFiles: 'git:discard-files',
   stashList: 'git:stash-list',
   stashPush: 'git:stash-push',
   stashPop: 'git:stash-pop',
@@ -120,7 +119,6 @@ export interface DesktopGitBridge {
   cherryPick(cwd: string, hash: string): Promise<GitOpResult>;
   commit(cwd: string, message: string, stageAll?: boolean): Promise<GitOpResult>;
   amendCommit(cwd: string, message: string, stageAll?: boolean): Promise<GitOpResult>;
-  discardFiles(cwd: string, paths: string[]): Promise<GitOpResult>;
   stashList(cwd: string): Promise<GitStashItem[]>;
   stashPush(cwd: string, message?: string): Promise<GitOpResult>;
   stashPop(cwd: string, index?: number): Promise<GitOpResult>;

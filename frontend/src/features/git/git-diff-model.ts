@@ -1,7 +1,7 @@
 /**
- * @file 准备用于显示的 Git 补丁和行号。
- * @implementation 复用 jsdiff 解析普通分块并计算行号，保留特殊格式和大补丁的原文。
- * @updated 2026-11-25T13:23:00+08:00
+ * @file 准备用于显示的 Git 补丁、行号和分栏数据。
+ * @implementation 复用 jsdiff 解析分块并计算行号，配对前后变更行，保留特殊格式和大补丁的原文。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { parsePatch, type StructuredPatch, type StructuredPatchHunk } from 'diff';
 
@@ -15,7 +15,7 @@ export type GitDiffLine = {
 
 export type GitDiffHunk = { header: string; lines: GitDiffLine[] };
 
-export type PatchFile =
+export type PatchFile = { deleted?: boolean } & (
   | {
       kind: 'text';
       path: string | undefined;
@@ -29,7 +29,8 @@ export type PatchFile =
       path: string | undefined;
       text: string;
       binary: boolean;
-    };
+    }
+);
 
 /** 单个文件最多渲染行数（超出降为 raw）。已按文件折叠，大文件不再影响后续文件高亮。 */
 const maxLinesPerFile = 8000;
@@ -62,6 +63,28 @@ function numberLines(hunk: StructuredPatchHunk) {
   return lines;
 }
 
+export function splitDiffRows(lines: GitDiffLine[]) {
+  const rows: { before?: GitDiffLine; after?: GitDiffLine }[] = [];
+  let before: GitDiffLine[] = [];
+  let after: GitDiffLine[] = [];
+  const flush = () => {
+    for (let index = 0; index < Math.max(before.length, after.length); index++)
+      rows.push({ before: before[index], after: after[index] });
+    before = [];
+    after = [];
+  };
+  for (const line of lines) {
+    if (line.kind === 'removed') before.push(line);
+    else if (line.kind === 'added') after.push(line);
+    else {
+      flush();
+      rows.push({ before: line, after: line });
+    }
+  }
+  flush();
+  return rows;
+}
+
 export function describeGitPatch(patch: string, selectedPath: string | undefined): PatchFile[] {
   const sections = patch.split(/(?<=\n)(?=diff --(?:git|cc|combined) )/u);
   if (sections.length > 120)
@@ -87,11 +110,15 @@ export function describeGitPatch(patch: string, selectedPath: string | undefined
     }
     if (!parsed) return fallback;
     const path = fallback.path ?? filename(parsed);
+    const version =
+      parsed.newFileName === '/dev/null' || /^deleted file mode /mu.test(text)
+        ? { deleted: true }
+        : {};
     const lines = parsed.hunks.reduce((sum, hunk) => sum + hunk.lines.length, 0);
     // 单文件超过 maxLinesPerFile 或累计超 maxTotalLines 才降级 raw；
     // 不让大文件吃掉后续文件的渲染配额。
     if (binary || !lines || lines > maxLinesPerFile || lines > remainingTotalLines)
-      return { ...fallback, path };
+      return { ...fallback, path, ...version };
     const headers = [...text.matchAll(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@.*$/gmu)];
     if (headers.length !== parsed.hunks.length) return { ...fallback, path };
     const metadata = text
@@ -111,6 +138,6 @@ export function describeGitPatch(patch: string, selectedPath: string | undefined
       }
       return { header: headers[index]?.[0] ?? '', lines: rows };
     });
-    return { kind: 'text', path, metadata, hunks, added, removed };
+    return { kind: 'text', path, metadata, hunks, added, removed, ...version };
   });
 }

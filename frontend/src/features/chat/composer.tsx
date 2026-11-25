@@ -6,7 +6,7 @@
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { ArrowUp, File as FileIcon, Paperclip, Plus, Quote, X } from 'lucide-react';
-import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
+import { composerTextLimit, fileQuoteLocation, formatMessageText } from '@shared/message-quotes';
 import type { Draft, ReasoningEffort, Run } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
@@ -359,7 +359,7 @@ export function Composer({
           </p>
         ) : null}
         {draft.messageQuotes?.length ? (
-          <ul className="composer-quotes" aria-label={t('composer.quotes')}>
+          <ul className="composer-quotes" aria-label={t(draft.messageQuotes.some(({ file }) => file) ? 'composer.fileQuotes' : 'composer.quotes')}>
             {draft.messageQuotes.map((item, index) => (
               <li key={item.id} className="composer-quote">
                 <Quote
@@ -367,7 +367,14 @@ export function Composer({
                   className="composer-quote-mark"
                   aria-hidden="true"
                 />
-                <span className="composer-quote-excerpt">{item.text}</span>
+                {item.file ? (
+                  <div className="composer-file-quote">
+                    <code className="composer-file-quote-location" title={fileQuoteLocation(item.file)}>
+                      {fileQuoteLocation(item.file)}
+                    </code>
+                    <span className="composer-quote-excerpt">{item.text}</span>
+                  </div>
+                ) : <span className="composer-quote-excerpt">{item.text}</span>}
                 <Button
                   type="button"
                   variant="ghost"

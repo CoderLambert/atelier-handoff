@@ -1,17 +1,19 @@
 /**
  * @file 管理可信工作台窗口的原生文件操作与诊断导出。
- * @implementation 校验 IPC 来源，通过系统对话框选择目录或保存位置；从配对运行时读取交付物、登记并定位已保存副本，或写出诊断信息。
- * @updated 2026-11-20T03:34:05+08:00
+ * @implementation 校验 IPC 来源，通过系统对话框处理目录和保存操作；从配对运行时读取交付物或 Git 文件位置，定位本机文件并导出诊断信息。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { access, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { release } from 'node:os';
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import {
   desktopArtifactIdSchema,
   desktopArtifactSaveSchema,
   desktopFilesChannels,
+  desktopGitFileSchema,
+  desktopGitFileLocationSchema,
 } from '../../shared/desktop-files.js';
 import { desktopPairingHeader } from '../../shared/desktop-host.js';
 import { desktopT } from './i18n.mjs';
@@ -108,6 +110,23 @@ export function createNativeFileActions(
       return true;
     },
   );
+  ipcMain.handle(desktopFilesChannels.revealGitFile, async (event, input: unknown): Promise<boolean> => {
+    const { runtime } = trusted(event);
+    const { projectId, worktreeId, path } = desktopGitFileSchema.parse(input);
+    const url = new URL(`/api/projects/${projectId}/git/worktrees/${worktreeId}/file-location`, runtime.origin);
+    url.searchParams.set('path', path);
+    const response = await fetch(url, {
+      headers: { [desktopPairingHeader]: runtime.pairing },
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+    });
+    if (!response.ok || trusted(event).runtime !== runtime) return false;
+    const value: unknown = await response.json();
+    const { location } = desktopGitFileLocationSchema.parse(value);
+    if (!isAbsolute(location) || trusted(event).runtime !== runtime) return false;
+    shell.showItemInFolder(location);
+    return true;
+  });
   ipcMain.handle(desktopFilesChannels.exportDiagnostics, async (event): Promise<boolean> => {
     const { owner } = trusted(event);
     const result = await dialog.showSaveDialog(owner, {

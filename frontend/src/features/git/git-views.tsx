@@ -1,7 +1,7 @@
 /**
  * @file 展示 Git 文件、提交、差异及操作入口。
- * @implementation 按工作树展示分组文件与差异，提供逐文件暂存、取消暂存及提交、丢弃和储藏操作。
- * @updated 2026-11-25T13:41:28+08:00
+ * @implementation 按工作树和变更层展示文件与差异，提供布局切换、完整内容预览、本机定位及文件层级操作。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { useRef, useState } from 'react';
 import {
@@ -26,18 +26,21 @@ import {
 import { translateError, useUiTranslation } from '@/i18n';
 import { useGitFiles } from '@/use-query/git/use-git-files';
 import { useUpdateGitFileIndex } from '@/use-query/git/use-update-git-file-index';
+import { useDiscardGitFiles } from '@/use-query/git/use-discard-git-files';
 import { useGitFileDiff } from '@/use-query/git/use-git-file-diff';
 import type {
   GitDiff,
   GitDiffLayer,
   GitFile,
+  GitFileDiscardRequest,
   GitOverview,
   GitWorktree,
 } from '@shared/git-workbench';
 import type { GitRepoStatus } from '@shared/desktop-git';
-import { getDesktopGitBridge } from '@/desktop-git';
 
-import { GitPatch } from './git-diff';
+import { GitDiffLayoutButton, GitPatch } from './git-diff';
+import { GitFileActions } from './git-file-actions';
+import type { GitOpenFile } from './git-open-file';
 import { GitFileLabel } from './git-file-label';
 import { GitMultiCommitDialog } from './git-multi-commit-dialog';
 import { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
@@ -69,19 +72,47 @@ function DiffContent({
   path,
   error,
   retry,
+  split,
 }: {
   data?: GitDiff;
   path?: string;
   error?: unknown;
   retry: () => void;
+  split?: boolean;
 }) {
   const { t } = useUiTranslation('git');
   if (!data || error) return <GitQueryFeedback error={error} retry={retry} />;
-  if (data.text) return <GitPatch text={data.text} path={path} />;
+  if (data.text) return <GitPatch text={data.text} path={path} split={split} />;
   return <p className="git-feedback">{t(data.binary ? 'diff.binary' : 'diff.empty')}</p>;
 }
 
 const layers = ['staged', 'unstaged', 'untracked', 'conflict'] as const;
+
+function FileDiff({
+  projectId,
+  treeId,
+  path,
+  layer,
+  split,
+}: {
+  projectId: string;
+  treeId: string;
+  path: string;
+  layer: GitDiffLayer;
+  split: boolean;
+}) {
+  const patch = useGitFileDiff(projectId, treeId, { path, layer });
+  return (
+    <DiffContent
+      path={path}
+      data={patch.data}
+      error={patch.error}
+      split={split}
+      retry={() => void patch.refetch()}
+    />
+  );
+}
+
 function layerFiles(file: GitFile, layer: GitDiffLayer) {
   if (file.kind !== 'tracked') return file.kind === layer;
   return layer === 'staged' ? file.index !== '.' : layer === 'unstaged' && file.worktree !== '.';
@@ -108,6 +139,7 @@ function fileChangeCode(file: GitFile, layer: GitDiffLayer) {
 export function GitFilesView({
   projectId,
   tree,
+  onOpenFile,
   busy,
   onBusy,
   repoStatus,
@@ -116,6 +148,7 @@ export function GitFilesView({
 }: {
   projectId: string;
   tree: GitWorktree;
+  onOpenFile: (file: GitOpenFile) => void;
   busy: boolean;
   onBusy: (value: boolean) => void;
   repoStatus?: GitRepoStatus | null;
@@ -124,15 +157,18 @@ export function GitFilesView({
 }) {
   const { t, locale } = useUiTranslation('git');
   const [selected, choose] = useState<{ path: string; layer: GitDiffLayer }>();
-  const [discardTargets, setDiscardTargets] = useState<string[] | null>(null);
-  const [discarding, setDiscarding] = useState(false);
+  const [comparisonPath, setComparisonPath] = useState<string>();
+  const [split, setSplit] = useState(false);
+  const [discardTargets, setDiscardTargets] = useState<GitFileDiscardRequest['targets']>();
 
   const toolbar = useRef<HTMLDivElement>(null);
   const fileList = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const discardTrigger = useRef<HTMLButtonElement>(null);
   const available = tree.state === 'ready' && tree.scope !== 'external';
   const status = useGitFiles(projectId, available ? tree.id : undefined);
   const fileIndex = useUpdateGitFileIndex(projectId, tree.id);
+  const discard = useDiscardGitFiles(projectId, tree.id);
   const pending = usePendingMultiCommits(projectId, tree.id, available);
   const recovery = useRecoverMultiCommit(projectId, tree.id);
   const abandonment = useAbandonMultiCommit(projectId, tree.id);
@@ -144,39 +180,52 @@ export function GitFilesView({
   }));
   const firstGroup = groups.find(({ files }) => files.length);
   const firstFile = firstGroup?.files[0];
-  const selectedGroup = selected && (
-    groups.find(({ layer, files }) =>
-      layer === selected.layer && files.some(({ path }) => path === selected.path),
-    ) ?? groups.find(({ files }) => files.some(({ path }) => path === selected.path))
+  const selectedGroup =
+    selected &&
+    (groups.find(
+      ({ layer, files }) =>
+        layer === selected.layer && files.some(({ path }) => path === selected.path),
+    ) ??
+      groups.find(({ files }) => files.some(({ path }) => path === selected.path)));
+  const current =
+    selectedGroup && selected
+      ? { path: selected.path, layer: selectedGroup.layer }
+      : firstGroup && firstFile
+        ? { path: firstFile.path, layer: firstGroup.layer }
+        : undefined;
+  const hasBothLayers =
+    current &&
+    status.data?.files.some(
+      (file) =>
+        file.path === current.path && layerFiles(file, 'staged') && layerFiles(file, 'unstaged'),
+    );
+  const comparing = hasBothLayers && current?.path === comparisonPath;
+  const activeFile = current && status.data?.files.find((file) =>
+    file.path === current.path && layerFiles(file, current.layer),
   );
-  const current = selectedGroup && selected
-    ? { path: selected.path, layer: selectedGroup.layer }
-    : firstGroup && firstFile
-      ? { path: firstFile.path, layer: firstGroup.layer }
-      : undefined;
-  const patch = useGitFileDiff(projectId, available ? tree.id : undefined, current);
+  const fullSource = current?.layer === 'staged' ? activeFile?.index === 'D' ? 'head' : 'index'
+    : activeFile?.worktree === 'D' ? 'index' : 'worktree';
+  const discarding = discard.isPending;
+  const discardDescription = (layer: GitFileDiscardRequest['targets'][number]['layer']) =>
+    t(layer === 'staged' && !tree.head ? 'files.discardFirstStaged' : `files.discardMode.${layer}`);
 
-  // 丢弃改动执行逻辑
+  const openDiscard = (button: HTMLButtonElement, targets: GitFileDiscardRequest['targets']) => {
+    discardTrigger.current = button;
+    discard.reset();
+    setDiscardTargets(targets);
+  };
   const handleDiscard = async () => {
-    if (!discardTargets || !tree.path) return;
-    const bridge = getDesktopGitBridge();
-    if (!bridge) return;
-
-    setDiscarding(true);
+    if (!discardTargets || discarding) return;
+    onBusy(true);
     try {
-      const res = await bridge.discardFiles(tree.path, discardTargets);
-      if (!res.success) {
-        showToast?.('丢弃改动失败', 'error', res.stderr);
-        return;
-      }
-      showToast?.(`已丢弃 ${discardTargets.length} 个文件的改动`, 'success');
-      setDiscardTargets(null);
-      void status.refetch();
-      onRefreshAll?.();
-    } catch (err) {
-      showToast?.('丢弃改动异常', 'error', err instanceof Error ? err.message : String(err));
+      await discard.mutateAsync({ targets: discardTargets });
+      showToast?.(t('files.discardDone'), 'success');
+      setDiscardTargets(undefined);
+    } catch {
+      // The mutation retains the error for the confirmation dialog.
     } finally {
-      setDiscarding(false);
+      onRefreshAll?.();
+      onBusy(false);
     }
   };
 
@@ -191,6 +240,17 @@ export function GitFilesView({
     busy || pending.isPending || pending.isError || Boolean(pending.data?.items.length);
 
   const fileActionsDisabled = commitDisabled || discarding || fileIndex.isPending;
+  const allDiscardTargets = status.data.files.flatMap<GitFileDiscardRequest['targets'][number]>(
+    ({ path, kind, index }) =>
+      kind === 'conflict' || path.endsWith('/')
+        ? []
+        : [
+            {
+              path,
+              layer: kind === 'untracked' ? 'untracked' : index !== '.' ? 'staged' : 'unstaged',
+            },
+          ],
+  );
 
   const conflictFiles = repoStatus?.conflictFiles ?? [];
 
@@ -202,16 +262,17 @@ export function GitFilesView({
           {staged > 0 ? (
             <Badge variant="success">{t('commit.stagedCount', { count: staged })}</Badge>
           ) : null}
-          {fileCount > 0 && (
+          {allDiscardTargets.length > 0 && (
             <Button
               type="button"
               size="sm"
               variant="ghost"
               className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-              onClick={() => setDiscardTargets(status.data?.files.map((f) => f.path) ?? [])}
+              disabled={fileActionsDisabled}
+              onClick={(event) => openDiscard(event.currentTarget, allDiscardTargets)}
             >
               <Trash2 className="w-3 h-3 mr-1" aria-hidden="true" />
-              <span>{t('files.discardAll')}</span>
+              <span>{t('files.discardMany')}</span>
             </Button>
           )}
         </div>
@@ -426,21 +487,26 @@ export function GitFilesView({
                                   <IndexIcon aria-hidden="true" />
                                 </Button>
                               ) : null}
-                              <Button
-                                type="button"
-                                size="icon-xs"
-                                variant="ghost"
-                                disabled={busy || discarding}
-                                className="git-file-discard size-7 shrink-0 text-muted-foreground hover:text-destructive"
-                                title={t('files.discardFile')}
-                                aria-label={t('files.discardFile')}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDiscardTargets([file.path]);
-                                }}
-                              >
-                                <X className="w-3.5 h-3.5" aria-hidden="true" />
-                              </Button>
+                              {layer !== 'conflict' && !file.path.endsWith('/') ? (
+                                <Button
+                                  type="button"
+                                  size="icon-xs"
+                                  variant="ghost"
+                                  disabled={fileActionsDisabled}
+                                  className="git-file-discard size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                  title={discardDescription(layer)}
+                                  aria-label={t('files.discardPath', {
+                                    path: file.path,
+                                    action: discardDescription(layer),
+                                  })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDiscard(e.currentTarget, [{ path: file.path, layer }]);
+                                  }}
+                                >
+                                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                </Button>
+                              ) : null}
                             </div>
                           </li>
                         );
@@ -487,17 +553,77 @@ export function GitFilesView({
                 <h3>
                   <GitFileLabel path={current.path} />
                 </h3>
-                <Badge variant={current.layer === 'staged' ? 'success' : 'secondary'}>
-                  {t(`layer.${current.layer}`)}
-                </Badge>
+                {hasBothLayers ? (
+                  <div className="git-diff-layer-controls">
+                    {(['staged', 'unstaged'] as const).map((layer) => (
+                      <Button
+                        key={layer}
+                        type="button"
+                        size="xs"
+                        variant={!comparing && current.layer === layer ? 'secondary' : 'ghost'}
+                        aria-pressed={!comparing && current.layer === layer}
+                        onClick={() => {
+                          choose({ path: current.path, layer });
+                          setComparisonPath(undefined);
+                        }}
+                      >
+                        {t(`layer.${layer}`)}
+                      </Button>
+                    ))}
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant={comparing ? 'secondary' : 'ghost'}
+                      aria-pressed={Boolean(comparing)}
+                      onClick={() => setComparisonPath(comparing ? undefined : current.path)}
+                    >
+                      {t('diff.compareLayers')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Badge variant={current.layer === 'staged' ? 'success' : 'secondary'}>
+                    {t(`layer.${current.layer}`)}
+                  </Badge>
+                )}
+                <div className="git-file-actions ms-auto">
+                  <GitDiffLayoutButton split={split} onToggle={() => setSplit(!split)} />
+                  {activeFile && !current.path.endsWith('/') && (
+                    <GitFileActions key={current.path + ':' + fullSource} projectId={projectId}
+                      worktreeId={tree.id}
+                      target={{ kind: 'worktree', worktreeId: tree.id, source: fullSource, path: current.path }}
+                      revealPath={activeFile.worktree === 'D' || activeFile.index === 'D' ? undefined : current.path}
+                      onRevealFailed={showToast} onOpenFile={onOpenFile} />
+                  )}
+                </div>
               </div>
-              <DiffContent
-                key={current.layer + ':' + current.path}
-                path={current.path}
-                data={patch.data}
-                error={patch.error}
-                retry={() => void patch.refetch()}
-              />
+              {comparing ? (
+                <div className="git-diff-comparison">
+                  {(['staged', 'unstaged'] as const).map((layer) => (
+                    <section
+                      key={layer + ':' + current.path}
+                      className="git-detail"
+                      aria-label={t(`layer.${layer}`)}
+                    >
+                      <h4 className="git-diff-comparison-heading">{t(`layer.${layer}`)}</h4>
+                      <FileDiff
+                        projectId={projectId}
+                        treeId={tree.id}
+                        path={current.path}
+                        layer={layer}
+                        split={split}
+                      />
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <FileDiff
+                  key={current.layer + ':' + current.path}
+                  projectId={projectId}
+                  treeId={tree.id}
+                  split={split}
+                  {...current}
+                />
+              )}
             </>
           ) : (
             <p className="git-feedback">{t('diff.choose')}</p>
@@ -512,8 +638,17 @@ export function GitFilesView({
 
       {/* 丢弃改动二次确认对话框 */}
       {discardTargets && (
-        <Dialog open onOpenChange={(o) => !discarding && !o && setDiscardTargets(null)}>
-          <DialogContent className="max-w-md">
+        <Dialog open onOpenChange={(o) => !discarding && !o && setDiscardTargets(undefined)}>
+          <DialogContent
+            className="max-w-md"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              const button = discardTrigger.current;
+              (button?.isConnected && !button.disabled ? button : toolbar.current)?.focus({
+                preventScroll: true,
+              });
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Trash2 className="w-4 h-4 text-destructive" aria-hidden="true" />
@@ -524,13 +659,26 @@ export function GitFilesView({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="max-h-32 overflow-y-auto my-2 p-2 rounded bg-muted/40 font-mono text-[11px] space-y-0.5">
-              {discardTargets.map((p) => (
-                <div key={p} className="truncate">
-                  {p}
-                </div>
-              ))}
-            </div>
+            <ul className="flex max-h-40 flex-col gap-2 overflow-y-auto rounded bg-muted/40 p-2 text-xs">
+              {discardTargets.map(({ path, layer }) => {
+                const rename = status.data.files.find(
+                  (file) => file.path === path && fileChangeCode(file, layer) === 'R',
+                )?.previousPath;
+                return (
+                  <li key={layer + ':' + path}>
+                    <div className="font-mono break-all">
+                      {rename ? rename + ' → ' + path : path}
+                    </div>
+                    <div className="text-muted-foreground">{discardDescription(layer)}</div>
+                  </li>
+                );
+              })}
+            </ul>
+            {discard.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {translateError(discard.error, t('files.discardFailed'))}
+              </p>
+            ) : null}
 
             <DialogFooter className="mt-4 gap-2">
               <Button
@@ -538,7 +686,7 @@ export function GitFilesView({
                 variant="outline"
                 size="sm"
                 disabled={discarding}
-                onClick={() => setDiscardTargets(null)}
+                onClick={() => setDiscardTargets(undefined)}
               >
                 {t('actions.cancel')}
               </Button>
@@ -563,6 +711,7 @@ export function GitHistoryView({
   projectId,
   overview,
   tree,
+  onOpenFile,
   onRefreshAll,
   showToast,
   repoStatus,
@@ -570,6 +719,7 @@ export function GitHistoryView({
   projectId: string;
   overview: GitOverview;
   tree: GitWorktree;
+  onOpenFile: (file: GitOpenFile) => void;
   onRefreshAll?: () => void;
   showToast?: (message: string, type?: 'success' | 'error', stderr?: string) => void;
   repoStatus?: GitRepoStatus | null;
@@ -579,6 +729,7 @@ export function GitHistoryView({
       projectId={projectId}
       overview={overview}
       tree={tree}
+      onOpenFile={onOpenFile}
       onRefreshAll={onRefreshAll}
       showToast={showToast}
       repoStatus={repoStatus}

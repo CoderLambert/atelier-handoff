@@ -1,14 +1,16 @@
 /**
  * @file 展示 Git 文件和提交的差异预览。
- * @implementation 保留原始补丁回退，按语言延迟加载高亮，并在同一区域显示原行和新行。
- * @updated 2026-11-25T13:23:00+08:00
+ * @implementation 支持行内和左右布局、文件卡片操作及按语言延迟加载高亮，为特殊格式保留原始补丁回退。
+ * @updated 2026-11-25T16:53:09+08:00
  */
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { ChevronDown, FileCode2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { ChevronDown, Columns2, FileCode2, List } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { loadCodeHighlighter, type HighlightResult } from '@atelier/markdown';
 import { useUiTranslation } from '@/i18n';
 import {
   describeGitPatch,
+  splitDiffRows,
   type GitDiffHunk,
   type GitDiffLine,
   type PatchFile,
@@ -24,7 +26,7 @@ const aliases: Readonly<Record<string, string>> = {
   'code-workspace': 'jsonc',
 };
 
-function languageForPath(path: string) {
+export function languageForPath(path: string) {
   const name = path.split('/').at(-1)?.toLowerCase() ?? '';
   if (/^(?:dockerfile|containerfile)(?:\.|$)/u.test(name)) return 'dockerfile';
   if (name === 'makefile' || name === 'gnumakefile') return 'make';
@@ -87,7 +89,7 @@ function useHunkTokens(path: string | undefined, lines: GitDiffLine[]) {
   return highlight?.path === path && highlight?.lines === lines ? highlight : undefined;
 }
 
-function HighlightedLine({ text, tokens }: { text: string; tokens: Tokens[number] | undefined }) {
+export function HighlightedLine({ text, tokens }: { text: string; tokens: Tokens[number] | undefined }) {
   if (!tokens?.length) return text;
   return tokens.map(({ content, htmlStyle }, index) => {
     const style: TokenStyle = {
@@ -100,6 +102,61 @@ function HighlightedLine({ text, tokens }: { text: string; tokens: Tokens[number
       </span>
     );
   });
+}
+
+function DiffLineContent({ line, tokens }: { line: GitDiffLine; tokens?: Tokens[number] }) {
+  const { t } = useUiTranslation('inspector');
+  const crlf = line.text.endsWith('\r');
+  return (
+    <>
+      <code>
+        <HighlightedLine text={crlf ? line.text.slice(0, -1) : line.text} tokens={tokens} />
+      </code>
+      {crlf ? (
+        <span className="git-line-note" title={t('diff.crlf')}>
+          ␍
+        </span>
+      ) : null}
+      {line.noFinalNewline ? (
+        <span className="git-line-note">{t('diff.noFinalNewline')}</span>
+      ) : null}
+    </>
+  );
+}
+
+function SplitPatchHunk({ hunk, path }: { hunk: GitDiffHunk; path: string | undefined }) {
+  const tokens = useHunkTokens(path, hunk.lines);
+  let beforeOffset = 0;
+  let afterOffset = 0;
+  return (
+    <tbody>
+      <tr className="git-diff-hunk">
+        <td colSpan={4}>{hunk.header}</td>
+      </tr>
+      {splitDiffRows(hunk.lines).map(({ before, after }, index) => {
+        const beforeTokens = before ? tokens?.old?.[beforeOffset] : undefined;
+        const afterTokens = after ? tokens?.new?.[afterOffset] : undefined;
+        if (before) beforeOffset++;
+        if (after) afterOffset++;
+        return (
+          <tr className="git-diff-split-row" key={index}>
+            <td className="git-diff-number" data-kind={before?.kind}>
+              {before?.oldLine}
+            </td>
+            <td className="git-diff-text" data-kind={before?.kind}>
+              {before && <DiffLineContent line={before} tokens={beforeTokens} />}
+            </td>
+            <td className="git-diff-number" data-kind={after?.kind}>
+              {after?.newLine}
+            </td>
+            <td className="git-diff-text" data-kind={after?.kind}>
+              {after && <DiffLineContent line={after} tokens={afterTokens} />}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  );
 }
 
 function PatchHunk({ hunk, path }: { hunk: GitDiffHunk; path: string | undefined }) {
@@ -117,7 +174,6 @@ function PatchHunk({ hunk, path }: { hunk: GitDiffHunk; path: string | undefined
         const next = line.newLine === null ? undefined : tokens?.new?.[newIndex];
         if (line.oldLine !== null) oldIndex++;
         if (line.newLine !== null) newIndex++;
-        const crlf = line.text.endsWith('\r');
         return (
           <tr className="git-diff-line" data-kind={line.kind} key={index}>
             <td className="git-diff-number">{line.oldLine}</td>
@@ -126,20 +182,7 @@ function PatchHunk({ hunk, path }: { hunk: GitDiffHunk; path: string | undefined
               {line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : ' '}
             </td>
             <td className="git-diff-text">
-              <code>
-                <HighlightedLine
-                  text={crlf ? line.text.slice(0, -1) : line.text}
-                  tokens={line.kind === 'removed' ? previous : next}
-                />
-              </code>
-              {crlf ? (
-                <span className="git-line-note" title={t('diff.crlf')}>
-                  ␍
-                </span>
-              ) : null}
-              {line.noFinalNewline ? (
-                <span className="git-line-note">{t('diff.noFinalNewline')}</span>
-              ) : null}
+              <DiffLineContent line={line} tokens={line.kind === 'removed' ? previous : next} />
             </td>
           </tr>
         );
@@ -155,65 +198,73 @@ export interface PatchFileCardProps {
   collapsible?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  split?: boolean;
+  actions?: ReactNode;
 }
 
 export function PatchFileCard({
   file,
-  filename = file.path,
+  filename,
   highlight = true,
   collapsible = false,
   isCollapsed = false,
   onToggleCollapse,
+  split = false,
+  actions,
 }: PatchFileCardProps) {
   const { t, locale } = useUiTranslation('git');
   const { t: diff } = useUiTranslation('inspector');
   const format = new Intl.NumberFormat(locale);
+  const toggleLabel = t(isCollapsed ? 'diff.expandFile' : 'diff.collapseFile');
+  const name = filename ? (
+    <span className="git-patch-name" title={filename}>
+      <FileCode2 aria-hidden="true" />
+      <span className="truncate">{filename}</span>
+    </span>
+  ) : null;
+  const Hunk = split ? SplitPatchHunk : PatchHunk;
 
   return (
     <div className="git-patch">
       {filename || file.kind === 'text' ? (
-        <header
-          className={`git-patch-heading ${collapsible ? 'cursor-pointer select-none hover:bg-muted/40 transition-colors' : ''}`}
-          onClick={collapsible ? onToggleCollapse : undefined}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {collapsible && (
-              <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform text-muted-foreground ${isCollapsed ? '-rotate-90' : ''}`}
-                aria-hidden="true"
-              />
-            )}
-            {filename ? (
-              <h4 title={filename} className="flex items-center gap-1.5 truncate">
-                <FileCode2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{filename}</span>
-              </h4>
-            ) : null}
-          </div>
+        <header className="git-patch-heading">
+          {collapsible && filename ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="git-patch-toggle"
+              title={toggleLabel}
+              aria-expanded={!isCollapsed}
+              aria-label={t('diff.fileAction', { action: toggleLabel, path: filename })}
+              onClick={onToggleCollapse}
+            >
+              <ChevronDown aria-hidden="true" data-collapsed={isCollapsed} />
+              {name}
+            </Button>
+          ) : (
+            name
+          )}
           {file.kind === 'text' ? (
             <div className="git-patch-stats flex items-center gap-2">
-              <span className="git-diff-added text-xs" aria-label={diff('diff.addedLines', { count: file.added })}>
+              <span
+                className="git-diff-added text-xs"
+                aria-label={diff('diff.addedLines', { count: file.added })}
+              >
                 +{format.format(file.added)}
               </span>
-              <span className="git-diff-removed text-xs" aria-label={diff('diff.removedLines', { count: file.removed })}>
+              <span
+                className="git-diff-removed text-xs"
+                aria-label={diff('diff.removedLines', { count: file.removed })}
+              >
                 −{format.format(file.removed)}
               </span>
             </div>
           ) : null}
+          {actions}
         </header>
       ) : null}
-      {isCollapsed ? (
-        <div className="px-3 py-2 text-xs text-muted-foreground flex items-center justify-between bg-muted/10 border-t border-border">
-          <span>{t('diff.expandFile')}</span>
-          <button
-            type="button"
-            className="text-xs text-primary hover:underline"
-            onClick={onToggleCollapse}
-          >
-            {t('diff.expandFile')}
-          </button>
-        </div>
-      ) : file.kind === 'raw' ? (
+      {isCollapsed ? null : file.kind === 'raw' ? (
         <>
           {file.binary ? <p className="git-feedback">{t('diff.binary')}</p> : null}
           <pre className="git-patch-raw">
@@ -239,27 +290,52 @@ export function PatchFileCard({
           {file.metadata.length ? (
             <pre className="git-patch-raw">{file.metadata.join('\n')}</pre>
           ) : null}
-          <table className="git-diff-table" aria-label={filename}>
-            <colgroup>
-              <col className="git-diff-number-column" />
-              <col className="git-diff-number-column" />
-              <col className="git-diff-sign-column" />
-              <col />
-            </colgroup>
-            <thead className="sr-only">
-              <tr>
-                <th scope="col">{diff('diff.oldLine')}</th>
-                <th scope="col">{diff('diff.newLine')}</th>
-                <th scope="col">{t('diff.change')}</th>
-                <th scope="col">{t('diff.content')}</th>
-              </tr>
-            </thead>
+          <table
+            className={split ? 'git-diff-table git-diff-table-split' : 'git-diff-table'}
+            aria-label={filename}
+          >
+            {split ? (
+              <>
+                <colgroup>
+                  <col className="git-diff-number-column" />
+                  <col />
+                </colgroup>
+                <colgroup>
+                  <col className="git-diff-number-column" />
+                  <col />
+                </colgroup>
+              </>
+            ) : (
+              <colgroup>
+                <col className="git-diff-number-column" />
+                <col className="git-diff-number-column" />
+                <col className="git-diff-sign-column" />
+                <col />
+              </colgroup>
+            )}
+            {split ? (
+              <thead>
+                <tr>
+                  <th colSpan={2} scope="colgroup">
+                    {t('diff.before')}
+                  </th>
+                  <th colSpan={2} scope="colgroup">
+                    {t('diff.after')}
+                  </th>
+                </tr>
+              </thead>
+            ) : (
+              <thead className="sr-only">
+                <tr>
+                  <th scope="col">{diff('diff.oldLine')}</th>
+                  <th scope="col">{diff('diff.newLine')}</th>
+                  <th scope="col">{t('diff.change')}</th>
+                  <th scope="col">{t('diff.content')}</th>
+                </tr>
+              </thead>
+            )}
             {file.hunks.map((hunk, hunkIndex) => (
-              <PatchHunk
-                key={hunkIndex}
-                hunk={hunk}
-                path={highlight ? file.path : undefined}
-              />
+              <Hunk key={hunkIndex} hunk={hunk} path={highlight ? file.path : undefined} />
             ))}
           </table>
         </>
@@ -268,7 +344,7 @@ export function PatchFileCard({
   );
 }
 
-export function GitPatch({ text, path }: { text: string; path?: string }) {
+export function GitPatch({ text, path, split }: { text: string; path?: string; split?: boolean }) {
   const { t } = useUiTranslation('git');
   const files = useMemo(() => describeGitPatch(text, path), [text, path]);
   const highlight = text.length <= 96_000;
@@ -282,9 +358,28 @@ export function GitPatch({ text, path }: { text: string; path?: string }) {
             file={file}
             filename={filename}
             highlight={highlight}
+            split={split}
           />
         );
       })}
     </div>
+  );
+}
+
+export function GitDiffLayoutButton({ split, onToggle }: { split: boolean; onToggle: () => void }) {
+  const { t } = useUiTranslation('git');
+  const label = t(split ? 'diff.inline' : 'diff.split');
+  const Icon = split ? List : Columns2;
+  return (
+    <Button
+      type="button"
+      size="icon-xs"
+      variant={split ? 'secondary' : 'ghost'}
+      title={label}
+      aria-label={label}
+      onClick={onToggle}
+    >
+      <Icon aria-hidden="true" />
+    </Button>
   );
 }

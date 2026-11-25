@@ -1,7 +1,7 @@
 /**
- * @file 提供主进程安全的 Git CLI 执行服务与基础业务能力。
- * @implementation 严格使用参数数组调用 execFile，捕获完整 stderr，实现仓库状态检测、统计、同步、分支与储藏操作。
- * @updated 2026-11-25T03:15:00+08:00
+ * @file 提供主进程 Git CLI 执行服务与基础操作。
+ * @implementation 通过参数数组调用 execFile，限制时间和输出并返回结果，提供仓库状态、统计、同步、分支及储藏操作。
+ * @updated 2026-11-25T16:31:33+08:00
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -346,58 +346,6 @@ export async function gitAmendCommit(
   }
   const res = await execGit(cwd, ['commit', '--amend', '-m', message]);
   return { success: res.success, stdout: res.stdout, stderr: res.stderr };
-}
-
-export async function gitDiscardFiles(cwd: string, paths: string[]): Promise<GitOpResult> {
-  const validPaths = paths.filter((p) => p.trim().length > 0);
-  if (validPaths.length === 0) {
-    return { success: true, stdout: '', stderr: '' };
-  }
-
-  const statusRes = await execGit(cwd, ['status', '--porcelain', '-z']);
-  const untracked = new Set<string>();
-  if (statusRes.success) {
-    const entries = statusRes.stdout.split('\0').filter(Boolean);
-    for (const entry of entries) {
-      if (entry.startsWith('?? ')) {
-        untracked.add(entry.slice(3).trim());
-      }
-    }
-  }
-
-  const untrackedList = validPaths.filter((p) => untracked.has(p));
-  const trackedList = validPaths.filter((p) => !untracked.has(p));
-
-  const stdouts: string[] = [];
-  const stderrs: string[] = [];
-  let allSuccess = true;
-
-  if (trackedList.length > 0) {
-    const res = await execGit(cwd, [
-      'restore',
-      '--staged',
-      '--worktree',
-      '--source=HEAD',
-      '--',
-      ...trackedList,
-    ]);
-    if (!res.success) allSuccess = false;
-    if (res.stdout) stdouts.push(res.stdout);
-    if (res.stderr) stderrs.push(res.stderr);
-  }
-
-  if (untrackedList.length > 0) {
-    const res = await execGit(cwd, ['clean', '-f', '-d', '--', ...untrackedList]);
-    if (!res.success) allSuccess = false;
-    if (res.stdout) stdouts.push(res.stdout);
-    if (res.stderr) stderrs.push(res.stderr);
-  }
-
-  return {
-    success: allSuccess,
-    stdout: stdouts.join('\n'),
-    stderr: stderrs.join('\n'),
-  };
 }
 
 export async function gitStashList(cwd: string): Promise<GitStashItem[]> {

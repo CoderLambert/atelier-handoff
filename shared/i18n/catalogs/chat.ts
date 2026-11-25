@@ -125,6 +125,7 @@ export const chat = {
   'composer.queueAction': ['加入队列', 'add to queue'],
   'composer.queued': ['排队中', 'Queued'],
   'composer.quotes': ['已引用的回复', 'Quoted replies'],
+  'composer.fileQuotes': ['已添加的引用', 'Draft quotes'],
   'composer.quoteTooLong': [
     '正文和引用合计超过输入上限。缩短正文或移除引用后即可发送。',
     'The text and quotes exceed the input limit. Shorten the text or remove a quote to send.',

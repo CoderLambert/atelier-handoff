@@ -1,7 +1,7 @@
 /**
- * @file 测试桌面端 Git 基础 IPC 能力与安全执行服务。
- * @implementation 使用真实临时 Git 仓库，验证仓库状态检测、提交统计、分支生命周期、同步、储藏、放弃改动及异常状态中断与继续。
- * @updated 2026-11-25T03:15:00+08:00
+ * @file 测试桌面端 Git 执行服务及基础操作。
+ * @implementation 使用真实临时 Git 仓库验证状态检测、提交统计、分支生命周期、同步、储藏与异常状态处理。
+ * @updated 2026-11-25T16:31:33+08:00
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +19,6 @@ import {
   gitContinueOp,
   gitCreateBranch,
   gitDeleteBranch,
-  gitDiscardFiles,
   gitFetch,
   gitMergeBranch,
   gitPull,
@@ -137,7 +136,7 @@ describe('桌面端 Git 基础 IPC 能力', () => {
     }
   });
 
-  test('提交与储藏操作接口（reset, revert, cherry-pick, amend, discard, stash）', async () => {
+  test('提交与储藏操作接口（reset, revert, cherry-pick, amend, stash）', async () => {
     const { dir, cleanup } = createTestRepo();
     try {
       writeFileSync(join(dir, 'f.txt'), 'v1\n');
@@ -189,16 +188,7 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       const statusAfterCp = await getGitRepoStatus(dir);
       assert.equal(statusAfterCp.isDirty, false);
 
-      // 6. discardFiles: 丢弃已跟踪与未跟踪文件
-      writeFileSync(join(dir, 'f.txt'), 'modified dirty text\n');
-      writeFileSync(join(dir, 'untracked.txt'), 'untracked dirty text\n');
-      assert.equal((await getGitRepoStatus(dir)).isDirty, true);
-
-      const discardRes = await gitDiscardFiles(dir, ['f.txt', 'untracked.txt']);
-      assert.equal(discardRes.success, true);
-      assert.equal((await getGitRepoStatus(dir)).isDirty, false);
-
-      // 7. 储藏操作 (stashPush, stashList, stashApply, stashPop, stashDrop)
+      // 6. 储藏操作 (stashPush, stashList, stashApply, stashPop, stashDrop)
       writeFileSync(join(dir, 'f.txt'), 'stash test change\n');
       const pushStash = await gitStashPush(dir, 'my test stash');
       assert.equal(pushStash.success, true);
@@ -212,8 +202,6 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       assert.equal(popStash.success, true);
       assert.equal((await getGitRepoStatus(dir)).isDirty, true);
 
-      // 清理
-      await gitDiscardFiles(dir, ['f.txt']);
     } finally {
       cleanup();
     }

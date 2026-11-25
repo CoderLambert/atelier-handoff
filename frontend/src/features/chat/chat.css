@@ -662,6 +662,24 @@
   line-height: 1.5;
 }
 
+.chat-composer .composer-file-quote {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-composer .composer-file-quote-location {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-muted-foreground);
+  font: 12px / 1.5 var(--font-mono);
+}
+
+.chat-composer .composer-file-quote .composer-quote-excerpt {
+  font-family: var(--font-mono);
+}
+
 .chat-composer .composer-toolbar {
   display: flex;
   align-items: center;

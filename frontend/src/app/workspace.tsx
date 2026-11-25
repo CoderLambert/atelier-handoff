@@ -1,7 +1,7 @@
 /**
  * @file 编排工作区、会话及功能面板。
- * @implementation 管理路由、Git 侧栏宽度和全窗口切换，协调浏览器显示、焦点恢复和开发会话。
- * @updated 2026-11-24T04:13:00+08:00
+ * @implementation 管理路由、Git 侧栏和全窗口切换，协调浏览器、开发会话和焦点，并将所选代码加入同项目会话草稿。
+ * @updated 2026-11-25T17:22:06+08:00
  */
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +34,7 @@ import {
 } from '@/use-query/sessions/use-session-snapshot';
 import { gitKeys } from '@/use-query/git/keys';
 import { SessionWorktree } from '@/features/git/session-worktree';
+import type { QuoteGitCode } from '@/features/git/git-code-selection';
 import { Button } from '@/components/ui/button';
 import { translateError, useUiTranslation } from '@/i18n';
 import {
@@ -43,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { deleteDraft, lastSession, rememberSession } from './drafts';
+import { appendFileQuote, deleteDraft, lastSession, rememberSession } from './drafts';
 import { keys, useRunEvents } from './events';
 import { ProjectsDialog } from './projects';
 import { Sidebar } from './sidebar';
@@ -224,6 +225,21 @@ export default function Workspace() {
   const showLeft = width >= 768;
   const canDockGit = width >= 1120;
   const gitFullWindow = Boolean(gitBoard && (gitExpanded || !canDockGit));
+  const canQuoteGit = view === 'chat' && snapshot && snapshot.session.id === sessionId &&
+    snapshot.session.status !== 'archived' && snapshot.project.id === gitBoard?.project.id;
+  const quoteGitCode: QuoteGitCode = (file, text) => {
+    if (!canQuoteGit || !snapshot) return 'unavailable';
+    const result = appendFileQuote(snapshot.session.id, snapshot.session.draft, file, text);
+    if (result === 'added' || result === 'duplicate') {
+      if (tab !== 'conversation') selectTab('conversation');
+      if (canDockGit && gitFullWindow) expandGit(false);
+      if (canDockGit && tab === 'conversation') requestAnimationFrame(() => {
+        if (router.state.location.pathname === pathname)
+          document.getElementById('prompt-input')?.focus({ preventScroll: true });
+      });
+    }
+    return result;
+  };
   const showBrowserRight =
     view === 'chat' && browserActive && (width > 1120 || (width >= 900 && desktop));
   const browserTrigger = useRef<HTMLButtonElement>(null);
@@ -596,6 +612,7 @@ export default function Workspace() {
                 onToggleExpanded={canDockGit ? () => expandGit((current) => !current) : undefined}
                 busy={gitBusy}
                 onBusy={setGitBusy}
+                onQuoteCode={canQuoteGit ? quoteGitCode : undefined}
                 onClose={() => closeGit()}
                 onCreated={(id) => {
                   closeGit(false);

@@ -1,7 +1,7 @@
 /**
  * @file 验证本机 Git 看板、开发会话和暂存提交。
- * @implementation 使用独立 SQLite、真实 Git 和回环模型验证目录生命周期、单文件索引范围及暂存提交核对。
- * @updated 2026-11-25T13:35:57+08:00
+ * @implementation 用独立 SQLite、真实 Git 和回环模型验证目录生命周期、分层文件操作、各版本完整内容和暂存提交核对。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type { Session, Run, Project } from '../shared/types.js';
@@ -173,6 +173,114 @@ test('Git file actions update only the selected index entries and preserve worki
       await request(firstIndex, 'POST', { path: 'first.txt', layer: 'staged' });
       assert.equal(git(initial, 'status', '--short'), '?? first.txt\n');
       assert.equal(await readFile(join(initial, 'first.txt'), 'utf8'), 'first file with a later edit\n');
+    } finally {
+      await app.close();
+    }
+  }));
+
+test('Git full file content follows the selected snapshot and returns the parent for a deletion', () =>
+  fixture(async (repo, data) => {
+    const head = git(repo, 'rev-parse', 'HEAD').trim();
+    await writeFile(join(repo, 'same.txt'), 'staged content\n');
+    git(repo, 'add', 'same.txt');
+    await writeFile(join(repo, 'same.txt'), 'working content\n');
+    await writeFile(join(repo, '.env'), 'synthetic setting\n');
+    const app = await createApp({ root, data });
+    try {
+      const request = await client(app);
+      const { project } = await request<{ project: Project }>('/api/projects', 'POST', { path: repo }, 201);
+      const base = `/api/projects/${project.id}/git`;
+      const checkout = `${base}/worktrees/${project.id}/file-content?path=same.txt&source=`;
+      assert.deepEqual(await request(checkout + 'index'), { text: 'staged content\n' });
+      assert.deepEqual(await request(checkout + 'worktree'), { text: 'working content\n' });
+      assert.deepEqual(await request(checkout + 'head'), { text: 'base\n' });
+      assert.deepEqual(await request(`${base}/commits/${head}/file-content?path=same.txt&source=commit`), { text: 'base\n' });
+      git(repo, 'rm', '-f', 'same.txt');
+      git(repo, 'commit', '-m', 'Delete');
+      const deleted = git(repo, 'rev-parse', 'HEAD').trim();
+      const deletedFile = `${base}/commits/${deleted}/file-content?path=same.txt&source=`;
+      assert.deepEqual(await request(deletedFile + 'parent'), { text: 'base\n' });
+      await request(deletedFile + 'commit', 'GET', undefined, 404);
+      await request(`${base}/worktrees/${project.id}/file-content?path=.env&source=worktree`, 'GET', undefined, 403);
+    } finally {
+      await app.close();
+    }
+  }));
+
+test('Git discard restores only the confirmed file layers', () =>
+  fixture(async (repo, data, base) => {
+    const app = await createApp({ root, data });
+    try {
+      const request = await client(app);
+      const { project } = await request<{ project: Project }>(
+        '/api/projects',
+        'POST',
+        { path: repo },
+        201,
+      );
+      const discard = `/api/projects/${project.id}/git/worktrees/${project.id}/file-discard`;
+      await writeFile(join(repo, 'same.txt'), 'staged\n');
+      git(repo, 'add', 'same.txt');
+      await writeFile(join(repo, 'same.txt'), 'working\n');
+      const index = git(repo, 'ls-files', '--stage', '-z');
+      await request(discard, 'POST', { targets: [{ path: 'same.txt', layer: 'unstaged' }] });
+      assert.equal(git(repo, 'ls-files', '--stage', '-z'), index);
+      assert.equal(await readFile(join(repo, 'same.txt'), 'utf8'), 'staged\n');
+      await request(discard, 'POST', { targets: [{ path: 'same.txt', layer: 'unstaged' }] }, 404);
+      git(repo, 'restore', '--source=HEAD', '--staged', '--worktree', '--', 'same.txt');
+      git(repo, 'mv', 'same.txt', 'renamed.txt');
+      await writeFile(join(repo, 'renamed.txt'), 'later rename edit\n');
+      await writeFile(join(repo, ':(glob)*.txt'), 'new literal path\n');
+      await writeFile(join(repo, 'unrelated.txt'), 'keep this file\n');
+      await request(discard, 'POST', {
+        targets: [
+          { path: 'renamed.txt', layer: 'staged' },
+          { path: ':(glob)*.txt', layer: 'untracked' },
+        ],
+      });
+      assert.equal(await readFile(join(repo, 'same.txt'), 'utf8'), 'base\n');
+      assert.equal(git(repo, 'status', '--short'), '?? unrelated.txt\n');
+
+      await writeFile(join(repo, 'same.txt'), 'working again\n');
+      await request(
+        discard,
+        'POST',
+        {
+          targets: [
+            { path: 'same.txt', layer: 'unstaged' },
+            { path: 'untracked-and-gone.txt', layer: 'untracked' },
+          ],
+        },
+        404,
+      );
+      assert.equal(await readFile(join(repo, 'same.txt'), 'utf8'), 'working again\n');
+
+      git(repo, 'rm', '-f', 'same.txt');
+      await writeFile(join(repo, 'same.txt'), 'untracked replacement\n');
+      await request(discard, 'POST', { targets: [{ path: 'same.txt', layer: 'staged' }] }, 404);
+      assert.equal(await readFile(join(repo, 'same.txt'), 'utf8'), 'untracked replacement\n');
+
+      const unborn = join(base, 'unborn');
+      await mkdir(unborn);
+      git(unborn, 'init', '-b', 'main');
+      await writeFile(join(unborn, 'first.txt'), 'first staged file\n');
+      git(unborn, 'add', 'first.txt');
+      await writeFile(join(unborn, 'first.txt'), 'latest working content\n');
+      const first = await request<{ project: Project }>(
+        '/api/projects',
+        'POST',
+        { path: unborn },
+        201,
+      );
+      await request(
+        `/api/projects/${first.project.id}/git/worktrees/${first.project.id}/file-discard`,
+        'POST',
+        {
+          targets: [{ path: 'first.txt', layer: 'staged' }],
+        },
+      );
+      assert.equal(git(unborn, 'status', '--short'), '');
+      await assert.rejects(readFile(join(unborn, 'first.txt')), { code: 'ENOENT' });
     } finally {
       await app.close();
     }

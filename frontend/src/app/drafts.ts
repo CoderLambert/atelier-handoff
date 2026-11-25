@@ -1,9 +1,9 @@
 /**
- * @file 管理会话草稿、运行偏好保存与任务发送。
- * @implementation 串行保存正文、引用和运行偏好。发送时组合正文与引用并复用幂等键，确认后清除草稿内容并保留运行偏好。
- * @updated 2026-11-22T14:33:25+08:00
+ * @file 管理会话草稿、引用、运行偏好与任务发送。
+ * @implementation 串行保存草稿，校验并去重文件摘录；发送时组合正文与引用并复用幂等键，确认后清除草稿内容并保留运行偏好。
+ * @updated 2026-11-25T17:22:06+08:00
  */
-import { composerTextLimit, formatMessageText, messageQuotesSchema } from '@shared/message-quotes';
+import { composerTextLimit, formatMessageText, messageQuoteLimit, messageQuotesSchema, type FileQuoteSource } from '@shared/message-quotes';
 import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
 import { getTranslator } from '@/i18n';
@@ -139,6 +139,20 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft, imm
   };
   if (immediate) enqueue();
   else save.timer = setTimeout(enqueue, 500);
+}
+
+export function appendFileQuote(id: string, server: Draft, file: FileQuoteSource, text: string) {
+  if (store.getState().workspace.submitting[id]) return 'unavailable';
+  const draft = readDraft(id, server);
+  const quotes = draft.messageQuotes ?? [];
+  if (quotes.some((quote) => quote.text === text && JSON.stringify(quote.file) === JSON.stringify(file)))
+    return 'duplicate';
+  if (quotes.length >= messageQuoteLimit) return 'limit';
+  const messageQuotes = [...quotes, { id: `quote:${crypto.randomUUID()}`, text, file }];
+  if (formatMessageText(draft.text, messageQuotes).length > composerTextLimit ||
+    !messageQuotesSchema.safeParse(messageQuotes).success) return 'tooLong';
+  updateDraft(id, { ...draft, messageQuotes }, server, true);
+  return 'added';
 }
 
 export async function submitDraft(

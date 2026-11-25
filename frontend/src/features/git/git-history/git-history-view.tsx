@@ -3,7 +3,7 @@
  * @implementation 协调分支选择、提交列表右键菜单、新建分支与 Reset/Revert/Cherry-pick 对话框。
  * @updated 2026-11-25T12:57:00+08:00
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, GitBranch as BranchIcon, RotateCcw } from 'lucide-react';
 import { useUiTranslation } from '@/i18n';
 import { useGitHistory } from '@/use-query/git/use-git-history';
@@ -21,11 +21,13 @@ import { GitCommitList } from './git-commit-list';
 import { GitCommitToolbar } from './git-commit-toolbar';
 import { GitCommitDetailPane } from './git-commit-detail-pane';
 import { useGitCommitFilters } from './use-git-commit-filters';
+import type { GitOpenFile } from '../git-open-file';
 
 export interface GitHistoryViewProps {
   projectId: string;
   overview: GitOverview;
   tree: GitWorktree;
+  onOpenFile: (file: GitOpenFile) => void;
   diffRenderer?: (commitOid: string, commitInfo?: GitCommit, onClose?: () => void) => React.ReactNode;
   feedbackRenderer: (error?: unknown, retry?: () => void) => React.ReactNode;
   onRefreshAll?: () => void;
@@ -37,6 +39,7 @@ export function GitHistoryView({
   projectId,
   overview,
   tree,
+  onOpenFile,
   diffRenderer,
   feedbackRenderer,
   onRefreshAll,
@@ -46,6 +49,8 @@ export function GitHistoryView({
   const { t, locale } = useUiTranslation('git');
   const [ref, selectRef] = useState<GitBranch>();
   const [selection, selectCommit] = useState<{ anchor: string; oid: string }>();
+  const detailPane = useRef<HTMLDivElement>(null);
+  const detailTrigger = useRef<HTMLElement>(null);
 
   // 快捷操作菜单与弹窗状态
   const [contextMenu, setContextMenu] = useState<{
@@ -91,6 +96,9 @@ export function GitHistoryView({
     ref && overview.branches.find((item) => item.kind === ref.kind && item.name === ref.name);
   const anchor = branch?.oid ?? tree.head ?? undefined;
   const commit = selection?.anchor === anchor ? selection?.oid : undefined;
+  useEffect(() => {
+    if (commit) detailPane.current?.focus({ preventScroll: true });
+  }, [commit]);
 
   const history = useGitHistory(projectId, anchor, filters);
   const dateFormat = useMemo(
@@ -152,10 +160,16 @@ export function GitHistoryView({
 
   const handleSelectCommit = useCallback(
     (oid: string) => {
-      if (anchor) selectCommit({ anchor, oid });
+      if (!anchor) return;
+      detailTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      selectCommit({ anchor, oid });
     },
     [anchor],
   );
+  const handleCloseDetail = () => {
+    selectCommit(undefined);
+    window.requestAnimationFrame(() => detailTrigger.current?.focus({ preventScroll: true }));
+  };
 
   const handleFetchNextPage = useCallback(() => {
     void history.fetchNextPage();
@@ -216,7 +230,7 @@ export function GitHistoryView({
   );
 
   return (
-    <div className="git-split">
+    <div className="git-split git-history-split" data-reviewing={Boolean(commit)}>
       {/* 1. 左侧分支栏 */}
       <GitBranchSidebar
         overview={overview}
@@ -271,19 +285,22 @@ export function GitHistoryView({
 
           {/* 选中提交的差异详情：横向排布在右侧，提供文件过滤导航与超大差异折叠 */}
           {commit && (
-            <div className="git-history-detail-pane">
+            <div ref={detailPane} className="git-history-detail-pane" tabIndex={-1}>
               {diffRenderer ? (
                 diffRenderer(
                   commit,
                   visibleCommits.find((c) => c.oid === commit),
-                  () => selectCommit(undefined),
+                  handleCloseDetail,
                 )
               ) : (
                 <GitCommitDetailPane
+                  key={commit}
                   projectId={projectId}
+                  worktreeId={tree.id}
+                  onOpenFile={onOpenFile}
                   commitOid={commit}
                   commitInfo={visibleCommits.find((c) => c.oid === commit)}
-                  onClose={() => selectCommit(undefined)}
+                  onClose={handleCloseDetail}
                   showToast={showToast}
                 />
               )}
