@@ -1,11 +1,11 @@
 /**
  * @file 验证 Git 补丁展示数据。
- * @implementation 核对多文件、带引号路径、换行标记、异常和大补丁的表示。
- * @updated 2026-11-24T04:00:00+08:00
+ * @implementation 核对多文件、带引号路径、换行标记、大补丁回退和分栏差异行的对齐。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { describeGitPatch } from './git-diff-model';
+import { describeGitPatch, splitDiffRows } from './git-diff-model';
 
 const patch = [
   'diff --git "a/\\344\\270\\255\\346\\226\\207.ts" "b/\\344\\270\\255\\346\\226\\207.ts"',
@@ -54,4 +54,24 @@ test('keeps the requested path and source text for untracked and oversized patch
   assert.deepEqual(describeGitPatch(large, 'bulk.ts'), [
     { kind: 'raw', path: 'bulk.ts', text: large, binary: false },
   ]);
+});
+test('split diff aligns context and pairs changed lines with room for extra additions', () => {
+  const [file] = describeGitPatch(
+    '--- a.txt\n+++ a.txt\n@@ -1,2 +1,3 @@\n same\n-old\n+new\n+extra\n',
+    'a.txt',
+  );
+  assert.ok(file?.kind === 'text' && file.hunks[0]);
+  assert.deepEqual(
+    splitDiffRows(file.hunks[0].lines).map(({ before, after }) => [
+      before?.oldLine ?? null,
+      before?.text ?? null,
+      after?.newLine ?? null,
+      after?.text ?? null,
+    ]),
+    [
+      [1, 'same', 1, 'same'],
+      [2, 'old', 2, 'new'],
+      [null, null, 3, 'extra'],
+    ],
+  );
 });

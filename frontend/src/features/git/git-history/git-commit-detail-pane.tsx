@@ -1,27 +1,31 @@
 /**
- * @file 展示选中提交的差异详情，提供文件级快速过滤导航与超大变更分块折叠以优化性能。
- * @implementation 支持单文件/全文件切换、按文件卡片折叠、提交元数据展示与快速复制关闭。
- * @updated 2026-11-25T13:23:00+08:00
+ * @file 展示选中提交的差异详情与文件操作。
+ * @implementation 支持文件过滤与折叠、行内或左右对比、完整内容预览和本机定位。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  FileCode2,
-  Layers,
-  X,
-} from 'lucide-react';
+import { Check, ChevronsDown, ChevronsUp, Copy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useUiTranslation } from '@/i18n';
 import { useGitCommitDiff } from '@/use-query/git/use-git-commit-diff';
 import type { GitCommit } from '@shared/git-workbench';
 import { describeGitPatch, type PatchFile } from '../git-diff-model';
-import { PatchFileCard } from '../git-diff';
+import { GitDiffLayoutButton, PatchFileCard } from '../git-diff';
+import { GitFileActions } from '../git-file-actions';
+import type { GitOpenFile } from '../git-open-file';
 
 export interface GitCommitDetailPaneProps {
   projectId: string;
+  worktreeId: string;
+  onOpenFile: (file: GitOpenFile) => void;
   commitOid: string;
   commitInfo?: GitCommit;
   onClose: () => void;
@@ -30,6 +34,8 @@ export interface GitCommitDetailPaneProps {
 
 export function GitCommitDetailPane({
   projectId,
+  worktreeId,
+  onOpenFile,
   commitOid,
   commitInfo,
   onClose,
@@ -40,6 +46,7 @@ export function GitCommitDetailPane({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
+  const [split, setSplit] = useState(false);
 
   const format = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
@@ -174,77 +181,67 @@ export function GitCommitDetailPane({
         </div>
       </div>
 
-      {/* 2. 变更文件快速导航栏 */}
-      {files.length > 1 && (
+      {files.length > 0 && (
         <div className="git-commit-file-bar">
-          <div
-            className="git-commit-file-pills"
-            onWheel={(e) => {
-              if (e.deltaY !== 0) {
-                e.preventDefault();
-                e.currentTarget.scrollLeft += e.deltaY;
-              }
-            }}
-          >
-            <button
-              type="button"
-              className="git-commit-file-pill"
-              aria-pressed={selectedPath === null}
-              onClick={() => setSelectedPath(null)}
+          {files.length > 1 && (
+            <Select
+              value={selectedPath ? 'file:' + selectedPath : 'all'}
+              onValueChange={(value) => setSelectedPath(value === 'all' ? null : value.slice(5))}
             >
-              <Layers className="w-3 h-3" aria-hidden="true" />
-              <span>{t('diff.allFiles', { count: files.length })}</span>
-            </button>
-
-            {files.map((f) => {
-              if (!f.path) return null;
-              const name = f.path.split('/').pop() || f.path;
-              const isSelected = selectedPath === f.path;
-              return (
-                <button
-                  key={f.path}
-                  type="button"
-                  className="git-commit-file-pill"
-                  aria-pressed={isSelected}
-                  title={f.path}
-                  onClick={() => setSelectedPath(f.path ?? null)}
-                >
-                  <FileCode2 className="w-3 h-3 shrink-0" aria-hidden="true" />
-                  <span className="truncate max-w-[140px]">{name}</span>
-                  {f.kind === 'text' && (
-                    <span className="text-[10px] opacity-75 tabular-nums">
-                      +{f.added} -{f.removed}
-                    </span>
+              <SelectTrigger
+                size="sm"
+                className="min-w-0 max-w-full"
+                aria-label={t('diff.filePicker')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-w-[min(34rem,80vw)]">
+                <SelectGroup>
+                  <SelectItem value="all">{t('diff.allFiles', { count: files.length })}</SelectItem>
+                  {files.map(({ path }) =>
+                    path ? (
+                      <SelectItem key={path} value={'file:' + path}>
+                        <span title={path} className="truncate">
+                          {path}
+                        </span>
+                      </SelectItem>
+                    ) : null,
                   )}
-                </button>
-              );
-            })}
-          </div>
-
-          {selectedPath === null && files.length > 2 && (
-            <div className="flex items-center gap-1 shrink-0 ml-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={handleExpandAll}
-              >
-                <ChevronDown className="w-3 h-3 mr-0.5" aria-hidden="true" />
-                <span>{t('diff.expandAll')}</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={handleCollapseAll}
-              >
-                <ChevronUp className="w-3 h-3 mr-0.5" aria-hidden="true" />
-                <span>{t('diff.collapseAll')}</span>
-              </Button>
-            </div>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           )}
+          <div className="git-file-actions ms-auto">
+            {displayedFiles.some(({ kind }) => kind === 'text') && (
+              <GitDiffLayoutButton split={split} onToggle={() => setSplit(!split)} />
+            )}
+            {selectedPath === null && files.filter(({ path }) => path).length > 1 && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('diff.expandAll')}
+                  title={t('diff.expandAll')}
+                  disabled={collapsedPaths.size === 0}
+                  onClick={handleExpandAll}
+                >
+                  <ChevronsDown aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('diff.collapseAll')}
+                  title={t('diff.collapseAll')}
+                  disabled={!files.some(({ path }) => path && !collapsedPaths.has(path))}
+                  onClick={handleCollapseAll}
+                >
+                  <ChevronsUp aria-hidden="true" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -286,7 +283,25 @@ export function GitCommitDetailPane({
                 file={file}
                 filename={file.path}
                 highlight={shouldHighlight}
-                collapsible={!isSingle}
+                split={split}
+                actions={
+                  file.path && (
+                    <GitFileActions
+                      projectId={projectId}
+                      worktreeId={worktreeId}
+                      target={{
+                        kind: 'history',
+                        commitOid,
+                        path: file.path,
+                        source: file.deleted ? 'parent' : 'commit',
+                      }}
+                      revealPath={file.deleted ? undefined : file.path}
+                      onRevealFailed={showToast}
+                      onOpenFile={onOpenFile}
+                    />
+                  )
+                }
+                collapsible={!isSingle && Boolean(file.path)}
                 isCollapsed={isCollapsed}
                 onToggleCollapse={() => toggleCollapse(file.path)}
               />

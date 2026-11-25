@@ -1,7 +1,7 @@
 /**
- * @file 向渲染进程提供桌面浏览器和原生文件桥接接口。
- * @implementation 使用共享 schema 校验请求和响应，经 Electron IPC 转发浏览器及文件操作，并管理浏览器状态订阅。
- * @updated 2026-11-20T03:34:05+08:00
+ * @file 向渲染进程提供受限的桌面能力桥接。
+ * @implementation 通过 Electron IPC 转发浏览器、文件、界面设置、通知和 Git 操作，校验适用的请求及响应并管理浏览器状态订阅。
+ * @updated 2026-11-25T16:31:33+08:00
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
@@ -62,6 +62,7 @@ import {
   desktopArtifactSaveSchema,
   desktopDirectoryResultSchema,
   desktopFileActionResultSchema,
+  desktopGitFileSchema,
   desktopFilesChannels,
   type DesktopFilesBridge,
 } from '../shared/desktop-files.js';
@@ -87,6 +88,11 @@ const files: DesktopFilesBridge = {
     const id = desktopArtifactIdSchema.parse(artifactId);
     return desktopFileActionResultSchema.parse(
       await ipcRenderer.invoke(desktopFilesChannels.revealArtifact, id),
+    );
+  },
+  async revealGitFile(file) {
+    return desktopFileActionResultSchema.parse(
+      await ipcRenderer.invoke(desktopFilesChannels.revealGitFile, desktopGitFileSchema.parse(file)),
     );
   },
 };
@@ -276,13 +282,6 @@ const gitBridge: DesktopGitBridge = {
       cwd,
       message,
       stageAll,
-    });
-    return gitOpResultSchema.parse(response);
-  },
-  async discardFiles(cwd, paths) {
-    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.discardFiles, {
-      cwd,
-      paths,
     });
     return gitOpResultSchema.parse(response);
   },

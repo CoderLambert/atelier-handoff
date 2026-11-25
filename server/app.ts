@@ -52,7 +52,10 @@ import {
   gitCommitRequest,
   gitDiffLayer,
   gitFileIndexRequest,
+  gitFileDiscardRequest,
   gitOid,
+  gitCommitFileSource,
+  gitWorkingFileSource,
   gitPath,
   gitReclaimRequest,
   gitRestoreRequest,
@@ -91,6 +94,8 @@ import {
   readGitStatus,
 } from './modules/git/git-reader.js';
 import { updateGitFileIndex } from './modules/git/git-file-index.js';
+import { readGitFileContent } from './modules/git/git-file-content.js';
+import { discardGitFiles } from './modules/git/git-file-discard.js';
 import { pickProjectDirectory } from './project-picker.js';
 import { buildRunDiagnostics } from './diagnostics.js';
 import { gatewayModelId, gatewayModels } from './gateway-models.js';
@@ -1540,6 +1545,13 @@ export async function createApp(options: {
             });
             return json(res, result);
           }
+          if (parts[6] === 'file-discard') {
+            const input = gitFileDiscardRequest.parse(await body(req));
+            const result = await worktrees.writeCheckout(project, id, (git) =>
+              discardGitFiles(git, input),
+            );
+            return json(res, result);
+          }
           if (parts[6] === 'file-index') {
             const input = gitFileIndexRequest.parse(await body(req));
             const result = await worktrees.writeCheckout(project, id, (git) =>
@@ -1682,6 +1694,15 @@ export async function createApp(options: {
               }
               if (parts[6] === 'status')
                 return json(res, { ...(await readGitStatus(git, abort.signal)), rebuildable });
+              if (parts[6] === 'file-content') {
+                const path = gitPath.parse(url.searchParams.get('path'));
+                const source = gitWorkingFileSource.parse(url.searchParams.get('source'));
+                return json(res, await readGitFileContent(git, path, source, abort.signal));
+              }
+              if (parts[6] === 'file-location' && options.desktopPairing) {
+                const path = gitPath.parse(url.searchParams.get('path'));
+                return json(res, { location: await resolveProjectPath(git.root, path) });
+              }
               if (parts[6] === 'diff') {
                 const path = gitPath.parse(url.searchParams.get('path'));
                 const layer = gitDiffLayer.parse(url.searchParams.get('layer'));
@@ -1706,6 +1727,12 @@ export async function createApp(options: {
                 res,
                 await readGitHistory(git, oid, offset, { query, author, since }, abort.signal),
               );
+            }
+            if (parts.length === 7 && parts[4] === 'commits' && parts[6] === 'file-content') {
+              const oid = gitOid.parse(parts[5]);
+              const path = gitPath.parse(url.searchParams.get('path'));
+              const source = gitCommitFileSource.parse(url.searchParams.get('source'));
+              return json(res, await readGitFileContent(git, path, { oid, parent: source === 'parent' }, abort.signal));
             }
             if (parts.length === 6 && parts[4] === 'commits')
               return json(res, await readCommitDiff(git, gitOid.parse(parts[5]), abort.signal));

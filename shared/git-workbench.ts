@@ -1,7 +1,7 @@
 /**
  * @file 定义 Git 看板、开发会话和暂存提交的共享契约。
- * @implementation 校验本机引用、工作树操作、单文件索引请求、暂存清单和提交回执。
- * @updated 2026-11-25T13:32:26+08:00
+ * @implementation 校验本机引用、工作树、文件层级与内容来源、索引操作、丢弃请求和提交回执。
+ * @updated 2026-11-25T16:53:09+08:00
  */
 import { z } from 'zod';
 import { uiLocaleSchema } from './i18n/locale.js';
@@ -26,12 +26,21 @@ export const gitPath = z
         ),
   );
 export const gitDiffLayer = z.enum(['staged', 'unstaged', 'untracked', 'conflict']);
+export const gitWorkingFileSource = z.enum(['worktree', 'index', 'head']);
+export const gitCommitFileSource = z.enum(['commit', 'parent']);
+export const gitFileContentResponse = z.strictObject({ text: z.string() });
+export type GitWorkingFileSource = z.infer<typeof gitWorkingFileSource>;
+export type GitCommitFileSource = z.infer<typeof gitCommitFileSource>;
 export const gitFileIndexRequest = z.strictObject({
   path: gitPath,
   layer: z.enum(['staged', 'unstaged', 'untracked']),
 });
 export type GitFileIndexRequest = z.infer<typeof gitFileIndexRequest>;
 export const gitFileIndexReceipt = z.strictObject({ updated: z.literal(true) });
+export const gitFileDiscardRequest = z.strictObject({
+  targets: z.array(gitFileIndexRequest).min(1),
+});
+export type GitFileDiscardRequest = z.infer<typeof gitFileDiscardRequest>;
 export const gitCheckoutMode = z.enum(['linked', 'in_place']);
 export const gitStartPoint = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('head') }),

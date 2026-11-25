@@ -1,3 +1,8 @@
+/**
+ * @file 管理授权项目内的文件访问、检索与文本修改。
+ * @implementation 限制路径及敏感文件访问，检查文件类型、大小和编码，提供目录浏览、搜索、文本差异与安全写入能力。
+ * @updated 2026-11-25T16:53:09+08:00
+ */
 import { constants } from 'node:fs';
 import {
   lstat,
@@ -40,6 +45,7 @@ const sensitive = (part: string) =>
   blockedNames.has(part) ||
   /^\.env(?:\.|$)/i.test(part) ||
   /^(id_rsa|id_ed25519)$|\.(pem|key|p12)$/i.test(part);
+export const sensitiveProjectPath = (path: string) => path.split(/[\\/]/u).some(sensitive);
 export function inside(root: string, target: string): boolean {
   const part = relative(root, target);
   return part === '' || (!part.startsWith(`..${sep}`) && part !== '..' && !isAbsolute(part));

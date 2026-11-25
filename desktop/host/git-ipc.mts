@@ -22,7 +22,6 @@ import {
   gitContinueOp,
   gitCreateBranch,
   gitDeleteBranch,
-  gitDiscardFiles,
   gitFetch,
   gitMergeBranch,
   gitPull,
@@ -322,25 +321,6 @@ export function bindDesktopGit(
       }
       if (!message) throw new Error('Missing commit message parameter.');
       return gitAmendCommit(cwd, message, stageAll);
-    },
-  );
-
-  ipcMain.handle(
-    desktopGitChannels.discardFiles,
-    async (event, input: unknown, pathsArg?: unknown) => {
-      trusted(event);
-      let cwd: string;
-      let paths: string[];
-      if (typeof input === 'object' && input !== null && 'paths' in input) {
-        cwd = parseCwd(input);
-        paths = Array.isArray((input as { paths: unknown }).paths)
-          ? ((input as { paths: unknown[] }).paths.map(String) as string[])
-          : [];
-      } else {
-        cwd = parseCwd(input);
-        paths = Array.isArray(pathsArg) ? pathsArg.map(String) : [];
-      }
-      return gitDiscardFiles(cwd, paths);
     },
   );
 
