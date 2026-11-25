@@ -40,6 +40,12 @@
 
 Linux packager 的实际调用因缺少 `makepkg` 退出；安装态 smoke 因 `/opt/atelier/atelier` 不存在退出。尚未构建或验收完整的 Node 24.21.0 Linux 安装件，也未重新生成 Windows/macOS 候选。系统 IME 与真实桌面全屏 TUI 仍待验收。
 
+## GitHub 交接与 CI 结果
+
+实现已推送为 `17252bad04b89c566ae9579335924f974e7a8f26`，远端 tree 与本地已核对源码完全一致。草稿 [PR #3](https://github.com/CoderLambert/atelier-handoff/pull/3) 目标为 `main@f48da53d`，GitHub 确认无合并冲突。整分支文件头检查覆盖 62 份源码并通过。
+
+[Actions run 45693929946](https://github.com/CoderLambert/atelier-handoff/actions/runs/45693929946) 的首次运行和一次重试均在分配 runner 前失败：`runner_id=0`，步骤列表为空，没有可下载日志。因此没有实际执行远端测试或 Electron 烟测。现有返回信息不能确定平台失败的具体原因；需要恢复可执行的 runner 后复跑，不能将该失败推断为源码测试失败或宣称 CI 通过。PR 保持草稿，未合并和切换用户桌面。
+
 ## 复跑
 
 ```sh
