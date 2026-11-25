@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm"],
+  "includePaths": ["package.json", "packages/markdown/package.json"],
+  "dependencyDashboard": { "enabled": true },
+  "automerge": false,
+  "lockFileMaintenance": { "enabled": false },
+  "timezone": "Asia/Shanghai",
+  "schedule": ["* 8-11 * * 1"],
+  "npm": {
+    "minimumReleaseAge": "3 days"
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "24.x"
+    },
+    {
+      "matchPackageNames": [
+        "@tanstack/react-query",
+        "@types/react",
+        "i18next",
+        "react-resizable-panels",
+        "tailwind-merge"
+      ],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "frontend patch updates"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchPackageNames": [
+        "@anthropic-ai/claude-agent-sdk",
+        "@modelcontextprotocol/sdk",
+        "electron",
+        "better-sqlite3",
+        "drizzle-orm",
+        "playwright-core"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchPackageNames": [
+        "@lamberl-lee/file-preview",
+        "@aiden0z/pptx-renderer",
+        "docx-preview",
+        "exceljs",
+        "jszip",
+        "pdfjs-dist",
+        "rtf.js",
+        "xlsx",
+        "streamdown",
+        "@streamdown/**",
+        "katex"
+      ],
+      "enabled": false
+    }
+  ]
+}

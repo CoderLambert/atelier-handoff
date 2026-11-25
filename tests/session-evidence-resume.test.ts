@@ -112,7 +112,7 @@ test(
       'package.json',
     );
     const { version } = z
-      .object({ version: z.literal('0.3.326') })
+      .object({ version: z.literal('0.3.332') })
       .parse(JSON.parse(await readFile(sdkPackage, 'utf8')));
     const directory = await mkdtemp(join(tmpdir(), 'atelier-session-evidence-'));
     const projectPath = join(directory, 'project');
