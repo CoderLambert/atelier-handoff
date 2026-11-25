@@ -230,11 +230,27 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     assert.ok(item);
     queueStore.beginLive(item, activeId);
     queueStore.dispatched(item, activeId);
+    const toolId = activeId + ':toolu_restart_fixture';
+    running.app.store.put('tools', {
+      id: toolId,
+      runId: activeId,
+      sessionId: session.id,
+      name: 'Bash',
+      inputSummary: '{}',
+      status: 'running',
+      output: '',
+      startedAt: now(),
+      endedAt: null,
+      bashExecution: { phase: 'background', controllable: true, lastObservedAt: now() },
+    });
     await running.app.close();
     running = await startApp();
     const uncertain = (await state()).messageQueue;
     assert.equal(uncertain.paused, false);
     assert.equal(uncertain.items[0]?.delivery, 'unknown');
+    const recoveredBash = running.app.store.get('tools', toolId);
+    assert.equal(recoveredBash.bashExecution?.phase, 'unknown');
+    assert.equal(recoveredBash.bashExecution?.controllable, false);
     await sendBody(send('new message after uncertain delivery'));
     await waitFor(() => starts.length === 4);
     assert.equal(starts[3]?.run.prompt, 'new message after uncertain delivery');

@@ -133,6 +133,11 @@ test(
       await settings.waitFor();
       await settings.click();
       const picker = page.getByRole('combobox', { name: '选择模型', exact: true });
+      const effort = page.getByRole('combobox', { name: '选择推理深度', exact: true });
+      assert.equal(await picker.getAttribute('data-presentation'), 'menu');
+      assert.equal(await effort.getAttribute('data-presentation'), 'menu');
+      assert.equal(await picker.getByText('模型', { exact: true }).count(), 1);
+      assert.equal(await effort.getByText('推理深度', { exact: true }).count(), 1);
       await picker.click();
       await page
         .getByText('补充模型列表暂不可用，仍可选择已显示的模型或手动输入 ID。', { exact: true })
@@ -147,10 +152,7 @@ test(
         await page.getByRole('combobox', { name: '选择推理深度', exact: true }).isDisabled(),
         true,
       );
-      assert.equal(
-        await page.getByRole('combobox', { name: '选择推理深度', exact: true }).textContent(),
-        '高',
-      );
+      assert.equal(await effort.locator('[data-slot="select-value"]').textContent(), '高');
       assert.equal(await page.locator('#selection').textContent(), 'shared:low');
       await picker.click();
       await page.getByRole('option', { name: '手动输入 ID…', exact: true }).click();
@@ -159,7 +161,6 @@ test(
       await page.getByRole('button', { name: '使用此模型', exact: true }).click();
       assert.equal(await page.locator('#selection').textContent(), 'custom-manual:low');
       await settings.click();
-      const effort = page.getByRole('combobox', { name: '选择推理深度', exact: true });
       await effort.click();
       await page.getByRole('option', { name: '中', exact: true }).click();
       assert.equal(await page.locator('#selection').textContent(), 'custom-manual:medium');

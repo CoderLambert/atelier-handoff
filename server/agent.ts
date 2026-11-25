@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 使用冻结的执行目录并在工具分派前核验工作树，协调 SDK、子任务和工具回执。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 使用冻结的目录核对工作树，协调 SDK 子任务及工具回执。原生 Bash 在后台时保持所属会话可接收消息，直到实际终态。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -20,6 +20,7 @@ import {
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import type { BashControl } from '../shared/bash-execution.js';
 import {
   AppError,
   now,
@@ -67,6 +68,7 @@ import {
 } from './tool-output-context.js';
 import { searchToolOutput } from './tool-output-search.js';
 import { createHarnessProcess } from './harness-process.js';
+import { NativeBashTasks, type BashTaskReceipt } from './native-bash.js';
 import { ProjectWrites, SubagentRun } from './subagent-run.js';
 import { callMcp, isLegacyDesktopPlaywright, McpSessions } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
@@ -95,7 +97,7 @@ class InputQueue {
     text: string,
     images: AttachmentImages = [],
     uuid: NonNullable<SDKUserMessage['uuid']> = randomUUID(),
-    liveInsertion = false,
+    priority?: 'next' | 'now',
   ) {
     this.values.push({
       type: 'user',
@@ -105,9 +107,9 @@ class InputQueue {
       },
       parent_tool_use_id: null,
       uuid,
-      ...(liveInsertion
+      ...(priority
         ? {
-            priority: 'now' as const,
+            priority,
             origin: { kind: 'human' as const },
             client_composed: true as const,
           }
@@ -136,6 +138,7 @@ class InputQueue {
 export interface LiveInput {
   id: NonNullable<SDKUserMessage['uuid']>;
   text: string;
+  priority?: 'next' | 'now';
   canDispatch?(): boolean;
   dispatched(): void;
   confirmed(): void;
@@ -145,7 +148,10 @@ interface LiveRun {
   cancellation: AbortController;
   reason?: 'user' | 'timeout' | 'shutdown';
   done: Promise<void>;
-  insert?: (message: LiveInput) => void;
+  insert?: (message: LiveInput) => void | Promise<void>;
+  canInsertNext?: () => boolean;
+  canInsertNow?: () => boolean;
+  controlBash?: (toolId: string, action: BashControl['action']) => Promise<void>;
   stopSubagent?: (id: string) => Promise<void>;
 }
 export interface Runner {
@@ -158,13 +164,17 @@ export interface Runner {
     images?: AttachmentImages,
     promptMessageId?: NonNullable<SDKUserMessage['uuid']>,
   ): void | Promise<void>;
-  insert?(id: string, message: LiveInput): void;
+  insert?(id: string, message: LiveInput): void | Promise<void>;
+  canInsertNext?(id: string): boolean;
+  canInsertNow?(id: string): boolean | undefined;
+  controlBash?(runId: string, toolId: string, action: BashControl['action']): Promise<void>;
   stopSubagent?(runId: string, subagentId: string): Promise<void>;
   stop(id: string): void;
   shutdown(): Promise<void>;
 }
 export class AgentRunner implements Runner {
   private readonly active = new Map<string, LiveRun>();
+  private readonly writes = new ProjectWrites();
   constructor(
     private readonly store: Store,
     private readonly permissions: PermissionService,
@@ -172,6 +182,7 @@ export class AgentRunner implements Runner {
     private readonly mcpSessions = new McpSessions(),
     private readonly browserAccess?: DesktopBrowserAccess,
     private readonly verifyWorkspace?: (run: Run) => Promise<void>,
+    private readonly onInputCheckpoint?: (sessionId: string) => void,
   ) {}
   start(
     run: Run,
@@ -196,7 +207,7 @@ export class AgentRunner implements Runner {
     ).finally(() => this.active.delete(run.id));
     return live.done;
   }
-  insert(id: string, message: LiveInput): void {
+  insert(id: string, message: LiveInput): void | Promise<void> {
     const live = this.active.get(id);
     if (!live?.insert || live.cancellation.signal.aborted)
       throw new AppError(
@@ -204,7 +215,19 @@ export class AgentRunner implements Runner {
         '当前轮尚未就绪或已经结束，消息仍在队列中。',
         409,
       );
-    live.insert(message);
+    return live.insert(message);
+  }
+  canInsertNext(id: string) {
+    return this.active.get(id)?.canInsertNext?.() === true;
+  }
+  canInsertNow(id: string) {
+    return this.active.get(id)?.canInsertNow?.();
+  }
+  async controlBash(runId: string, toolId: string, action: BashControl['action']) {
+    const live = this.active.get(runId);
+    if (!live?.controlBash || live.cancellation.signal.aborted)
+      throw new AppError('BASH_CONTROL_UNAVAILABLE', '命令所属运行已结束或尚未就绪。', 409);
+    await live.controlBash(toolId, action);
   }
   async stopSubagent(runId: string, subagentId: string) {
     const live = this.active.get(runId);
@@ -413,7 +436,19 @@ export class AgentRunner implements Runner {
       branchControllers.get(id)?.abort();
       branchControllers.delete(id);
     });
-    const writes = new ProjectWrites();
+    const writeProject = <T>(effect: () => Promise<T>) =>
+      this.writes.run(verifyDispatch, effect, workingDirectory);
+    const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
+    const runningTools = new Set<string>();
+    const bash = native
+      ? new NativeBashTasks(sdkSessionId, (id, execution) => {
+          const record = this.store.get('tools', id);
+          if (record.endedAt) return;
+          this.store.update('tools', id, { bashExecution: execution });
+          this.store.event(run.id, session.id, 'tool.bash_updated', { toolCallId: id });
+        })
+      : undefined;
+    let sdkTemp: string | undefined;
     const callHash = (name: string, args: Record<string, unknown>) =>
       fingerprint(
         JSON.stringify(
@@ -435,7 +470,7 @@ export class AgentRunner implements Runner {
       }).id;
     let assistantId = createAssistant();
     let assistantAnchor: string | undefined;
-    let insertion: { message: LiveInput; sent: boolean } | undefined;
+    let insertion: { message: LiveInput; sent: boolean; preparing?: boolean } | undefined;
     let insertionIdleTimer: ReturnType<typeof setTimeout> | undefined;
     let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
     const blocks = new Map<string, string>();
@@ -448,18 +483,28 @@ export class AgentRunner implements Runner {
       this.store.update('messages', assistantId, { text: [...blocks.values()].join('\n\n') });
       this.store.event(run.id, run.sessionId, 'message.delta', { messageId: assistantId });
     };
+    let atToolBoundary = false;
+    let awaitingModel = true;
+    const blockedByLocalWork = () =>
+      subagents.active ||
+      toolWork.size > 0 ||
+      commands.size > 0 ||
+      this.store.get('runs', run.id).status === 'awaiting_permission';
+    const foregroundTools = () => [...runningTools].filter((id) => !bash?.isBackground(id));
     const sendInsertion = () => {
       if (
-        !insertion ||
-        insertion.sent ||
+        closing ||
         signal.aborted ||
         !initialized ||
-        subagents.active ||
-        toolWork.size ||
-        commands.size ||
-        this.store.get('runs', run.id).status === 'awaiting_permission'
+        blockedByLocalWork() ||
+        (bash && foregroundTools().length)
       )
         return;
+      if (!insertion) {
+        if (bash && (!awaitingModel || atToolBoundary)) this.onInputCheckpoint?.(session.id);
+        return;
+      }
+      if (insertion.sent || insertion.preparing) return;
       const { message } = insertion;
       if (message.canDispatch?.() === false) {
         insertion = undefined;
@@ -480,14 +525,22 @@ export class AgentRunner implements Runner {
       });
       assistantId = createAssistant();
       assistantAnchor = undefined;
-      input.push(message.text, [], message.id, true);
+      awaitingModel = true;
+      input.push(message.text, [], message.id, message.priority ?? 'now');
       this.store.event(run.id, session.id, 'message.delta', { messageId: message.id });
     };
     const flushTimer = setInterval(flush, 80);
     const appToolId = (id: string, agentId?: string) =>
       agentId ? `${run.id}:${agentId}:${id}` : `${run.id}:${id}`;
     const seenTools = new Set<string>();
-    const createTool = (id: string, name: string, args: unknown, subagentId?: string) => {
+    const createTool = (
+      id: string,
+      name: string,
+      args: unknown,
+      subagentId?: string,
+      useId?: string,
+      sdkActorId?: string,
+    ) => {
       if (seenTools.has(id)) return this.store.get('tools', id);
       const input = JSON.stringify(args);
       const command =
@@ -507,6 +560,11 @@ export class AgentRunner implements Runner {
         ...(subagentId ? { subagentId } : {}),
         inputSummary: input.slice(0, 4000),
         ...(command === undefined ? {} : { command }),
+        ...(name === 'Bash' &&
+          useId &&
+          bash && {
+            bashExecution: bash.register(id, useId, subagentId, sdkActorId),
+          }),
         status: 'running',
         output: '',
         startedAt: now(),
@@ -514,13 +572,19 @@ export class AgentRunner implements Runner {
       };
       this.store.put('tools', value);
       seenTools.add(id);
+      runningTools.add(id);
       progress.started(value);
       this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
       return value;
     };
     const pagedOutputIds = new Set<string>();
     const capturing = new Set<string>();
-    const finishTool = (id: string, ok: boolean, output: string, bashLog?: ToolCall['bashLog']) => {
+    const finishTool = (
+      id: string,
+      ok: boolean | 'stopped' | 'unknown',
+      output: string,
+      bashLog?: ToolCall['bashLog'],
+    ) => {
       let prior: ToolCall;
       try {
         prior = this.store.get('tools', id);
@@ -529,11 +593,16 @@ export class AgentRunner implements Runner {
       }
       const status = ['denied', 'canceled'].includes(prior.status)
         ? prior.status
-        : ok
-          ? 'succeeded'
-          : 'failed';
+        : ok === 'stopped' || ok === 'unknown'
+          ? 'canceled'
+          : ok
+            ? 'succeeded'
+            : 'failed';
       if (prior.status !== 'running' && prior.status !== 'awaiting_permission' && prior.endedAt)
         return;
+      bash?.complete(id);
+      runningTools.delete(id);
+      atToolBoundary = true;
       const skill = skillCalls.get(id);
       if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
       if (output.length > 32000) this.files.saveOutput(id, output);
@@ -545,6 +614,14 @@ export class AgentRunner implements Runner {
         outputLength: output.length,
         outputTruncated: output.length > 32000,
         ...(bashLog ? { bashLog } : {}),
+        ...(prior.bashExecution && {
+          bashExecution: {
+            ...prior.bashExecution,
+            phase: ok === 'unknown' || ok === 'stopped' ? ok : prior.bashExecution.phase,
+            controllable: false,
+            lastObservedAt: now(),
+          },
+        }),
         endedAt: now(),
       });
       const observed = progress.finished(finished);
@@ -794,7 +871,7 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            const hash = await writes.run(verifyDispatch, () =>
+            const hash = await writeProject(() =>
               applyText(
                 workingDirectory,
                 args.path,
@@ -829,7 +906,7 @@ export class AgentRunner implements Runner {
             );
             return {
               path: args.path,
-              fingerprint: await writes.run(verifyDispatch, () =>
+              fingerprint: await writeProject(() =>
                 applyText(workingDirectory, args.path, before, after, toolSignal(), verifyCurrent),
               ),
               applied: true,
@@ -855,7 +932,7 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            await writes.run(verifyDispatch, () =>
+            await writeProject(() =>
               applyText(workingDirectory, args.path, before, null, toolSignal(), verifyCurrent),
             );
             return { path: args.path, deleted: true };
@@ -1147,7 +1224,7 @@ export class AgentRunner implements Runner {
               },
               toolSignal(),
             );
-            const work = writes.run(verifyDispatch, () =>
+            const work = writeProject(() =>
               runCommand(workingDirectory, args.command, toolSignal()),
             );
             commands.add(work);
@@ -1542,6 +1619,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
           if (!skill && !native) throw new Error('该 Skill 不在本轮自动调用名单中。');
           if (skill) skillCalls.set(id, skill);
+        } else if (event.tool_name === 'TaskStop') {
+          if (!bash?.authorizesStop(args, actor?.id))
+            throw new AppError(
+              'BASH_CONTROL_UNAVAILABLE',
+              '任务不属于本轮可停止的 Bash 命令。',
+              409,
+            );
         } else if (
           !(native && nativeWorkTools.includes(event.tool_name)) &&
           !permittedMcp.has(event.tool_name)
@@ -1552,6 +1636,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           event.tool_name,
           event.tool_name === 'Skill' ? { skill: args.skill } : args,
           actor?.id,
+          event.tool_use_id,
+          event.agent_id,
         );
         const updatedInput = permittedMcp.has(event.tool_name)
           ? {
@@ -1582,14 +1668,15 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       if (run.workspacePath) await this.verifyWorkspace?.(run);
       await resolveProjectPath(workingDirectory, '', { directory: true });
       const sdkDirectory = join(this.store.directory, 'sdk', session.id);
-      const sdkSessionId = resumeExisting ? session.sdkSessionId! : randomUUID();
       await mkdir(sdkDirectory, { recursive: true, mode: 0o700 });
+      if (native) sdkTemp = await mkdtemp(join(sdkDirectory, 'bash-tasks-'));
       const finishWithBashLog = async (
         id: string,
         useId: string,
         response: unknown,
         raw: string,
         hookSession: string,
+        outcome: true | 'stopped',
       ) => {
         if (!seenTools.has(id) || capturing.has(id) || closing) return;
         const call = this.store.get('tools', id);
@@ -1598,39 +1685,71 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         const branch = call.subagentId ? branchControllers.get(call.subagentId) : undefined;
         const sdkActorId = call.subagentId ? subagents.taskId(call.subagentId) : undefined;
         const scope = branch ? AbortSignal.any([signal, branch.signal]) : signal;
-        const work = (async () => {
-          let captured: ToolCall['bashLog'];
-          let committed = false;
-          try {
-            captured =
-              hookSession === sdkSessionId
-                ? await this.files.captureBashLog(
-                    id,
-                    sdkDirectory,
-                    sdkSessionId,
-                    useId,
-                    response,
-                    scope,
-                    sdkActorId,
-                  )
-                : { status: 'unavailable' };
-            if (scope.aborted || closing) return;
-            const saved = finishTool(id, true, raw, captured);
-            committed = Boolean(saved);
-            return saved;
-          } finally {
-            if (!committed && (captured?.status === 'complete' || captured?.status === 'partial'))
-              await this.files.discardBashLog(id);
-          }
-        })();
+        const work =
+          hookSession === sdkSessionId
+            ? this.files.captureBashLog(
+                id,
+                sdkDirectory,
+                sdkSessionId,
+                useId,
+                response,
+                scope,
+                sdkActorId,
+              )
+            : Promise.resolve<ToolCall['bashLog']>({ status: 'unavailable' });
         toolWork.add(work);
+        let captured: ToolCall['bashLog'];
+        let committed = false;
         try {
-          return await work;
+          captured = await work;
+          toolWork.delete(work);
+          if (scope.aborted || closing) return;
+          const saved = finishTool(id, outcome, raw, captured);
+          committed = !!saved;
+          return saved;
         } finally {
           toolWork.delete(work);
           capturing.delete(id);
+          if (!committed && (captured?.status === 'complete' || captured?.status === 'partial'))
+            await this.files.discardBashLog(id);
           sendInsertion();
         }
+      };
+      const finishBashTask = async (task: BashTaskReceipt) => {
+        const { id, useId, sdkActorId, receipt } = task;
+        const captured =
+          sdkTemp && receipt.output_file && !signal.aborted
+            ? await this.files
+                .captureBashLog(
+                  id,
+                  sdkDirectory,
+                  sdkSessionId,
+                  useId,
+                  undefined,
+                  signal,
+                  sdkActorId,
+                  { scratch: sdkTemp, id: receipt.task_id, outputFile: receipt.output_file },
+                )
+                .catch((): ToolCall['bashLog'] => ({ status: 'unavailable' }))
+            : undefined;
+        const outcome =
+          receipt.reason === 'worker_restart'
+            ? 'unknown'
+            : receipt.status === 'stopped'
+              ? 'stopped'
+              : task.failure === undefined && receipt.status === 'completed';
+        finishTool(
+          id,
+          outcome,
+          outcome === 'unknown'
+            ? ''
+            : this.clean(
+                (outcome === false ? task.failure : undefined) ?? receipt.summary,
+                Infinity,
+              ),
+          captured,
+        );
+        sendInsertion();
       };
       const documentManifest: {
         name: string;
@@ -1696,7 +1815,9 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         CLAUDE_CONFIG_DIR: sdkDirectory,
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
-        CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
+        ...(sdkTemp
+          ? { CLAUDE_CODE_TMPDIR: sdkTemp, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '0' }
+          : { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' }),
         CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS: '1',
         CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: 'false',
         ...(run.config.effort ? { CLAUDE_CODE_ALWAYS_ENABLE_EFFORT: '1' } : {}),
@@ -1749,7 +1870,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           skills: native ? 'all' : [...candidates.keys()],
           allowedTools: [],
           disallowedTools: [
-            ...(native ? [] : ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch']),
+            ...(native ? [] : ['Bash', 'TaskStop', 'Write', 'Edit', 'NotebookEdit', 'WebFetch']),
             ...(delegate ? [] : ['Agent', 'Task']),
             'WebSearch',
           ],
@@ -1817,6 +1938,20 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (!permittedMcp.has(event.tool_name)) {
                       const response = event.tool_response;
                       const raw = JSON.stringify(response) ?? '';
+                      if (event.tool_name === 'Bash' && bash && event.session_id === sdkSessionId) {
+                        atToolBoundary = true;
+                        const handoff = bash.handedOff(id, response);
+                        if (handoff) {
+                          if (handoff.terminal) await finishBashTask(handoff.terminal);
+                          sendInsertion();
+                          return {};
+                        }
+                      }
+                      const outcome =
+                        event.tool_name === 'Bash' &&
+                        z.object({ interrupted: z.literal(true) }).safeParse(response).success
+                          ? 'stopped'
+                          : true;
                       const hasSpill =
                         event.tool_name === 'Bash' &&
                         typeof response === 'object' &&
@@ -1829,14 +1964,16 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                             response,
                             raw,
                             event.session_id,
+                            outcome,
                           )
-                        : finishTool(id, true, raw);
+                        : finishTool(id, outcome, raw);
                       if (saved) {
                         replacement = nativeOutputReplacement(event.tool_name, id, response, raw);
                         if (saved.bashLog) logNote = bashLogNotice(id, saved.bashLog);
                       }
                       if (replacement || logNote) pagedOutputIds.add(id);
                     }
+                    sendInsertion();
                     const context = [feedbackFor(id), replacement?.context, logNote]
                       .filter(Boolean)
                       .join('\n');
@@ -1859,16 +1996,21 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (event.hook_event_name === 'PostToolUseFailure') {
                       const id = appToolId(event.tool_use_id, event.agent_id);
                       const error = this.clean(event.error, Infinity);
+                      if (event.tool_name === 'Bash' && bash?.deferFailureDuringStop(id, error))
+                        return {};
                       if (event.tool_name === 'Agent') {
                         subagents.finish(id, signal.aborted ? 'stopped' : 'failed', error);
                         sendInsertion();
                       }
                       const saved = finishTool(
                         id,
-                        false,
+                        event.tool_name === 'Bash' && event.is_interrupt === true
+                          ? 'stopped'
+                          : false,
                         error,
                         event.tool_name === 'Bash' ? { status: 'receipt-only' } : undefined,
                       );
+                      sendInsertion();
                       const pointer =
                         saved && error.length > inlineOutputLimit
                           ? [
@@ -1965,8 +2107,27 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         promptMessageId,
       );
       let contextSessionId: string | undefined;
+      let drainingInput = false;
+      const drainInput = () => {
+        drainingInput = true;
+        live.insert = undefined;
+        input.end();
+      };
+      const awaitInsertionReceipt = () => {
+        if (!insertion || bash?.hasDeferredReceipt || insertionIdleTimer) return;
+        insertionIdleTimer = setTimeout(() => {
+          insertionIdleTimer = undefined;
+          if (!bash?.hasDeferredReceipt && (!bash || !foregroundTools().length)) drainInput();
+        }, 120_000);
+      };
+      const afterDeferredWork = () => {
+        if (bash?.hasDeferredReceipt || !finalResult || subagents.active) return;
+        if (insertion) awaitInsertionReceipt();
+        else if (!awaitingModel) drainInput();
+      };
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {
+          const firstInit = !initialized;
           initialized = true;
           contextSessionId = message.session_id;
           live.stopSubagent = async (id) => {
@@ -1980,23 +2141,67 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             controller.abort();
             await stopping;
           };
-          live.insert = (message) => {
-            if (insertion)
-              throw new AppError('LIVE_INPUT_BUSY', '上一条补充消息还在处理，请稍后再插入。', 409);
-            insertion = { message, sent: false };
-            try {
-              sendInsertion();
-            } catch (error) {
-              insertion = undefined;
-              throw error;
-            }
-          };
+          if (bash && !drainingInput) {
+            const sdk = connection;
+            live.controlBash = async (id, action) => {
+              try {
+                await bash.control(sdk, id, action);
+              } catch (error) {
+                const failure = action === 'stop' ? bash.failureAfterRejectedStop(id) : undefined;
+                if (failure !== undefined) {
+                  finishTool(id, false, failure, { status: 'receipt-only' });
+                  sendInsertion();
+                  afterDeferredWork();
+                }
+                throw error;
+              }
+            };
+            live.canInsertNow = () =>
+              !blockedByLocalWork() && foregroundTools().every((id) => bash.canMove(id));
+            live.canInsertNext = () =>
+              !!live.insert &&
+              !insertion &&
+              !blockedByLocalWork() &&
+              (!awaitingModel || atToolBoundary) &&
+              !foregroundTools().length;
+          }
+          if (!drainingInput)
+            live.insert = async (message) => {
+              if (insertion)
+                throw new AppError(
+                  'LIVE_INPUT_BUSY',
+                  '上一条补充消息还在处理，请稍后再插入。',
+                  409,
+                );
+              const current = { message, sent: false, preparing: true };
+              insertion = current;
+              try {
+                if (bash && (message.priority ?? 'now') === 'now') {
+                  if (!live.canInsertNow?.())
+                    throw new AppError('BASH_CONTROL_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
+                  if (message.canDispatch?.() === false)
+                    throw new AppError('QUEUE_CHANGED', '队列或执行范围已变化。', 409);
+                  const sdk = connection;
+                  if (sdk)
+                    for (const id of foregroundTools()) {
+                      signal.throwIfAborted();
+                      if (runningTools.has(id) && !bash.isBackground(id))
+                        await bash.control(sdk, id, 'background');
+                    }
+                }
+                current.preparing = false;
+                sendInsertion();
+              } catch (error) {
+                if (insertion === current) insertion = undefined;
+                throw error;
+              }
+            };
           observedModel = message.model || observedModel;
           this.store.update('sessions', session.id, {
             sdkSessionId: message.session_id,
             sdkMode: run.mode,
             sdkConfigKey: configKey,
-            ...(!resumeExisting ? { sdkCostTotal: 0 } : {}),
+            ...(firstInit && !resumeExisting ? { sdkCostTotal: 0 } : {}),
           });
           if (skillRefs.length) {
             const discovered = new Set(message.skills ?? []);
@@ -2020,12 +2225,24 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           });
         } else if (message.type === 'system' && message.subtype === 'task_started') {
           subagents.started(message);
+          bash?.started(message);
+        } else if (message.type === 'system' && message.subtype === 'task_updated') {
+          bash?.updated(message);
         } else if (message.type === 'system' && message.subtype === 'task_notification') {
           subagents.notify(message);
+          const task = bash?.terminal(message);
+          if (task && !capturing.has(task.id)) {
+            await finishBashTask(task);
+            afterDeferredWork();
+          }
         } else if (message.type === 'stream_event') {
           if (message.parent_tool_use_id) continue;
           const event = message.event;
-          if (event.type === 'message_start') messageId = event.message.id;
+          if (event.type === 'message_start') {
+            messageId = event.message.id;
+            atToolBoundary = false;
+            awaitingModel = true;
+          }
           if (event.type === 'content_block_start') blockIndex = event.index;
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             if (firstText && event.delta.text) {
@@ -2047,6 +2264,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           // Persist an actual SDK heartbeat at most once per fifteen seconds for this run.
           if (Date.now() - lastHeartbeat >= 15_000) {
             lastHeartbeat = Date.now();
+            if (message.type === 'tool_progress' && message.tool_name === 'Bash')
+              bash?.progress(message.tool_use_id, message.session_id, message.task_id);
             this.store.event(
               run.id,
               session.id,
@@ -2103,7 +2322,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               } catch {
                 continue;
               }
-              if (record.status === 'running' && !capturing.has(id))
+              if (record.status === 'running' && !capturing.has(id) && !bash?.awaitingTerminal(id))
                 finishTool(
                   id,
                   !block.is_error,
@@ -2112,16 +2331,18 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             }
         } else if (message.type === 'result') {
           finalResult = message;
+          awaitingModel = false;
           const consumedInputs =
             message.user_message_uuids ??
             (message.user_message_uuid ? [message.user_message_uuid] : []);
           const continuingInsertion = Boolean(
             insertion && !consumedInputs.includes(insertion.message.id),
           );
-          if (insertion && !continuingInsertion) {
+          if (insertion?.sent && !continuingInsertion) {
             insertion.message.confirmed();
             insertion = undefined;
             clearTimeout(insertionIdleTimer);
+            insertionIdleTimer = undefined;
           }
           if (!continuingInsertion && !blocks.size && message.subtype === 'success') {
             blocks.set('result', message.result);
@@ -2131,7 +2352,11 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           previousCost = cumulativeCost ?? previousCost;
           this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost ?? undefined });
           const contextUsage =
-            !continuingInsertion && !subagents.active && !message.is_error && contextSessionId
+            !continuingInsertion &&
+            !bash?.hasDeferredReceipt &&
+            !subagents.active &&
+            !message.is_error &&
+            contextSessionId
               ? await sampleContextUsage(connection, contextSessionId, signal)
               : undefined;
           this.store.update('runs', run.id, { usage, ...(contextUsage && { contextUsage }) });
@@ -2148,14 +2373,15 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             deniedTools: message.permission_denials?.length ?? null,
           });
           this.store.event(run.id, session.id, 'usage.updated', {});
+          if (drainingInput) continue;
           if (continuingInsertion) {
             sendInsertion();
             // Tell the SDK there is no more input if it becomes idle without acknowledging a delivery.
             // Closing input still allows an already accepted response to finish.
-            insertionIdleTimer ??= setTimeout(() => {
-              live.insert = undefined;
-              input.end();
-            }, 120_000);
+            awaitInsertionReceipt();
+          } else if (bash?.hasDeferredReceipt) {
+            flush();
+            sendInsertion();
           } else {
             live.insert = undefined;
             if (subagents.active) {
@@ -2172,6 +2398,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         }
       }
       if (insertion?.sent && !signal.aborted) failure = '补充消息未收到 SDK 回执。';
+      else if (bash?.hasDeferredReceipt && !signal.aborted)
+        failure = 'SDK 连接结束，Bash 命令未返回终态。';
       else if (!finalResult && !signal.aborted) failure = 'SDK 连接已结束，但未返回终态。';
       else if (finalResult?.is_error)
         failure =
@@ -2188,9 +2416,18 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
     } finally {
       live.stopSubagent = undefined;
       live.insert = undefined;
+      live.controlBash = undefined;
+      live.canInsertNext = undefined;
+      live.canInsertNow = undefined;
       // Block new approvals and queued writes whenever the SDK can no longer consume their results.
       closing = true;
-      if (!finalResult || commands.size || toolWork.size || subagents.active)
+      if (
+        !finalResult ||
+        commands.size ||
+        toolWork.size ||
+        subagents.active ||
+        bash?.hasDeferredReceipt
+      )
         live.cancellation.abort();
       clearTimeout(insertionIdleTimer);
       insertion?.message.released();
@@ -2235,6 +2472,10 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         await rm(documentDirectory, { recursive: true, force: true }).catch(() => {
           this.store.event(run.id, session.id, 'sdk.notice', { type: 'attachment_cleanup_failed' });
         });
+      if (sdkTemp)
+        await rm(sdkTemp, { recursive: true, force: true }).catch(() => {
+          this.store.event(run.id, session.id, 'sdk.notice', { type: 'bash_log_cleanup_failed' });
+        });
       for (const directory of [
         ...(pluginDirectory ? [pluginDirectory] : []),
         ...hostSkillPlugins,
@@ -2245,7 +2486,10 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           this.store.event(run.id, session.id, 'sdk.notice', { type: 'skill_cleanup_failed' });
         }
       }
-      if (initialized && (!finalResult || (native && (live.reason || cleanupUncertain))))
+      if (
+        initialized &&
+        (!finalResult || (native && (live.reason || cleanupUncertain || bash?.hasDeferredReceipt)))
+      )
         this.store.update('sessions', session.id, {
           sdkCostTotal: undefined,
           sdkConfigKey: undefined,
@@ -2280,21 +2524,25 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         if (assistantAnchor && this.store.get('messages', assistantId).text.trim())
           saveAnchor(assistantId, assistantAnchor);
       }
-      this.store.update('runs', run.id, {
-        status,
-        endedAt: now(),
-        reason,
-        error: ['failed', 'interrupted'].includes(status) ? reason : null,
+      this.store.transaction(() => {
+        this.store.update('runs', run.id, {
+          status,
+          endedAt: now(),
+          reason,
+          error: ['failed', 'interrupted'].includes(status) ? reason : null,
+        });
+        for (const item of this.store
+          .list('tools')
+          .filter(
+            (item) =>
+              item.runId === run.id && ['running', 'awaiting_permission'].includes(item.status),
+          )) {
+          if (item.bashExecution) finishTool(item.id, 'unknown', '');
+          else this.store.update('tools', item.id, { status: 'canceled', endedAt: now() });
+        }
+        this.store.update('sessions', session.id, { updatedAt: now() });
+        this.store.event(run.id, session.id, 'run.finished', { status, reason });
       });
-      for (const item of this.store
-        .list('tools')
-        .filter(
-          (item) =>
-            item.runId === run.id && ['running', 'awaiting_permission'].includes(item.status),
-        ))
-        this.store.update('tools', item.id, { status: 'canceled', endedAt: now() });
-      this.store.update('sessions', session.id, { updatedAt: now() });
-      this.store.event(run.id, session.id, 'run.finished', { status, reason });
     }
   }
 }

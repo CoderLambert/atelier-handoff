@@ -1,7 +1,7 @@
 /**
- * @file 安全读取锁定 SDK 明示的 Bash 日志并保存独立副本。
- * @implementation 校验 config/project/session 路径，以固定目录和文件描述符拒绝链接、特殊文件及竞态，限幅 UTF-8 后原子发布。
- * @updated 2026-11-22T22:30:00+08:00
+ * @file 安全读取和保存 SDK 的 Bash 回执日志与任务日志。
+ * @implementation 按项目、会话和任务身份校验来源，以文件描述符拒绝链接、特殊文件及竞态，限幅 UTF-8 后原子发布。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { constants, type BigIntStats } from 'node:fs';
@@ -226,6 +226,27 @@ export async function captureSdkBashLog(
   if (snapshot.sourceBytes !== source.persistedOutputSize)
     throw new Error('SDK log size disagrees with receipt');
   return snapshot;
+}
+
+export async function captureSdkBashTaskLog(
+  scratch: string,
+  projectPath: string,
+  sdkSessionId: string,
+  task: { id: string; outputFile: string },
+  signal?: AbortSignal,
+): Promise<Snapshot> {
+  if (![sdkSessionId, task.id].every((value) => /^[a-zA-Z0-9_-]{1,200}$/.test(value)))
+    throw new Error('Invalid SDK task identity');
+  const path = [
+    'claude-' + uid(),
+    projectKey(projectPath),
+    sdkSessionId,
+    'tasks',
+    task.id + '.output',
+  ];
+  if (task.outputFile !== join(scratch, ...path))
+    throw new Error('SDK task log outside its session');
+  return readSnapshot(scratch, path, signal);
 }
 
 export async function publishBashLog(

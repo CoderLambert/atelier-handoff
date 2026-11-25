@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { MessageQuote } from './message-quotes.js';
 import type { ContextUsage } from './context-usage.js';
+import type { BashExecution } from './bash-execution.js';
 
 export type RunStatus =
   | 'queued'
@@ -303,6 +304,7 @@ export interface ToolCall {
   output: string;
   outputLength?: number;
   outputTruncated?: boolean;
+  bashExecution?: BashExecution;
   /** Scope of the separately retained native Bash log. Sizes are UTF-8 bytes. */
   bashLog?: {
     status: 'complete' | 'partial' | 'unavailable' | 'receipt-only';

@@ -233,6 +233,30 @@ test('native interruption and background acknowledgment remain distinct from com
   assert.match(toolOutputMessage(canceled, toolOutputView(canceled)) ?? '', /已取消/u);
 });
 
+test('Bash task lifecycle shows background work and missing receipts without changing known exits', () => {
+  const execution = {
+    controllable: true,
+    lastObservedAt: '2026-11-25T22:05:00+08:00',
+  };
+  const background = tool({
+    status: 'running',
+    endedAt: null,
+    bashExecution: { ...execution, phase: 'background' },
+  });
+  assert.equal(toolDisplayStatus(background, toolOutputView(background)), 'background');
+  assert.match(toolOutputMessage(background, toolOutputView(background)) ?? '', /后台/u);
+  const interrupted = tool({
+    status: 'canceled',
+    bashExecution: { ...execution, phase: 'unknown', controllable: false },
+  });
+  assert.equal(toolDisplayStatus(interrupted, toolOutputView(interrupted)), 'unknown');
+  const failed = tool({
+    status: 'failed',
+    bashExecution: { ...execution, phase: 'background', controllable: false },
+  });
+  assert.equal(toolDisplayStatus(failed, toolOutputView(failed)), 'failed');
+});
+
 test('controlled command success and failure use actual merged-output receipts and available code', () => {
   const value = tool({
     name: 'mcp__atelier__run_command',

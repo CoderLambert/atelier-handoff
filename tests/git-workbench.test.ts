@@ -286,7 +286,7 @@ test('Git discard restores only the confirmed file layers', () =>
     }
   }));
 
-test('development sessions use independent directories, durable branch bindings, and overlapping-run guards', () =>
+test('development sessions support shared and independent execution with exclusive Git changes', () =>
   fixture(async (repo, data) => {
     await writeFile(join(repo, 'same.txt'), 'original checkout\n');
     const starts = new Map<string, { run: Run; prompt: string }>();
@@ -397,7 +397,11 @@ test('development sessions use independent directories, durable branch bindings,
         { text: 'try', idempotencyKey: randomUUID() },
         409,
       );
-      assert.equal(conflict.error.code, 'RUN_ACTIVE');
+      assert.equal(conflict.error.code, 'SERVER_BUSY');
+      await request('/api/runs/' + first.run.id + '/stop', 'POST', {});
+      const fourth = await send(same);
+      assert.equal(starts.get(fourth.run.id)?.run.sessionId, same.id);
+      assert.equal(starts.get(third.run.id)?.run.sessionId, original.id);
       const busy = await request<{ error: { code: string } }>(
         gitUrl + '/preview',
         'POST',
@@ -405,7 +409,7 @@ test('development sessions use independent directories, durable branch bindings,
         409,
       );
       assert.equal(busy.error.code, 'GIT_DIRECTORY_BUSY');
-      for (const { run } of [first, second, third])
+      for (const { run } of [second, third, fourth])
         await request('/api/runs/' + run.id + '/stop', 'POST', {});
       const switched = await create(inPlace);
       assert.equal(switched.workspace.path, repo);

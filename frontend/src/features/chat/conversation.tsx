@@ -37,7 +37,7 @@ import {
   permissionSubagentSource,
 } from '@/features/inspector';
 import { permissionOperation, StatusBadge, statusLabel } from '@/features/inspector/shared';
-import { formatDuration } from '@/utils/format';
+import { formatDate, formatDuration } from '@/utils/format';
 import { AttachmentPreview } from './attachment-preview';
 import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
@@ -89,14 +89,6 @@ const toolLabels: Readonly<
   browser_click: 'tool.click',
   browser_type: 'tool.type',
 };
-const toolStatuses = {
-  running: 'tool.running',
-  awaiting_permission: 'tool.awaitingPermission',
-  succeeded: 'tool.succeeded',
-  failed: 'tool.failed',
-  denied: 'tool.denied',
-  canceled: 'tool.canceled',
-} as const satisfies Record<ToolCall['status'], string>;
 const modelEvents = new Set([
   'sdk.initialized',
   'sdk.api_retry',
@@ -127,25 +119,6 @@ function groupByRun<T extends { runId: string }>(items: T[]) {
     else groups.set(item.runId, [item]);
   }
   return groups;
-}
-
-function ProgressClock({ at }: { at: string }) {
-  const { t } = useUiTranslation('chat');
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const milliseconds = now - Date.parse(at);
-  if (!Number.isFinite(milliseconds)) return null;
-  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-  return (
-    <span>
-      {seconds < 60
-        ? t('progress.secondsAgo', { count: seconds })
-        : t('progress.minutesAgo', { count: Math.floor(seconds / 60), seconds: seconds % 60 })}
-    </span>
-  );
 }
 
 function ModelLoadingIndicator({ label }: { label: string }) {
@@ -189,21 +162,23 @@ function RunProgress({
   );
   const active = isActive(run);
   const runningSubagents = work.subagents.filter(({ subagent }) => subagent?.status === 'running');
-  const ongoing = tools.find((tool) => tool.status === 'running');
-  const finished = tools.filter((tool) => tool.endedAt);
-  const last = finished.reduce<ToolCall | undefined>(
-    (latest, tool) => (!latest || tool.endedAt! >= latest.endedAt! ? tool : latest),
-    undefined,
+  const ongoing = tools.find(
+    (tool) => tool.status === 'running' && tool.bashExecution?.phase !== 'background',
+  );
+  const backgroundBash = tools.some(
+    (tool) => tool.status === 'running' && tool.bashExecution?.phase === 'background',
   );
   const activity = events.findLast((event) => modelEvents.has(event.type));
   let stage: string = t('progress.waitingModel');
   if (run.status === 'queued') stage = t('progress.queued');
   else if (run.status === 'awaiting_permission') stage = t('progress.awaitingApproval');
   else if (run.status === 'stopping') stage = t('progress.stopping');
+  else if (ongoing?.bashExecution?.phase === 'stopping') stage = t('progress.stoppingBash');
   else if (ongoing) stage = t('progress.callingTool', { name: toolLabel(ongoing.name) });
   else if (runningSubagents.length)
     stage = t('progress.runningSubtasks', { count: runningSubagents.length });
   else if (activity?.type === 'sdk.api_retry') stage = t('progress.retryingModel');
+  else if (backgroundBash) stage = t('progress.backgroundBash');
   else if (activity?.type === 'message.delta' && hasText) stage = t('progress.receiving');
   else if (!activity && !tools.length && !hasText) stage = t('progress.starting');
   const approved = useMemo(
@@ -227,6 +202,26 @@ function RunProgress({
     !active && Number.isFinite(duration) && duration >= 0
       ? t('progress.historyDuration', { status, duration: formatDuration(duration, locale) })
       : status;
+  const lastTool = tools.at(-1);
+  const lastActivityAt =
+    events.at(-1)?.at ?? lastTool?.endedAt ?? lastTool?.startedAt ?? run.startedAt ?? run.createdAt;
+  const liveHeading = active ? (
+    <div
+      className="run-progress-head"
+      title={t('progress.lastActivity', { time: formatDate(lastActivityAt, locale) })}
+    >
+      {stage === t('progress.waitingModel') ? (
+        <div className="run-progress-loading-inline" role="status" aria-label={stage}>
+          <span className="model-loading-dot" />
+          <span className="model-loading-dot" />
+          <span className="model-loading-dot" />
+          <span className="sr-only">{stage}</span>
+        </div>
+      ) : (
+        <strong role="status">{stage}</strong>
+      )}
+    </div>
+  ) : null;
   return (
     <section
       className="run-progress"
@@ -251,42 +246,7 @@ function RunProgress({
         ) : (
           <p className="run-history-status">{summary}</p>
         ))}
-      {active ? (
-        <div className="run-progress-head">
-          {stage === t('progress.waitingModel') ? (
-            <div
-              className="run-progress-loading-inline"
-              role="status"
-              aria-live="polite"
-              aria-label={t('progress.waitingModel')}
-            >
-              <span className="model-loading-dot" />
-              <span className="model-loading-dot" />
-              <span className="model-loading-dot" />
-              <span className="sr-only">{t('progress.waitingModel')}</span>
-            </div>
-          ) : (
-            <strong role="status">{stage}</strong>
-          )}
-          <ProgressClock
-            at={events.at(-1)?.at || last?.endedAt || run.startedAt || run.createdAt}
-          />
-        </div>
-      ) : null}
-      {active && tools.length > 0 ? (
-        <p className="run-progress-tools">
-          {t('progress.toolsFinished', {
-            finished: finished.length,
-            count: tools.length,
-            recent: last
-              ? t('progress.recentTool', {
-                  name: toolLabel(last.name),
-                  status: t(toolStatuses[last.status]),
-                })
-              : '',
-          })}
-        </p>
-      ) : null}
+      {work.tools.length ? null : liveHeading}
       {hasDetails ? (
         <div
           className="run-progress-content"
@@ -300,6 +260,7 @@ function RunProgress({
             <RunToolActivity
               tools={work.tools}
               active={active}
+              liveHeading={liveHeading}
               historyOpen={historyOpen}
               approved={approved}
               onOutput={onOutput}

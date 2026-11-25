@@ -1,9 +1,9 @@
 /**
  * @file 订阅运行事件并刷新工作台数据。
- * @implementation 从游标建立 SSE，合并查询失效请求，并维护连接状态与结束通知。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 从游标建立 SSE，合并查询失效请求并分发结束通知。记录后台会话的未查看结果，进入或删除会话时清除。
+ * @updated 2026-11-25T19:11:00+08:00
  */
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import type { RunEvent, RunStatus } from '@shared/types';
 import { sessionKeys } from '@/use-query/sessions/keys';
@@ -20,8 +20,22 @@ export const keys = {
 };
 
 type RefreshKey = readonly [string, ...unknown[]];
-export function useRunEvents(client: QueryClient, cursor?: number) {
+export function useRunEvents(client: QueryClient, cursor?: number, viewedSessionId?: string) {
   const ready = cursor !== undefined;
+  const markUnseenOutcome = useEffectEvent((event: RunEvent) => {
+    const status = event.payload?.status;
+    if (
+      typeof event.sessionId === 'string' &&
+      event.sessionId &&
+      event.sessionId !== viewedSessionId &&
+      (status === 'completed' || status === 'failed' || status === 'interrupted')
+    ) {
+      store.dispatch(actions.markRunOutcome({ sessionId: event.sessionId, status }));
+    }
+  });
+  useEffect(() => {
+    if (viewedSessionId) store.dispatch(actions.acknowledgeRunOutcome(viewedSessionId));
+  }, [viewedSessionId]);
   useEffect(() => {
     if (!ready) return;
     let latest = cursor ?? 0;
@@ -87,10 +101,14 @@ export function useRunEvents(client: QueryClient, cursor?: number) {
       }
       if (event.type === 'artifact.created') schedule(keys.artifacts);
       if (event.type === 'run.finished') {
+        markUnseenOutcome(event);
         notifyRunFinished(
           (event.payload as { status?: RunStatus } | undefined)?.status,
           event.sessionId,
         );
+      }
+      if (event.type === 'session.deleted' && typeof event.payload?.sessionId === 'string') {
+        store.dispatch(actions.acknowledgeRunOutcome(event.payload.sessionId));
       }
       if (
         event.type === 'project.bound' ||

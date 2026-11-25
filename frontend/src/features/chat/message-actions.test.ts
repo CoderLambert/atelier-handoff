@@ -731,9 +731,9 @@ test(
       assert.deepEqual(sends[0]?.body.contextPaths, ['current.txt']);
       assert.equal(await input.inputValue(), '');
       assert.equal(await page.getByText('编辑后将作为新一轮发送', { exact: true }).count(), 0);
-      assert.equal(await input.getAttribute('aria-keyshortcuts'), 'Alt+Enter');
+      assert.equal(await input.getAttribute('aria-keyshortcuts'), 'Control+Enter Alt+Enter');
       await input.fill('立即补充');
-      await input.press('Alt+Enter');
+      await input.press('Control+Enter');
       await page.waitForFunction("window.events.filter(([type]) => type === 'sent').length === 2");
       assert.equal(sends[2]?.body.text, '立即补充');
       assert.deepEqual(inserts, [

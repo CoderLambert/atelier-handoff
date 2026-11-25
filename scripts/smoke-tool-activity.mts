@@ -1,7 +1,7 @@
 /**
- * @file 从隔离 Electron 窗口验证会话内的命令、回执和事件明细。
- * @implementation 在回环模型和真实窗口中核对命令、摘要、事件及历史，验证 Bash 日志分页、下载文件和焦点恢复。
- * @updated 2026-11-22T21:17:02+08:00
+ * @file 从隔离 Electron 窗口验证会话内工具活动和原生 Bash 控制。
+ * @implementation 用回环模型与真实窗口核对工具事件、历史和日志，验证中英文命令操作、后台消息投递与同目录会话隔离。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -22,11 +22,36 @@ const longOutput =
 assert.ok(Buffer.byteLength(longOutput, 'utf8') > 200 * 1024);
 let invocations = 0;
 let modelGotSummary = false;
+const controlPrompts = ['BASH_CONTROL_FIRST_SESSION', 'BASH_CONTROL_SECOND_SESSION'] as const;
+const controlCalls = new Set<string>();
+const followup = 'BASH_CONTROL_CHANGE_DIRECTION';
+let receivedFollowup = false;
 const gateway = createServer(async (req, res) => {
   if (req.method !== 'POST')
     return res.end(JSON.stringify(req.url === '/routes' ? { data: [{ model }] } : {}));
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  const wire = Buffer.concat(chunks).toString();
+  const controlLane = controlPrompts.findIndex((marker) => wire.includes(marker));
+  if (controlLane >= 0) {
+    const toolId = 'toolu_bash_control_' + controlLane;
+    if (!controlCalls.has(toolId)) {
+      controlCalls.add(toolId);
+      return sendModelReply(res, model, [
+        {
+          name: 'Bash',
+          id: toolId,
+          input: {
+            command: `printf 'started-${controlLane}\\n'; while ! test -f release-control-${controlLane}; do sleep 0.05; done; printf 'completed-${controlLane}\\n'`,
+            description: 'Run the isolated command control fixture',
+            timeout: 120_000,
+          },
+        },
+      ]);
+    }
+    if (wire.includes(followup)) receivedFollowup = true;
+    return sendModelReply(res, model, 'Fixture Bash control reply.');
+  }
   if (++invocations === 1)
     return sendModelReply(res, model, [
       {
@@ -43,7 +68,6 @@ const gateway = createServer(async (req, res) => {
         input: { command: 'cat long-receipt.txt', description: 'Inspect synthetic log' },
       },
     ]);
-  const wire = Buffer.concat(chunks).toString();
   modelGotSummary =
     wire.includes('工具输出摘要') && wire.includes('read_tool_output') && !wire.includes(middle);
   sendModelReply(res, model, '检查已完成。');
@@ -66,6 +90,7 @@ try {
       ...process.env,
       ATELIER_DATA_DIR: join(directory, 'data'),
       ATELIER_GATEWAY: `http://127.0.0.1:${address.port}`,
+      ATELIER_GATEWAY_TOKEN: 'tool-activity-fixture',
       ATELIER_MODEL: model,
       ATELIER_PORT: '0',
       ATELIER_NATIVE_EXECUTION: '1',
@@ -85,6 +110,18 @@ try {
   await input.press('Enter');
   const row = page.locator('.run-tool-list details[data-tool-id$="toolu_activity"]');
   await row.locator(':scope > summary').waitFor();
+  const live = page.locator('.run-progress[data-active="true"]');
+  const liveBar = live.locator('.run-live-activity-bar');
+  assert.match((await liveBar.getByRole('status').textContent()) ?? '', /正在调用.*Bash/u);
+  const toolsToggle = liveBar.getByRole('button', { name: /0 \/ 1 已结束/ });
+  assert.equal(await toolsToggle.getAttribute('aria-expanded', { timeout: 3000 }), 'true');
+  assert.equal(
+    await live.evaluate((element) => getComputedStyle(element).backgroundColor),
+    'rgba(0, 0, 0, 0)',
+  );
+  await toolsToggle.press('Enter');
+  assert.equal(await row.count(), 0);
+  await toolsToggle.press('Space');
   assert.ok((await row.locator(':scope > summary').innerText()).includes('printf'));
   await row.locator(':scope > summary').click();
   await row.getByText(command, { exact: true }).waitFor();
@@ -174,6 +211,63 @@ try {
   );
   assert.equal(invocations, 3);
   assert.equal(modelGotSummary, true);
+
+  await input.fill(controlPrompts[0]);
+  await input.press('Enter');
+  const firstBash = page.locator('details[data-tool-id$="toolu_bash_control_0"]');
+  await firstBash.locator(':scope > summary').click();
+  await firstBash.getByRole('button', { name: '转到后台', exact: true }).waitFor();
+  await firstBash.getByRole('button', { name: '停止命令', exact: true }).waitFor();
+  if (process.env.ATELIER_BASH_CONTROL_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.ATELIER_BASH_CONTROL_SCREENSHOT_DIR, 'control-zh.png'),
+    });
+  await input.fill(followup);
+  await input.press('Control+Enter');
+  await firstBash.locator(':scope > summary').getByText('后台运行', { exact: true }).waitFor();
+  await page.getByText('Fixture Bash control reply.', { exact: true }).first().waitFor();
+  assert.equal(receivedFollowup, true);
+  const firstSession = page.url();
+
+  await page.goto(new URL('/#/settings/models', firstSession).href);
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).click();
+  await page.getByRole('option', { name: 'English', exact: true }).click();
+  await page.getByRole('heading', { name: 'Settings', exact: true }).waitFor();
+  await page.goto(firstSession);
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  await page.locator('.sidebar-project-new').click();
+  await page.waitForURL((url) => url.href !== firstSession);
+  await input.fill(controlPrompts[1]);
+  await input.press('Enter');
+  const secondBash = page.locator('details[data-tool-id$="toolu_bash_control_1"]');
+  await secondBash.locator(':scope > summary').click();
+  await secondBash.getByRole('button', { name: 'Move to background', exact: true }).click();
+  await secondBash
+    .locator(':scope > summary')
+    .getByText('Running in background', { exact: true })
+    .waitFor();
+  if (process.env.ATELIER_BASH_CONTROL_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: join(process.env.ATELIER_BASH_CONTROL_SCREENSHOT_DIR, 'control-en.png'),
+    });
+  await secondBash.getByRole('button', { name: 'Stop command', exact: true }).click();
+  await secondBash.locator(':scope > summary').getByText('Stopped', { exact: true }).waitFor();
+
+  await page.goto(firstSession);
+  await firstBash
+    .locator(':scope > summary')
+    .getByText('Running in background', { exact: true })
+    .waitFor();
+  await firstBash.locator(':scope > summary').click();
+  await writeFile(join(project, 'release-control-0'), 'release');
+  await firstBash.getByRole('button', { name: 'View full log', exact: true }).click();
+  const fullLog = page.getByRole('dialog', { name: 'Full Bash log' });
+  await fullLog
+    .getByText(/completed-0/)
+    .first()
+    .waitFor();
+  await page.keyboard.press('Escape');
+  await fullLog.waitFor({ state: 'hidden' });
   console.log(
     JSON.stringify({
       result: 'passed',
@@ -183,6 +277,9 @@ try {
       realOutputVisible: true,
       toolEventCorrelated: true,
       historyExpandable: true,
+      nativeBashControlledInChineseAndEnglish: true,
+      sameDirectorySessionsIndependent: true,
+      newInstructionArrivedBeforeBashExit: true,
       sidebarHiddenByDefault: true,
       savedLogBytes: Buffer.byteLength(longOutput, 'utf8'),
       pagesToMiddle,

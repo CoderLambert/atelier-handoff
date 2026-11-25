@@ -1,7 +1,7 @@
 /**
  * @file 展示工作台导航、项目与会话侧栏。
- * @implementation 管理搜索、项目及分支展开和分页状态，通过回调触发导航、会话操作及设置。
- * @updated 2026-11-23T05:10:55+08:00
+ * @implementation 管理搜索、项目及分支展开和分页，结合活动运行与未查看结果呈现会话状态，通过回调处理导航和会话操作。
+ * @updated 2026-11-25T19:11:00+08:00
  */
 import { useId, useMemo, useState } from 'react';
 import {
@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronRight,
   FolderOpen,
+  GitBranch,
+  History,
   MessagesSquare,
   Package,
   PanelLeftClose,
@@ -35,7 +37,7 @@ import {
   type SessionTreePagination,
 } from './session-tree';
 import { SidebarSessionMenu, type SessionAction } from './sidebar-session-menu';
-import { type View } from './store';
+import { useWorkspace, type View } from './store';
 import { formatSessionTime } from '@/utils/format';
 import './sidebar.css';
 
@@ -96,11 +98,15 @@ export function Sidebar({
   };
   const activeThemeLabel = themeLabels[theme] ?? t('sidebar.themeObsidian');
   const numberFormat = new Intl.NumberFormat(locale);
-  const runStatus: Partial<Record<RunStatus, string>> = {
+  const runStatus: Partial<Record<RunStatus | 'idle', string>> = {
     queued: t('status.queued'),
     running: t('status.running'),
     awaiting_permission: t('status.awaitingPermission'),
     stopping: t('status.stopping'),
+    idle: t('status.idle'),
+    completed: t('status.completed'),
+    failed: t('status.failed'),
+    interrupted: t('status.interrupted'),
   };
   const [search, setSearch] = useState('');
   const [pagination, setPagination] = useState(() => new Map<string, SessionTreePagination>());
@@ -115,6 +121,7 @@ export function Sidebar({
     return buildProjectSessionGroups(sessions ?? [], [...knownProjects.values()], filter);
   }, [sessions, projects, project, filter]);
   const selected = view === 'chat' ? current : undefined;
+  const unseenOutcomes = useWorkspace((state) => state.workspace.unseenRunOutcomes);
   const activity = useActiveRuns();
   const bySession = new Map(
     activity.flatMap((query) => query.data?.items ?? []).map((run) => [run.sessionId, run]),
@@ -129,19 +136,19 @@ export function Sidebar({
   ) {
     const active = bySession.get(session.id);
     const archived = session.status === 'archived';
-    const status = active ? runStatus[active.status] : undefined;
+    const unseen = selected === session.id ? undefined : unseenOutcomes[session.id];
+    const status = active?.status ?? unseen ?? 'idle';
+    const statusLabel = runStatus[status] ?? t('status.idle');
     const updatedAt = new Date(session.updatedAt);
-    const meta = [
-      priorVersion
-        ? t('session.priorVersion')
-        : session.fork && !session.fork.kind
-          ? t('session.branch')
-          : undefined,
-      archived ? t('session.archived') : undefined,
-      archived ? undefined : formatSessionTime(updatedAt, now, locale),
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const branchLabel = priorVersion
+      ? t('session.priorVersion')
+      : session.fork && !session.fork.kind
+        ? t('session.branch')
+        : undefined;
+    const BranchIcon = priorVersion ? History : GitBranch;
+    const dot = archived ? null : (
+      <span className="sidebar-session-status" title={statusLabel} aria-hidden="true" />
+    );
     const hasChildren = children.length > 0;
     const revealSelected =
       selectedPath.includes(session.id) && closedBranches.get(session.id) !== selected;
@@ -154,13 +161,13 @@ export function Sidebar({
         <div
           className="history-node-row sidebar-session-row"
           data-selected={selected === session.id || undefined}
+          data-status={archived ? undefined : status}
         >
           {hasChildren ? (
             <Button
               size="icon-sm"
               variant="ghost"
               className="history-disclosure"
-              data-status={active?.status}
               aria-expanded={expanded}
               aria-controls={groupId}
               aria-label={t(expanded ? 'session.collapseBranches' : 'session.expandBranches', {
@@ -177,43 +184,38 @@ export function Sidebar({
               }
             >
               <Chevron data-icon="inline-start" aria-hidden="true" />
-              {active ? (
-                <span
-                  className="sidebar-status-ring sidebar-status-ring--disclosure"
-                  aria-hidden="true"
-                />
-              ) : null}
+              {dot}
             </Button>
-          ) : (
-            <span
-              className={cn('sidebar-disclosure-space', active && 'has-status')}
-              data-status={active?.status}
-              title={status}
-              onClick={active ? () => onSession(session.id) : undefined}
-            >
-              {active ? (
-                <span className="sidebar-status-ring" aria-hidden="true" />
-              ) : null}
-            </span>
-          )}
+          ) : null}
           <button
             type="button"
             className={cn('history-item', selected === session.id && 'selected')}
             aria-current={selected === session.id ? 'page' : undefined}
             onClick={() => onSession(session.id)}
           >
+            {hasChildren ? null : dot}
             <span className="history-title truncate" title={session.title}>
               {session.title}
             </span>
-            <span
-              className="history-meta"
-              data-status={active?.status}
-              title={updatedAt.toLocaleString(locale)}
-            >
-              {archived ? <Archive aria-hidden="true" /> : null}
-              {active && status ? <span className="sr-only">{status}</span> : null}
-              <span className="truncate">{meta}</span>
+            <span className="history-meta">
+              {branchLabel ? (
+                <span className="history-meta-icon" title={branchLabel}>
+                  <BranchIcon aria-hidden="true" />
+                  <span className="sr-only">{branchLabel}</span>
+                </span>
+              ) : null}
+              {archived ? (
+                <span className="history-meta-icon" title={t('session.archived')}>
+                  <Archive aria-hidden="true" />
+                  <span className="sr-only">{t('session.archived')}</span>
+                </span>
+              ) : (
+                <time dateTime={session.updatedAt} title={updatedAt.toLocaleString(locale)}>
+                  {formatSessionTime(updatedAt, now, locale)}
+                </time>
+              )}
             </span>
+            {archived ? null : <span className="sr-only">{statusLabel}</span>}
           </button>
           {onSessionAction ? (
             <SidebarSessionMenu

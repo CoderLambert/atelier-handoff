@@ -134,11 +134,6 @@ export function ModelPicker({
 
   const controls = (
     <>
-      {compact ? (
-        <label htmlFor={`${id}-model`} className="text-sm font-medium">
-          {t('model.label')}
-        </label>
-      ) : null}
       <Select
         value={model === undefined ? defaultValue : modelValue(model)}
         open={open && !disabled}
@@ -165,9 +160,10 @@ export function ModelPicker({
           ref={compact ? undefined : triggerRef}
           id={`${id}-model`}
           size="sm"
+          presentation={compact ? 'menu' : 'field'}
           className={cn(
             'min-w-0 [&_[data-slot=select-value]]:min-w-0',
-            compact ? 'w-full' : 'composer-ghost-select max-w-48',
+            !compact && 'composer-ghost-select max-w-48',
           )}
           aria-label={t('model.choose')}
           aria-describedby={modelUnavailable ? `${id}-model-help` : undefined}
@@ -180,6 +176,7 @@ export function ModelPicker({
                 })
           }
         >
+          {compact ? <span className="shrink-0">{t('model.label')}</span> : null}
           <SelectValue>
             <span className="truncate">
               {modelUnavailable
@@ -283,11 +280,6 @@ export function ModelPicker({
           </SelectGroup>
         </SelectContent>
       </Select>
-      {compact ? (
-        <label htmlFor={`${id}-effort`} className="text-sm font-medium">
-          {t('model.effort')}
-        </label>
-      ) : null}
       <Select
         value={fixedEffort ?? effort ?? defaultValue}
         open={effortOpen && !effortDisabled}
@@ -305,12 +297,14 @@ export function ModelPicker({
         <SelectTrigger
           id={`${id}-effort`}
           size="sm"
-          className={compact ? 'w-full' : 'composer-ghost-select shrink-0'}
+          presentation={compact ? 'menu' : 'field'}
+          className={!compact ? 'composer-ghost-select shrink-0' : undefined}
           aria-label={t('model.chooseEffort')}
           aria-describedby={`${id}-effort-help`}
           aria-invalid={fixedEffort === undefined && unsupportedEffort}
           title={effortTitle}
         >
+          {compact ? <span className="shrink-0">{t('model.effort')}</span> : null}
           <SelectValue>
             {compact ? effortLabel : t('model.effortSummary', { effort: effortLabel })}
           </SelectValue>
@@ -343,25 +337,25 @@ export function ModelPicker({
               aria-label={t('model.settings')}
               title={`${modelName} · ${effortLabel}`}
               disabled={disabled}
-              className="max-w-60 min-w-0 gap-1.5"
+              className="max-w-60 min-w-0 gap-1.5 data-[state=open]:bg-accent data-[state=open]:[&>svg]:rotate-180"
             >
               <span className="truncate">
                 {modelUnavailable ? t('model.magpieDisabled') : modelName}
               </span>
               <span className="shrink-0 text-muted-foreground">{effortLabel}</span>
-              <ChevronDown aria-hidden="true" />
+              <ChevronDown data-icon="inline-end" aria-hidden="true" />
             </Button>
           </PopoverTrigger>
           <PopoverContent
             aria-label={t('model.settings')}
-            className="grid w-72 max-w-[calc(100vw-24px)] gap-2 p-3"
+            className="grid w-64 max-w-[calc(100vw-24px)] gap-0.5 p-1"
             onCloseAutoFocus={(event) => {
               if (manualOpen) event.preventDefault();
             }}
           >
             {controls}
-            {effortDisabled || unsupportedEffort ? (
-              <p className="text-xs text-muted-foreground">{effortTitle}</p>
+            {unsupportedEffort && !effortDisabled ? (
+              <p className="px-2.5 py-1.5 text-xs text-warning">{effortTitle}</p>
             ) : null}
           </PopoverContent>
         </Popover>

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Atelier · Skill 设置交互原型</title>
+<style>
+:root{--canvas:#f8f9f5;--surface:#fff;--sidebar:#f3f5ef;--ink:#242b23;--muted:#586358;--dim:#626d61;--line:#dce2d7;--edge:#8d988a;--accent:#3b5534;--accent-hover:#30462b;--tint:#e9efe3;--wash:#f1f4ed;--warning:#71501c;--warn-bg:#fcf4e3;--shadow:0 22px 68px #20282126;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;--sans:Inter,system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.55 var(--sans)}button,input,select{font:inherit;color:inherit}button,select{cursor:pointer}button{background:none;border:0}button:disabled,select:disabled{cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}[hidden]{display:none!important}h1,h2,h3,p{margin:0}small{font-size:12px}code{font:12px var(--mono)}svg.icon{height:17px;width:17px;stroke:currentColor;fill:none;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;flex:none}svg.icon.big{height:23px;width:23px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.shell{min-height:100vh;display:grid;grid-template-columns:224px minmax(0,1fr)}.sidebar{display:flex;position:sticky;top:0;height:100dvh;gap:18px;flex-direction:column;padding:21px 12px 14px;border-right:1px solid var(--line);background:var(--sidebar)}.brand{display:flex;align-items:center;gap:9px;padding:1px 10px 8px;font-size:27px;font-weight:820;letter-spacing:-1.7px;line-height:1}.brand-mark{width:27px;height:28px;display:flex;gap:3px;align-items:center;transform:rotate(-15deg);padding-left:3px}.brand-mark i{display:block;width:4px;background:var(--accent);height:18px}.brand-mark i:nth-child(2){height:25px}.brand-mark i:nth-child(3){height:16px}.sidebar-caption{padding:0 9px;color:var(--dim);font-size:12px;font-weight:630}.sidebar-nav,.session-list{display:grid;gap:4px}.nav-item{display:flex;align-items:center;justify-content:flex-start;gap:9px;width:100%;padding:7px 9px;min-height:35px;text-align:left;border-radius:7px;color:var(--muted)}.nav-item:hover{background:#e9ede5;color:var(--ink)}.nav-item[aria-current="page"],.nav-item[aria-current="true"]{background:#e3e8dd;color:#2e4629;font-weight:670}.nav-item .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-pin{width:6px;height:6px;border-radius:50%;background:#778371;flex:none;margin-inline:5px}.nav-item[aria-current=true] .nav-pin{background:var(--accent)}.workdir{display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--canvas);border:1px solid var(--line);border-radius:8px}.workdir>svg{color:var(--accent)}.workdir small,.workdir strong{display:block}.workdir small{color:var(--dim);font-size:11px}.workdir strong{font-size:13px}.sandbox-label{margin-top:auto;border-top:1px solid var(--line);padding:11px 9px 0;color:var(--dim);font-size:12px}
+.workspace{min-width:0}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;height:53px;padding:0 25px;background:#fcfcfa;border-bottom:1px solid var(--line)}.crumb{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px;min-width:0}.crumb strong{color:var(--ink)}.demo-marker{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:650;color:#44543e;border:1px solid var(--line);border-radius:20px;background:var(--wash);padding:3px 9px;white-space:nowrap}.demo-marker::before{content:"";width:5px;height:5px;border-radius:50%;background:#5d7354}
+.page{max-width:1064px;margin:0 auto;padding:36px 32px 34px}.heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:25px}.eyebrow{color:var(--accent);font:600 11px/1.2 var(--mono);letter-spacing:.14em;margin-bottom:8px}.heading h1{font-size:30px;line-height:1.22;letter-spacing:-.045em;margin-bottom:8px}.lead{color:var(--muted);font-size:13px}.project-select{display:grid;gap:4px;color:var(--dim);font-size:12px;min-width:164px}.project-select select{min-width:0;width:100%}.tabbar{display:flex;gap:22px;align-items:center;border-bottom:1px solid var(--line);margin-bottom:20px;color:var(--dim)}.tabbar span{display:flex;align-items:center;gap:7px;padding:0 2px 10px;font-size:13px}.tabbar .active{border-bottom:2px solid var(--accent);margin-bottom:-1px;color:var(--ink);font-weight:700}.tabbar .muted-tab{color:var(--dim)}.tabbar svg.icon{width:15px;height:15px}.scopebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px;flex-wrap:wrap}.segments{display:inline-flex;gap:3px;align-items:center;padding:3px;background:var(--wash);border:1px solid var(--line);border-radius:9px}.segment{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;border-radius:6px;padding:5px 10px;font-size:13px;color:var(--muted);white-space:nowrap;min-height:32px}.segment:hover{background:var(--tint)}.segment[aria-selected=true]{border-color:var(--line);background:var(--surface);color:var(--ink);font-weight:680;box-shadow:0 1px 2px #2637260a}.segment svg{width:14px;height:14px}
+.btn{display:inline-flex;gap:7px;justify-content:center;align-items:center;min-height:34px;padding:5px 11px;border:1px solid var(--edge);border-radius:7px;background:var(--surface);font-size:13px;font-weight:620;white-space:nowrap}.btn:hover{background:var(--wash)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.primary:hover{background:var(--accent-hover)}.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}.btn.ghost:hover{background:var(--wash);color:var(--ink)}.btn.icon-btn{width:34px;padding:0}.btn svg.icon{width:15px;height:15px}
+select,.search input{border:1px solid var(--edge);border-radius:7px;background:var(--surface);min-height:35px;padding:4px 9px;font-size:13px}select:disabled{background:var(--wash);color:var(--dim);border-color:var(--line)}.search{position:relative;max-width:280px;width:100%;display:flex;align-items:center}.search svg{position:absolute;left:10px;color:var(--muted);pointer-events:none}.search input{width:100%;padding-inline-start:34px}.search input::placeholder{color:var(--dim)}
+.surface{border:1px solid var(--line);border-radius:12px;background:var(--surface)}.gate{padding:16px 19px;display:grid;grid-template-columns:auto 1fr auto;align-items:start;gap:13px;background:#f1f4eb}.gate h2,.section-head h2{font-size:16px;line-height:1.4;letter-spacing:-.02em}.gate h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}.gate p{color:var(--muted);font-size:13px}.gate .gate-control{align-self:center}.gate .directory{display:inline-block;margin-top:6px;padding:2px 5px;background:#e6ecdf;border-radius:4px;color:#3f513a}.mark{align-self:start;width:37px;height:37px;display:grid;place-items:center;flex:none;border-radius:8px;background:var(--tint);color:var(--accent)}.gate .mark{width:41px;height:41px;background:#e2eadc}.tag{display:inline-flex;align-items:center;gap:5px;min-height:21px;padding:1px 7px;border-radius:5px;background:var(--wash);color:#485644;font-size:11px;font-weight:640;white-space:nowrap}.tag.on{background:var(--tint);color:#32532d}.tag.warn{background:var(--warn-bg);color:var(--warning)}.tag.outline{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}.dot::before{content:"";height:5px;width:5px;border-radius:50%;background:currentColor}.switch{width:39px;height:23px;background:#e1e7dc;border:1px solid #84917e;border-radius:999px;padding:3px;display:inline-flex;align-items:center}.switch::after{content:"";width:15px;height:15px;border-radius:50%;background:#5c6758;transition:transform .14s}.switch[aria-checked=true]{background:var(--accent);border-color:var(--accent)}.switch[aria-checked=true]::after{background:white;transform:translateX(15px)}
+.section-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:18px 0 9px}.section-head h2{display:flex;align-items:center;gap:8px}.section-title p{color:var(--dim);font-size:12px;margin-top:2px}.list{overflow:hidden}.list-header,.skill-row{display:grid;grid-template-columns:minmax(0,1fr) 145px 132px;gap:13px;align-items:center;padding:10px 15px}.list-header{background:#f9faf7;color:var(--muted);font-size:12px;font-weight:650;padding-block:7px}.skill-row{min-height:67px;border-top:1px solid var(--line)}.skill-row:first-child{border-top:0}.skill-ident{display:flex;min-width:0;align-items:center;gap:10px}.skill-ident .mark{align-self:center;width:32px;height:32px}.skill-id{min-width:0}.skill-name{display:flex;align-items:center;gap:7px;font:650 13px/1.4 var(--mono);overflow-wrap:anywhere}.skill-desc{color:var(--muted);font-size:12px;margin-top:3px}.skill-meta{color:var(--dim);font-size:11px;margin-top:3px}.row-policy{width:100%;min-width:0}.reason{font-size:11px;color:var(--dim);margin-top:3px}.empty{padding:28px 14px;text-align:center;color:var(--muted)}.footnote{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px;color:var(--dim);font-size:12px}.sandbox-actions{display:flex;gap:3px;flex-wrap:wrap}.inline-note{display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:12px;margin-top:10px}.inline-note svg{width:15px;height:15px;margin-top:2px}.notice{border:1px solid #e7d8b8;border-radius:8px;background:var(--warn-bg);color:var(--warning);padding:9px 11px;margin:10px 0 0;font-size:12px;display:flex;gap:8px;align-items:flex-start}.notice .icon{width:15px;height:15px;margin-top:2px}
+.chat{max-width:850px}.chat .heading{margin-bottom:18px}.conversation{display:grid;gap:14px;padding:18px;margin-bottom:16px}.bubble{background:var(--wash);padding:10px 13px;max-width:83%;border-radius:9px;justify-self:end}.reply{max-width:83%;color:var(--muted)}.composer{padding:13px}.composer-line{min-height:52px;color:var(--dim)}.composer-actions{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.composer-buttons{display:flex;gap:5px}.run-receipt{padding:9px 10px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--muted)}.manual-pick{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+dialog{position:fixed;inset:0 0 0 auto;margin:0;height:100dvh;max-height:none;width:min(492px,100vw);max-width:100vw;border:0;border-left:1px solid var(--line);background:#fbfcf9;color:var(--ink);padding:0;box-shadow:var(--shadow)}dialog::backdrop{background:#19261644}.drawer{display:grid;grid-template-rows:auto 1fr auto;height:100%}.drawer-head{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:21px 22px 14px;border-bottom:1px solid var(--line)}.drawer-head h2{font-size:22px;line-height:1.3;margin:3px 0 3px}.drawer-body{padding:15px 22px 23px;overflow:auto;overscroll-behavior:contain}.drawer-footer{padding:9px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--dim);font-size:12px}.drawer-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.drawer-controls label{display:grid;gap:4px;color:var(--muted);font-size:12px}.drawer-controls select{width:100%}.drawer .section-head{margin-top:18px}.drawer .skill-row{grid-template-columns:minmax(0,1fr) 116px;padding:9px 11px;min-height:61px}.drawer-group{margin:13px 0 0}.drawer-group h3{font-size:13px;margin:0 0 5px}.drawer-group .skill-desc{font-size:11px}.drawer-group .result{font-size:11px;color:var(--dim);margin-top:3px}.toast{position:fixed;right:22px;bottom:20px;z-index:4;padding:10px 13px;max-width:min(410px,calc(100% - 32px));border-radius:8px;background:#283d24;color:#fff;box-shadow:var(--shadow);font-size:13px}.drawer-toast{font-weight:650;color:var(--accent)}
+@media(max-width:990px){.shell{grid-template-columns:184px minmax(0,1fr)}.page{padding-inline:24px}.list-header,.skill-row{grid-template-columns:minmax(0,1fr) 119px 112px;gap:9px}}@media(max-width:720px){.shell{grid-template-columns:1fr}.sidebar{display:none}.topbar{padding-inline:16px}.page{padding:25px 15px}.heading{margin-bottom:17px}.heading h1{font-size:25px}.gate{padding:12px;gap:9px}.gate .mark{width:33px;height:33px}.gate .mark svg{width:19px;height:19px}.list-header{display:none}.skill-row{grid-template-columns:minmax(0,1fr) 112px;padding:9px 10px;gap:5px 8px}.skill-row .skill-ident{grid-column:1/-1}.drawer .skill-row .skill-ident{grid-column:auto}.skill-row:first-child{border-top:0}.skill-row .skill-status{padding-left:42px}.heading .project-select{min-width:110px}.section-head .search{max-width:none}}@media(max-width:395px){.heading{align-items:start;flex-direction:column}.heading .project-select{width:100%}.tabbar{gap:14px}.gate{grid-template-columns:1fr auto}.gate .mark{display:none}.drawer-head,.drawer-body,.drawer-footer{padding-inline:14px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+/* The project view mirrors the existing catalog; the new global view is separate. */
+.page:not(.chat){max-width:1160px}.project-toolbar,.project-filters,.project-actions,.project-note,.project-policy{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.project-toolbar,.project-note{justify-content:space-between}.project-filters{flex:1 1 330px}.project-actions{justify-content:flex-end}.project-filters .search{flex:1 1 150px;max-width:340px}.project-note{margin:14px 0 18px;color:var(--muted);font-size:12px}.project-policy{gap:6px}.project-policy select{min-height:29px;padding-block:2px;font-size:12px}.project-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.catalog-card{display:flex;flex-direction:column;min-width:0;padding:16px;gap:11px}.catalog-card:focus-within{border-color:var(--accent)}.card-top,.card-meta,.card-auto,.card-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.card-top .switch,.card-meta .version,.card-auto .switch,.card-actions .danger{margin-inline-start:auto}.card-top .mark{width:33px;height:33px}.card-top small,.card-meta,.card-source,.auto-caption,.card-upstream{font-size:12px;color:var(--muted)}.card-name{font-size:17px;font-weight:720;text-align:left;padding:0;overflow-wrap:anywhere}.card-name:hover{text-decoration:underline}.card-description{font-size:13px;line-height:1.55;min-height:4.65em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.card-source{min-height:3em;overflow-wrap:anywhere}.card-auto{border-top:1px solid var(--line);padding-top:10px;justify-content:space-between}.card-auto .switch:disabled{opacity:.62}.card-actions{margin-top:auto;gap:2px;padding-top:3px}.card-actions .btn{padding-inline:7px}.btn.danger{color:white;background:#a92025;border-color:#a92025}.btn.danger:hover{background:#8f1b20}.prototype-note{margin-top:13px}.tabbar .tab-count{display:inline-block;padding:1px 5px;min-width:18px;background:var(--wash);border-radius:4px;font:500 11px var(--mono);text-align:center}.scopebar>[data-action=session]{margin-inline-start:auto}
+#catalog-dialog{inset:0;margin:auto;width:min(480px,calc(100% - 32px));height:fit-content;max-height:calc(100dvh - 32px);border:1px solid var(--line);border-radius:13px;overflow:auto;background:var(--surface)}.catalog-modal{padding:19px 20px}.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:13px}.modal-head h2{font-size:20px}.modal-fields{display:grid;gap:11px}.modal-fields label{display:grid;gap:4px;color:var(--muted);font-size:13px}.modal-fields input,.modal-fields textarea{width:100%;font:inherit;color:var(--ink);border:1px solid var(--edge);border-radius:7px;background:var(--surface);padding:7px 8px}.modal-fields textarea{resize:vertical;min-height:70px}.modal-fields textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.modal-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:14px}.modal-result{color:var(--muted);margin-top:7px}.modal-caption{color:var(--muted);font-size:12px;margin-bottom:10px}.modal-error{color:#a92025;font-size:12px}.market-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding:9px 0}
+@media(max-width:920px){.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-actions{justify-content:flex-start}}@media(max-width:530px){.project-grid{grid-template-columns:1fr}.project-filters{flex-basis:100%}.project-note{align-items:flex-start}.scopebar>[data-action=session]{margin-inline-start:0}}
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M10 3H5a2 2 0 0 0-2 2v4h2a2 2 0 1 1 0 4H3v6a2 2 0 0 0 2 2h5v-2a2 2 0 1 1 4 0v2h5a2 2 0 0 0 2-2v-6h-2a2 2 0 0 1 0-4h2V5a2 2 0 0 0-2-2h-5v2a2 2 0 1 1-4 0z"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-4 0h8"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.5a8.5 8.5 0 0 1-8.5 8.5H4l1.1-3.1a8.5 8.5 0 1 1 15.4-5.4z"/><path d="M8.5 12h7"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M10 3l1.4 4.6L16 9l-4.6 1.4L10 15l-1.4-4.6L4 9l4.6-1.4L10 3zM18.5 12l.9 2.7 2.6.8-2.6.9-.9 2.6-.8-2.6-2.7-.9 2.7-.8zM4 16v4m-2-2h4"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 6 6 6-6 6m9 0h7"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5m6-5v5m-8 0h10v5a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3zM12 16v5"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 1 1.6 6M3 5v6h6"/></symbol>
+</svg>
+<div class="shell">
+  <aside class="sidebar" aria-label="工作台">
+    <div class="brand" aria-label="atelier"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>atelier.</div>
+    <div class="workdir"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><div><small>工作目录</small><strong id="workdir">web-studio</strong></div></div>
+    <nav class="sidebar-nav" aria-label="工作台导航">
+      <button class="nav-item" data-action="extensions" id="nav-extensions"><svg class="icon" aria-hidden="true"><use href="#i-puzzle"/></svg>扩展</button>
+      <button class="nav-item" data-action="chat" id="nav-chat"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>会话</button>
+    </nav>
+    <div><p class="sidebar-caption">演示会话</p><div class="session-list" id="session-nav"></div></div>
+    <p class="sandbox-label">演示数据 · 不连接真实工作台</p>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="crumb" id="crumb"></div><span class="demo-marker">交互原型</span></header>
+    <main id="app" class="page"></main>
+  </div>
+</div>
+<dialog id="session-dialog" aria-labelledby="drawer-title">
+  <div class="drawer">
+    <header class="drawer-head"><div><p class="eyebrow">SESSION SKILLS</p><h2 id="drawer-title">本会话 Skills</h2><p class="lead" id="drawer-context"></p></div><button class="btn ghost icon-btn" data-action="close-session" aria-label="关闭会话设置" autofocus><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></header>
+    <div id="drawer-body" class="drawer-body"></div>
+    <footer class="drawer-footer"><span>仅影响所选会话的下一次新运行</span><span id="drawer-feedback" class="drawer-toast" role="status"></span><button class="btn" data-action="close-session">完成</button></footer>
+  </div>
+</dialog>
+<dialog id="catalog-dialog" aria-labelledby="catalog-modal-title"></dialog>
+<div id="toast" class="toast" aria-hidden="true" hidden></div><div id="status-announcer" role="status" class="sr-only"></div>
+<script>
+'use strict';
+const hostSkills = [
+  {id:'host:agent-browser',name:'agent-browser',desc:'控制外部浏览器；不连接 Atelier 内置浏览器。',icon:'monitor'},
+  {id:'host:find-skills',name:'find-skills',desc:'查找可安装的 Skill，适合明确需要扩展能力时使用。',icon:'search'},
+  {id:'host:review',name:'review',desc:'按本机工作流检查代码。与项目里的同名条目独立。',icon:'spark'}
+];
+const newcomer={id:'host:readme-check',name:'readme-check',desc:'核对 README 的结构、命令和示例。',icon:'spark'};
+const projects = {
+  'my-deeptutor':{sessions:[{id:'web-a',name:'网页验收'},{id:'web-b',name:'编辑器验收'}],skills:[
+    {id:'app:web:frontend',name:'frontend-design',desc:'Guidance for distinctive, intentional visual design when building a new UI or reshaping an existing one. Helps with aesthetic direction, typography, and composition.',origin:'Atelier 安装',sourceLabel:'github.com/anthropics/skills · frontend-design/SKILL.md',revision:'d91970639e9f',version:4,policy:'auto',icon:'spark'},
+    {id:'app:web:mermaid',name:'mermaid-diagram',desc:'Create Mermaid diagrams for product managers and software engineers, including flowcharts, sequence diagrams, and architecture views.',origin:'Atelier 安装',sourceLabel:'skillhub:@clawhub/mermaid-diagram',revision:'c1b867ed0fed',version:5,policy:'manual',icon:'spark'},
+    {id:'app:web:search',name:'multi-search-engine',desc:'从多个公开搜索引擎查找资料，按语言和时间筛选，并对照来源。',origin:'Atelier 安装',sourceLabel:'skillhub:@zcwl/multi-search-engine',revision:'dc9811c52104',version:5,policy:'manual',icon:'spark'},
+    {id:'app:web:parenting',name:'parenting-expert',desc:'帮助家长梳理不同年龄阶段的养育问题，提供可实践的家庭沟通和陪伴建议。',origin:'Atelier 安装',sourceLabel:'skillhub:parenting-expert',revision:'demo-03',version:3,policy:'manual',icon:'spark'},
+    {id:'app:web:charts',name:'smart-charts',desc:'将表格和结构化数据转成可交互的图表，并提供图形选择建议。',origin:'Atelier 安装',sourceLabel:'skillhub:smart-charts',revision:'demo-03',version:3,policy:'manual',icon:'spark'},
+    {id:'app:web:ui-review',name:'ui-review',desc:'按实际使用路径审查视觉层级、响应式、键盘操作和交互反馈。',origin:'Atelier 安装',sourceLabel:'atelier 精选',version:4,policy:'manual',icon:'spark'},
+    {id:'app:web:review',name:'review',desc:'检查改动、测试和回归风险。与本机同名条目独立。',origin:'Atelier 安装',version:2,policy:'off',icon:'spark'},
+    {id:'project:web:layout-check',name:'layout-check',desc:'按项目清单验收页面布局和键盘操作。',origin:'项目目录',policy:'manual',icon:'folder'}]},
+  'docs-lab':{sessions:[{id:'docs-a',name:'文档发布检查'},{id:'docs-b',name:'术语整理'}],skills:[
+    {id:'app:docs:copy-edit',name:'copy-edit',desc:'校对说明文档中的措辞和格式。',origin:'Atelier 安装',policy:'manual',icon:'spark'},
+    {id:'project:docs:link-check',name:'link-check',desc:'核对仓库文档里的相对链接。',origin:'项目目录',policy:'auto',icon:'folder'}]}
+};
+const labels={off:'停用',manual:'仅手动',auto:'允许自动调用'};
+const seed=()=>({enabled:false,policies:{},blocked:{},overrides:{},modes:{},newItem:false,runs:{},picked:{},projectSkills:Object.fromEntries(Object.entries(projects).map(([id,item])=>[id,structuredClone(item.skills)]))});
+let state=seed(), project='my-deeptutor', sessionId='web-a', page='extensions', scope='project', filter='', projectSearch='', projectFilter='all', returnFocus, toastTimer, catalogAction, demoSkillSerial=0;
+const app=document.querySelector('#app'), dialog=document.querySelector('#session-dialog'), drawerBody=document.querySelector('#drawer-body'), catalogDialog=document.querySelector('#catalog-dialog');
+const text=(value)=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const projectSkills=()=>state.projectSkills[project];
+const icon=(name,big=false)=>`<svg class="icon${big?' big':''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const tag=(text,className='')=>`<span class="tag ${className}">${text}</span>`;
+const attr=(key)=>`data-focus="${key}"`;
+const session=()=>projects[project].sessions.find(item=>item.id===sessionId);
+const catalog=()=>state.newItem?[...hostSkills,newcomer]:hostSkills;
+const policyOf=(skill)=>state.policies[skill.id]??'off';
+const native=()=>state.modes[sessionId]!=='controlled';
+const options=(entries,value)=>entries.map(([id,title])=>`<option value="${text(id)}"${id===value?' selected':''}>${text(title)}</option>`).join('');
+const skillOptions=(value,includeFollow=false,available='auto')=>options([
+  ...(includeFollow?[['follow','跟随上层']]:[]),['off','停用'],...(available!=='off'?[['manual','仅手动']]:[]),...(available==='auto'?[['auto','允许自动调用']]:[])
+],value);
+const projectsOptions=()=>options(Object.keys(projects).map(id=>[id,id]),project);
+const refocus=(key)=>{if(!key)return;const root=dialog.open?dialog:document;root.querySelector(`[data-focus="${CSS.escape(key)}"]`)?.focus({preventScroll:true});};
+const focusKey=()=>document.activeElement?.dataset.focus;
+const notify=(text)=>{
+  if(dialog.open){document.querySelector('#drawer-feedback').textContent=text;return;}
+  const toast=document.querySelector('#toast');toast.textContent=text;toast.hidden=false;
+  document.querySelector('#status-announcer').textContent=text;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{toast.hidden=true;},3100);
+};
+function sessionGate(skill,source){
+  if(source==='host'){
+    if(!state.enabled)return {policy:'off',reason:'全局继承已关闭'};
+    if(state.blocked[project])return {policy:'off',reason:'项目不使用本机 Skill'};
+    if(!native())return {policy:'off',reason:'受控模式不加载本机 Skill'};
+    if(policyOf(skill)==='off')return {policy:'off',reason:'未在全局启用'};
+    return {policy:policyOf(skill)};
+  }
+  if(skill.origin==='项目目录'&&!native())return {policy:'off',reason:'受控模式不加载项目目录 Skill'};
+  return skill.policy==='off'?{policy:'off',reason:'项目中已停用'}:{policy:skill.policy};
+}
+function effective(skill,source){
+  const {policy,reason}=sessionGate(skill,source);
+  const override=state.overrides[sessionId]?.[skill.id];
+  const upperPolicy=policy;
+  if(policy==='off')return {policy,upperPolicy,reason,override:'follow'};
+  if(override==='off')return {policy:'off',upperPolicy,reason:'本会话已停用',override};
+  if(override==='manual')return {policy:'manual',upperPolicy,reason:'本会话设为仅手动',override};
+  return {policy,upperPolicy,reason:'跟随上层',override:'follow'};
+}
+const effectiveCatalog=()=>[
+  ...projectSkills().map(skill=>({...skill,source:'project',...effective(skill,'project')})),
+  ...catalog().map(skill=>({...skill,origin:'本机继承',source:'host',...effective(skill,'host')}))
+];
+function renderShell(){
+  document.querySelector('#workdir').textContent=project;
+  for(const choice of ['extensions','chat']){
+    const nav=document.querySelector(`#nav-${choice}`);
+    if(page===choice)nav.setAttribute('aria-current','page');else nav.removeAttribute('aria-current');
+  }
+  document.querySelector('#crumb').innerHTML=`<span>${page==='extensions'&&scope==='global'?'工作台':project}</span><span aria-hidden="true">/</span><strong>${page==='extensions'?'扩展':session().name}</strong>`;
+  document.querySelector('#session-nav').innerHTML=projects[project].sessions.map(item=>`<button class="nav-item" data-action="open-chat" data-id="${item.id}" ${attr('nav-'+item.id)}${item.id===sessionId?' aria-current="true"':''}><span class="nav-pin" aria-hidden="true"></span><span class="truncate">${item.name}</span></button>`).join('');
+}
+function globalRows(){
+  const all=catalog(), search=filter.trim().toLowerCase();
+  const rows=all.filter(skill=>`${skill.name} ${skill.desc}`.toLowerCase().includes(search));
+  const list=document.querySelector('#global-list');
+  if(!list)return;
+  document.querySelector('#catalog-count').textContent=search?`${rows.length} / ${all.length} 项`:`${all.length} 项`;
+  list.innerHTML=rows.length?`<div class="list-header" aria-hidden="true"><span>Skill / 来源</span><span>当前全局状态</span><span>全局用法</span></div>`+rows.map(skill=>{
+    const configured=policyOf(skill);
+    return `<div class="skill-row">
+      <div class="skill-ident"><span class="mark">${icon(skill.icon)}</span><div class="skill-id"><div class="skill-name">${skill.name}${skill===newcomer?tag('新发现','outline'):''}</div><p class="skill-desc">${skill.desc}</p><p class="skill-meta">本机目录</p></div></div>
+      <div class="skill-status">${state.enabled&&configured!=='off'?tag(labels[configured],'dot on'):tag(state.enabled?'未启用':'继承已关闭','dot')}${!state.enabled&&configured!=='off'?`<p class="reason">已保留：${labels[configured]}</p>`:''}</div>
+      <select class="row-policy" data-change="global-policy" data-id="${skill.id}" ${attr(skill.id)} aria-label="${skill.name} 的全局用法" ${state.enabled?'':'disabled'}>${skillOptions(configured)}</select>
+    </div>`;
+  }).join(''):'<p class="empty">没有匹配的本机 Skill，试试其他关键词。</p>';
+}
+function renderGlobal(){
+  const values=catalog().map(policyOf);
+  const total=values.filter(value=>value!=='off').length, automatic=values.filter(value=>value==='auto').length;
+  return `<section id="scope-panel" role="tabpanel" aria-labelledby="global-tab">
+    <div class="surface gate">
+      <span class="mark">${icon('monitor',true)}</span><div><h2 id="global-title">继承本机 Skills ${tag(state.enabled?'已开启':'已关闭',state.enabled?'on dot':'dot')}</h2>
+      <p id="global-help">${state.enabled?`已启用 ${total} 项，其中 ${automatic} 项允许自动调用。新发现的项仍需手动启用。`:'默认不继承。打开后，只恢复你曾明确启用的项，不会全部放开。'}</p><code class="directory">~/.claude/skills/</code></div>
+      <button class="switch gate-control" data-action="toggle-global" ${attr('global-switch')} role="switch" aria-checked="${state.enabled}" aria-labelledby="global-title" aria-describedby="global-help"></button>
+    </div>
+    <div class="section-head"><div class="section-title"><h2>检测到的本机 Skills ${tag('<span id="catalog-count"></span>','outline')}</h2><p>${state.enabled?'选择「仅手动」后，模型不会主动调用该 Skill。':'关闭继承时仍可以查看列表；这些项不会提供给 Agent。'}</p></div>
+    <label class="search">${icon('search')}<span class="sr-only">搜索本机 Skills</span><input type="search" id="global-search" placeholder="搜索名称或用途"></label></div>
+    <div class="surface list" id="global-list"></div>
+    <div class="footnote"><span>全局设置适用于所有项目的下一次新运行。</span><div class="sandbox-actions"><button class="btn ghost" data-action="discover" ${attr('discover')} ${state.newItem?'disabled':''}>${icon('plus')} 模拟发现新 Skill</button><button class="btn ghost" data-action="reset" ${attr('reset')}>${icon('reset')} 重置原型</button></div></div>
+  </section>`;
+}
+function renderProject(){
+  const blocked=Boolean(state.blocked[project]);
+  return `<section id="scope-panel" role="tabpanel" aria-labelledby="project-tab">
+    <div class="project-toolbar">
+      <div class="project-filters"><label class="search">${icon('search')}<span class="sr-only">搜索项目 Skills</span><input type="search" id="project-search" placeholder="搜索名称或描述" ${attr('project-search')}></label><label for="project-filter">状态</label><select id="project-filter" data-change="project-filter" ${attr('project-filter')}>${options([['all','全部'],['enabled','已启用'],['disabled','已停用']],projectFilter)}</select></div>
+      <div class="project-actions"><button class="btn primary" data-action="catalog" data-kind="market" ${attr('market')}>${icon('spark')} Skill 市场</button><button class="btn" data-action="catalog" data-kind="public" ${attr('public')}>从公开来源导入</button><button class="btn" data-action="catalog" data-kind="markdown" ${attr('markdown')}>导入 Markdown</button><button class="btn" data-action="catalog" data-kind="create" ${attr('create')}>${icon('plus')} 新建 Skill</button></div>
+    </div>
+    <div class="project-note"><p>卡片设置只在当前项目生效。启用后可手动调用，自动调用单独设置。</p><div class="project-policy"><label for="project-inherit">本机继承</label><select id="project-inherit" aria-label="此项目的本机 Skill 策略" data-change="project-policy" ${attr('project-policy')}>${options([['follow','跟随全局'],['block','本项目不使用']],blocked?'block':'follow')}</select>${tag(blocked?'项目已停用':state.enabled?'全局已开启':'全局已关闭','outline')}</div></div>
+    <div id="project-grid" class="project-grid"></div>
+    <p class="inline-note prototype-note">${icon('info')} 项目卡片与本机继承独立；操作使用演示数据，不修改正式工作台。</p>
+  </section>`;
+}
+function projectRows(){
+  const grid=document.querySelector('#project-grid');if(!grid)return;
+  const query=projectSearch.trim().toLowerCase();
+  const rows=projectSkills().filter(item=>`${item.name} ${item.desc}`.toLowerCase().includes(query)&&(projectFilter==='all'||(item.policy!=='off')===(projectFilter==='enabled')));
+  grid.innerHTML=rows.length?rows.map(skill=>{
+    const enabled=skill.policy!=='off', auto=(enabled?skill.policy:skill.previousPolicy)==='auto', name=text(skill.name);
+    return `<article class="surface catalog-card" aria-label="${name}">
+      <div class="card-top"><span class="mark">${icon(skill.icon)}</span><small>Skills</small><button class="switch" role="switch" aria-checked="${enabled}" aria-label="在项目中启用 ${name}" data-action="card-switch" data-id="${skill.id}" ${attr('enabled:'+skill.id)}></button></div>
+      <h2><button class="card-name" data-action="catalog" data-kind="edit" data-id="${skill.id}">${name}</button></h2><p class="card-description">${text(skill.desc)}</p>
+      <div class="card-meta">${tag(enabled?'已启用':'已停用',enabled?'on dot':'dot')}<span>${enabled?'可手动调用':'不可调用'}</span><span class="version">v${skill.version??1}</span></div>
+      <p class="card-source"><code>${text(skill.sourceLabel??(skill.origin==='项目目录'?'.claude/skills/':'Atelier 安装'))}</code></p>
+      <div class="card-auto"><span>允许自动调用</span><button class="switch" role="switch" aria-checked="${auto}" aria-label="允许自动调用 ${name}" data-action="card-auto" data-id="${skill.id}" ${attr('auto:'+skill.id)}${enabled?'':' disabled'}></button></div>
+      <p class="auto-caption">${!enabled?'启用该 Skill 后才能调用。':auto?'允许模型按需调用，下一次新运行生效。':'已关闭自动调用，仍可手动使用。'}</p>
+      ${skill.revision?`<p class="card-upstream">公开来源　<code>${text(skill.revision)}</code></p>`:''}
+      <div class="card-actions"><button class="btn ghost" data-action="catalog" data-kind="edit" data-id="${skill.id}" ${attr('edit:'+skill.id)}>查看与编辑</button>${skill.revision?`<button class="btn ghost" data-action="catalog" data-kind="update" data-id="${skill.id}" ${attr('update:'+skill.id)}>检查更新</button>`:''}<button class="btn danger" data-action="catalog" data-kind="delete" data-id="${skill.id}" ${attr('delete:'+skill.id)}>删除</button></div>
+    </article>`;
+  }).join(''):`<p class="surface empty" style="grid-column:1/-1">${projectSkills().length?'没有匹配的项目 Skill。':'当前项目还没有 Skill。'}</p>`;
+}
+function renderMain(preserve=true){
+  const key=preserve?focusKey():undefined;renderShell();
+  app.className=page==='chat'?'page chat':'page';
+  if(page==='chat'){renderChat();refocus(key);return;}
+  app.innerHTML=`<header class="heading"><div><p class="eyebrow">EXTENSIONS</p><h1>项目扩展</h1><p class="lead">为每个项目配置常用指令、Skill 与工具服务。</p></div><label class="project-select"><span id="project-label">当前项目</span><select aria-labelledby="project-label" data-change="project" ${attr('project-select')}>${projectsOptions()}</select></label></header>
+  <div class="tabbar" aria-label="扩展类型"><span class="active" aria-current="page">${icon('spark')} Skills <span class="tab-count" title="项目 Skill 数量">${projectSkills().length}</span></span><span class="muted-tab">${icon('terminal')} Commands <span class="tab-count">0</span></span><span class="muted-tab">${icon('plug')} MCP <span class="tab-count">${project==='my-deeptutor'?1:0}</span></span></div>
+  <div class="scopebar"><div class="segments" role="tablist" aria-label="Skill 设置范围"><button id="project-tab" class="segment" role="tab" aria-selected="${scope==='project'}" aria-controls="scope-panel" tabindex="${scope==='project'?0:-1}" data-action="scope" data-id="project" ${attr('project-tab')}>${icon('folder')} 当前项目</button><button id="global-tab" class="segment" role="tab" aria-selected="${scope==='global'}" aria-controls="scope-panel" tabindex="${scope==='global'?0:-1}" data-action="scope" data-id="global" ${attr('global-tab')}>${icon('monitor')} 本机继承 ${tag('全局','outline')}</button></div>
+  <button class="btn" data-action="session" ${attr('session-trigger')}>${icon('chat')} 本会话 Skills ${icon('arrow')}</button></div>${scope==='global'?renderGlobal():renderProject()}`;
+  const search=document.querySelector('#global-search');if(search){search.value=filter;globalRows();}
+  const localSearch=document.querySelector('#project-search');if(localSearch){localSearch.value=projectSearch;projectRows();}
+  refocus(key);
+}
+const catalogTitles={market:'Skill 市场',public:'从公开来源导入',markdown:'导入 Markdown',create:'新建 Skill',edit:'查看与编辑',update:'检查更新',delete:'删除 Skill'};
+function openCatalog(kind,id,trigger){
+  if(!Object.hasOwn(catalogTitles,kind))return;
+  const skill=projectSkills().find(item=>item.id===id);
+  if(['edit','update','delete'].includes(kind)&&!skill)return;
+  catalogAction={kind,skill,trigger,key:trigger.dataset.focus??`edit:${id}`};
+  const fields=`<label>名称<input name="skillName" required maxlength="64" value="${text(skill?.name??'')}" placeholder="例如 release-check"></label><label>描述<textarea name="description" maxlength="300" placeholder="说明何时使用这个 Skill">${text(skill?.desc??'')}</textarea></label><label>Skill 内容<textarea name="body" maxlength="10000" placeholder="编写 Skill 的操作步骤">${text(skill?.body??'')}</textarea></label>`;
+  let body='';
+  switch(kind){
+    case 'market':body=`<div class="market-row"><div><strong>release-check</strong><p class="lead">核对发布说明和验收清单。</p></div><button class="btn primary" type="submit">安装演示 Skill</button></div>`;break;
+    case 'public':body=`<div class="modal-fields"><label>公开来源链接<input name="source" type="url" required maxlength="300" placeholder="https://example.com/release-check/SKILL.md"></label></div><div class="modal-actions"><button class="btn primary" type="submit">模拟导入</button></div>`;break;
+    case 'markdown':body=`<div class="modal-fields"><label>选择 Markdown 文件<input type="file" name="file" accept=".md,.markdown,text/markdown"></label><label>或粘贴 Markdown<textarea name="body" maxlength="10000" placeholder="# release-check"></textarea></label></div><div class="modal-actions"><button class="btn primary" type="submit">导入到演示项目</button></div>`;break;
+    case 'create':case 'edit':body=`<div class="modal-fields">${fields}</div><div class="modal-actions"><button class="btn primary" type="submit">${skill?'保存':'创建'}</button></div>`;break;
+    case 'update':body=`<p>检查 <strong>${text(skill.name)}</strong> 的公开来源。</p><p id="update-result" class="modal-result" role="status"></p><div class="modal-actions"><button class="btn primary" type="submit">模拟检查更新</button></div>`;break;
+    case 'delete':body=`<p>从 <strong>${project}</strong> 删除 <strong>${text(skill.name)}</strong>？不会影响本机同名 Skill。</p><div class="modal-actions"><button class="btn" data-action="close-catalog" type="button" autofocus>取消</button><button class="btn danger" type="submit">确认删除</button></div>`;break;
+  }
+  catalogDialog.innerHTML=`<div class="catalog-modal"><header class="modal-head"><div><h2 id="catalog-modal-title">${catalogTitles[kind]}</h2><p class="modal-caption">交互演示 · 只修改原型中的项目数据，不访问网络。</p></div><button class="btn ghost icon-btn" data-action="close-catalog" aria-label="关闭" type="button">${icon('x')}</button></header><form id="catalog-form">${body}<p class="modal-error" role="alert" id="catalog-error"></p></form></div>`;
+  catalogDialog.showModal();
+}
+catalogDialog.addEventListener('close',()=>{
+  const action=catalogAction;catalogAction=undefined;
+  if(action?.trigger.isConnected)action.trigger.focus();
+  else (document.querySelector(`[data-focus="${CSS.escape(action?.key??'')}"]`)??document.querySelector('#project-search'))?.focus({preventScroll:true});
+});
+catalogDialog.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const action=catalogAction;if(!action)return;
+  const {kind,skill}=action, form=new FormData(event.target);
+  const value=(key)=>String(form.get(key)??'').trim();
+  const error=(message)=>{catalogDialog.querySelector('#catalog-error').textContent=message;};
+  if(kind==='update'){
+    catalogDialog.querySelector('#update-result').textContent=`模拟结果：当前版本 v${skill.version??1} 已是最新。`;
+    return;
+  }
+  if(kind==='delete'){
+    state.projectSkills[project]=projectSkills().filter(item=>item.id!==skill.id);
+    catalogDialog.close();renderMain(false);notify('已从演示项目删除 Skill');return;
+  }
+  let name=value('skillName'), desc=value('description'), body=value('body'), sourceLabel;
+  if(kind==='market'){name='release-check';desc='核对发布说明和验收清单。';sourceLabel='Skill 市场 · 演示来源';}
+  if(kind==='public'){
+    let source;
+    try{source=new URL(value('source'));}catch{return error('请输入有效的公开链接。');}
+    if(!['https:','http:'].includes(source.protocol))return error('请输入 HTTP 或 HTTPS 链接。');
+    name=source.pathname.split('/').filter(Boolean).at(-1)??'public-skill';
+    if(/^skill\.md$/i.test(name))name=source.pathname.split('/').filter(Boolean).at(-2)??'public-skill';
+    name=name.replace(/\.(md|markdown)$/i,'');desc='从公开来源导入的演示 Skill。';sourceLabel=`${source.hostname} · 演示来源`;
+  }
+  if(kind==='markdown'){
+    const file=form.get('file');
+    if(file instanceof File&&file.size){
+      if(file.size>64000)return error('原型只支持 64 KB 以内的 Markdown 文件。');
+      try{body=(await file.text()).trim();}catch{return error('无法读取这个文件，请重新选择。');}
+      if(catalogAction!==action||!catalogDialog.open)return;
+      name=file.name.replace(/\.(md|markdown)$/i,'');
+    }
+    if(!body)return error('请选择文件或粘贴 Markdown。');
+    name=body.match(/^#\s+(.+)$/m)?.[1]?.trim()||name||'markdown-skill';
+    desc='从 Markdown 导入的演示 Skill。';sourceLabel='Markdown · 本次演示';
+  }
+  if(!name||name.length>64)return error('Skill 名称必须为 1–64 个字符。');
+  if(projectSkills().some(item=>item!==skill&&item.name===name&&item.origin===(skill?.origin??'Atelier 安装')))return error('这个来源在当前项目中已有同名 Skill。');
+  if(skill){Object.assign(skill,{name,desc,body,version:(skill.version??1)+1});}
+  else projectSkills().unshift({id:`app:demo:${++demoSkillSerial}`,name,desc,body,sourceLabel,origin:'Atelier 安装',policy:'manual',icon:'spark'});
+  if(!skill){projectSearch='';projectFilter='all';}
+  catalogDialog.close();renderMain(false);notify(skill?'已保存演示 Skill':'已添加到当前演示项目');
+});
+function renderDrawer(){
+  const key=focusKey();
+  document.querySelector('#drawer-context').textContent=`${project} / ${session().name}`;
+  const rows=effectiveCatalog();
+  const enabled=rows.filter(skill=>skill.policy!=='off').length, auto=rows.filter(skill=>skill.policy==='auto').length;
+  drawerBody.innerHTML=`<div class="drawer-controls"><label><span id="drawer-session-label">会话</span><select aria-labelledby="drawer-session-label" data-change="drawer-session" ${attr('drawer-session')}>${options(projects[project].sessions.map(item=>[item.id,item.name]),sessionId)}</select></label><label><span id="drawer-mode-label">模拟运行模式</span><select aria-labelledby="drawer-mode-label" data-change="mode" ${attr('mode')}>${options([['native','本机信任'],['controlled','受控模式']],native()?'native':'controlled')}</select></label></div>
+  ${state.runs[sessionId]?.active?`<p class="notice">${icon('info')} 当前运行仍使用启动时的配置。要立即停止，返回会话后点「停止模拟运行」。</p>`:''}
+  <div class="section-head"><div class="section-title"><h2>下一次新运行 ${tag(`可用 ${enabled} 项`,'on')}</h2><p>允许自动调用 ${auto} 项。会话只能缩小上层范围。</p></div></div>
+  ${[['project','项目 Skills'],['host','本机继承']].map(([source,title])=>`<div class="drawer-group"><h3>${title}</h3><div class="surface list">${rows.filter(skill=>skill.source===source).map(skill=>{
+    const overrideChoices=[['follow','跟随上层'],['off','停用此项'],...(skill.upperPolicy==='auto'||skill.override==='manual'?[['manual','仅手动']]:[])];
+    return `<div class="skill-row"><div class="skill-ident"><span class="mark">${icon(skill.icon)}</span><div class="skill-id"><p class="skill-name">${text(skill.name)}</p><p class="skill-desc">${skill.origin} · ${labels[skill.policy]}</p><p class="result">${skill.reason}</p></div></div><select data-change="override" data-id="${skill.id}" ${attr('drawer:'+skill.id)} aria-label="${text(skill.name)}（${skill.origin}）的会话用法" ${skill.upperPolicy==='off'?'disabled':''}>${options(skill.upperPolicy==='off'?[['follow','不可覆盖']]:overrideChoices,skill.override)}</select></div>`;
+  }).join('')}</div></div>`).join('')}`;
+  refocus(key);
+}
+function renderChat(){
+  const rows=effectiveCatalog(), available=rows.filter(skill=>skill.policy!=='off');
+  const run=state.runs[sessionId];
+  const picked=available.find(skill=>skill.id===state.picked[sessionId])?.id??'';
+  app.innerHTML=`<header class="heading"><div><p class="eyebrow">CONVERSATION</p><h1>${session().name}</h1><p class="lead">${project} · ${native()?'本机信任':'受控模式'}</p></div><button class="btn" data-action="extensions" ${attr('back-extensions')}>${icon('puzzle')} 返回扩展</button></header>
+  <div class="surface conversation"><p class="bubble">用我们已有的工具，帮我检查这个页面。</p><p class="reply">这个会话用来预览 Skill 设置对下一次运行的影响。不会调用真实模型，也不会操作任何网页。</p>
+  ${run?`<p class="run-receipt">${tag(run.active?'模拟运行中':'模拟运行已停止',run.active?'on':'outline')} <strong>启动时可用 ${run.count} 项。</strong> ${run.skill?`模拟${run.manual?'手动':'自动'}调用：<code>${text(run.skill.name)}</code> · ${run.skill.origin}`:'没有模拟调用任何 Skill。'}</p>`:''}</div>
+  <div class="surface composer"><p class="composer-line">在下方选择要手动调用的 Skill，或直接模拟发送。</p><div class="composer-actions"><button class="btn" data-action="session" ${attr('session-trigger')}>${icon('spark')} 本会话 Skills ${tag(`${available.length} 项`,'outline')}</button><div class="composer-buttons"><button class="btn primary" data-action="${run?.active?'stop-run':'start-run'}" ${attr('run-trigger')}>${icon(run?.active?'x':'arrow')} ${run?.active?'停止模拟运行':'模拟新运行'}</button></div></div>
+  <div class="manual-pick"><label for="manual-picker">手动指定</label><select id="manual-picker" data-change="manual-picker" aria-label="手动指定 Skill" ${run?.active?'disabled':''}>${options([['','未指定'],...available.map(skill=>[skill.id,`${skill.name} · ${skill.origin}`])],picked)}</select></div></div>`;
+}
+function changeProject(next){if(!projects[next]||next===project)return;project=next;sessionId=projects[project].sessions[0].id;}
+function openDrawer(button){returnFocus=button;document.querySelector('#drawer-feedback').textContent='';renderDrawer();dialog.showModal();}
+dialog.addEventListener('close',()=>{if(returnFocus?.isConnected)returnFocus.focus();else document.querySelector('[data-focus="session-trigger"]')?.focus();});
+document.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-action]');if(!button||button.disabled)return;
+  const {action,id}=button.dataset;
+  switch(action){
+    case 'extensions':page='extensions';renderMain();break;
+    case 'chat':page='chat';renderMain();break;
+    case 'open-chat':sessionId=id;page='chat';renderMain();break;
+    case 'scope':scope=id;renderMain();break;
+    case 'catalog':openCatalog(button.dataset.kind,id,button);break;
+    case 'close-catalog':catalogDialog.close();break;
+    case 'card-switch':case 'card-auto':{
+      const skill=projectSkills().find(item=>item.id===id);if(!skill)return;
+      if(action==='card-switch'){
+        if(skill.policy==='off')skill.policy=skill.previousPolicy??'manual';
+        else {skill.previousPolicy=skill.policy;skill.policy='off';}
+      }else if(skill.policy!=='off')skill.policy=skill.policy==='auto'?'manual':'auto';
+      renderMain();
+      if(!document.querySelector(`[data-focus="${CSS.escape(button.dataset.focus)}"]`))document.querySelector('#project-filter')?.focus();
+      notify('已保存演示项目设置');break;
+    }
+    case 'toggle-global':state.enabled=!state.enabled;renderMain();notify(state.enabled?'全局继承已开启 · 下一次新运行生效':'全局继承已关闭 · 下一次新运行生效');break;
+    case 'session':openDrawer(button);break;
+    case 'close-session':dialog.close();break;
+    case 'discover':state.newItem=true;filter='';renderMain(false);document.querySelector('#global-search')?.focus();notify('发现 readme-check，未自动启用');break;
+    case 'reset':state=seed();filter='';projectSearch='';projectFilter='all';project='my-deeptutor';sessionId='web-a';renderMain();notify('已恢复原型默认设置');break;
+    case 'start-run':{
+      const rows=effectiveCatalog(), pick=rows.find(skill=>skill.policy!=='off'&&skill.id===state.picked[sessionId]);
+      const skill=pick??rows.find(skill=>skill.policy==='auto');
+      state.runs[sessionId]={active:true,count:rows.filter(skill=>skill.policy!=='off').length,skill,manual:Boolean(pick)};
+      renderMain();notify('模拟运行已启动，保存了本轮的 Skill 配置');break;
+    }
+    case 'stop-run':if(state.runs[sessionId])state.runs[sessionId].active=false;renderMain();notify('模拟运行已停止');break;
+  }
+});
+document.addEventListener('change',event=>{
+  const el=event.target;if(!(el instanceof HTMLSelectElement)||el.disabled)return;
+  const {change,id}=el.dataset;
+  switch(change){
+    case 'project':changeProject(el.value);projectSearch='';projectFilter='all';renderMain();break;
+    case 'project-filter':projectFilter=el.value;projectRows();break;
+    case 'global-policy':if(!state.enabled||!catalog().some(item=>item.id===id))return;state.policies[id]=el.value;renderMain();notify('已保存全局用法 · 下一次新运行生效');break;
+    case 'project-policy':state.blocked[project]=el.value==='block';renderMain();notify('已保存项目设置 · 下一次新运行生效');break;
+    case 'drawer-session':if(!projects[project].sessions.some(item=>item.id===el.value))return;sessionId=el.value;document.querySelector('#drawer-feedback').textContent='';renderMain(false);renderDrawer();break;
+    case 'mode':state.modes[sessionId]=el.value;renderMain(false);renderDrawer();notify('已切换模拟模式');break;
+    case 'override':(state.overrides[sessionId]??={})[id]=el.value;renderMain(false);renderDrawer();notify('已保存会话覆盖');break;
+    case 'manual-picker':state.picked[sessionId]=el.value;break;
+  }
+});
+document.addEventListener('input',event=>{
+  if(event.target.id==='global-search'){filter=event.target.value;globalRows();}
+  if(event.target.id==='project-search'){projectSearch=event.target.value;projectRows();}
+});
+document.addEventListener('keydown',event=>{
+  if(!event.target.closest('[role="tab"]')||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  event.preventDefault();scope=event.key==='Home'?'project':event.key==='End'?'global':scope==='global'?'project':'global';renderMain(false);refocus(scope+'-tab');
+});
+renderMain(false);
+</script>
+</body>
+</html>

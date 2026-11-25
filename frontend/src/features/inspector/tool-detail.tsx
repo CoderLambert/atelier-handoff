@@ -1,14 +1,15 @@
 /**
  * @file 在会话消息、子任务和执行轨迹中展示工具调用详情。
- * @implementation 通过同一摘要及展开内容渲染命令、参数和已记录回执，按语义回调打开完整输出，支持紧凑聊天行。
- * @updated 2026-11-22T18:42:04+08:00
+ * @implementation 展示命令、参数和回执，为可控的原生 Bash 提供转后台和停止操作，并通过回调打开完整日志。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import { useUiTranslation } from '@/i18n';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ToolCall } from '@shared/types';
-import { ChevronRight } from 'lucide-react';
-import { StatusBadge, formatDate, formatDuration } from './shared';
+import { ChevronRight, PanelBottom, Square } from 'lucide-react';
+import { useControlBash } from '@/use-query/runs/use-control-bash';
+import { StatusBadge, errorMessage, formatDate, formatDuration } from './shared';
 import {
   splitCommandForDisplay,
   toolDisplayStatus,
@@ -25,6 +26,55 @@ export interface ToolDetailProps {
   automaticallyApproved: boolean;
   onOutput?: () => void;
   variant?: 'default' | 'compact';
+}
+
+function BashActions({ tool }: { tool: ToolCall }) {
+  const { t } = useUiTranslation('inspector');
+  const control = useControlBash(tool);
+  const stopRef = useRef<HTMLButtonElement>(null);
+  const execution = tool.bashExecution;
+  const disabled = control.isPending || !execution?.controllable || !!tool.endedAt;
+  return (
+    <div className="tool-detail__section">
+      <div className="flex flex-wrap items-center gap-2">
+        {execution?.phase === 'foreground' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={disabled}
+            onClick={() =>
+              control.mutate(
+                { action: 'background' },
+                {
+                  onSuccess: () => stopRef.current?.focus({ preventScroll: true }),
+                },
+              )
+            }
+          >
+            <PanelBottom data-icon="inline-start" aria-hidden="true" />
+            {t('tool.moveBashToBackground')}
+          </Button>
+        ) : null}
+        <Button
+          ref={stopRef}
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled={disabled}
+          onClick={() => control.mutate({ action: 'stop' })}
+        >
+          <Square data-icon="inline-start" aria-hidden="true" />
+          {t('tool.stopBash')}
+        </Button>
+      </div>
+      {control.isError ? (
+        <p className="tool-detail__notice" role="alert">
+          {errorMessage(control.error)}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function ToolText({
@@ -114,8 +164,18 @@ export function ToolDetailBody({
           )}
         </span>
         {automaticallyApproved ? <span>{t('common.approvalAutomatic')}</span> : null}
+        {waiting && tool.bashExecution ? (
+          <span>
+            {t('tool.lastBashObservation', { time: formatDate(tool.bashExecution.lastObservedAt) })}
+          </span>
+        ) : null}
         <span className="tool-detail__id">{tool.id}</span>
       </p>
+      {waiting &&
+      tool.bashExecution &&
+      (tool.bashExecution.controllable || tool.bashExecution.phase === 'stopping') ? (
+        <BashActions tool={tool} />
+      ) : null}
       <section
         aria-label={t('tool.parameters')}
         className="tool-detail__section tool-detail__section--input"
@@ -158,6 +218,13 @@ export function ToolDetailBody({
           {tool.bashLog ? t('tool.sdkPreview') : t('tool.output')}
         </h4>
         {presentation.scope ? <p className="tool-detail__notice">{presentation.scope}</p> : null}
+        {tool.bashExecution?.foregroundTimeoutMs !== undefined ? (
+          <p className="tool-detail__notice">
+            {t('tool.bashMovedAtTimeout', {
+              duration: formatDuration(tool.bashExecution.foregroundTimeoutMs),
+            })}
+          </p>
+        ) : null}
         {input.isCommand ? (
           <dl aria-label={t('tool.executionResult')} className="tool-detail__result">
             <div>

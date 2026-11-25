@@ -265,7 +265,7 @@ export default function Workspace() {
   const savedLocation = useRef<string | undefined>(undefined);
   const rememberLocation = useRememberWorkspaceLocation();
   const retryKeys = useRef(new Map<string, string>());
-  useRunEvents(client, ready.data?.cursor);
+  useRunEvents(client, ready.data?.cursor, view === 'chat' ? sessionId : undefined);
 
   useEffect(() => {
     function onRunFinished(event: Event) {

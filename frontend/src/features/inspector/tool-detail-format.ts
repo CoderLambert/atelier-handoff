@@ -1,7 +1,7 @@
 /**
  * @file 将已记录工具参数和回执转换为安全的工具详情展示数据。
- * @implementation 从已记录参数生成工具摘要，并按原生 Bash、受控命令及其他工具的回执结构提取展示字段。
- * @updated 2026-11-22T18:43:11+08:00
+ * @implementation 从参数和回执提取摘要、输出和日志字段，依据原生 Bash 的执行阶段生成状态与提示。
+ * @updated 2026-11-25T22:48:09+08:00
  */
 import { getTranslator } from '@/i18n';
 import type { ToolCall } from '@shared/types';
@@ -312,6 +312,9 @@ export function toolOutputPresentation(tool: ToolCall): ToolOutputPresentation {
 }
 
 export function toolDisplayStatus(tool: ToolCall, output: ToolOutputView): string {
+  const phase = tool.bashExecution?.phase;
+  if (phase === 'unknown' || phase === 'stopped') return phase;
+  if (tool.status === 'running' && (phase === 'background' || phase === 'stopping')) return phase;
   if (tool.status === 'denied' || tool.status === 'canceled') return tool.status;
   if (output.interrupted) return 'interrupted';
   if (output.backgroundTaskId && tool.status === 'succeeded') return 'running';
@@ -322,6 +325,11 @@ export function toolDisplayStatus(tool: ToolCall, output: ToolOutputView): strin
 export function toolOutputMessage(tool: ToolCall, output: ToolOutputView): string | undefined {
   const t = getTranslator('inspector');
   if (tool.status === 'awaiting_permission') return t('tool.awaitingApproval');
+  if (tool.bashExecution?.phase === 'unknown') return t('tool.bashResultUnknown');
+  if (tool.status === 'running' && tool.bashExecution?.phase === 'background')
+    return t('tool.backgroundReceipt');
+  if (tool.status === 'running' && tool.bashExecution?.phase === 'stopping')
+    return t('tool.stopAwaitingReceipt');
   if (tool.status === 'running') return t('tool.awaitingReceipt');
   if (output.backgroundTaskId && tool.status === 'succeeded') return t('tool.backgroundReceipt');
   if (output.interrupted) return t('tool.commandInterrupted');

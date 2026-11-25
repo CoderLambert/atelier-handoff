@@ -1,7 +1,7 @@
 /**
- * @file 验证工作台侧栏导航和会话操作。
- * @implementation 用隔离 Chromium 夹具验证分组、菜单行内布局、键盘焦点和折叠状态。
- * @updated 2026-11-23T17:40:31+08:00
+ * @file 验证工作台侧栏导航、会话操作与状态显示。
+ * @implementation 用隔离 Chromium 夹具验证分组、菜单、键盘焦点、折叠及运行结果的查看和确认。
+ * @updated 2026-11-25T19:11:00+08:00
  */
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +17,7 @@ import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Sidebar } from '@/app/sidebar';
+import { useRunEvents } from '@/app/events';
 import { actions, store } from '@/app/store';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import '@/styles.css';
@@ -33,16 +34,38 @@ const initial = [
   make('orphan', 'removed', 'Missing project history'),
 ];
 const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } });
+const activityKey = (status) => ['runs', { projectId: '', sessionId: '', status, limit: 500, offset: 0 }];
 for (const status of ['queued', 'running', 'awaiting_permission', 'stopping']) {
-  client.setQueryData(['runs', { projectId: '', sessionId: '', status, limit: 500, offset: 0 }], {
+  client.setQueryData(activityKey(status), {
     items: status === 'awaiting_permission' ? [{ id: 'fake-run', sessionId: 'a-head', status }] : [], total: 0,
   });
 }
+let source;
+let eventId = 0;
+let connections = 0;
+window.EventSource = class {
+  constructor() { source = this; connections++; }
+  addEventListener() {}
+  close() {}
+};
+window.sidebarFixture = {
+  setRunning: (sessionId) => client.setQueryData(activityKey('running'), {
+    items: sessionId ? [{ id: 'run-' + sessionId, sessionId, status: 'running' }] : [], total: sessionId ? 1 : 0,
+  }),
+  finish: (sessionId, status, replay = false) => {
+    if (!replay) eventId++;
+    source.onmessage({ lastEventId: String(eventId), data: JSON.stringify({
+      id: eventId, type: 'run.finished', sessionId, runId: 'run-' + sessionId, payload: { status },
+    }) });
+  },
+  connections: () => connections,
+};
 function Fixture() {
   const [sessions, setSessions] = useState(initial);
   const [collapsed, setCollapsed] = useState(false);
   const [current, setCurrent] = useState('a');
   const [view, setView] = useState('chat');
+  useRunEvents(client, 0, view === 'chat' ? current : undefined);
   const [action, setAction] = useState('');
   const [dialog, setDialog] = useState();
   const [created, setCreated] = useState('');
@@ -137,15 +160,91 @@ try {
   assert.equal(await page.locator('[data-project-id="Alpha"] [data-session-node="b"]').count(), 0);
   assert.equal(await page.locator('[data-project-id="Beta"] [data-session-node="a"]').count(), 0);
   assert.equal(await nav.getByText('Missing project history', { exact: true }).count(), 1);
-  assert.equal(await nav.getByText('等待审批', { exact: true }).count(), 1);
+  const row = (id: string) => nav.locator(`[data-session-node="${id}"] > .sidebar-session-row`);
+  const status = (id: string, label: string) =>
+    row(id)
+      .locator('.sidebar-session-status')
+      .and(page.getByTitle(label, { exact: true }));
+  const openSession = (id: string) => row(id).locator('.history-item').press('Enter');
+  const dotColor = (id: string, label: string) =>
+    status(id, label).evaluate((element) => getComputedStyle(element).backgroundColor);
+  assert.equal(await status('a-head', '待审批').textContent(), '');
+  assert.equal(await row('a-head').locator('.history-item .sr-only').textContent(), '待审批');
+  await status('a', '空闲').waitFor();
+  const idleColor = await dotColor('a', '空闲');
+  assert.notEqual(idleColor, 'rgba(0, 0, 0, 0)');
+  await openSession('b');
+  await page.evaluate("window.sidebarFixture.setRunning('b')");
+  await status('b', '执行中').waitFor();
+  const runningColor = await dotColor('b', '执行中');
+  await openSession('a');
+  await page.evaluate("window.sidebarFixture.finish('b', 'completed')");
+  await status('b', '执行中').waitFor();
+  await page.evaluate('window.sidebarFixture.setRunning()');
+  await status('b', '已完成').waitFor();
+  await status('a', '空闲').waitFor();
+  const dot = await status('a-branch', '空闲').boundingBox();
+  const title = await row('a-branch').locator('.history-title').boundingBox();
+  assert.ok(dot && title && dot.x + dot.width <= title.x);
+  await page.evaluate("window.sidebarFixture.finish('b-long', 'failed')");
+  await status('b-long', '执行异常').waitFor();
+  const stateColors = [
+    idleColor,
+    runningColor,
+    await dotColor('b', '已完成'),
+    await dotColor('a-head', '待审批'),
+    await dotColor('b-long', '执行异常'),
+  ];
+  assert.equal(new Set(stateColors).size, stateColors.length);
+  assert.ok(!stateColors.includes('rgba(0, 0, 0, 0)'));
+  if (process.env.ATELIER_SIDEBAR_STATUS_SCREENSHOT) {
+    await page.setViewportSize({ width: 1440, height: 1080 });
+    await nav.screenshot({ path: process.env.ATELIER_SIDEBAR_STATUS_SCREENSHOT });
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+  await status('b', '已完成').click();
+  await status('b', '空闲').waitFor();
+  await status('b-long', '执行异常').waitFor();
+  await openSession('a');
+  await page.evaluate("window.sidebarFixture.finish('b', 'completed', true)");
+  await status('b', '空闲').waitFor();
+  await page.evaluate("window.sidebarFixture.finish('b', 'failed')");
+  await status('b', '执行异常').waitFor();
+  await openSession('b');
+  await status('b', '空闲').waitFor();
+  await openSession('b-long');
+  await status('b-long', '空闲').waitFor();
+  await openSession('a-head');
+  await status('a-head', '待审批').waitFor();
+  await openSession('a');
+  await page.evaluate("window.sidebarFixture.finish('a', 'completed')");
+  await status('a', '空闲').waitFor();
+  assert.equal(await page.evaluate('window.sidebarFixture.connections()'), 1);
   const longRow = nav.locator('[data-session-node="b-long"] .sidebar-session-row');
   const longTitle = longRow.locator('.history-title');
-  assert.ok(await longTitle.evaluate((element) => element.scrollWidth > element.clientWidth && getComputedStyle(element).textOverflow === 'ellipsis'));
+  assert.ok(
+    await longTitle.evaluate(
+      (element) =>
+        element.scrollWidth > element.clientWidth &&
+        getComputedStyle(element).textOverflow === 'ellipsis',
+    ),
+  );
   assert.equal(await longTitle.getAttribute('title'), await longTitle.textContent());
+  const time = longRow.locator('time[datetime]');
+  assert.equal(await time.count(), 1);
+  const titleBounds = await longTitle.boundingBox();
+  const timeBounds = await time.boundingBox();
+  assert.ok(titleBounds && timeBounds);
+  assert.ok(titleBounds.x + titleBounds.width <= timeBounds.x);
+  assert.ok(
+    Math.abs(titleBounds.y + titleBounds.height / 2 - timeBounds.y - timeBounds.height / 2) < 1,
+  );
   const rowBounds = await longRow.boundingBox();
   const rowMenu = await longRow.locator('.sidebar-session-menu-trigger').boundingBox();
-  assert.ok(rowBounds && rowMenu && rowBounds.height <= 48);
-  assert.ok(rowMenu.y >= rowBounds.y && rowMenu.y + rowMenu.height <= rowBounds.y + rowBounds.height);
+  assert.ok(rowBounds && rowMenu && rowBounds.height <= 34);
+  assert.ok(
+    rowMenu.y >= rowBounds.y && rowMenu.y + rowMenu.height <= rowBounds.y + rowBounds.height,
+  );
   const menuEndGap = rowBounds.x + rowBounds.width - (rowMenu.x + rowMenu.width);
   assert.ok(rowMenu.x >= rowBounds.x && menuEndGap >= 0 && menuEndGap <= 8);
   await nav.getByRole('button', { name: '在「Beta」中新建会话' }).click();
@@ -253,7 +352,7 @@ try {
   assert.equal(await nav.getByText('Needle branch', { exact: true }).isVisible(), true);
   assert.deepEqual(errors, []);
   console.log(
-    'Sidebar smoke passed: project grouping, rewind search, project creation, non-current archive/restore, delete cancel, keyboard menu focus, dialog focus, menu bounds, auto reveal, 48px rail.',
+    'Sidebar smoke passed: background outcomes, active approval, read on visit, duplicate completion, one stream, project grouping, navigation, menus, focus and collapsed rail.',
   );
 } finally {
   await browser?.close();

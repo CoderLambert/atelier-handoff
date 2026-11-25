@@ -335,7 +335,7 @@ test('queue shows server-selected insertion actions with an accessible priority 
   };
   const markup = renderQueue(insertQueue, false, true, activeRun);
   assert.match(markup, /aria-label="立即插入消息 1"/);
-  assert.match(markup, /aria-label="优先执行消息 2"/);
+  assert.match(markup, /aria-label="停止本轮并发送消息 2"/);
   const descriptionId = markup.match(/aria-describedby="([^"]+)"/)?.[1];
   assert.ok(descriptionId);
   assert.ok(markup.includes(`id="${descriptionId}"`));

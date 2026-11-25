@@ -155,19 +155,25 @@ export class SubagentRun {
 
 /** Acquired at execution time, after user approval. Held until the actual side effect settles. */
 export class ProjectWrites {
-  private tail = Promise.resolve();
+  private readonly tails = new Map<string, Promise<void>>();
 
-  async run<T>(verify: () => void | Promise<void>, effect: () => Promise<T>): Promise<T> {
-    const previous = this.tail;
+  async run<T>(
+    verify: () => void | Promise<void>,
+    effect: () => Promise<T>,
+    directory = '',
+  ): Promise<T> {
+    const previous = this.tails.get(directory);
     let unlock: () => void = () => {};
-    this.tail = new Promise<void>((resolve) => {
+    const tail = new Promise<void>((resolve) => {
       unlock = resolve;
     });
+    this.tails.set(directory, tail);
     try {
       await previous;
       await verify();
       return await effect();
     } finally {
+      if (this.tails.get(directory) === tail) this.tails.delete(directory);
       unlock();
     }
   }
