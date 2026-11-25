@@ -50,7 +50,7 @@ test('keeps the requested path and source text for untracked and oversized patch
   const trackedShape = '--- /dev/null\n+++ b/notes.ts\n@@ -0,0 +1 @@\n+const x = 1;\n';
   const [file] = describeGitPatch(trackedShape, 'b/notes.ts');
   assert.equal(file?.path, 'b/notes.ts');
-  const large = '--- /dev/null\n+++ bulk.ts\n@@ -0,0 +1,2500 @@\n' + '+text\n'.repeat(2500);
+  const large = '--- /dev/null\n+++ bulk.ts\n@@ -0,0 +1,8001 @@\n' + '+text\n'.repeat(8001);
   assert.deepEqual(describeGitPatch(large, 'bulk.ts'), [
     { kind: 'raw', path: 'bulk.ts', text: large, binary: false },
   ]);
