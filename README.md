@@ -26,7 +26,7 @@ Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运�
 
 ## 启动
 
-本轮验证环境：Node **24.21.0**、npm 11.19.0、Claude Agent SDK **0.3.326** / CLI **2.1.326**、Shunt **0.64.0**。Node 最低要求 24，推荐使用已验证版本。
+本轮验证环境：Node **24.21.0**、npm 11.19.0、Claude Agent SDK **0.3.332** / CLI **2.1.332**、Shunt **0.64.0**。Node 最低要求 24，推荐使用已验证版本。
 
 ```sh
 git clone https://github.com/CoderLambert/atelier-handoff.git

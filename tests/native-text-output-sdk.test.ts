@@ -90,7 +90,7 @@ async function nativeFixture(
     'package.json',
   );
   const version = z
-    .object({ version: z.literal('0.3.326') })
+    .object({ version: z.literal('0.3.332') })
     .parse(JSON.parse(await readFile(sdkPackage, 'utf8'))).version;
   context.diagnostic(`real SDK ${version}; loopback model responses; paid model requests=0`);
   const root = await mkdtemp(join(tmpdir(), 'atelier-native-text-sdk-'));

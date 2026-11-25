@@ -93,7 +93,7 @@ async function withSdkFixture(
     'package.json',
   );
   const sdkVersion = z
-    .object({ version: z.literal('0.3.326') })
+    .object({ version: z.literal('0.3.332') })
     .parse(JSON.parse(await readFile(sdkPackage, 'utf8')));
   context.diagnostic(
     `real Agent SDK ${sdkVersion.version}; synthetic loopback gateway; no paid model`,
