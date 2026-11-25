@@ -1,7 +1,7 @@
 /**
- * @file 验证 RTK 自动包装的固定命令范围与资源失效行为。
- * @implementation 使用含空格和引号的路径核对完整命令，只接受精确形式，并拒绝残缺或错误版本的随包资源。
- * @updated 2026-11-26T01:58:00+08:00
+ * @file 验证 RTK 命令规划范围与资源失效行为。
+ * @implementation 使用固定 RTK 和含空格、引号的路径核对多种命令及复合命令改写，覆盖精确输出和 shell 边界，并检查无效资源回退。
+ * @updated 2026-11-26T03:01:01+08:00
  */
 import assert from 'node:assert/strict';
 import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';

@@ -2,6 +2,8 @@
 
 状态为已实现，Linux x64 安装态专项与通用发行验收均通过。锁定 CLI 的 `classic.PreToolUse` 插件调用原生 `$.tool.check` 预检原命令，随后由原生 Bash 检查包装命令。项目设置与工具轨迹均从实际安装件核对。对应[桌面路线图](../../openspec/roadmaps/build-atelier-desktop/roadmap.md) P5（运行时工具）与 P7（Linux 安装态）。
 
+当前自动匹配范围及新增验证见 [RTK Bash 命令覆盖](2026-11-26-rtk-command-coverage.md)。
+
 ## 2026-11-26 · 锁定 SDK 权限验证
 
 沿用原生 Bash 回环夹具的隔离方式和 `nativeSdkOptions()`，锁定 `@anthropic-ai/claude-agent-sdk@0.3.332`，以 `settingSources: []`、独立的 `HOME` 和 `CLAUDE_CONFIG_DIR` 启动真实 SDK。模型替身每轮只提出一次 Bash。使用临时 Git 仓库，原命令为 `git status`，改写后走路径含空格的本地替身，由系统 Git 执行 `git status --short`。以 `PostToolUse` 的输入、回环模型收到的 `?? sample.txt` 回执和 `canUseTool` 的调用记录判定结果。
