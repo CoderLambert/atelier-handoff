@@ -507,8 +507,7 @@
   max-width: 820px;
 }
 
-.chat-composer:has(.chat-task-plan) .composer-box,
-.chat-message-queue + .chat-composer .composer-box {
+.chat-message-queue + .chat-composer:not(:has(.chat-task-plan)) .composer-box {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
@@ -1228,13 +1227,53 @@
 
 .chat-conversation .run-progress[data-active='false'] {
   gap: 6px;
-  margin-block: 6px 10px;
-  padding-block: 2px;
-  padding-inline: 12px 0;
+  max-inline-size: var(--ui-reading-width);
+  margin-block: 0 12px;
+  padding: 0 0 6px;
   border: 0;
-  border-inline-start: 1.5px solid var(--ui-border);
+  border-block-end: 1px solid var(--ui-border-subtle);
   border-radius: 0;
   background: transparent;
+}
+
+.chat-conversation .run-history-toggle,
+.chat-conversation .run-history-status {
+  justify-self: start;
+  margin: 0;
+  padding-inline: 0 6px;
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-conversation .run-history-toggle[aria-expanded='true'] > svg {
+  rotate: 90deg;
+}
+
+.chat-conversation .run-progress[data-status='failed'] :is(.run-history-toggle, .run-history-status) {
+  color: var(--ui-destructive);
+}
+
+.run-progress-content {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.run-progress[data-active='false'] .run-progress-content {
+  border-inline-start: 1px solid var(--ui-border-subtle);
+  padding-inline-start: 12px;
+}
+
+.run-history-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding-block: 4px;
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-xs);
 }
 
 .chat-conversation .run-progress-head {
@@ -1268,21 +1307,17 @@
 }
 
 .chat-composer .chat-task-plan {
-  max-width: 796px;
-  width: calc(100% - 24px);
-  margin: 0 auto -1px;
-  padding: 0;
+  width: 100%;
+  margin: 0 auto 8px;
   border: 1px solid var(--ui-border);
-  border-bottom: 0;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: var(--radius-lg);
   background: var(--ui-card);
-  position: relative;
-  z-index: 1;
 }
 
-.chat-message-queue + .chat-composer .chat-task-plan {
-  border-radius: 0;
-  border-top: 1px solid var(--ui-border-subtle);
+.chat-message-queue:has(+ .chat-composer .chat-task-plan) {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: var(--radius-md);
 }
 
 .chat-task-plan .chat-task-plan-toggle {
@@ -1293,6 +1328,10 @@
   justify-content: flex-start;
   gap: 8px;
   border-radius: inherit;
+}
+
+.chat-composer .chat-task-plan-toggle:focus-visible {
+  outline-offset: -3px;
 }
 
 .chat-task-plan-count {
@@ -1347,7 +1386,19 @@
 
 .chat-task-plan-list [data-status='completed'] .chat-task-plan-text {
   color: var(--ui-muted-foreground);
-  text-decoration: line-through;
+}
+
+.chat-composer .chat-task-plan-list {
+  padding-inline: 6px;
+}
+
+.chat-composer .chat-task-plan-list li {
+  padding-inline: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.chat-composer .chat-task-plan-list [data-status='in_progress'] {
+  background: var(--ui-info-soft);
 }
 
 .run-tool-activity {
@@ -1385,6 +1436,16 @@
 
 .run-activity-toggle[aria-expanded='true'] > svg {
   transform: rotate(90deg);
+}
+
+.run-tool-pagination {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .run-tool-list {

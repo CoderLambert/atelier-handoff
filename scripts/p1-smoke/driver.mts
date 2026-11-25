@@ -414,7 +414,7 @@ async function launch(
       await initialProjectDialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
     }
     await page
-      .getByRole('button', { name: '模型与网关设置', exact: true })
+      .getByRole('button', { name: '工作台设置', exact: true })
       .waitFor({ state: 'visible' });
     const origin = new URL(page.url()).origin;
     const bootstrap = await api(page, '/api/bootstrap');
@@ -476,7 +476,7 @@ async function save(): Promise<void> {
 
 async function settings(page: Page, offline: boolean): Promise<void> {
   const from = page.url();
-  await page.getByRole('button', { name: '模型与网关设置', exact: true }).click();
+  await page.getByRole('button', { name: '工作台设置', exact: true }).click();
   await page.waitForURL(/#\/settings\/models$/u);
   await page
     .getByText(offline ? '本机网关未连接' : '本机网关可访问', { exact: true })
@@ -2055,7 +2055,7 @@ async function main(): Promise<void> {
     };
     active = await launch(cfg, chromium, fixture, freshStarts + 2, false, true);
     const firstGateway = await verifyGateway(active);
-    await active.page.getByRole('button', { name: '模型与网关设置', exact: true }).click();
+    await active.page.getByRole('button', { name: '工作台设置', exact: true }).click();
     await active.page.waitForURL(/#\/settings\/models$/u);
     const gatewaySettings = active.page.locator('.settings-page');
     await gatewaySettings

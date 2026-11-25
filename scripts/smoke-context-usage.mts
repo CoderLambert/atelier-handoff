@@ -357,7 +357,7 @@ try {
   };
   await capture('conversation-en-1440');
   await setSize(reopened, 1920, 1080);
-  await reopened.getByRole('button', { name: 'Model and gateway settings', exact: true }).click();
+  await reopened.getByRole('button', { name: 'Workbench settings', exact: true }).click();
   await reopened.getByRole('heading', { name: 'Settings', exact: true }).waitFor();
   await capture('settings-en-1920');
   await reopened.getByRole('button', { name: 'Extensions', exact: true }).click();

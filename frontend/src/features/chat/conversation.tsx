@@ -1,7 +1,7 @@
 /**
- * @file 展示会话消息、历史任务清单、运行结果、浏览器异常及网页链接选择入口。
- * @implementation 按运行组织消息和执行明细，输入区未展示的清单归入对应助手消息。提供审批、完整输出、选区引用及历史操作入口。
- * @updated 2026-11-23T13:36:26+08:00
+ * @file 展示会话消息、运行进度与历史、浏览器异常及网页链接选择入口。
+ * @implementation 按运行组织消息，以状态和耗时汇总结束的运行。通过统一入口展开工具、任务清单和子任务，并提供审批、输出及历史操作入口。
+ * @updated 2026-11-25T18:35:00+08:00
  */
 import { useUiTranslation, getTranslator } from '@/i18n';
 import {
@@ -9,6 +9,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -24,7 +25,7 @@ import type {
   RunEvent,
   ToolCall,
 } from '@shared/types';
-import { Activity, ArrowDown, File, Folder, RotateCcw, Shield } from 'lucide-react';
+import { Activity, ArrowDown, ChevronRight, File, Folder, RotateCcw, Shield } from 'lucide-react';
 import { activeStatuses } from '@shared/types';
 import { cn } from '@/components/ui/utils';
 import type { Snapshot } from '@/api/types';
@@ -35,7 +36,8 @@ import {
   groupRunWork,
   permissionSubagentSource,
 } from '@/features/inspector';
-import { permissionOperation, StatusBadge } from '@/features/inspector/shared';
+import { permissionOperation, StatusBadge, statusLabel } from '@/features/inspector/shared';
+import { formatDuration } from '@/utils/format';
 import { AttachmentPreview } from './attachment-preview';
 import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
@@ -178,7 +180,9 @@ function RunProgress({
   onOutput: (tool: ToolCall) => void;
   onTrace: () => void;
 }) {
-  const { t } = useUiTranslation('chat');
+  const { t, locale } = useUiTranslation('chat');
+  const historyId = useId();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const work = useMemo(
     () => groupRunWork(snapshot, run),
     [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
@@ -209,17 +213,20 @@ function RunProgress({
       ),
     [work],
   );
+  const hasDetails = work.tools.length > 0 || work.subagents.length > 0 || showPlan;
   const isPureModelWaiting =
-    !work.tools.length &&
-    !work.subagents.length &&
-    !showPlan &&
-    run.status !== 'awaiting_permission' &&
-    run.status !== 'stopping';
-  if (!active && !work.tools.length && !work.subagents.length && !showPlan) return null;
+    !hasDetails && run.status !== 'awaiting_permission' && run.status !== 'stopping';
   if (active && isPureModelWaiting) {
     if (hasText) return null;
     return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
   }
+  const duration =
+    run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : NaN;
+  const status = active ? '' : statusLabel(run.status);
+  const summary =
+    !active && Number.isFinite(duration) && duration >= 0
+      ? t('progress.historyDuration', { status, duration: formatDuration(duration, locale) })
+      : status;
   return (
     <section
       className="run-progress"
@@ -227,6 +234,23 @@ function RunProgress({
       data-active={active}
       aria-label={active ? t('progress.label') : t('progress.history')}
     >
+      {!active &&
+        (hasDetails ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="run-history-toggle"
+            aria-expanded={historyOpen}
+            aria-controls={historyId}
+            onClick={() => setHistoryOpen(!historyOpen)}
+          >
+            {summary}
+            <ChevronRight data-icon="inline-end" aria-hidden="true" />
+          </Button>
+        ) : (
+          <p className="run-history-status">{summary}</p>
+        ))}
       {active ? (
         <div className="run-progress-head">
           {stage === t('progress.waitingModel') ? (
@@ -263,22 +287,36 @@ function RunProgress({
           })}
         </p>
       ) : null}
-      {work.tools.length ? (
-        <RunToolActivity
-          tools={work.tools}
-          active={active}
-          approved={approved}
-          onOutput={onOutput}
-        />
+      {hasDetails ? (
+        <div
+          className="run-progress-content"
+          id={historyId}
+          hidden={!active && !historyOpen}
+          onFocusCapture={() => {
+            if (active) setHistoryOpen(true);
+          }}
+        >
+          {work.tools.length ? (
+            <RunToolActivity
+              tools={work.tools}
+              active={active}
+              historyOpen={historyOpen}
+              approved={approved}
+              onOutput={onOutput}
+            />
+          ) : null}
+          {showPlan && (active || historyOpen) ? (
+            <TaskPlan steps={run.plan} embedded={!active} />
+          ) : null}
+          <SubagentProgress
+            groups={work.subagents}
+            run={run}
+            onPermission={onPermission}
+            onToolOutput={onOutput}
+            onTrace={onTrace}
+          />
+        </div>
       ) : null}
-      {showPlan ? <TaskPlan steps={run.plan} /> : null}
-      <SubagentProgress
-        groups={work.subagents}
-        run={run}
-        onPermission={onPermission}
-        onToolOutput={onOutput}
-        onTrace={onTrace}
-      />
     </section>
   );
 }
@@ -397,7 +435,8 @@ function FormattedUserMessage({ text }: { text: string }) {
       const cleanPath = isDir ? rawPath.slice(0, -1) : rawPath;
       const lastSlash = cleanPath.lastIndexOf('/');
       const dir = lastSlash >= 0 ? cleanPath.slice(0, lastSlash + 1) : '';
-      const name = (lastSlash >= 0 ? cleanPath.slice(lastSlash + 1) : cleanPath) + (isDir ? '/' : '');
+      const name =
+        (lastSlash >= 0 ? cleanPath.slice(lastSlash + 1) : cleanPath) + (isDir ? '/' : '');
 
       nodes.push(
         <span key={match.index} className="composer-file-mention-badge" title={rawPath}>
@@ -656,7 +695,7 @@ export function Conversation({
         if (
           event.target instanceof Element &&
           event.target.closest(
-            '.run-progress summary, .run-tool-activity button, .chat-task-plan-toggle',
+            '.run-progress summary, .run-history-toggle, .run-tool-activity button, .chat-task-plan-toggle',
           )
         )
           nearBottom.current = false;
