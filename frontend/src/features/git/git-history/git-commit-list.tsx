@@ -1,7 +1,7 @@
 /**
  * @file 展示 Git 提交记录时间线列表与无限滚动加载状态。
- * @implementation 使用 IntersectionObserver 哨兵元素实现自动分页，提供短 Hash 复制与骨架屏反馈。
- * @updated 2026-11-25T02:49:00+08:00
+ * @implementation 使用 IntersectionObserver 哨兵元素实现自动分页，提供短 Hash 复制、右键菜单与骨架屏反馈。
+ * @updated 2026-11-25T03:37:00+08:00
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useUiTranslation } from '@/i18n';
 import type { GitCommit } from '@shared/git-workbench';
 import { GitCommitRow } from './git-commit-row';
 import { GitCommitSkeleton } from './git-commit-skeleton';
+import { useHoverCard } from './use-hover-card';
+import { GitCommitHoverCard } from './git-commit-hover-card';
 
 export interface GitCommitListProps {
   commits: GitCommit[];
@@ -17,10 +19,12 @@ export interface GitCommitListProps {
   searchHighlightQuery: string;
   hasActiveFilters: boolean;
   dateFormat: Intl.DateTimeFormat;
+  cwd?: string;
   hasNextPage?: boolean;
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
   onFetchNextPage: () => void;
+  onContextMenuCommit?: (commit: GitCommit, e: React.MouseEvent) => void;
 }
 
 export function GitCommitList({
@@ -30,10 +34,12 @@ export function GitCommitList({
   searchHighlightQuery,
   hasActiveFilters,
   dateFormat,
+  cwd,
   hasNextPage,
   isFetchingNextPage,
   isFetchNextPageError,
   onFetchNextPage,
+  onContextMenuCommit,
 }: GitCommitListProps) {
   const { t } = useUiTranslation('git');
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -41,6 +47,9 @@ export function GitCommitList({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isLoadingMoreRef = useRef(false);
+
+  const { activeItem, handleMouseEnter, handleMouseLeave, handleScroll } =
+    useHoverCard<GitCommit>(400);
 
   // 监听底部 1px 哨兵，在距底部 240px 时触发下一页加载
   useEffect(() => {
@@ -107,7 +116,7 @@ export function GitCommitList({
   }
 
   return (
-    <div className="git-history-list" ref={scrollContainerRef}>
+    <div className="git-history-list" ref={scrollContainerRef} onScroll={handleScroll}>
       <ul>
         {commits.map((item) => (
           <GitCommitRow
@@ -119,9 +128,21 @@ export function GitCommitList({
             searchHighlightQuery={searchHighlightQuery}
             onSelect={onSelectCommit}
             onCopyHash={handleCopyHash}
+            onContextMenu={onContextMenuCommit}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
           />
         ))}
       </ul>
+
+      {activeItem && (
+        <GitCommitHoverCard
+          commit={activeItem.item}
+          rect={activeItem.rect}
+          cwd={cwd}
+          dateFormat={dateFormat}
+        />
+      )}
 
       {/* 底部骨架屏加载中状态 */}
       {isFetchingNextPage && <GitCommitSkeleton />}

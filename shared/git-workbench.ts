@@ -1,7 +1,7 @@
 /**
  * @file 定义 Git 看板、开发会话和暂存提交的共享契约。
- * @implementation 校验本机引用、工作树操作、暂存清单、编辑内容和提交回执。
- * @updated 2026-11-24T04:50:56+08:00
+ * @implementation 校验本机引用、工作树操作、单文件索引请求、暂存清单和提交回执。
+ * @updated 2026-11-25T13:32:26+08:00
  */
 import { z } from 'zod';
 import { uiLocaleSchema } from './i18n/locale.js';
@@ -26,6 +26,12 @@ export const gitPath = z
         ),
   );
 export const gitDiffLayer = z.enum(['staged', 'unstaged', 'untracked', 'conflict']);
+export const gitFileIndexRequest = z.strictObject({
+  path: gitPath,
+  layer: z.enum(['staged', 'unstaged', 'untracked']),
+});
+export type GitFileIndexRequest = z.infer<typeof gitFileIndexRequest>;
+export const gitFileIndexReceipt = z.strictObject({ updated: z.literal(true) });
 export const gitCheckoutMode = z.enum(['linked', 'in_place']);
 export const gitStartPoint = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('head') }),

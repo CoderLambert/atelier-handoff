@@ -1,7 +1,7 @@
 /**
  * @file 呈现单个 Git 本地或远端分支行及其关联工作树胶囊。
- * @implementation 支持选中态指示条、HEAD 标记、远端前缀弱化及工作树末级目录胶囊展示。
- * @updated 2026-11-25T02:49:00+08:00
+ * @implementation 支持双击切换、右键菜单、选中态指示条、HEAD 标记与悬停卡片。
+ * @updated 2026-11-25T12:28:00+08:00
  */
 import { memo } from 'react';
 import { Cloud, Folder, GitBranch as BranchIcon } from 'lucide-react';
@@ -16,6 +16,10 @@ export interface GitBranchItemProps {
   worktreePath?: string;
   searchQuery: string;
   onSelect: (branch: GitBranch) => void;
+  onDoubleClick?: (branch: GitBranch) => void;
+  onContextMenu?: (branch: GitBranch, e: React.MouseEvent) => void;
+  onMouseEnter?: (branch: GitBranch, el: HTMLElement, worktreePath?: string) => void;
+  onMouseLeave?: () => void;
 }
 
 export const GitBranchItem = memo(function GitBranchItem({
@@ -25,6 +29,10 @@ export const GitBranchItem = memo(function GitBranchItem({
   worktreePath,
   searchQuery,
   onSelect,
+  onDoubleClick,
+  onContextMenu,
+  onMouseEnter,
+  onMouseLeave,
 }: GitBranchItemProps) {
   const { t } = useUiTranslation('git');
   const isRemote = branch.kind === 'remote';
@@ -38,13 +46,20 @@ export const GitBranchItem = memo(function GitBranchItem({
     : undefined;
 
   return (
-    <li>
+    <li className="list-none p-0 m-0">
       <button
         type="button"
         className="git-branch-item-btn"
         aria-pressed={isSelected}
         title={branch.name}
         onClick={() => onSelect(branch)}
+        onDoubleClick={() => onDoubleClick?.(branch)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onContextMenu?.(branch, e);
+        }}
+        onMouseEnter={(e) => onMouseEnter?.(branch, e.currentTarget, worktreePath)}
+        onMouseLeave={onMouseLeave}
       >
         {isSelected && <span className="git-branch-accent-bar" aria-hidden="true" />}
         <div className="git-branch-item-main">

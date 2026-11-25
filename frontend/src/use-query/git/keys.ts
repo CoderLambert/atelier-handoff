@@ -24,6 +24,7 @@ export const gitKeys = {
       filters?.since ?? '',
     ] as const,
   commit: (id: string, oid?: string) => [...project(id), 'commit', oid] as const,
+  repoStatus: (cwd?: string) => ['desktop-git', 'status', cwd ?? ''] as const,
   analysisProgress: (id: string, tree: string, analysisId?: string, version?: string) =>
     [...project(id), 'analysis-progress', tree, analysisId, version] as const,
 };
