@@ -40,7 +40,6 @@ import { AttachmentPreview } from './attachment-preview';
 import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
 import { Markdown } from './markdown';
 import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from './message-actions';
-import { runModeLabel } from './run-mode';
 import { RunToolActivity } from './run-tool-activity';
 import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
 import { TaskPlan } from './task-plan';
@@ -529,6 +528,10 @@ export function Conversation({
     () => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }),
     [locale],
   );
+  const shortTimeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { timeStyle: 'short' }),
+    [locale],
+  );
   const viewport = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -708,22 +711,12 @@ export function Conversation({
               <article
                 key={message.id}
                 className={cn('message', assistant ? 'assistant-message' : 'user-message')}
+                aria-label={t(assistant ? 'conversation.assistant' : 'conversation.you')}
                 data-message-id={message.id}
                 data-run-id={message.runId}
                 data-last-message={index === messages.length - 1 || undefined}
               >
-                <div
-                  className={cn('avatar', assistant ? 'ai-avatar' : 'user-avatar')}
-                  aria-hidden="true"
-                >
-                  {assistant ? 'A' : t('conversation.me')}
-                </div>
                 <div className="message-body">
-                  <div className="message-meta">
-                    <strong>{assistant ? 'atelier' : t('conversation.you')}</strong>
-                    <time dateTime={message.createdAt}>{date(message.createdAt, timeFormat)}</time>
-                    {!assistant && run ? <span>{runModeLabel(run)}</span> : null}
-                  </div>
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunProgress
                       run={run}
@@ -764,34 +757,38 @@ export function Conversation({
                       <p className="message-placeholder">{t('conversation.noReply')}</p>
                     )
                   ) : (
-                    <div className="message-text">
-                      <FormattedUserMessage text={message.text} />
+                    <div className="user-message-bubble">
+                      <div className="message-text">
+                        <FormattedUserMessage text={message.text} />
+                      </div>
+                      {run ? <MessageContext run={run} attachments={indexes.attachments} /> : null}
+                      {snapshot.session.fork &&
+                      events.some((event) => event.type === 'sdk.context_restarted') ? (
+                        <p className="message-placeholder">{t('conversation.branchRestored')}</p>
+                      ) : null}
                     </div>
                   )}
-                  {!assistant && run ? (
-                    <MessageContext run={run} attachments={indexes.attachments} />
-                  ) : null}
-                  {!assistant &&
-                  snapshot.session.fork &&
-                  events.some((event) => event.type === 'sdk.context_restarted') ? (
-                    <p className="message-placeholder">{t('conversation.branchRestored')}</p>
-                  ) : null}
-                  {hasText ||
-                  (hasMessageForkAnchor(message) && (onForkMessage || onRewindMessage)) ? (
-                    <MessageActions
-                      key={`${snapshot.session.id}:${message.id}`}
-                      message={message}
-                      disabled={submitting || snapshot.session.status === 'archived'}
-                      onEdit={onEditMessage}
-                      onQuote={onQuoteMessage}
-                      onFork={onForkMessage}
-                      onRewind={onRewindMessage}
-                      subsequentMessageCount={subsequentMessageCounts.get(message.id)}
-                      rewindDisabledReason={rewindDisabledReason}
-                      forking={forkingMessageId === message.id}
-                      forkDisabled={submitting || Boolean(forkingMessageId)}
-                    />
-                  ) : null}
+                  <footer className="message-footer">
+                    <time dateTime={message.createdAt} title={date(message.createdAt, timeFormat)}>
+                      {date(message.createdAt, shortTimeFormat)}
+                    </time>
+                    {hasText ||
+                    (hasMessageForkAnchor(message) && (onForkMessage || onRewindMessage)) ? (
+                      <MessageActions
+                        key={`${snapshot.session.id}:${message.id}`}
+                        message={message}
+                        disabled={submitting || snapshot.session.status === 'archived'}
+                        onEdit={onEditMessage}
+                        onQuote={onQuoteMessage}
+                        onFork={onForkMessage}
+                        onRewind={onRewindMessage}
+                        subsequentMessageCount={subsequentMessageCounts.get(message.id)}
+                        rewindDisabledReason={rewindDisabledReason}
+                        forking={forkingMessageId === message.id}
+                        forkDisabled={submitting || Boolean(forkingMessageId)}
+                      />
+                    ) : null}
+                  </footer>
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
                   ) : null}

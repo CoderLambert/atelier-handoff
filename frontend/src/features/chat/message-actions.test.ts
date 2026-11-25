@@ -1,7 +1,7 @@
 /**
- * @file 验证消息操作、引用草稿、快捷插入及任务清单。
- * @implementation 使用隔离浏览器和回环 HTTP 替身覆盖消息和草稿操作、发送失败恢复，以及清单的键盘折叠、状态更新、历史查看和会话隔离。
- * @updated 2026-11-23T13:37:30+08:00
+ * @file 验证消息布局、操作、引用草稿、快捷插入及任务清单。
+ * @implementation 使用隔离浏览器和回环 HTTP 替身覆盖消息布局、草稿操作、发送失败恢复，以及清单的键盘折叠、状态更新、历史查看和会话隔离。
+ * @updated 2026-11-25T18:05:55+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -452,6 +452,22 @@ test(
       const copy = assistant.getByRole('button', { name: '复制 Markdown', exact: true });
       const readDraft = () => page.evaluate('window.fixture.draft()') as Promise<Draft>;
       await input.waitFor();
+      const bubble = await user.locator('.user-message-bubble').boundingBox();
+      const row = await user.boundingBox();
+      const footer = await user.locator('.message-footer').boundingBox();
+      const timestamp = user.locator('time[datetime][title]');
+      const time = await timestamp.boundingBox();
+      assert.ok(bubble && row && footer);
+      assert.ok(bubble.width < row.width * 0.7);
+      assert.ok(Math.abs(bubble.x + bubble.width - (row.x + row.width)) < 1);
+      assert.ok(footer.y >= bubble.y + bubble.height);
+      assert.ok(time);
+      assert.ok(Math.abs(time.x + time.width - (bubble.x + bubble.width)) < 1);
+      assert.equal(
+        await user.locator('.message-footer').getByText('只读', { exact: true }).count(),
+        0,
+      );
+      assert.equal(await page.locator('.message .avatar').count(), 0);
       assert.equal(await input.inputValue(), initialDraft.text);
       assert.equal(await page.locator('[data-message-id="empty"] .message-actions').count(), 0);
       const send = page.getByRole('button', { name: '发送任务', exact: true });
@@ -461,6 +477,7 @@ test(
 
       // Copy uses original user text and assistant Markdown, including fences and links.
       await user.getByRole('button', { name: '复制消息', exact: true }).focus();
+      assert.equal((await timestamp.boundingBox())?.x, time.x);
       await page.keyboard.press('Enter');
       await user.getByRole('status').filter({ hasText: '已复制' }).waitFor();
       await copy.click();
@@ -673,6 +690,11 @@ test(
       assert.equal(await inherited.getByRole('button').count(), 0);
       const queue = page.getByRole('button', { name: '加入队列', exact: true });
       await queue.waitFor();
+      assert.equal(await queue.textContent(), '');
+      assert.equal(
+        await page.locator('#input-help').evaluate((el) => el.getBoundingClientRect().height),
+        1,
+      );
 
       // IME Enter keeps editing; a deliberate send uses the existing draft/submit pipeline.
       await quote.click();
