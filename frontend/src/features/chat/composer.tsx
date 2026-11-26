@@ -1,7 +1,7 @@
 /**
  * @file 提供任务输入、引用和附件编辑。
- * @implementation 按会话状态控制上下文和 Skill 选择，协调选择器与会话弹窗，并统一处理发送、入队、停止及草稿。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 按会话管理草稿、附件、上下文和发送。输入框优先使用浏览器原生自动高度，并兼容旧浏览器。
+ * @updated 2026-11-27T00:33:30+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
@@ -163,6 +163,7 @@ export function Composer({
   );
 
   useLayoutEffect(() => {
+    if (CSS.supports('field-sizing', 'content')) return;
     const input = inputRef.current;
     if (!input) return;
     input.style.height = 'auto';

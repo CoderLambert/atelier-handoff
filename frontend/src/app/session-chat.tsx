@@ -1,7 +1,7 @@
 /**
  * @file 连接会话输入、运行偏好与消息发送。
- * @implementation 按会话保存本机或项目执行偏好和草稿，将快捷插入投递到发送回执指定的队列项。
- * @updated 2026-11-22T16:28:35+08:00
+ * @implementation 按会话提供正在编辑的草稿和按需读取入口，将快捷插入投递到发送回执指定的队列项。
+ * @updated 2026-11-27T00:29:54+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -60,7 +60,8 @@ export default function SessionChat({
   const submitting = useWorkspace((state) => state.workspace.submitting[id] === true);
   const message = useSendSessionMessage();
   const insert = useInsertQueuedMessage(id);
-  const fallback = useMemo(() => readDraft(id, serverDraft), [id, serverDraft]);
+  const getDraft = useCallback(() => readDraft(id, serverDraft), [id, serverDraft]);
+  const fallback = useMemo(getDraft, [getDraft]);
   const nativeAvailable = nativeExecution && !snapshot.agent && !snapshot.session.agentRevisionId;
   const changeDraft = useCallback(
     (next: Draft | ((previous: Draft) => Draft), immediate = false) => {
@@ -125,6 +126,7 @@ export default function SessionChat({
     <Chat
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
+      getDraft={getDraft}
       defaultModel={defaultModel}
       nativeExecution={nativeAvailable}
       onOpenLink={onOpenLink}

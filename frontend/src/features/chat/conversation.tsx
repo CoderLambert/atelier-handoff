@@ -1,11 +1,12 @@
 /**
  * @file 展示会话消息、运行进度与历史，以及审批和异常入口。
- * @implementation 按运行选择有序对话或旧历史展示，组合消息操作、工具、任务和运行结束摘要。
- * @updated 2026-11-26T01:17:56+08:00
+ * @implementation 按运行选择有序对话或旧历史展示，复用 props 相同时的渲染结果以跳过草稿更新引起的历史渲染。
+ * @updated 2026-11-27T00:29:54+08:00
  */
 import { useUiTranslation, getTranslator } from '@/i18n';
 import {
   lazy,
+  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -543,7 +544,7 @@ function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: 
   );
 }
 
-export function Conversation({
+export const Conversation = memo(function Conversation({
   snapshot,
   composerPlanRunId,
   onRetry,
@@ -1073,4 +1074,4 @@ export function Conversation({
       ) : null}
     </div>
   );
-}
+});

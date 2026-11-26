@@ -1,7 +1,7 @@
 /**
  * @file 验证消息布局、操作、引用草稿、快捷插入及任务清单。
- * @implementation 使用隔离浏览器和回环 HTTP 替身覆盖消息布局、草稿操作、发送失败恢复，以及清单的键盘折叠、状态更新、历史查看和会话隔离。
- * @updated 2026-11-25T18:05:55+08:00
+ * @implementation 使用隔离浏览器覆盖消息布局、草稿操作、发送恢复、清单交互和输入时的历史渲染及自动高度。
+ * @updated 2026-11-27T00:33:30+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -278,7 +278,6 @@ test(
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
       window.events = [];
       let historyReads = 0;
-      let renderTimes;
       let rewindMode = 'reject';
       async function rewind(messageId, expectedHeadId) {
         const id = current.session.id;
@@ -295,12 +294,10 @@ test(
       }
       function render() {
         root.render(<Provider store={store}><QueryClientProvider client={client}>
-          <React.Profiler id="chat" onRender={(_, phase, duration) => renderTimes?.push(duration)}>
           <SessionChat snapshot={current} defaultModel="default" onSent={async (id) => { window.events.push(['sent', id]); }}
             onError={(error) => window.events.push(['error', error])} onTrace={() => {}}
             onStop={() => {}} onRetry={(id) => window.events.push(['retry', id])}
             onForkMessage={(id) => window.events.push(['fork', id])} onRewindMessage={rewind} />
-          </React.Profiler>
         </QueryClientProvider></Provider>);
       }
       window.fixture = {
@@ -309,15 +306,12 @@ test(
             id: 'history-' + index, role: 'assistant', createdAt: initial.session.createdAt,
             text: initial.messages[1].text.repeat(6),
           }));
+          // Observe reads of the history rendered by Conversation during draft changes.
           current = { ...current, get inheritedMessages() { historyReads++; return history; } };
           render();
         },
-        startTypingSample: () => { historyReads = 0; renderTimes = []; },
-        finishTypingSample: () => {
-          const sample = { historyReads, renderTimes };
-          renderTimes = undefined;
-          return sample;
-        },
+        resetHistoryReads: () => { historyReads = 0; },
+        historyReads: () => historyReads,
         rewindMode: (mode) => { rewindMode = mode; },
         appendMessage: () => {
           current = { ...current, messages: [...current.messages, { ...initial.messages[1], id: 'later-message', sessionId: current.session.id }] };
@@ -1086,16 +1080,43 @@ test(
       await page.evaluate('window.fixture.longHistory()');
       await page.locator('.inherited-message').last().waitFor({ state: 'attached' });
       await input.fill('');
-      await page.evaluate('window.fixture.startTypingSample()');
+      await page.evaluate('window.fixture.resetHistoryReads()');
+      const scrollHeightReads = await input.evaluateHandle((element) => {
+        const read = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight')?.get;
+        if (!read) throw new Error('Missing native scrollHeight getter');
+        const reads = { count: 0 };
+        Object.defineProperty(element, 'scrollHeight', {
+          configurable: true,
+          get() {
+            reads.count++;
+            return read.call(this) as number;
+          },
+        });
+        return reads;
+      });
       await input.pressSequentially('typing a draft');
       assert.equal(await input.inputValue(), 'typing a draft');
       assert.equal((await readDraft()).text, 'typing a draft');
-      const sample = (await page.evaluate('window.fixture.finishTypingSample()')) as {
-        historyReads: number;
-        renderTimes: number[];
-      };
-      console.log('Composer typing sample', JSON.stringify(sample));
-      assert.equal(sample.historyReads, 0, 'Draft keystrokes should not render conversation history');
+      const { count } = await scrollHeightReads.jsonValue();
+      await scrollHeightReads.dispose();
+      await input.evaluate((element) => Reflect.deleteProperty(element, 'scrollHeight'));
+      if (await page.evaluate(() => CSS.supports('field-sizing', 'content'))) {
+        assert.equal(count, 0, 'Native sizing should not synchronously read textarea geometry');
+      }
+      const readHeight = () => input.evaluate((element) => element.clientHeight);
+      const initialHeight = await readHeight();
+      await input.fill('first\nsecond\nthird\nfourth');
+      assert.ok(await readHeight() > initialHeight);
+      await input.fill('overflowing\n'.repeat(40));
+      assert.equal(await readHeight(), 220);
+      assert.ok(await input.evaluate((element) => element.scrollHeight > element.clientHeight));
+      await input.fill('typing a draft');
+      assert.equal(await readHeight(), initialHeight);
+      assert.equal(
+        await page.evaluate('window.fixture.historyReads()'),
+        0,
+        'Draft keystrokes should not render conversation history',
+      );
       await page.evaluate("window.fixture.patch({ assistantText: '更新中的回复' })");
       await assistant.getByText('更新中的回复', { exact: true }).waitFor();
       assert.equal(await input.inputValue(), 'typing a draft');

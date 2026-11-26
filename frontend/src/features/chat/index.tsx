@@ -1,10 +1,10 @@
 /**
  * @file 组合会话消息、待处理队列、任务清单和输入界面。
- * @implementation 选定输入区显示清单的运行，协调其在消息中的展示。按会话隔离编辑确认、输入焦点及草稿引用。
- * @updated 2026-11-23T13:35:40+08:00
+ * @implementation 协调清单展示与输入焦点，为对话提供稳定的操作回调，在引用和编辑时读取本会话的最新草稿。
+ * @updated 2026-11-27T00:29:54+08:00
  */
 import { useUiTranslation } from '@/i18n';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import { composerTextLimit, formatMessageText, messageQuoteLimit } from '@shared/message-quotes';
 import type { Draft, Message, ReasoningEffort } from '@shared/types';
@@ -27,6 +27,7 @@ import './chat.css';
 export interface ChatProps {
   snapshot: Snapshot;
   draft: Draft;
+  getDraft: () => Draft;
   defaultModel: string;
   nativeExecution?: boolean;
   onModelChange: (model?: string) => void;
@@ -50,7 +51,10 @@ export default function Chat(props: ChatProps) {
 
 function SessionChat(props: ChatProps) {
   const { t } = useUiTranslation('chat');
-  const { snapshot, draft, onDraftChange, onRetry, onTrace, onOpenLink, submitting } = props;
+  const { snapshot, draft, getDraft, onDraftChange, onRetry, onTrace, onOpenLink, submitting } =
+    props;
+  const sessionId = snapshot.session.id;
+  const { onRewindMessage } = props;
   const currentRun = snapshot.runs.find(isActive) ?? snapshot.runs.at(-1);
   const composerPlan = currentRun?.plan.length ? currentRun : undefined;
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -101,82 +105,104 @@ function SessionChat(props: ChatProps) {
     input?.setSelectionRange(length, length);
   }, [focusRequest]);
 
-  function focusInput() {
+  const focusInput = useCallback(() => {
     setFocusRequest((previous) => previous + 1);
-  }
+  }, []);
 
-  function replaceText(text: string) {
-    if (draftDisabled) return false;
-    if (text.length > composerTextLimit) {
-      setActionError('draft.tooLong');
-      return false;
-    }
-    onDraftChange((previous) => ({ ...previous, text }));
-    setActionError(undefined);
-    setEditing(true);
-    return true;
-  }
+  const replaceText = useCallback(
+    (text: string) => {
+      if (draftDisabled) return false;
+      if (text.length > composerTextLimit) {
+        setActionError('draft.tooLong');
+        return false;
+      }
+      onDraftChange((previous) => ({ ...previous, text }));
+      setActionError(undefined);
+      setEditing(true);
+      return true;
+    },
+    [draftDisabled, onDraftChange],
+  );
 
-  function editMessage(message: Message, trigger: HTMLButtonElement) {
-    if (draftDisabled || message.sessionId !== snapshot.session.id) return;
-    setActionError(undefined);
-    if (draft.text.length) {
-      setReplacement({ sessionId: snapshot.session.id, text: message.text, trigger });
-    } else if (replaceText(message.text)) focusInput();
-  }
+  const editMessage = useCallback(
+    (message: Message, trigger: HTMLButtonElement) => {
+      if (draftDisabled || message.sessionId !== sessionId) return;
+      setActionError(undefined);
+      if (getDraft().text.length) {
+        setReplacement({ sessionId, text: message.text, trigger });
+      } else if (replaceText(message.text)) focusInput();
+    },
+    [draftDisabled, sessionId, getDraft, replaceText, focusInput],
+  );
 
-  function quoteMessage(message: Message, excerpt?: string): boolean {
-    if (draftDisabled || message.sessionId !== snapshot.session.id || message.role !== 'assistant')
-      return false;
-    const existing = draft.messageQuotes ?? [];
-    const duplicate = existing.some((item) =>
-      excerpt === undefined
-        ? item.id === message.id
-        : item.sourceMessageId === message.id && item.text === excerpt,
-    );
-    if (duplicate) {
+  const quoteMessage = useCallback(
+    (message: Message, excerpt?: string): boolean => {
+      if (draftDisabled || message.sessionId !== sessionId || message.role !== 'assistant')
+        return false;
+      const draft = getDraft();
+      const existing = draft.messageQuotes ?? [];
+      const duplicate = existing.some((item) =>
+        excerpt === undefined
+          ? item.id === message.id
+          : item.sourceMessageId === message.id && item.text === excerpt,
+      );
+      if (duplicate) {
+        setActionError(undefined);
+        focusInput();
+        return true;
+      }
+      if (existing.length >= messageQuoteLimit) {
+        setActionError('draft.quoteLimit');
+        return false;
+      }
+      const quote =
+        excerpt === undefined
+          ? { id: message.id, text: message.text }
+          : { id: `quote:${crypto.randomUUID()}`, sourceMessageId: message.id, text: excerpt };
+      const messageQuotes = [...existing, quote];
+      if (formatMessageText(draft.text, messageQuotes).length > composerTextLimit) {
+        setActionError(excerpt === undefined ? 'draft.quoteTooLong' : 'draft.selectionTooLong');
+        return false;
+      }
+      onDraftChange((previous) => ({ ...previous, messageQuotes }));
       setActionError(undefined);
       focusInput();
       return true;
-    }
-    if (existing.length >= messageQuoteLimit) {
-      setActionError('draft.quoteLimit');
-      return false;
-    }
-    const quote =
-      excerpt === undefined
-        ? { id: message.id, text: message.text }
-        : { id: `quote:${crypto.randomUUID()}`, sourceMessageId: message.id, text: excerpt };
-    const messageQuotes = [...existing, quote];
-    if (formatMessageText(draft.text, messageQuotes).length > composerTextLimit) {
-      setActionError(excerpt === undefined ? 'draft.quoteTooLong' : 'draft.selectionTooLong');
-      return false;
-    }
-    onDraftChange((previous) => ({ ...previous, messageQuotes }));
-    setActionError(undefined);
-    focusInput();
-    return true;
-  }
+    },
+    [draftDisabled, sessionId, getDraft, onDraftChange, focusInput],
+  );
 
-  function chooseRewind(message: Message, trigger: HTMLButtonElement) {
-    if (rewind || rewindDisabledReason || !props.onRewindMessage) return;
-    const index = snapshot.messages.findIndex((item) => item.id === message.id);
-    const head = snapshot.messages.at(-1);
-    if (
-      message.sessionId !== snapshot.session.id ||
-      !hasMessageForkAnchor(message) ||
-      index < 0 ||
-      index === snapshot.messages.length - 1 ||
-      !head
-    )
-      return;
-    setRewind({
-      message,
-      trigger,
-      expectedHeadId: head.id,
-      subsequentMessageCount: snapshot.messages.length - index - 1,
-    });
-  }
+  const quoteReply = useCallback((message: Message) => quoteMessage(message), [quoteMessage]);
+  const quoteSelection = useCallback(
+    (id: string, text: string) => {
+      const message = snapshot.messages.find((item) => item.id === id);
+      return message ? quoteMessage(message, text) : false;
+    },
+    [snapshot.messages, quoteMessage],
+  );
+
+  const chooseRewind = useCallback(
+    (message: Message, trigger: HTMLButtonElement) => {
+      if (rewind || rewindDisabledReason || !onRewindMessage) return;
+      const index = snapshot.messages.findIndex((item) => item.id === message.id);
+      const head = snapshot.messages.at(-1);
+      if (
+        message.sessionId !== sessionId ||
+        !hasMessageForkAnchor(message) ||
+        index < 0 ||
+        index === snapshot.messages.length - 1 ||
+        !head
+      )
+        return;
+      setRewind({
+        message,
+        trigger,
+        expectedHeadId: head.id,
+        subsequentMessageCount: snapshot.messages.length - index - 1,
+      });
+    },
+    [rewind, rewindDisabledReason, onRewindMessage, snapshot.messages, sessionId],
+  );
 
   async function confirmRewind() {
     if (!rewind || !props.onRewindMessage) throw new Error(t('rewind.unavailable'));
@@ -195,11 +221,8 @@ function SessionChat(props: ChatProps) {
         onTrace={onTrace}
         onOpenLink={onOpenLink}
         onEditMessage={editMessage}
-        onQuoteMessage={(message) => quoteMessage(message)}
-        onQuoteSelection={(id, text) => {
-          const message = snapshot.messages.find((item) => item.id === id);
-          return message ? quoteMessage(message, text) : false;
-        }}
+        onQuoteMessage={quoteReply}
+        onQuoteSelection={quoteSelection}
         onForkMessage={props.onForkMessage}
         onRewindMessage={props.onRewindMessage ? chooseRewind : undefined}
         rewindDisabledReason={rewindDisabledReason}
