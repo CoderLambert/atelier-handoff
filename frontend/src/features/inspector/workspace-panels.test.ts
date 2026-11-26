@@ -328,7 +328,16 @@ test(
         savedRight,
       );
       assert.equal(layoutWrites.length, writesAfterResize);
-      const changes = page.getByRole('button', { name: '变更记录', exact: true });
+      const changeButton = { name: '变更记录', exact: true };
+      assert.equal(await page.locator('.topbar').getByRole('button', changeButton).count(), 0);
+      const changes = page
+        .getByRole('tabpanel', { name: /^执行轨迹/ })
+        .getByRole('button', changeButton);
+      const sessionTabs = await page.locator('.session-tabs').boundingBox();
+      const changesBounds = await changes.boundingBox();
+      assert.ok(
+        sessionTabs && changesBounds && changesBounds.y >= sessionTabs.y + sessionTabs.height,
+      );
       await changes.click();
       const dialog = page.getByRole('dialog', { name: '变更记录', exact: true });
       await dialog.getByText('暂无操作记录。', { exact: true }).waitFor();

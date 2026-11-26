@@ -4,15 +4,7 @@
  * @updated 2026-11-26T04:17:21+08:00
  */
 import { useId, type Ref } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  FileDiff,
-  GitBranch,
-  Globe,
-  Menu,
-  TerminalSquare,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, GitBranch, Globe, Menu, TerminalSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
 
@@ -31,10 +23,8 @@ interface WorkspaceToolbarProps {
     onToggle: () => void;
   };
   sessionActions?: {
-    pendingPermissions: number;
     browserOpen: boolean;
     browserTrigger: Ref<HTMLButtonElement>;
-    onOpenChanges: () => void;
     onToggleBrowser: () => void;
     terminalOpen: boolean;
     terminalTrigger: Ref<HTMLButtonElement>;
@@ -58,10 +48,6 @@ export function WorkspaceToolbar({
   const { t: git } = useUiTranslation('git');
   const { t: terminal } = useUiTranslation('terminal');
   const connectionStatusId = useId();
-  const changesLabel = sessionActions?.pendingPermissions
-    ? t('changes.pending', { count: sessionActions.pendingPermissions })
-    : t('changes.title');
-
   return (
     <header className="topbar">
       <div className="breadcrumbs">
@@ -142,18 +128,6 @@ export function WorkspaceToolbar({
             >
               <TerminalSquare data-icon="inline-start" aria-hidden="true" />
               <span className="workspace-action-label">{terminal('title')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="topbar-changes-btn"
-              data-pending={sessionActions.pendingPermissions > 0 || undefined}
-              aria-label={t('changes.title')}
-              title={changesLabel}
-              onClick={sessionActions.onOpenChanges}
-            >
-              <FileDiff data-icon="inline-start" aria-hidden="true" />
-              <span className="workspace-action-label">{changesLabel}</span>
             </Button>
             <Button
               ref={sessionActions.browserTrigger}

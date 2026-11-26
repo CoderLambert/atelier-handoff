@@ -5,7 +5,7 @@
  */
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, X } from 'lucide-react';
+import { FileDiff, FolderOpen, X } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
 import { WorkspaceToolbar } from './workspace-toolbar';
 import { WorkspaceNotice } from './workspace-notice';
@@ -482,6 +482,9 @@ export default function Workspace() {
   };
   const pendingPermissions =
     snapshot?.permissions.filter((item) => item.status === 'pending').length ?? 0;
+  const changesLabel = pendingPermissions
+    ? t('changes.pending', { count: pendingPermissions })
+    : t('changes.title');
   const browserPanel = previewProject ? (
     <PanelHost
       definition={panels.browser}
@@ -628,10 +631,8 @@ export default function Workspace() {
               sessionActions={
                 view === 'chat' && sessionId
                   ? {
-                      pendingPermissions,
                       browserOpen: browserActive,
                       browserTrigger,
-                      onOpenChanges: () => openDrawer('details'),
                       onToggleBrowser: panel.toggleBrowser,
                       terminalOpen: panel.terminalActive,
                       terminalTrigger: panel.terminalTrigger,
@@ -861,6 +862,23 @@ export default function Workspace() {
                           role={sessionId ? 'tabpanel' : undefined}
                           aria-labelledby={sessionId ? `${sessionContentId}-${tab}` : undefined}
                         >
+                          {sessionId && tab === 'trace' ? (
+                            <div className="flex shrink-0 items-center py-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="session-changes-button"
+                                data-pending={pendingPermissions > 0 || undefined}
+                                aria-label={t('changes.title')}
+                                aria-description={pendingPermissions ? changesLabel : undefined}
+                                aria-haspopup="dialog"
+                                onClick={() => openDrawer('details')}
+                              >
+                                <FileDiff data-icon="inline-start" aria-hidden="true" />
+                                {changesLabel}
+                              </Button>
+                            </div>
+                          ) : null}
                           <Suspense fallback={loading}>
                             {snapshot && tab === 'conversation' ? (
                               <SessionChat
