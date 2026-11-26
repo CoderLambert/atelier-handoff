@@ -6,11 +6,7 @@
 import { Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/components/ui/utils';
-
-type CatalogOption = { value: string; label: string };
-
-const selectClassName =
-  'h-9 min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50';
+import { OptionsSelect, type SelectOption } from './options-select';
 
 export function CatalogProjectSelect({
   label,
@@ -25,7 +21,7 @@ export function CatalogProjectSelect({
   label: string;
   selectLabel: string;
   value: string;
-  options: readonly CatalogOption[];
+  options: readonly SelectOption[];
   emptyLabel: string;
   disabled?: boolean;
   className?: string;
@@ -40,23 +36,15 @@ export function CatalogProjectSelect({
       )}
     >
       {label}
-      <select
+      <OptionsSelect
         aria-label={selectLabel}
-        className={selectClassName}
+        className="w-full"
         disabled={disabled}
         value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-      >
-        {options.length ? (
-          options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))
-        ) : (
-          <option value="">{emptyLabel}</option>
-        )}
-      </select>
+        options={options}
+        placeholder={emptyLabel}
+        onValueChange={onValueChange}
+      />
     </label>
   );
 }
@@ -76,7 +64,7 @@ export function CatalogToolbar({
   filter: {
     label: string;
     value: string;
-    options: readonly CatalogOption[];
+    options: readonly SelectOption[];
     onChange: (value: string) => void;
   };
   className?: string;
@@ -100,17 +88,12 @@ export function CatalogToolbar({
       </label>
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         {filter.label}
-        <select
-          className={selectClassName}
+        <OptionsSelect
+          aria-label={filter.label}
           value={filter.value}
-          onChange={(event) => filter.onChange(event.target.value)}
-        >
-          {filter.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          options={filter.options}
+          onValueChange={filter.onChange}
+        />
       </label>
       <div className="flex flex-wrap items-center gap-2 min-[1000px]:ms-auto">{children}</div>
     </div>

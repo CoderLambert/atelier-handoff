@@ -3,6 +3,7 @@
  * @implementation 根据扩展列表展示可选项和依赖状态，通过受控配置回调增删选择及调整工具。
  * @updated 2026-11-23T04:51:34+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import type { AgentConfig, Extension } from '@shared/types';
 import { Button } from '@/components/ui/button';
@@ -84,12 +85,24 @@ export function AgentDependencies({
                       <span className="sr-only">
                         {t('dependency.activationLabel', { name: item.name })}
                       </span>
-                      <select
+                      <OptionsSelect
+                        size="sm"
                         aria-label={t('dependency.activationLabel', { name: item.name })}
                         value={selection.activation}
                         disabled={stale}
-                        onChange={(event) => {
-                          const activation = event.target.value === 'auto' ? 'auto' : 'manual';
+                        options={[
+                          {
+                            value: 'auto',
+                            label: t('dependency.auto'),
+                            disabled: Boolean(autoReason),
+                          },
+                          {
+                            value: 'manual',
+                            label: t('dependency.manual'),
+                            disabled: Boolean(manualReason),
+                          },
+                        ]}
+                        onValueChange={(activation) => {
                           onChange({
                             ...config,
                             skills: config.skills.map((value) =>
@@ -97,14 +110,7 @@ export function AgentDependencies({
                             ),
                           });
                         }}
-                      >
-                        <option value="auto" disabled={Boolean(autoReason)}>
-                          {t('dependency.auto')}
-                        </option>
-                        <option value="manual" disabled={Boolean(manualReason)}>
-                          {t('dependency.manual')}
-                        </option>
-                      </select>
+                      />
                     </label>
                   ) : null}
                 </div>

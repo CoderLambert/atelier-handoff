@@ -3,6 +3,7 @@
  * @implementation 管理配置草稿、依赖刷新和版本冲突，在保存前重新检查依赖，并处理放弃更改确认。
  * @updated 2026-11-23T04:52:18+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -281,10 +282,15 @@ export function AgentEditor({
               <h3>{t('agentEditor.capabilitiesTitle')}</h3>
               <label className="agent-field agent-mode-field">
                 <span>{t('agentEditor.modeLabel')}</span>
-                <select
+                <OptionsSelect
+                  aria-label={t('agentEditor.modeLabel')}
+                  className="w-full"
                   value={config.mode}
-                  onChange={(event) => {
-                    const mode = event.target.value === 'edit' ? 'edit' : 'readonly';
+                  options={[
+                    { value: 'readonly', label: t('agents.readonlyMode') },
+                    { value: 'edit', label: t('agentEditor.controlledEdit') },
+                  ]}
+                  onValueChange={(mode) => {
                     change({
                       ...config,
                       mode,
@@ -294,10 +300,7 @@ export function AgentEditor({
                           : config.capabilities,
                     });
                   }}
-                >
-                  <option value="readonly">{t('agents.readonlyMode')}</option>
-                  <option value="edit">{t('agentEditor.controlledEdit')}</option>
-                </select>
+                />
                 <small>{t('agentEditor.modeHelp')}</small>
               </label>
               <div className="agent-capability-grid">

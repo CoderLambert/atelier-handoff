@@ -3,6 +3,7 @@
  * @implementation 提供防抖搜索输入、作者与时间快捷下拉及当前分支统计状态展示。
  * @updated 2026-11-25T02:49:00+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { memo } from 'react';
 import { Search, X } from 'lucide-react';
 import { useUiTranslation } from '@/i18n';
@@ -62,39 +63,34 @@ export const GitCommitToolbar = memo(function GitCommitToolbar({
         </div>
 
         {/* 作者筛选下拉 */}
-        <select
-          className="git-filter-select"
+        <OptionsSelect
+          size="sm"
+          className="max-w-44"
           aria-label={t('history.filterAuthor')}
           value={authorFilter}
-          onChange={(e) => onAuthorFilterChange(e.target.value)}
-        >
-          <option value="all">{t('history.allAuthors')}</option>
-          {authors.map((auth) => (
-            <option key={auth} value={auth}>
-              {auth}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: 'all', label: t('history.allAuthors') },
+            ...authors.map((author) => ({ value: author, label: author })),
+          ]}
+          onValueChange={onAuthorFilterChange}
+        />
 
         {/* 时间范围筛选下拉 */}
-        <select
-          className="git-filter-select"
+        <OptionsSelect
+          size="sm"
           aria-label={t('history.filterTime')}
           value={timeFilter}
-          onChange={(e) => onTimeFilterChange(e.target.value)}
-        >
-          <option value="all">{t('history.allTime')}</option>
-          <option value="7d">{t('history.past7Days')}</option>
-          <option value="30d">{t('history.past30Days')}</option>
-        </select>
+          options={[
+            { value: 'all', label: t('history.allTime') },
+            { value: '7d', label: t('history.past7Days') },
+            { value: '30d', label: t('history.past30Days') },
+          ]}
+          onValueChange={onTimeFilterChange}
+        />
 
         {/* 重置筛选按钮 */}
         {hasActiveFilters && (
-          <button
-            type="button"
-            className="git-reset-filters-btn"
-            onClick={onResetFilters}
-          >
+          <button type="button" className="git-reset-filters-btn" onClick={onResetFilters}>
             {t('history.resetFilters')}
           </button>
         )}

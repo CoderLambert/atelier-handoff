@@ -497,9 +497,8 @@ test(
       await page
         .getByText('进展停滞 · 连续搜索没有新增证据，正在调整任务。', { exact: true })
         .waitFor();
-      await page
-        .getByRole('combobox', { name: '筛选事件类型', exact: true })
-        .selectOption('harness');
+      await page.getByRole('combobox', { name: '筛选事件类型', exact: true }).click();
+      await page.getByRole('option', { name: '执行进展', exact: true }).click();
       const progressEvents = page.locator('details[data-event-type="harness.progress"]');
       assert.equal(await progressEvents.count(), 1);
       await progressEvents.locator(':scope > summary').click();

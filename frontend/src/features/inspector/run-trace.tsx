@@ -3,13 +3,13 @@
  * @implementation 关联运行事件、工具、输出和审批，展示用量、子任务、诊断以及 Skill 来源。
  * @updated 2026-11-26T00:06:59+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { skillInheritanceSourceSchema } from '@shared/skill-inheritance';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Activity, Download, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/components/ui/utils';
 import { useRunTrace } from '@/use-query/runs/use-run-trace';
 import { runModeLabel } from '@/features/chat/run-mode';
 import { SubagentProgress, groupRunWork, permissionSubagentSource } from './subagent-progress';
@@ -23,7 +23,6 @@ import {
   Loading,
   StatusBadge,
   eventName,
-  fieldClass,
   formatDate,
   formatDuration,
   errorMessage,
@@ -245,21 +244,19 @@ function TraceDetail({
         <label htmlFor="inspector-trace-run" className="text-xs font-medium text-muted-foreground">
           {t('common.run')}
         </label>
-        <select
+        <OptionsSelect
           id="inspector-trace-run"
           value={run.id}
-          onChange={(event) => onSelect(event.target.value)}
-          className={cn(fieldClass, 'flex-1 sm:max-w-xl')}
-        >
-          {snapshot.runs
+          onValueChange={onSelect}
+          className="flex-1 sm:max-w-xl"
+          options={snapshot.runs
             .slice()
             .reverse()
-            .map((item) => (
-              <option key={item.id} value={item.id}>
-                {formatDate(item.createdAt)} · {item.prompt.slice(0, 60) || t('common.run')}
-              </option>
-            ))}
-        </select>
+            .map((item) => ({
+              value: item.id,
+              label: `${formatDate(item.createdAt)} · ${item.prompt.slice(0, 60) || t('common.run')}`,
+            }))}
+        />
         <StatusBadge status={run.status} />
       </div>
       {run.error ? <ErrorNotice message={errorMessage(new Error(run.error))} /> : null}
@@ -352,36 +349,31 @@ function TraceDetail({
             <label htmlFor="inspector-event-type" className="sr-only">
               {t('trace.filterEventType')}
             </label>
-            <select
+            <OptionsSelect
               id="inspector-event-type"
               value={eventFilter}
-              onChange={(event) => {
-                setEventFilter(event.target.value);
+              onValueChange={(value) => {
+                setEventFilter(value);
                 setEventOffset(0);
               }}
-              className={cn(fieldClass, 'w-36')}
-            >
-              <option value="">{t('trace.allEvents')}</option>
-              {[
-                ['run', t('common.run')],
-                ['sdk', 'SDK'],
-                ['harness', t('trace.progress')],
-                ['tool', t('trace.tool')],
-                ['subagent', t('trace.subtask')],
-                ['permission', t('trace.approval')],
-                ['mcp', 'MCP'],
-                ['skill', 'Skill'],
-                ['artifact', t('common.artifacts')],
-                ['process', t('trace.process')],
-                ['usage', t('trace.usage')],
-                ['plan', t('trace.plan')],
-                ['extensions', t('trace.extension')],
-              ].map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              className="w-36"
+              options={[
+                { value: '', label: t('trace.allEvents') },
+                { value: 'run', label: t('common.run') },
+                { value: 'sdk', label: t('trace.sdkCategory') },
+                { value: 'harness', label: t('trace.progress') },
+                { value: 'tool', label: t('trace.tool') },
+                { value: 'subagent', label: t('trace.subtask') },
+                { value: 'permission', label: t('trace.approval') },
+                { value: 'mcp', label: t('trace.mcpCategory') },
+                { value: 'skill', label: t('trace.skillCategory') },
+                { value: 'artifact', label: t('common.artifacts') },
+                { value: 'process', label: t('trace.process') },
+                { value: 'usage', label: t('trace.usage') },
+                { value: 'plan', label: t('trace.plan') },
+                { value: 'extensions', label: t('trace.extension') },
+              ]}
+            />
             <Button
               type="button"
               variant="ghost"

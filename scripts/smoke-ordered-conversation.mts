@@ -356,7 +356,8 @@ try {
     await legacyTool.locator(':scope > summary').click();
   await legacyTool.getByText('LEGACY_TOOL_RECEIPT', { exact: true }).waitFor();
   await page.getByRole('tab', { name: /^Activity/ }).click();
-  await page.locator('#inspector-trace-run').selectOption('legacy_transcript_fixture');
+  await page.locator('#inspector-trace-run').click();
+  await page.getByRole('option', { name: /LEGACY_USER_BODY/ }).click();
   const legacyEvent = page
     .locator('details[data-event-type="tool.finished"]')
     .filter({ hasText: 'legacy.txt' });

@@ -3,6 +3,7 @@
  * @implementation 加载绑定及扩展信息，维护可选择和编辑的绑定草稿，并提交保存。
  * @updated 2026-11-23T04:51:57+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { Plus, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
@@ -217,108 +218,114 @@ export function SkillToolBindingsDialog({
                             />
                           </Field>
                           <Field label={t('bindings.sourceLabel')}>
-                            <select
+                            <OptionsSelect
+                              aria-label={t('bindings.sourceLabel')}
+                              className="w-full"
                               value={binding.kind}
-                              onChange={(event) =>
-                                update(
-                                  index,
-                                  newBinding(
-                                    event.target.value as SkillToolBinding['kind'],
-                                    binding.name,
-                                  ),
-                                )
+                              options={(
+                                Object.keys(bindingKinds) as (keyof typeof bindingKinds)[]
+                              ).map((value) => ({
+                                value,
+                                label: bindingKinds[value],
+                              }))}
+                              onValueChange={(kind) =>
+                                update(index, newBinding(kind, binding.name))
                               }
-                            >
-                              {Object.entries(bindingKinds).map(([value, text]) => (
-                                <option key={value} value={value}>
-                                  {text}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </Field>
                         </div>
                         {binding.kind === 'builtin' ? (
                           <Field label={t('bindings.builtin')}>
-                            <select
+                            <OptionsSelect
+                              aria-label={t('bindings.builtin')}
+                              className="w-full"
                               value={binding.tool}
-                              onChange={(event) =>
-                                update(index, {
-                                  ...binding,
-                                  tool: event.target.value as typeof binding.tool,
-                                })
-                              }
-                            >
-                              {Object.entries(builtinTools).map(([value, text]) => (
-                                <option key={value} value={value}>
-                                  {text} · {value}
-                                </option>
-                              ))}
-                            </select>
+                              options={(
+                                Object.keys(builtinTools) as (keyof typeof builtinTools)[]
+                              ).map((value) => ({
+                                value,
+                                label: `${builtinTools[value]} · ${value}`,
+                              }))}
+                              onValueChange={(tool) => update(index, { ...binding, tool })}
+                            />
                           </Field>
                         ) : binding.kind === 'mcp' ? (
                           <>
                             <div className="ext-binding-pair">
                               <Field label={t('bindings.mcpService')}>
-                                <select
+                                <OptionsSelect
                                   required
+                                  aria-label={t('bindings.mcpService')}
+                                  className="w-full"
                                   value={binding.extensionId}
                                   aria-describedby={`${id}-mcp-${index}`}
-                                  onChange={(event) => {
+                                  options={[
+                                    { value: '', label: t('bindings.chooseMcp') },
+                                    ...(binding.extensionId && !server
+                                      ? [
+                                          {
+                                            value: binding.extensionId,
+                                            label: t('bindings.removedTarget', {
+                                              name: binding.extensionId,
+                                            }),
+                                            disabled: true,
+                                          },
+                                        ]
+                                      : []),
+                                    ...servers.map((item) => {
+                                      const available = allowedTools(item, 'edit').length > 0;
+                                      return {
+                                        value: item.id,
+                                        label:
+                                          item.name +
+                                          (available ? '' : t('bindings.noToolsSuffix')),
+                                        disabled: !available,
+                                      };
+                                    }),
+                                  ]}
+                                  onValueChange={(extensionId) => {
                                     const selected = servers.find(
-                                      (item) => item.id === event.target.value,
+                                      (item) => item.id === extensionId,
                                     );
                                     update(index, {
                                       ...binding,
-                                      extensionId: event.target.value,
+                                      extensionId,
                                       tool: selected
                                         ? (allowedTools(selected, 'edit')[0]?.name ?? '')
                                         : '',
                                     });
                                   }}
-                                >
-                                  <option value="">{t('bindings.chooseMcp')}</option>
-                                  {binding.extensionId && !server ? (
-                                    <option value={binding.extensionId} disabled>
-                                      {t('bindings.removedTarget', { name: binding.extensionId })}
-                                    </option>
-                                  ) : null}
-                                  {servers.map((item) => {
-                                    const available = allowedTools(item, 'edit').length > 0;
-                                    return (
-                                      <option key={item.id} value={item.id} disabled={!available}>
-                                        {item.name}
-                                        {available ? '' : t('bindings.noToolsSuffix')}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
+                                />
                               </Field>
                               <Field label={t('bindings.allowedTools')}>
-                                <select
+                                <OptionsSelect
                                   required
+                                  aria-label={t('bindings.allowedTools')}
+                                  className="w-full"
                                   value={binding.tool}
                                   disabled={!tools.length}
                                   aria-describedby={`${id}-mcp-${index}`}
-                                  onChange={(event) =>
-                                    update(index, { ...binding, tool: event.target.value })
-                                  }
-                                >
-                                  <option value="">{t('bindings.chooseTool')}</option>
-                                  {binding.tool &&
-                                  !tools.some((tool) => tool.name === binding.tool) ? (
-                                    <option value={binding.tool} disabled>
-                                      {t('bindings.unavailableTarget', { name: binding.tool })}
-                                    </option>
-                                  ) : null}
-                                  {tools.map((tool) => (
-                                    <option key={tool.name} value={tool.name}>
-                                      {tool.name} ·{' '}
-                                      {tool.access === 'read'
-                                        ? t('common.readOnly')
-                                        : t('common.approval')}
-                                    </option>
-                                  ))}
-                                </select>
+                                  options={[
+                                    { value: '', label: t('bindings.chooseTool') },
+                                    ...(binding.tool &&
+                                    !tools.some((tool) => tool.name === binding.tool)
+                                      ? [
+                                          {
+                                            value: binding.tool,
+                                            label: t('bindings.unavailableTarget', {
+                                              name: binding.tool,
+                                            }),
+                                            disabled: true,
+                                          },
+                                        ]
+                                      : []),
+                                    ...tools.map((tool) => ({
+                                      value: tool.name,
+                                      label: `${tool.name} · ${tool.access === 'read' ? t('common.readOnly') : t('common.approval')}`,
+                                    })),
+                                  ]}
+                                  onValueChange={(tool) => update(index, { ...binding, tool })}
+                                />
                               </Field>
                             </div>
                             <p
@@ -391,9 +398,13 @@ export function SkillToolBindingsDialog({
                         ) : (
                           <>
                             <Field label={t('bindings.command')}>
-                              <select value={binding.preset} disabled>
-                                <option value="pdftotext">{t('bindings.pdfPreset')}</option>
-                              </select>
+                              <OptionsSelect
+                                aria-label={t('bindings.command')}
+                                className="w-full"
+                                value={binding.preset}
+                                options={[{ value: 'pdftotext', label: t('bindings.pdfPreset') }]}
+                                disabled
+                              />
                             </Field>
                             <p className="ext-help">{t('bindings.pdfHelp')}</p>
                           </>

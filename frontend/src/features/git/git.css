@@ -1620,25 +1620,6 @@
     border-color: var(--ui-primary);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-primary) 15%, transparent);
   }
-  .git-filter-select {
-    height: 28px;
-    padding: 0 16px 0 8px;
-    font-size: 12px;
-    font-weight: 500;
-    border-radius: 6px;
-    border: 1px solid var(--ui-border);
-    background: var(--ui-background);
-    color: var(--ui-foreground);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s, background-color 0.15s;
-  }
-  .git-filter-select:hover {
-    background: var(--ui-muted);
-  }
-  .git-filter-select:focus {
-    border-color: var(--ui-primary);
-  }
   .git-reset-filters-btn {
     height: 28px;
     padding: 0 8px;

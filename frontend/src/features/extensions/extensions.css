@@ -61,16 +61,6 @@
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.ext-dialog select {
-  min-width: 0;
-  max-width: 100%;
-  padding: 8px 30px 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
-  font: inherit;
-}
 .ext-tabs {
   display: flex;
   gap: 28px;
@@ -793,14 +783,9 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.ext-tool select {
+.ext-tool-access {
   flex: none;
-  width: 114px;
-  padding: 5px 22px 5px 8px;
-  font-size: var(--text-xs);
-}
-.ext-tool select:disabled {
-  opacity: 0.5;
+  min-width: 114px;
 }
 .ext-tool-empty {
   padding: 20px;
@@ -969,9 +954,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-.ext-binding-pair select {
-  width: 100%;
 }
 .ext-binding-actions {
   display: flex;
@@ -1159,7 +1141,7 @@
   background: var(--surface-warm);
 }
 :where(.ext-page, .ext-dialog, .ext-completion, .ext-chips)
-  :where(button, input, textarea, select, summary):focus-visible {
+  :where(button, input, textarea, summary):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -1225,7 +1207,7 @@
   .ext-tool {
     flex-wrap: wrap;
   }
-  .ext-tool select {
+  .ext-tool-access {
     margin-left: 26px;
   }
   .ext-option-kind {

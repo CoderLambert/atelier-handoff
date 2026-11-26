@@ -3,6 +3,7 @@
  * @implementation 管理扩展内容、调用选项及 MCP 连接和工具配置，并提供技能工具绑定入口。
  * @updated 2026-11-23T04:52:50+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { getTranslator, useUiTranslation } from '@/i18n';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Switch } from '@/components/ui/switch';
@@ -405,13 +406,16 @@ export function ExtensionEditor({
                 </span>
               </label>
               <Field label={t('extensionEditor.transport')}>
-                <select
+                <OptionsSelect
+                  aria-label={t('extensionEditor.transport')}
+                  className="w-full"
                   value={transportType}
-                  onChange={(event) => setTransportType(event.target.value as McpTransport['type'])}
-                >
-                  <option value="http">{t('common.http')}</option>
-                  <option value="stdio">{t('extensionEditor.stdio')}</option>
-                </select>
+                  options={[
+                    { value: 'http', label: t('common.http') },
+                    { value: 'stdio', label: t('extensionEditor.stdio') },
+                  ]}
+                  onValueChange={setTransportType}
+                />
               </Field>
               {transportType === 'http' ? (
                 <>
@@ -518,26 +522,24 @@ export function ExtensionEditor({
                             <small>{tool.description || t('common.noDescription')}</small>
                           </span>
                         </label>
-                        <select
+                        <OptionsSelect
+                          className="ext-tool-access"
+                          size="sm"
                           aria-label={t('extensionEditor.accessLabel', { name: tool.name })}
                           disabled={!permissions.has(tool.name)}
                           value={permissions.get(tool.name) ?? 'approval'}
-                          onChange={(event) =>
+                          options={[
+                            { value: 'approval', label: t('common.approval') },
+                            { value: 'read', label: t('common.readOnly') },
+                          ]}
+                          onValueChange={(access) =>
                             setAllowedTools((old) =>
                               old.map((value) =>
-                                value.name === tool.name
-                                  ? {
-                                      ...value,
-                                      access: event.target.value as AllowedMcpTool['access'],
-                                    }
-                                  : value,
+                                value.name === tool.name ? { ...value, access } : value,
                               ),
                             )
                           }
-                        >
-                          <option value="approval">{t('common.approval')}</option>
-                          <option value="read">{t('common.readOnly')}</option>
-                        </select>
+                        />
                       </div>
                     ))
                   ) : (

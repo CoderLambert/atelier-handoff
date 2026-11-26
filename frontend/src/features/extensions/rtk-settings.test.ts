@@ -157,9 +157,8 @@ test(
       await project.click();
       await page.getByRole('option', { name: 'Follow global', exact: true }).click();
       await page.getByText('Setting source: global default (disabled)', { exact: true }).waitFor();
-      await page
-        .getByRole('combobox', { name: 'Select the project for extensions' })
-        .selectOption('beta');
+      await page.getByRole('combobox', { name: 'Select the project for extensions' }).click();
+      await page.getByRole('option', { name: 'beta', exact: true }).click();
       await hooks.click();
       await project.getByText('Follow global', { exact: true }).waitFor();
       assert.equal(await global.isChecked(), false);
@@ -186,7 +185,10 @@ test(
       const zhProject = page.getByRole('combobox', { name: '本项目的 RTK', exact: true });
       await zhProject.click();
       await page.getByRole('option', { name: '停用', exact: true }).click();
-      await page.getByRole('alert').getByText('RTK 设置保存失败，仍保留先前的设置。请重试。', { exact: true }).waitFor();
+      await page
+        .getByRole('alert')
+        .getByText('RTK 设置保存失败，仍保留先前的设置。请重试。', { exact: true })
+        .waitFor();
       await zhProject.getByText('跟随全局', { exact: true }).waitFor();
       failRead = true;
       await page.reload();

@@ -3,6 +3,7 @@
  * @implementation 按项目、会话和状态查询分页数据，展示运行模式并提供打开操作。
  * @updated 2026-11-20T14:44:21+08:00
  */
+import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Activity, ChevronRight, FileText, Folder, RefreshCw } from 'lucide-react';
@@ -142,35 +143,33 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
       >
         <label className="grid min-w-36 flex-1 gap-2 text-[11px] font-medium text-muted-foreground">
           {t('common.project')}
-          <select
+          <OptionsSelect
+            aria-label={t('common.project')}
             value={filters.projectId}
-            className={fieldClass}
-            onChange={(event) => updateFilter({ projectId: event.target.value })}
-          >
-            <option value="">{t('collections.allProjects')}</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-                {!project.available ? t('collections.unavailableSuffix') : ''}
-              </option>
-            ))}
-          </select>
+            className="w-full"
+            options={[
+              { value: '', label: t('collections.allProjects') },
+              ...projects.map((project) => ({
+                value: project.id,
+                label: project.name + (project.available ? '' : t('collections.unavailableSuffix')),
+              })),
+            ]}
+            onValueChange={(projectId) => updateFilter({ projectId })}
+          />
         </label>
         {view === 'runs' ? (
           <label className="grid min-w-32 flex-1 gap-2 text-[11px] font-medium text-muted-foreground">
             {t('collections.runStatus')}
-            <select
+            <OptionsSelect
+              aria-label={t('collections.runStatus')}
               value={filters.status}
-              className={fieldClass}
-              onChange={(event) => updateFilter({ status: event.target.value })}
-            >
-              <option value="">{t('collections.allStatuses')}</option>
-              {runStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {statusLabel(status)}
-                </option>
-              ))}
-            </select>
+              className="w-full"
+              options={[
+                { value: '', label: t('collections.allStatuses') },
+                ...runStatuses.map((status) => ({ value: status, label: statusLabel(status) })),
+              ]}
+              onValueChange={(status) => updateFilter({ status })}
+            />
           </label>
         ) : null}
         {!sessionId ? (
@@ -206,18 +205,14 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
         </p>
         <label className="flex items-center gap-2">
           {t('collections.perPage')}
-          <select
+          <OptionsSelect
             aria-label={t('collections.pageSize')}
-            value={filters.limit}
-            className={cn(fieldClass, 'h-8 w-20')}
-            onChange={(event) => updateFilter({ limit: Number(event.target.value) })}
-          >
-            {[20, 50, 100].map((limit) => (
-              <option key={limit} value={limit}>
-                {limit}
-              </option>
-            ))}
-          </select>
+            value={String(filters.limit)}
+            className="w-20"
+            size="sm"
+            options={[20, 50, 100].map((limit) => ({ value: String(limit), label: String(limit) }))}
+            onValueChange={(limit) => updateFilter({ limit: Number(limit) })}
+          />
         </label>
       </div>
       {resource.error ? <ErrorNotice message={resource.error} onRetry={resource.reload} /> : null}
