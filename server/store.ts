@@ -1,6 +1,6 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 管理会话、Git 工作树及多提交仓储的共享连接与版本迁移。恢复中断运行时关闭审批、更新工具并收尾对话顺序。
+ * @implementation 持有会话、运行回执和 Git 仓储共享的连接及事件事务。恢复中断运行时关闭审批、更新工具并收尾对话顺序。
  * @updated 2026-11-26T01:17:56+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
@@ -38,6 +38,8 @@ export class Store {
   readonly gitWorktrees: ReturnType<typeof openWorkbenchDatabase>['gitWorktrees'];
   readonly gitCommitOperations: ReturnType<typeof openWorkbenchDatabase>['gitCommitOperations'];
   readonly sessionSnapshots: SessionSnapshotRepository;
+  readonly sessionEvents: ReturnType<typeof openWorkbenchDatabase>['sessionEvents'];
+  readonly runReceipts: ReturnType<typeof openWorkbenchDatabase>['runReceipts'];
   readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
   readonly gitMultiCommitPreferences: ReturnType<
     typeof openWorkbenchDatabase
@@ -56,6 +58,8 @@ export class Store {
     this.gitWorktrees = connection.gitWorktrees;
     this.gitCommitOperations = connection.gitCommitOperations;
     this.sessionSnapshots = connection.sessionSnapshots;
+    this.sessionEvents = connection.sessionEvents;
+    this.runReceipts = connection.runReceipts;
     this.workspaceLayout = connection.workspaceLayout;
     this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
     this.skillInheritance = connection.skillInheritance;

@@ -1,7 +1,7 @@
 /**
  * @file 验收 Git 面板跟随外部文件和运行中对话的变动。
- * @implementation 在隔离 Electron、真实 Git 和锁定 SDK 中暂存及提交，核对工作区、差异和提交历史。
- * @updated 2026-11-26T21:23:00+08:00
+ * @implementation 在隔离 Electron 中先发送对话，再打开 Git 面板并分别释放暂存与提交步骤，核对两种语言的自动刷新。
+ * @updated 2026-11-27T00:10:00+08:00
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -50,6 +50,7 @@ const gateway = createServer(async (request, response) => {
       input: {
         description: 'Stage and commit an isolated fixture file',
         command: [
+          'while ! test -f .git/allow-fixture-stage; do sleep 0.05; done',
           "printf 'conversation change\\n' > hello.txt",
           'git add -- hello.txt',
           'while ! test -f .git/allow-fixture-commit; do sleep 0.05; done',
@@ -92,7 +93,6 @@ try {
   });
   page = await app.firstWindow();
   page.setDefaultTimeout(10_000);
-  const openStream = page.waitForResponse((response) => response.url().endsWith('/changes'));
   const bind = page.getByRole('dialog', { name: '绑定项目目录' });
   await bind.getByLabel('本机目录').fill(repo);
   await bind.getByRole('button', { name: '绑定项目', exact: true }).click();
@@ -100,13 +100,15 @@ try {
   const mode = page.getByRole('combobox', { name: '运行模式', exact: true });
   await mode.click();
   await page.getByRole('option', { name: /^本机信任/u }).click();
+  await page.locator('#prompt-input').fill('Stage then commit the live Git fixture.');
+  await page.locator('#prompt-input').press('Enter');
+  const openStream = page.waitForResponse((response) => response.url().endsWith('/changes'));
   await page.locator('.topbar').getByRole('button', { name: 'Git', exact: true }).click();
   assert.equal((await openStream).status(), 200);
   const board = page.locator('.git-board');
   await board.getByText('0 个文件变动', { exact: true }).waitFor();
 
-  await page.locator('#prompt-input').fill('Stage then commit the live Git fixture.');
-  await page.locator('#prompt-input').press('Enter');
+  await writeFile(join(repo, '.git', 'allow-fixture-stage'), '');
   await board.getByText('1 个暂存文件', { exact: true }).waitFor();
   assert.equal(git('--no-optional-locks', 'status', '--porcelain'), 'M  hello.txt');
   await board
@@ -142,10 +144,11 @@ try {
       .waitFor();
   }
   assert.ok(replyToTool);
-  sendModelReply(replyToTool, model, reply);
-  await page.getByText(reply, { exact: true }).waitFor();
   const screenshot = process.env.ATELIER_GIT_LIVE_SCREENSHOT;
   if (screenshot) await page.screenshot({ path: screenshot });
+  await board.getByRole('button', { name: '关闭 Git 面板', exact: true }).click();
+  sendModelReply(replyToTool, model, reply);
+  await page.getByText(reply, { exact: true }).waitFor();
   console.log('external edits refreshed the diff twice with the same file status');
 
   const conversation = page.url();

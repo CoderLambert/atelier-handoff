@@ -1,10 +1,4 @@
 {
-  "server/app.ts": [
-    "sql:393e3c663c10648d",
-    "sql:44da5fd643e2f268",
-    "sql:e51af2f4c608536d",
-    "sql:ef24a99151f3c23d"
-  ],
   "server/data-migration.ts": [
     "driver:09fdf6ba9fb1abd0",
     "sql:387fd27c84bea8f2",

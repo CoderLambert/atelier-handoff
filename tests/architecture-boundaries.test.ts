@@ -1,7 +1,7 @@
 /**
- * @file 验证 P2 静态架构边界的禁止依赖和宿主循环检测。
- * @implementation 在临时源码树中覆盖跨层导入、别名、源码扩展名及允许的组合入口。
- * @updated 2026-11-20T02:27:00+08:00
+ * @file 验证跨层导入、宿主循环和运行时入口边界。
+ * @implementation 在临时源码树中覆盖解析规则、允许的依赖方向及组合入口和 HTTP 文件的行数限制。
+ * @updated 2026-11-27T00:10:00+08:00
  */
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -43,6 +43,43 @@ async function check(sources: Record<string, string>): Promise<string[]> {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+test('runtime routes can call domain use cases, but neither can import composition', async () => {
+  const allowed = {
+    'server/app.ts': `import './http/git/routes.js'; import './modules/git/service.js';`,
+    'server/http/git/routes.ts': `import '../../modules/git/service.js';`,
+    'server/modules/git/service.ts': 'export const useCase = 1;',
+  };
+  assert.deepEqual(await check(allowed), []);
+  const errors = await check({
+    ...allowed,
+    'server/http/git/bad.ts': `import '../../app.js';`,
+    'server/modules/git/bad.ts': `export * from '../../http/git/routes.js'; import '../../main.js';`,
+  });
+  assert.equal(
+    errors.filter((error) => error.includes('cannot import runtime composition')).length,
+    2,
+  );
+  assert.equal(errors.filter((error) => error.includes('cannot import HTTP adapters')).length, 1);
+});
+
+test('the runtime entry and HTTP files have independent size limits', async () => {
+  const lines = (count: number) => 'export {};\n' + '// line\n'.repeat(count - 1);
+  assert.deepEqual(
+    await check({
+      'server/app.ts': lines(300),
+      'server/http/git/routes.ts': lines(350),
+      'server/modules/git/service.ts': lines(351),
+    }),
+    [],
+  );
+  const errors = await check({
+    'server/app.ts': lines(301),
+    'server/http/git/routes.ts': lines(351),
+  });
+  assert.ok(errors.some((error) => error.includes('server/app.ts: 301 lines')));
+  assert.ok(errors.some((error) => error.includes('server/http/git/routes.ts: 351 lines')));
+});
 
 test('P2 composition, shared contracts and one-way host dependencies are allowed', async () => {
   assert.deepEqual(

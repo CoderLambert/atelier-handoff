@@ -1,11 +1,13 @@
 /**
  * @file 打开工作台 SQLite 连接并装配 Drizzle 仓储。
- * @implementation 让旧 Store、会话快照、Git 工作树和多提交操作仓储共用数据库句柄，提供读取事务并装配版本迁移入口。
+ * @implementation 让旧 Store、会话快照、运行回执和 Git 仓储共用数据库句柄，提供读取事务并装配版本迁移入口。
  * @updated 2026-11-24T16:14:33+08:00
  */
 import SQLite from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { sessionSnapshotRepository } from './repositories/session-snapshot.js';
+import { sessionEventRepository } from './repositories/session-events.js';
+import { runReceiptRepository } from './repositories/run-receipts.js';
 import { applySnapshotIndexes } from './migrations/apply-snapshot-indexes.js';
 import { applySubagents } from './migrations/apply-subagents.js';
 import { subagentRepository } from './repositories/subagents.js';
@@ -43,6 +45,8 @@ export function openWorkbenchDatabase(path: string) {
     readTransaction: <T>(work: () => T): T => native.transaction(work).deferred(),
     assertForeignKeyIntegrity: () => assertForeignKeyIntegrity(db),
     sessionSnapshots: sessionSnapshotRepository(orm),
+    sessionEvents: sessionEventRepository(orm),
+    runReceipts: runReceiptRepository(orm),
     subagents: subagentRepository(orm),
     workspaceLayout: workspaceLayoutRepository(orm),
     gitMultiCommitPreferences: gitMultiCommitPreferencesRepository(orm),

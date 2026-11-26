@@ -1,3 +1,8 @@
+/**
+ * @file 计算绑定智能体的运行能力和扩展授权。
+ * @implementation 按修订版本收窄请求的工具、MCP 和 Skill，只向调用方暴露所需的扩展读取能力。
+ * @updated 2026-11-26T23:52:00+08:00
+ */
 import {
   AppError,
   type AgentCapability,
@@ -5,7 +10,7 @@ import {
   type ExtensionSelection,
   type Mode,
 } from '../shared/types.js';
-import { ProjectExtensions } from './extensions.js';
+import type { ProjectExtensions } from './extensions.js';
 
 export function agentCapabilitiesFor(revision: AgentRevision, mode: Mode, retry: boolean) {
   return revision.config.capabilities.filter((capability) => {
@@ -26,7 +31,7 @@ export function agentRunInfo(revision: AgentRevision, capabilities: AgentCapabil
 }
 
 export function resolveAgentExtensions(
-  extensions: ProjectExtensions,
+  extensions: Pick<ProjectExtensions, 'get' | 'resolve'>,
   revision: AgentRevision,
   mode: Mode,
   text: string,

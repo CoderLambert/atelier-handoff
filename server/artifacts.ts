@@ -19,7 +19,6 @@ import {
   unlink,
 } from 'node:fs/promises';
 import { join, extname, relative, sep } from 'node:path';
-import type { IncomingMessage } from 'node:http';
 import { documentAttachmentMime } from '../shared/document-attachments.js';
 import { validateDocumentFile } from './attachment-document-reader.js';
 import {
@@ -170,7 +169,11 @@ export class FileRecords {
     });
     return attachment;
   }
-  async uploadDocument(sessionId: string, name: string, request: IncomingMessage) {
+  async uploadDocument(sessionId: string, name: string, input: {
+    chunks(): AsyncIterable<Buffer | Uint8Array>;
+    declaredLength?: string;
+    isAborted(): boolean;
+  }) {
     this.store.get('sessions', sessionId);
     name = safeName(name);
     const mime = documentAttachmentMime(name);
@@ -178,7 +181,7 @@ export class FileRecords {
     const directory = join(this.store.directory, 'attachments');
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const disk = await statfs(directory, { bigint: true });
-    const declared = request.headers['content-length'];
+    const declared = input.declaredLength;
     const free = disk.bavail * disk.bsize;
     if (declared && BigInt(declared) > free)
       throw new AppError('ATTACHMENT_DISK_FULL', '磁盘空间不足，无法保存附件。', 507);
@@ -188,8 +191,8 @@ export class FileRecords {
     try {
       const output = await open(temporary, 'wx', 0o600);
       try {
-        for await (const input of request.iterator({ destroyOnReturn: false })) {
-          const chunk = Buffer.isBuffer(input) ? input : Buffer.from(input as Uint8Array);
+        for await (const bytes of input.chunks()) {
+          const chunk = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
           size += chunk.length;
           if (BigInt(size) > free)
             throw new AppError('ATTACHMENT_DISK_FULL', '磁盘空间不足，无法保存附件。', 507);
@@ -201,7 +204,7 @@ export class FileRecords {
       } finally {
         await output.close();
       }
-      if (request.aborted || !size || (declared && BigInt(size) !== BigInt(declared)))
+      if (input.isAborted() || !size || (declared && BigInt(size) !== BigInt(declared)))
         throw new AppError('INVALID_UPLOAD', '文档上传未完成或文件为空。', 400);
       await validateDocumentFile(temporary, mime);
       this.store.get('sessions', sessionId);

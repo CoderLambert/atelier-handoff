@@ -44,7 +44,7 @@ export interface CommitPlanRecoveryCoordinator extends CommitPlanExecutionCoordi
 
 /** One coordinator is scoped to an already authorized checkout and one user-confirmed digest. */
 export function commitPlanCoordinator(
-  store: Store,
+  store: Pick<Store, 'gitCommitOperations'>,
   journal: CommitJournal,
   projectId: string,
   repositoryId: string,

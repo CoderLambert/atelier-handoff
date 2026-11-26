@@ -6,7 +6,7 @@
 import type { ServerResponse } from 'node:http';
 import { basename, isAbsolute, relative, sep } from 'node:path';
 import { watch } from 'chokidar';
-import type { LocalGit } from './git-cli.js';
+import type { LocalGit } from '../../modules/git/git-cli.js';
 
 const checkoutMetadata = new Set([
   'HEAD',

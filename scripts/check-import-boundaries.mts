@@ -1,7 +1,7 @@
 /**
- * @file 检查 P2 宿主、运行时与共享契约之间的静态导入边界。
- * @implementation 解析导入与重导出，按前端路径别名和 TypeScript 源扩展名解析本地依赖，并报告宿主循环。
- * @updated 2026-11-20T02:27:00+08:00
+ * @file 检查桌面宿主、运行时及共享契约的静态模块边界。
+ * @implementation 解析导入与重导出，报告宿主循环和 HTTP/领域反向依赖，并限制运行时入口与路由文件的行数。
+ * @updated 2026-11-27T00:10:00+08:00
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
@@ -147,9 +147,25 @@ export async function checkImportBoundaries(root: string): Promise<string[]> {
   const graph = new Map<string, Set<string>>();
   for (const [path, file] of files) {
     if (isHost(file)) graph.set(file, new Set());
-    for (const { specifier, line } of imports(await readFile(path, 'utf8'), file)) {
+    const source = await readFile(path, 'utf8');
+    const limit =
+      file === 'server/app.ts' ? 300 : inDirectory(file, 'server/http') ? 350 : undefined;
+    if (limit !== undefined) {
+      const lines = source.replace(/\r?\n$/, '').split(/\r?\n/).length;
+      if (lines > limit) errors.push(`${file}: ${lines} lines exceeds the ${limit}-line boundary.`);
+    }
+    for (const { specifier, line } of imports(source, file)) {
       const target = modulePath(specifier, path);
       const location = `${file}:${line}: ${JSON.stringify(specifier)}`;
+      const domain = inDirectory(file, 'server/modules');
+      if (target && domain && inDirectory(target, 'server/http'))
+        errors.push(`${location}: server domain modules cannot import HTTP adapters.`);
+      if (
+        target &&
+        (domain || inDirectory(file, 'server/http')) &&
+        (/^server\/(?:app|main)\.[cm]?[jt]s$/.test(target) || inDirectory(target, 'server/runtime'))
+      )
+        errors.push(`${location}: HTTP and domain modules cannot import runtime composition.`);
       if (
         (isFrontend(file) || inDirectory(file, 'shared')) &&
         !isTest(file) &&
