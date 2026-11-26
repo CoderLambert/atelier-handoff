@@ -1,6 +1,6 @@
 /**
  * @file 提供人工终端和功能面板的双语文案。
- * @implementation 覆盖生命周期、连接恢复、可用能力、操作确认和无障碍名称。
+ * @implementation 覆盖生命周期、连接恢复、可用能力和无障碍名称。
  * @updated 2026-11-26T01:00:00+08:00
  */
 export const terminal = {
@@ -22,6 +22,8 @@ export const terminal = {
   cancel: ['取消', 'Cancel'],
   retry: ['重试', 'Retry'],
   reconnect: ['重新连接', 'Reconnect'],
+  connectionNotice: ['终端连接提醒', 'Terminal connection notice'],
+  dismissNotice: ['知道了', 'Dismiss notice'],
   loading: ['正在读取终端…', 'Loading terminals…'],
   empty: ['当前会话还没有终端。', 'This session has no terminals yet.'],
   emptyHint: [
@@ -30,6 +32,7 @@ export const terminal = {
   ],
   tabs: ['会话终端', 'Session terminals'],
   tab: ['终端 {{number}}', 'Terminal {{number}}'],
+  closeTab: ['关闭终端 {{number}}', 'Close terminal {{number}}'],
   screen: ['终端屏幕', 'Terminal screen'],
   shell: ['Shell：{{name}}', 'Shell: {{name}}'],
   cwd: ['初始目录：{{path}}', 'Initial directory: {{path}}'],
@@ -69,10 +72,6 @@ export const terminal = {
   runtimeChanged: [
     '运行时已重新启动，原终端不可连接。请按需新建终端。',
     'The runtime restarted. Previous terminals are unavailable. Create a new terminal when needed.',
-  ],
-  restoreNotice: [
-    '重新加载后已恢复屏幕；部分交互程序可能需要重新启动。',
-    'The screen was restored after reload; some interactive programs may need restarting.',
   ],
   'unavailable.desktopRequired': [
     '终端仅在已配对的桌面应用中可用。',

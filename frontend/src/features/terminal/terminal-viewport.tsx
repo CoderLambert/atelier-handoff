@@ -1,13 +1,72 @@
 /**
- * @file 将终端资源的 DOM 租用到当前可见区域。
- * @implementation ResizeObserver 仅请求可见尺寸，卸载释放视图租约而不销毁解析器或 WebSocket。
+ * @file 挂载可见终端并提供标题栏连接提醒。
+ * @implementation 视口租约独立于终端连接。异常详情和重连入口放在弹层里，不改变视口尺寸。
  * @updated 2026-11-26T01:00:00+08:00
  */
 import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUiTranslation } from '@/i18n';
 import type { TerminalClientSession } from './terminal-client';
 import { terminalErrorMessage } from './terminal-errors';
+
+export function TerminalConnectionStatus({ client }: { client: TerminalClientSession }) {
+  const { t } = useUiTranslation('terminal');
+  const state = useSyncExternalStore(client.subscribe, client.getSnapshot);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const reconnectable = ['disconnected', 'failed', 'replaced'].includes(state.phase);
+  if (!reconnectable && !state.inputUnconfirmed) return null;
+  const message = reconnectable
+    ? state.errorCode && state.phase === 'failed'
+      ? terminalErrorMessage(state.errorCode)
+      : t(`connection.${state.phase}`)
+    : undefined;
+  return (
+    <Popover>
+      <span className="sr-only" role="status">
+        {message ?? t('inputUnconfirmed')}
+      </span>
+      <PopoverTrigger asChild>
+        <Button
+          ref={trigger}
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t('connectionNotice')}
+          title={t('connectionNotice')}
+        >
+          <TriangleAlert aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        aria-label={t('connectionNotice')}
+        className="w-72 space-y-3 text-sm"
+        onCloseAutoFocus={(event) => {
+          if (!trigger.current?.isConnected) {
+            event.preventDefault();
+            client.focus();
+          }
+        }}
+      >
+        {message && <p>{message}</p>}
+        {state.inputUnconfirmed && <p>{t('inputUnconfirmed')}</p>}
+        <div className="flex flex-wrap gap-2">
+          {reconnectable && (
+            <Button size="xs" onClick={() => client.reconnect()}>
+              {t('reconnect')}
+            </Button>
+          )}
+          {state.inputUnconfirmed && (
+            <Button size="xs" variant="ghost" onClick={() => client.acknowledgeInputWarning()}>
+              {t('dismissNotice')}
+            </Button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function TerminalViewport({
   client,
@@ -47,27 +106,8 @@ export function TerminalViewport({
   useLayoutEffect(() => {
     element.current?.querySelector('textarea')?.setAttribute('aria-label', t('screen'));
   }, [state.phase, locale, t]);
-  const reconnectable = ['disconnected', 'failed', 'replaced'].includes(state.phase);
   return (
     <div className="terminal-screen-area">
-      <div className="terminal-connection" role="status">
-        <span>
-          {state.errorCode && state.phase === 'failed'
-            ? terminalErrorMessage(state.errorCode)
-            : t(`connection.${state.phase}`)}
-        </span>
-        {reconnectable && (
-          <Button size="xs" variant="outline" onClick={() => client.reconnect()}>
-            {t('reconnect')}
-          </Button>
-        )}
-      </div>
-      {state.inputUnconfirmed && (
-        <p className="terminal-notice" role="status">
-          {t('inputUnconfirmed')}
-        </p>
-      )}
-      {state.restored && <p className="terminal-notice">{t('restoreNotice')}</p>}
       <div
         ref={element}
         className="terminal-viewport"

@@ -1,25 +1,17 @@
 /**
  * @file 提供会话内的人工终端面板。
- * @implementation 显式创建多个 PTY，确认终止，按会话选择资源；隐藏仅释放视图，状态和错误通过双语提示呈现。
+ * @implementation 显式创建多个 PTY，通过标签结束指定终端；隐藏仅释放视图，错误通过双语提示呈现。
  * @updated 2026-11-26T01:00:00+08:00
  */
-import { useMemo, useRef, useState } from 'react';
-import { Maximize2, Minimize2, Plus, Square, TerminalSquare, X } from 'lucide-react';
-import { terminalHasActiveProcess, type TerminalRecord } from '@shared/terminal';
+import { useMemo } from 'react';
+import { Maximize2, Minimize2, PanelRightClose, Plus, TerminalSquare, X } from 'lucide-react';
+import type { TerminalRecord } from '@shared/terminal';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { useUiTranslation } from '@/i18n';
 import type { PanelInstance, PanelViewProps, SessionPanelTarget } from '@/panel-sdk';
 import { useTerminalWorkspace, type TerminalLaunchIntent } from './hooks/use-terminal-workspace';
 import { getTerminalClient } from './terminal-client';
-import { TerminalViewport } from './terminal-viewport';
+import { TerminalConnectionStatus, TerminalViewport } from './terminal-viewport';
 import {
   terminalErrorMessage,
   terminalStateKeys,
@@ -47,8 +39,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     canCreate,
   };
   const workspace = useTerminalWorkspace(scope, launch);
-  const [ending, setEnding] = useState<TerminalRecord>();
-  const endTrigger = useRef<HTMLButtonElement>(null);
   const { selected, capabilities, list } = workspace;
   const attachable =
     selected && ['awaiting-attach', 'starting', 'running', 'exited'].includes(selected.state);
@@ -66,9 +56,8 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const closeTerminal = async (record: TerminalRecord) => {
     try {
       await workspace.end(record);
-      setEnding(undefined);
     } catch {
-      /* Keep the explicit target and failure visible. */
+      /* The close mutation keeps the failure visible. */
     }
   };
   return (
@@ -80,22 +69,68 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       aria-label={t('title')}
     >
       <header className="terminal-heading">
-        <h2>
-          <TerminalSquare aria-hidden="true" />
-          {t('title')}
-        </h2>
+        <div className="terminal-heading-content">
+          {workspace.records.length > 0 ? (
+            <div className="terminal-tabs" role="group" aria-label={t('tabs')}>
+              {workspace.records.map((terminal, index) => (
+                <span
+                  key={terminal.terminalId}
+                  className="terminal-tab"
+                  data-selected={selected?.terminalId === terminal.terminalId || undefined}
+                >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-pressed={selected?.terminalId === terminal.terminalId}
+                    title={`${t('tab', { number: index + 1 })} · ${t(terminalStateKeys[terminal.state])}`}
+                    onClick={() => workspace.choose(terminal)}
+                  >
+                    <TerminalSquare data-icon="inline-start" aria-hidden="true" />
+                    {terminal.shellName || t('tab', { number: index + 1 })}
+                    {terminal.state !== 'running' && (
+                      <span className="terminal-tab-state">
+                        {t(terminalStateKeys[terminal.state])}
+                      </span>
+                    )}
+                  </Button>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={t('closeTab', { number: index + 1 })}
+                    title={t('closeTab', { number: index + 1 })}
+                    disabled={busy}
+                    onClick={() => void closeTerminal(terminal)}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </span>
+              ))}
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t('new')}
+                title={t('new')}
+                disabled={
+                  busy || limit || !canCreate || !capabilities.data?.supported || !list.data
+                }
+                onClick={workspace.newTerminal}
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+            </div>
+          ) : (
+            <h2>
+              <TerminalSquare aria-hidden="true" />
+              {t('title')}
+            </h2>
+          )}
+        </div>
         <div className="terminal-actions">
-          {workspace.records.length > 0 && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t('new')}
-              title={t('new')}
-              disabled={busy || limit || !canCreate || !capabilities.data?.supported || !list.data}
-              onClick={workspace.newTerminal}
-            >
-              <Plus aria-hidden="true" />
-            </Button>
+          {client && (
+            <TerminalConnectionStatus
+              key={`${selected?.runtimeId}:${selected?.terminalId}`}
+              client={client}
+            />
           )}
           {props.expandable && (
             <Button
@@ -114,27 +149,10 @@ export default function TerminalPanel(props: TerminalPanelProps) {
             title={t('hide')}
             onClick={props.onRequestHide}
           >
-            <X aria-hidden="true" />
+            <PanelRightClose aria-hidden="true" />
           </Button>
         </div>
       </header>
-      {workspace.records.length > 0 && (
-        <div className="terminal-tabs" role="group" aria-label={t('tabs')}>
-          {workspace.records.map((terminal, index) => (
-            <Button
-              key={terminal.terminalId}
-              size="sm"
-              variant={selected?.terminalId === terminal.terminalId ? 'secondary' : 'ghost'}
-              aria-pressed={selected?.terminalId === terminal.terminalId}
-              title={`${t('tab', { number: index + 1 })} · ${t(terminalStateKeys[terminal.state])}`}
-              onClick={() => workspace.choose(terminal)}
-            >
-              {t('tab', { number: index + 1 })}
-              <span className="terminal-tab-state">{t(terminalStateKeys[terminal.state])}</span>
-            </Button>
-          ))}
-        </div>
-      )}
       {workspace.runtimeChanged && (
         <p className="terminal-notice" role="status">
           {t('runtimeChanged')}
@@ -169,27 +187,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         </p>
       ) : selected ? (
         <>
-          <div className="terminal-metadata">
-            <span className="terminal-cwd" title={t('cwd', { path: selected.initialCwd })}>
-              {selected.initialCwd}
-            </span>
-            <span title={t('shell', { name: selected.shellName })}>{selected.shellName}</span>
-            <Button
-              ref={endTrigger}
-              size="icon-xs"
-              variant="ghost"
-              disabled={busy}
-              aria-label={t(terminalHasActiveProcess(selected.state) ? 'end' : 'remove')}
-              title={t(terminalHasActiveProcess(selected.state) ? 'end' : 'remove')}
-              onClick={() =>
-                terminalHasActiveProcess(selected.state)
-                  ? setEnding(selected)
-                  : void closeTerminal(selected)
-              }
-            >
-              <Square aria-hidden="true" />
-            </Button>
-          </div>
           {selected.state === 'exited' && (
             <p className="terminal-notice" role="status">
               {selected.exitSignal !== null
@@ -213,7 +210,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         !error && (
           <div className="terminal-empty">
             <p>{t('empty')}</p>
-            <p>{t('emptyHint')}</p>
             <Button
               onClick={workspace.newTerminal}
               disabled={busy || !canCreate || !capabilities.data?.supported || !list.data}
@@ -234,46 +230,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           {t(archived ? 'unavailable.archived' : 'unavailable.workspace')}
         </p>
       )}
-      <Dialog
-        open={Boolean(ending)}
-        onOpenChange={(open) => {
-          if (!open && !workspace.close.isPending) setEnding(undefined);
-        }}
-      >
-        <DialogContent
-          showCloseButton={!workspace.close.isPending}
-          onCloseAutoFocus={(event) => {
-            if (endTrigger.current?.isConnected) {
-              event.preventDefault();
-              endTrigger.current.focus({ preventScroll: true });
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{t('endTitle')}</DialogTitle>
-            <DialogDescription>{t('endDescription')}</DialogDescription>
-          </DialogHeader>
-          {workspace.close.error && (
-            <p role="alert">{terminalErrorMessage(workspace.close.error)}</p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={workspace.close.isPending}
-              onClick={() => setEnding(undefined)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={workspace.close.isPending}
-              onClick={() => ending && void closeTerminal(ending)}
-            >
-              {t('end')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

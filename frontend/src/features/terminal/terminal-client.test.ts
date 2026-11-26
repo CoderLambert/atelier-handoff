@@ -1,6 +1,6 @@
 /**
  * @file 验证终端客户端的真实解析、连接和视图租约。
- * @implementation Chromium 使用真实 xterm 与回环 WebSocket，核对隐藏应答、重挂载和运行时释放。
+ * @implementation Chromium 使用真实 xterm 与回环 WebSocket，核对隐藏应答、主题切换、输出阻塞时的输入回执与连接恢复。
  * @updated 2026-11-26T01:00:00+08:00
  */
 import assert from 'node:assert/strict';
@@ -54,11 +54,20 @@ test(
         resolveDir: root,
         loader: 'ts',
         contents: `
+      import {Terminal} from '@xterm/xterm';
       import {getTerminalClient, activateTerminalRuntime, disposeTerminalClients} from '@/features/terminal/terminal-client';
       const record=${JSON.stringify(record)};
       activateTerminalRuntime(record.runtimeId);
       const client=getTerminalClient(record, {receive(){},refreshRuntime(){}});
-      let first, second;
+      let first, second, releaseWrite;
+      const write=Terminal.prototype.write;
+      Terminal.prototype.write=function(data, callback){
+        if(data==='BLOCK_OUTPUT'){
+          releaseWrite=()=>write.call(this,data,callback);
+          return;
+        }
+        write.call(this,data,callback);
+      };
       window.fixture={
         mount(){first=client.attachView(document.querySelector('#one'));},
         hide(){first?.release();},
@@ -66,7 +75,10 @@ test(
         remount(){second=client.attachView(document.querySelector('#two'));},
         move(){second=client.attachView(document.querySelector('#two'));first?.release();},
         state(){return client.getSnapshot();},
+        outputStalled(){return typeof releaseWrite==='function';},
+        releaseOutput(){releaseWrite?.();releaseWrite=undefined;},
         reconnect(){client.reconnect();},
+        dismissInputWarning(){client.acknowledgeInputWarning();},
         runtime(){activateTerminalRuntime('55555555-5555-4555-8555-555555555555');},
         dispose(){disposeTerminalClients();}
       };
@@ -103,7 +115,7 @@ test(
       }
       res.setHeader('Content-Type', 'text/html');
       res.end(
-        `<style>${readFileSync(`${root}/../node_modules/@xterm/xterm/css/xterm.css`, 'utf8')} .viewport{width:800px;height:400px}.terminal-client{width:100%;height:100%;background:white;color:black}</style><div id="one" class="viewport"></div><div id="two" class="viewport"></div><script src="/bundle.js"></script>`,
+        `<style>${readFileSync(`${root}/../node_modules/@xterm/xterm/css/xterm.css`, 'utf8')} .viewport{width:800px;height:400px}.terminal-client{width:100%;height:100%;background:white;color:black} :root[data-theme="midnight"]{color-scheme:dark} :root[data-theme="midnight"] .terminal-client{background:#151b24;color:#e6edf3}</style><div id="one" class="viewport"></div><div id="two" class="viewport"></div><script src="/bundle.js"></script>`,
       );
     });
     const sockets = new WebSocketServer({ server, handleProtocols: () => 'atelier-terminal.v1' });
@@ -200,10 +212,11 @@ test(
       await page.evaluate('window.fixture.hide()');
       // Move replaced the first lease; hiding that old lease is intentionally harmless.
       await page.evaluate('window.fixture.detach()');
-      const peer = peers.at(-1);
+      let peer = peers.at(-1);
       assert.ok(peer);
+      const firstPeer = peer;
       const sendOutput = (data: string) =>
-        peer.send(
+        firstPeer.send(
           JSON.stringify({
             type: 'output',
             attachmentId: '66666666-6666-4666-8666-666666666666',
@@ -227,14 +240,75 @@ test(
       );
       await waitFor(() => frames.some((frame) => frame.type === 'outputAck' && frame.seq === seq));
       await page.evaluate('window.fixture.remount()');
+      // Transparent-background editors can emit RGB foreground colors outside the ANSI palette.
+      sendOutput('\r\n\x1b[38;2;198;208;245mPALE_TEXT\x1b[0m');
+      const paleText = page
+        .locator('#two .xterm-rows span')
+        .getByText('PALE_TEXT', { exact: true });
+      await paleText.waitFor({ timeout: 3000 });
+      assert.notEqual(
+        await paleText.evaluate((element) => getComputedStyle(element).color),
+        'rgb(198, 208, 245)',
+        'Pale truecolor text on the light terminal is adjusted for contrast',
+      );
+      sendOutput('\r\n\x1b[32mANSI_GREEN\x1b[0m');
+      const ansiGreen = page
+        .locator('#two .xterm-rows span')
+        .getByText('ANSI_GREEN', { exact: true });
+      await ansiGreen.waitFor({ timeout: 3000 });
+      assert.equal(
+        await ansiGreen.evaluate((element) => getComputedStyle(element).color),
+        'rgb(17, 99, 41)',
+      );
+      await page.evaluate(() => {
+        document.documentElement.dataset.theme = 'midnight';
+      });
+      await page.waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll('#two .xterm-rows span')).some(
+            (element) =>
+              element.textContent?.includes('ANSI_GREEN') &&
+              getComputedStyle(element).color === 'rgb(13, 188, 121)',
+          ),
+        undefined,
+        { timeout: 3000 },
+      );
+      assert.equal(connections, 1, 'Theme changes keep the existing terminal connection');
+      sendOutput('BLOCK_OUTPUT');
+      await page.waitForFunction('window.fixture.outputStalled()');
+      await page.locator('#two .xterm-helper-textarea').fill('accepted-while-renderer-busy');
+      await waitFor(() =>
+        frames.some(
+          (frame) =>
+            frame.type === 'input' &&
+            frame.payload.encoding === 'utf8' &&
+            frame.payload.data.includes('accepted-while-renderer-busy'),
+        ),
+      );
+      // TCP preserves the receipt ahead of the orderly close, while the xterm write still waits.
+      peer.close(4000);
+      await page.waitForFunction('window.fixture.state().phase === "disconnected"');
+      assert.equal(
+        await page.evaluate('window.fixture.state().inputUnconfirmed'),
+        false,
+        'A received input receipt is accounted for even if xterm is still processing output',
+      );
+      await page.evaluate('window.fixture.releaseOutput()');
+      await page.evaluate('window.fixture.reconnect()');
+      await page.waitForFunction('window.fixture.state().phase === "connected"');
+      peer = peers.at(-1);
+      assert.ok(peer);
+      const inputCount = frames.filter((frame) => frame.type === 'input').length;
       acknowledgeInput = false;
       await page.locator('#two .xterm-helper-textarea').fill('unconfirmed');
       await page.locator('#two .xterm-helper-textarea').press('Enter');
-      await waitFor(() => frames.filter((frame) => frame.type === 'input').length > 1);
+      await waitFor(() => frames.filter((frame) => frame.type === 'input').length > inputCount);
       peer.terminate();
       await page.waitForFunction('window.fixture.state().inputUnconfirmed === true');
+      await page.evaluate('window.fixture.dismissInputWarning()');
       await page.evaluate('window.fixture.reconnect()');
       await page.waitForFunction('window.fixture.state().phase === "connected"');
+      assert.equal(await page.evaluate('window.fixture.state().inputUnconfirmed'), false);
       assert.ok(connections >= 2);
       const countAfterReconnect = frames.filter((frame) => frame.type === 'input').length;
       await page.waitForTimeout(80);

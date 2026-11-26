@@ -61,6 +61,7 @@ export interface TerminalSmokeOptions {
   screenshotDirectory: string;
   observeShell(pid: number): Promise<TerminalProcessIdentity>;
   shellExited(shell: TerminalProcessIdentity): Promise<boolean>;
+  resizeWindow?(width: number, height: number): Promise<void>;
 }
 
 async function api(page: Page, path: string): Promise<unknown> {
@@ -83,15 +84,15 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
         open: 'Terminal',
         create: 'New terminal',
         hide: 'Hide terminal panel',
-        close: 'End terminal',
-        confirm: 'End this terminal?',
+        notice: 'Terminal connection notice',
+        close: 'Close terminal 1',
       }
     : {
         open: '终端',
         create: '新建终端',
         hide: '收起终端面板',
-        close: '结束终端',
-        confirm: '结束这个终端？',
+        notice: '终端连接提醒',
+        close: '关闭终端 1',
       };
   let connections = 0;
   const countConnection = (socket: BrowserWebSocket): void => {
@@ -170,8 +171,35 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
     return options.observeShell(identity.pid);
   }
   try {
+    await page.goto(new URL(`/#/sessions/${sessionId}/terminal`, page.url()).href);
+    const emptyLabel =
+      labels.open === 'Terminal' ? 'This session has no terminals yet.' : '当前会话还没有终端。';
+    await panel.getByText(emptyLabel, { exact: true }).waitFor();
+    await panel.getByRole('button', { name: labels.hide, exact: true }).click();
+    await panel.waitFor({ state: 'detached' });
+    assert.equal(
+      await page
+        .getByText(emptyLabel, { exact: true })
+        .isVisible()
+        .catch(() => false),
+      false,
+    );
     await page.goto(new URL(`/#/sessions/${sessionId}`, page.url()).href);
     const beforeOpen = new Set((await list()).terminals.map((item) => item.terminalId));
+    await page.getByRole('button', { name: labels.open, exact: true }).click();
+    await panel.getByRole('button', { name: labels.hide, exact: true }).click();
+    await until(
+      async () => ((await panel.count()) === 0 ? true : undefined),
+      5000,
+      'An immediately hidden Terminal panel removes its content',
+    );
+    assert.equal(
+      await page
+        .getByText(emptyLabel, { exact: true })
+        .isVisible()
+        .catch(() => false),
+      false,
+    );
     await page.getByRole('button', { name: labels.open, exact: true }).click();
     const first = await newRunning(beforeOpen);
     assert.equal(first.runtimeId, capabilities.runtimeId);
@@ -182,6 +210,86 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
       `ATELIER_PROBE_VALUE='${marker}'; printf '\\n%s 中文输入 ✓\\n' "$ATELIER_PROBE_VALUE"`,
     );
     await rendered(first, `${marker} 中文输入 ✓`);
+    assert.equal(await panel.locator('.terminal-metadata').count(), 0);
+    assert.equal(await panel.getByRole('button', { name: labels.notice, exact: true }).count(), 0);
+    const second = await create();
+    const secondShell = await identify(second, 'second');
+    await panel.locator('.terminal-tab').first().locator('button[aria-pressed]').click();
+    await panel
+      .getByRole('button', {
+        name: labels.open === 'Terminal' ? 'Close terminal 2' : '关闭终端 2',
+        exact: true,
+      })
+      .click();
+    await until(
+      async () =>
+        !(await list()).terminals.some((item) => item.terminalId === second.terminalId)
+          ? true
+          : undefined,
+      10_000,
+      'Closing a background tab removes only that Terminal',
+    );
+    await until(
+      async () => ((await options.shellExited(secondShell)) ? true : undefined),
+      10_000,
+      'Closing a tab exits its shell',
+    );
+    assert.ok((await list()).terminals.some((item) => item.terminalId === first.terminalId));
+    await current(first).locator('.xterm-rows').waitFor();
+    const colors = await current(first).evaluate((view) => {
+      const client = view.querySelector('.terminal-client');
+      const viewport = view.querySelector('.xterm-viewport');
+      if (!client || !viewport) throw new Error('Terminal surface unavailable');
+      return {
+        client: getComputedStyle(client).backgroundColor,
+        viewport: getComputedStyle(viewport).backgroundColor,
+      };
+    });
+    assert.notEqual(colors.client, 'rgba(0, 0, 0, 0)', 'Terminal surface must be opaque');
+    assert.equal(colors.viewport, colors.client, 'Terminal scroll background follows the theme');
+    assert.equal(
+      await panel.evaluate((element) => getComputedStyle(element).backgroundColor),
+      colors.client,
+      'Terminal panel covers the workspace with the same theme surface',
+    );
+    if (options.resizeWindow) {
+      await options.resizeWindow(1000, 700);
+      await until(
+        async () => ((await panel.getAttribute('data-expanded')) !== null ? true : undefined),
+        5000,
+        'A narrow desktop window expands the Terminal panel',
+      );
+      const expanded = await panel.boundingBox();
+      assert.ok(expanded && expanded.x === 0 && expanded.width >= 1000);
+      assert.equal(
+        await panel.evaluate((element) => getComputedStyle(element).backgroundColor),
+        colors.client,
+      );
+      await options.resizeWindow(1440, 900);
+      await until(
+        async () => ((await panel.getAttribute('data-expanded')) === null ? true : undefined),
+        5000,
+        'A wide desktop window docks the Terminal panel',
+      );
+      const docked = await until(
+        async () => {
+          const bounds = await panel.boundingBox();
+          return bounds && bounds.x > 0 && bounds.width > 0 ? bounds : undefined;
+        },
+        5000,
+        'Docked Terminal stays in its own pane',
+      );
+      assert.ok(docked.x + docked.width <= 1441);
+      await panel.getByRole('button', { name: labels.hide, exact: true }).click();
+      await panel.waitFor({ state: 'detached' });
+      assert.equal(
+        await page.locator('.terminal-client').count(),
+        0,
+        'Hidden Terminal leaves no visible content',
+      );
+      await page.getByRole('button', { name: labels.open, exact: true }).click();
+      await current(first).locator('.xterm-rows').waitFor();
+    }
     await page.screenshot({ path: join(screenshotDirectory, 'terminal-input.png') });
 
     const oldSize = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
@@ -238,6 +346,7 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
       'Reload retains the same Terminal resource',
     );
     await rendered(afterReload, `${marker}_BURST_DONE`);
+    assert.equal(await panel.getByRole('button', { name: labels.notice, exact: true }).count(), 0);
     await input(
       afterReload,
       `printf '%s\\n' "$$" "$ATELIER_PROBE_VALUE" > '${recordName}-reload'; printf '\\n%s_RELOADED\\n' "$ATELIER_PROBE_VALUE"`,
@@ -247,10 +356,6 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
     await page.screenshot({ path: join(screenshotDirectory, 'terminal-reloaded.png') });
 
     await panel.getByRole('button', { name: labels.close, exact: true }).click();
-    await page
-      .getByRole('dialog', { name: labels.confirm, exact: true })
-      .getByRole('button', { name: labels.close, exact: true })
-      .click();
     await until(
       async () =>
         !(await list()).terminals.some((item) => item.terminalId === first.terminalId)

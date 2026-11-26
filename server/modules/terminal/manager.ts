@@ -1,6 +1,6 @@
 /**
  * @file 管理人工终端的会话归属和生命周期。
- * @implementation 在首次连接就绪后启动 PTY，以独立目录保留、串行屏幕和有界连接恢复处理重试与清理。
+ * @implementation 在首次连接就绪后启动 PTY，以独立目录保留、屏幕顺序队列、快照确认和高低水位流控处理重连与清理。
  * @updated 2026-11-26T01:00:00+08:00
  */
 import { randomBytes, randomUUID } from 'node:crypto';

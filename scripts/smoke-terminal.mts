@@ -83,6 +83,7 @@ try {
     mkdir(terminalTestHome),
     mkdir(evidence, { recursive: true }),
   ]);
+  await writeFile(join(terminalTestHome, '.zshrc'), '');
   await new Promise<void>((done) => gateway.listen(0, '127.0.0.1', done));
   const address = gateway.address();
   assert.ok(address && typeof address !== 'string');
@@ -127,6 +128,14 @@ try {
     sessionId,
     initialCwd: project,
     screenshotDirectory: evidence,
+    resizeWindow: async (width, height) => {
+      await application.evaluate(
+        ({ BrowserWindow }, size) => {
+          BrowserWindow.getAllWindows()[0]?.setContentSize(size.width, size.height);
+        },
+        { width, height },
+      );
+    },
     observeShell: async (pid) => {
       const sample = await processSample(pid);
       assert.ok(sample);
@@ -153,10 +162,7 @@ try {
     BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900),
   );
   await page.goto(terminalRoute);
-  await page
-    .locator('.terminal-panel')
-    .getByRole('heading', { name: 'Terminal', exact: true })
-    .waitFor();
+  await page.getByRole('region', { name: 'Terminal', exact: true }).waitFor();
   const listed: unknown = await page.evaluate(async (id) => {
     const response = await fetch(`/api/sessions/${id}/terminals`);
     return response.json();

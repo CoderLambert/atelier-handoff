@@ -1,6 +1,6 @@
 /**
  * @file 持有人工终端的解析器、连接与可移动视图。
- * @implementation 有界资源注册表按 runtime/terminal 唯一建实例；视图租约只挂载 DOM，协议按解析完成确认且不重放输入。
+ * @implementation 有界资源注册表按 runtime/terminal 唯一建实例；视图租约挂载 DOM 并同步工作台配色，连续输出分批解析，输入回执即时记账。
  * @updated 2026-11-26T01:00:00+08:00
  */
 import { Terminal } from '@xterm/xterm';
@@ -14,6 +14,15 @@ import {
   type TerminalServerFrame,
 } from '@shared/terminal';
 import { requestTerminalAttachment } from '@/use-query/terminal/use-attach-terminal';
+import { resolveTerminalTheme } from './terminal-theme';
+
+type OrderedTerminalFrame = Exclude<TerminalServerFrame, { type: 'inputAccepted' }>;
+
+interface QueuedTerminalFrame {
+  frame: OrderedTerminalFrame;
+  bytes: number;
+  lastOutputSeq?: number;
+}
 
 export type TerminalConnectionPhase =
   | 'idle'
@@ -28,7 +37,6 @@ export interface TerminalClientSnapshot {
   phase: TerminalConnectionPhase;
   record: TerminalRecord;
   inputUnconfirmed: boolean;
-  restored: boolean;
   errorCode?: string;
 }
 interface TerminalClientCallbacks {
@@ -101,6 +109,8 @@ export class TerminalClientSession {
   private readonly container = document.createElement('div');
   private terminal?: Terminal;
   private fitAddon?: FitAddon;
+  private themeObserver?: MutationObserver;
+  private appliedTheme?: string;
   private socket?: WebSocket;
   private request?: AbortController;
   private view?: HTMLElement;
@@ -128,7 +138,7 @@ export class TerminalClientSession {
     record: TerminalRecord,
     private readonly callbacks: TerminalClientCallbacks,
   ) {
-    this.snapshot = { phase: 'idle', record, inputUnconfirmed: false, restored: false };
+    this.snapshot = { phase: 'idle', record, inputUnconfirmed: false };
     this.container.className = 'terminal-client';
   }
   getSnapshot = (): TerminalClientSnapshot => this.snapshot;
@@ -156,12 +166,12 @@ export class TerminalClientSession {
     const lease = ++this.lease;
     this.view = view;
     view.append(this.container);
+    this.syncTheme();
     const measure = () => {
       if (lease !== this.lease || !view.isConnected) return;
       const bounds = view.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return;
       if (!this.terminal) {
-        const style = getComputedStyle(this.container);
         this.terminal = new Terminal({
           cols: this.snapshot.record.cols,
           rows: this.snapshot.record.rows,
@@ -169,15 +179,19 @@ export class TerminalClientSession {
           fontSize: 13,
           cursorBlink: true,
           disableStdin: true,
-          theme: {
-            background: style.backgroundColor,
-            foreground: style.color,
-            cursor: style.color,
-          },
+          // Truecolor from editors can bypass the ANSI palette.
+          minimumContrastRatio: 4.5,
+          theme: resolveTerminalTheme(this.container),
         });
         this.fitAddon = new FitAddon();
         this.terminal.loadAddon(this.fitAddon);
         this.terminal.open(this.container);
+        this.appliedTheme = document.documentElement.dataset.theme;
+        this.themeObserver = new MutationObserver(() => this.syncTheme());
+        this.themeObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-theme'],
+        });
         this.terminal.onData((data) => this.sendInput(data));
         this.terminal.onBinary((data) => this.sendBinary(data));
         void this.connect();
@@ -202,6 +216,12 @@ export class TerminalClientSession {
       },
     };
   }
+  private syncTheme(): void {
+    const theme = document.documentElement.dataset.theme;
+    if (!this.terminal || !this.container.isConnected || this.appliedTheme === theme) return;
+    this.terminal.options.theme = resolveTerminalTheme(this.container);
+    this.appliedTheme = theme;
+  }
   focus(): void {
     const view = this.view;
     if (!view?.isConnected || view.getBoundingClientRect().width <= 0) return;
@@ -210,6 +230,9 @@ export class TerminalClientSession {
       this.focusPending = true;
       view.focus({ preventScroll: true });
     }
+  }
+  acknowledgeInputWarning(): void {
+    this.publish({ inputUnconfirmed: false });
   }
   reconnect(): void {
     if (!this.terminal || this.snapshot.phase === 'disposed') return;
@@ -240,10 +263,8 @@ export class TerminalClientSession {
     this.publish({
       phase: 'connecting',
       errorCode: undefined,
-      inputUnconfirmed: this.snapshot.inputUnconfirmed || this.pendingInput.size > 0,
+      inputUnconfirmed: this.abandonPendingInput(),
     });
-    this.pendingInput.clear();
-    this.inputBytes = 0;
     this.pendingCommands.clear();
     this.inputSequence = 0;
     this.commandSequence = 0;
@@ -266,28 +287,63 @@ export class TerminalClientSession {
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = new WebSocket(url, [ticket.protocol, `ticket.${ticket.ticket}`]);
       this.socket = socket;
+      let pendingOutput: QueuedTerminalFrame | undefined;
       socket.onmessage = (event: MessageEvent<unknown>) => {
         if (epoch !== this.epoch) return;
         if (typeof event.data !== 'string') return this.fail('TERMINAL_PROTOCOL', epoch);
         const bytes = encoder.encode(event.data).byteLength;
-        this.queuedBytes += bytes;
-        if (this.queuedBytes > terminalLimits.snapshotBufferBytes + terminalLimits.liveBufferBytes)
-          return this.fail('TERMINAL_SLOW_CONSUMER', epoch);
-        const raw = event.data;
-        this.tail = this.tail
-          .then(async () => {
-            if (epoch !== this.epoch) return;
-            const frame = terminalServerFrameSchema.parse(JSON.parse(raw));
+        if (bytes > terminalLimits.snapshotBytes) return this.fail('TERMINAL_PROTOCOL', epoch);
+        let frame: TerminalServerFrame;
+        try {
+          frame = terminalServerFrameSchema.parse(JSON.parse(event.data));
+          if (frame.type !== 'snapshot' && bytes > terminalLimits.frameBytes)
+            throw new Error('TERMINAL_PROTOCOL');
+          if (frame.type === 'inputAccepted') {
+            // An ordered socket can deliver the receipt before a pending xterm write completes.
+            const pendingBytes = this.pendingInput.get(frame.inputSeq);
             if (
-              bytes >
-              (frame.type === 'snapshot' ? terminalLimits.snapshotBytes : terminalLimits.frameBytes)
+              this.snapshot.phase !== 'connected' ||
+              !this.attachmentId ||
+              frame.attachmentId !== this.attachmentId ||
+              pendingBytes === undefined
             )
               throw new Error('TERMINAL_PROTOCOL');
-            await this.consume(frame, epoch);
+            this.pendingInput.delete(frame.inputSeq);
+            this.inputBytes -= pendingBytes;
+            return;
+          }
+        } catch {
+          return this.fail('TERMINAL_PROTOCOL', epoch);
+        }
+        if (
+          this.queuedBytes + bytes >
+          terminalLimits.snapshotBufferBytes + terminalLimits.liveBufferBytes
+        )
+          return this.fail('TERMINAL_SLOW_CONSUMER', epoch);
+        this.queuedBytes += bytes;
+        if (
+          frame.type === 'output' &&
+          pendingOutput?.frame.type === 'output' &&
+          frame.attachmentId === pendingOutput.frame.attachmentId &&
+          frame.seq === (pendingOutput.lastOutputSeq ?? pendingOutput.frame.seq) + 1 &&
+          pendingOutput.bytes + bytes <= terminalLimits.frameBytes
+        ) {
+          pendingOutput.frame.data += frame.data;
+          pendingOutput.lastOutputSeq = frame.seq;
+          pendingOutput.bytes += bytes;
+          return;
+        }
+        // A control frame or noncontiguous data ends the batch. ACK only after xterm parses it.
+        const queued: QueuedTerminalFrame = { frame, bytes };
+        pendingOutput = frame.type === 'output' ? queued : undefined;
+        this.tail = this.tail
+          .then(async () => {
+            if (pendingOutput === queued) pendingOutput = undefined;
+            if (epoch === this.epoch) await this.consume(queued.frame, epoch, queued.lastOutputSeq);
           })
           .catch(() => this.fail('TERMINAL_PROTOCOL', epoch))
           .finally(() => {
-            this.queuedBytes -= bytes;
+            this.queuedBytes -= queued.bytes;
           });
       };
       socket.onerror = () => {
@@ -313,7 +369,7 @@ export class TerminalClientSession {
               ? 'failed'
               : 'disconnected',
           errorCode: stopped ? event.reason : this.snapshot.errorCode,
-          inputUnconfirmed: this.snapshot.inputUnconfirmed || this.pendingInput.size > 0,
+          inputUnconfirmed: this.abandonPendingInput(),
         });
         if (
           !replaced &&
@@ -346,7 +402,11 @@ export class TerminalClientSession {
     if (!terminal) throw new Error('TERMINAL_PROTOCOL');
     await new Promise<void>((resolve) => terminal.write(data, resolve));
   }
-  private async consume(frame: TerminalServerFrame, epoch: number): Promise<void> {
+  private async consume(
+    frame: OrderedTerminalFrame,
+    epoch: number,
+    lastOutputSeq?: number,
+  ): Promise<void> {
     if (frame.type === 'error') {
       if (frame.code === 'TERMINAL_CLOSED') this.closed();
       else if (frame.code === 'TERMINAL_REPLACED') {
@@ -363,7 +423,7 @@ export class TerminalClientSession {
       this.attachmentId = frame.attachmentId;
       this.sequence = frame.seq;
       this.updateRecord(frame.terminal);
-      this.publish({ phase: 'restoring', restored: frame.terminal.state !== 'awaiting-attach' });
+      this.publish({ phase: 'restoring' });
       this.terminal.options.disableStdin = true;
       this.terminal.reset();
       this.terminal.resize(frame.terminal.cols, frame.terminal.rows);
@@ -393,13 +453,6 @@ export class TerminalClientSession {
       this.focusPending = false;
       return;
     }
-    if (frame.type === 'inputAccepted') {
-      const bytes = this.pendingInput.get(frame.inputSeq);
-      if (bytes === undefined) throw new Error('TERMINAL_PROTOCOL');
-      this.pendingInput.delete(frame.inputSeq);
-      this.inputBytes -= bytes;
-      return;
-    }
     if (frame.type === 'commandResult') {
       if (!this.pendingCommands.delete(frame.commandSeq)) throw new Error('TERMINAL_PROTOCOL');
       if (!frame.ok) this.lastResize = undefined;
@@ -417,7 +470,7 @@ export class TerminalClientSession {
       }
     }
     if (epoch !== this.epoch) return;
-    this.sequence = frame.seq;
+    this.sequence = lastOutputSeq ?? frame.seq;
     this.send({ type: 'outputAck', attachmentId: this.attachmentId, seq: this.sequence });
     if (frame.type === 'state' && frame.terminal.state === 'closed')
       forgetTerminalClient(frame.terminal);
@@ -467,6 +520,12 @@ export class TerminalClientSession {
         return;
       this.inputSequence = inputSeq;
     }
+  }
+  private abandonPendingInput(): boolean {
+    const unconfirmed = this.snapshot.inputUnconfirmed || this.pendingInput.size > 0;
+    this.pendingInput.clear();
+    this.inputBytes = 0;
+    return unconfirmed;
   }
   private reserveInput(sequence: number, bytes: number): boolean {
     if (this.inputBytes + bytes > terminalLimits.liveBufferBytes) {
@@ -518,7 +577,7 @@ export class TerminalClientSession {
     this.publish({
       phase: 'failed',
       errorCode: code,
-      inputUnconfirmed: this.snapshot.inputUnconfirmed || this.pendingInput.size > 0,
+      inputUnconfirmed: this.abandonPendingInput(),
     });
     this.socket?.close(1000, code.slice(0, 80));
   }
@@ -530,6 +589,7 @@ export class TerminalClientSession {
     cancelAnimationFrame(this.fitFrame);
     this.request?.abort();
     this.socket?.close();
+    this.themeObserver?.disconnect();
     this.terminal?.dispose();
     this.container.remove();
     this.view = undefined;
