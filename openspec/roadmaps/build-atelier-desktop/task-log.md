@@ -2,6 +2,11 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-26 · 合并 main 至人工终端分支
+
+- 合入 main 的 RTK、Skill 继承、有序对话和子代理插话，保留终端服务、PTY 与 RTK 发行清单及双方执行日志。通过 `npm run check`、`npm test`、`npm run build` 和 `npm run build:desktop`。运行时 776 项通过、1 项跳过，前端 139 项通过。完整日志保存在 `.local/terminal-main-merge/`。
+- 本次验证覆盖源码检查和测试，合并后的实际安装件及真实 Electron 终端仍待验收，沿用人工终端条目记录的状态。
+
 ## 2026-11-26 · 人工终端与面板合同（开发分支；桌面/发行验收阻塞）
 
 - 按用户最新要求从 `main@f48da53d` 新建 `feat/terminal-workbench`。保留最新 Git 文件阅读/引用、任务进度、原生 Bash 控制与同目录会话功能，加入静态 Panel SDK/registry/Host 和会话人工终端。[接入文档](../../../docs/panel-development.md) · [技术决策](../../../docs/decisions/2026-11-26-terminal-workbench.md)
@@ -10,6 +15,52 @@
 - 独立审查促成 in_place 目录身份、面板历史返回、关闭/失联客户端回收、慢创建附着时机、烟测新建入口与 shutdown 失败传播修正。源码与固定依赖进入工作分支，真实浏览器/Electron/安装件结果不以替身代替。
 - **开发过程 review（本轮实施）**。先冻结共享协议再并行负责后端、界面和发行，集中审查跨层接口。复用了现有 Git/SDK 测试和 p1 烟测。Unix IPC 与缺显示环境应在首次预检明确，后续不重复尝试依赖相同能力的本地入口；需要窗口的验收集中到已配置的 CI/桌面。完整桌面验收与文件说明收尾状态在证据中持续更新。
 - 文件说明使用 `gpt-6.1-terra` / `xhigh` 对本批 63 份输入按 SHA-256 只读核对，集中应用 9 份必要建议；未将桌面/安装态验收记为完成。
+## 2026-11-26 · 子代理插话与 RTK 合并验证
+
+- 将子代理插话提交与 RTK、会话轨迹合并，Bash 回执继续确认 RTK 实际命令，主会话工具边界按子代理归属判定。隔离工作树通过 `npm run check`、`npm test`、`npm run build` 和 `npm run build:desktop`，真实 RTK 与锁定 SDK 用例包含在全量测试中。
+- 首次测试因隔离工作树缺少 RTK 归档缓存失败，指定已校验归档重跑通过。日志保留在隔离工作树的 `.local/merge-verification/`。合并后的桌面安装件尚未单独验收，运行中的桌面继续使用此前版本。
+
+## 2026-11-26 · RTK Bash 命令覆盖（已验收并切换）
+
+- 使用随包 RTK OSS 1.2.1 的匹配规则，覆盖文件、搜索、构建、测试、包管理、Git 和基础设施的支持形式。可逐段改写复合命令，保留显式机器可读格式、管道、重定向、远程默认分支和比较日志的原始输出。SDK 继续对原命令及实际命令做权限检查。开关、回执和回退入口沿用现有界面。[取舍与回退](../../../docs/decisions/2026-11-26-rtk-command-coverage.md)
+- 基线 `f48da53`，候选包含同工作区的对话内运行提示，精确输入哈希见 `.local/rtk-command-coverage/evidence/final/candidate-inputs.json`。通过 `npm run check`、`npm test`、`npm run build` 与 `npm run build:desktop`。运行时 734 项、前端 131 项通过，1 项既有 WebFetch 用例跳过。真实 SDK、RTK 和回环模型核对项目覆盖、两侧审批、取消和后台、npm 参数及 XDG、截图场景的远程 HEAD 和分叉合并提交、机器可读输出及重开后轨迹。
+- Arch 安装件 SHA-256 为 `5549a7e514606b9880c2437c211e1a8a00b3be4528847650515d81cfa48adc96`。以 pacman 安装到独立系统根，使用隔离 Electron 在中英文核对 `ls -la && rg …`、实际命令、按项目开关和重开持久化，通过通用 `npm run smoke:linux`。10 次冷启动和附加场景均正常退出，实际模型调用为零。证据在 `.local/rtk-command-coverage/evidence/final/`。
+- 等旧桌面空闲后正常关闭，保存可恢复的 SQLite 副本并以该安装件、原数据目录和浏览器 profile 启动。3 个项目、17 个会话、142 次运行、292 条消息、2,559 个工具记录、15 项设置与待处理消息表逐项相同。窗口已显示，运行时、本机网关返回 200，随包 RTK 二进制与启动器校验通过。切换记录见 `.local/rtk-command-coverage/evidence/final/desktop-switch.json`。
+- 11 份候选文件的文件头经单批只读核对，集中更新 4 份说明。变更只涉及文件头，`npm run check:headers` 通过。
+- **开发过程 review**。把截图的两类 Git 查询与非 Git 命令放进同一回环运行，可以同时验证覆盖、回执和必要信息。下次直接使用锁定 CLI 提供的插件文件接口，并在首次候选冻结前加入机器格式、项目祖先规则和带全局参数的 RTK 管理命令用例。
+
+## 2026-11-26 · 对话内运行提示（已验收并切换）
+
+- 基线 `f48da53`，候选源码哈希见 `.local/inline-run-status/source.sha256`。运行阶段与耗时放在当前轮次末尾，随对话滚动。最近活动时间可悬停查看。停止入口沿用输入区控制。回退时恢复运行提示在输入区上方的挂载点和样式。
+- `npm run check`、`npm test`、`npm run build` 与 `npm run build:desktop` 通过。工作区 RTK 接口及断言同步后，最终运行时 730 项通过、5 项跳过，前端 131 项通过。隔离 Electron 用锁定 SDK 和回环模型验证等待、工具执行、耗时、流式输出及结束。1280×800、1440×900 和 1920×1080 下核对行宽和位置，并验证减少动效。Chromium 快照覆盖中英文等待文案。截图与日志在 `.local/inline-run-status/electron/`。
+- 沿用日用数据目录和浏览器 profile 打开新版。窗口已显示，运行时和托管网关均返回 200，交付的前端入口与构建一致。项目、会话、运行、消息、工具和设置记录指纹一致，数据库版本为 10。证据见 `.local/inline-run-status/live-result.json`。文件说明经单批只读复核，`npm run check:headers` 通过。
+- 主题微调。状态文字与图标跟随当前主题的主色，耗时使用辅助文字色。原安装版运行时搭配新界面，在隔离 Electron 用回环模型当场切换六个主题校验颜色，最小文字对比度为 4.87:1。通过 `npm run check`、`npm test`、`npm run build`、`npm run build:desktop` 和文件头检查。日用窗口已沿用原数据与 profile 启动，记录指纹一致。截图、日志与回退所需的旧界面保存在 `.local/inline-run-status-theme/`。
+- **开发过程 review**。复用有序对话的 Chromium 测试与 Electron 回环夹具。用一个可释放的模型响应检查等待行，避免依赖模型响应时长。分隔线在屏幕缩放下会按物理像素取整，后续验收检查可见性和最大宽度。主题调整复用原安装版运行时，在同一个等待状态内依次切换六个主题。
+
+## 2026-11-26 · 按真实执行顺序展示会话（已验收并切换）
+
+- 从新运行开始按原生 SDK 的观察顺序保存和显示用户消息、模型正文、工具、审批及错误。并行结果回写原位置，旧轮次仍可读正文、展开明细、查看执行轨迹。输入区显示实际执行阶段与耗时。[技术决策与回退](../../../docs/decisions/2026-11-26-ordered-conversation.md)
+- 基线 `f48da53`。以 `.local/ordered-conversation/headers-input.json` 的候选文件哈希核对含现有 Skill 继承的实物版本。通过 `npm run check`、`npm test`、`npm run build` 与 `npm run build:desktop`。运行时 690 项通过、1 项既有跳过，前端 129 项通过。
+- 锁定 SDK 与回环模型验证并行倒序完成、重试、错误、逐次审批、插话、取消、启动前中断、507 个正文片段及运行时重开。隔离 Linux Electron 核对中英文、1280/1440/1920 宽度、断线补齐、长等待计时、键盘焦点与同会话的新旧记录。日志和截图见 `.local/ordered-conversation/exact-candidate/`。
+- 沿用原数据目录和浏览器 profile 打开新版。项目、会话、运行、消息、工具和设置指纹一致，运行时及本机网关响应均为 200。 首次启动进程退出后，使用独立用户服务重新打开并在命令结束后复核窗口仍在运行。数据副本、上一版构建和切换记录保存在 `.local/ordered-conversation/rollout-nbimxaqm/`。
+- 文件说明按候选哈希核对，20 份源码通过独立文件头检查。
+- **开发过程 review**。SDK 回环用例先验证内容片段和调用身份，Electron 复用相同顺序断言。事件流断线用一次可控的连接失败和原生重试验证，省去重复尝试断掉已有连接。下一轮在窗口验收前冻结运行时源码和构建，避免重开时混用两个版本。
+
+## 2026-11-26 · 内置 RTK Hook（Linux 安装态专项与通用发行验收通过）
+
+- Linux x64 随包提供 RTK OSS 1.2.1。本机信任的主会话对四条固定 Git 命令默认包装；项目 Hooks 可跟随全局、启用或停用，轨迹展示收到回执的原命令和实际命令。关闭项目 Hook 或使用 `rtk bypass` 可恢复完整输出。子代理与受控执行保留原行为。[权限预检、取舍与回退](../../../docs/decisions/2026-11-26-builtin-rtk-hook.md#2026-11-26--采用-cli-插件的原生权限预检)
+- 基线 `f48da53`，保留同工作区中已有 Skill 继承与对话改动。已验收输入的逐文件哈希存于 `.local/rtk-delivery/source-sha256.txt`。`npm run check`、`npm run build`、`npm run build:desktop`、`npm test` 通过。启用真实 RTK 夹具时运行时 734 项通过、1 项既有 WebFetch 跳过，前端 131 项通过。SDK 0.3.332 配回环模型核对两侧规则、半途切换开关、后台/取消、非零返回、单次派发及重开后轨迹。真实 RTK 的四种形式与原生 Git、`bypass` 的输出对照见 `.local/rtk-delivery/git-command-matrix.json`。
+- 最终 Arch 包的 SHA-256 为 `0574c8668fddcb6e674ff7283e5944b411ce5cd5a967a7fd4f3ea92079df93bd`。使用 pacman 安装至独立系统根，隔离 Electron 的两个项目、中英双语、1280/1440/1920 宽度、开关及重启均通过，真实 SDK 与真实 RTK 走回环模型，实际模型调用为零。证据在 `.local/rtk-delivery/electron-final/`。当前活动桌面未切换。
+- 通用 `npm run smoke:linux` 使用同一 pacman 安装件在 Xvfb 的隔离命名空间跑至 `complete`，退出码 0，安装目录指纹一致。自动化对话的 17 条工具明细按持久化位置展示，3 条有自动批准标记，全程无手动审批卡。浏览器下载、离线重开、PDF 预览和托管网关重开全部通过。10 次冷启动、3 次附加启动均正常退出，残留进程 0，最慢冷启动 1,789 ms，最慢退出 116 ms，实际模型调用 0。完整报告及驱动哈希在 `.local/rtk-delivery/release-smoke-passed.json`、`release-smoke-rerun-3.log` 和 `release-smoke-driver.sha256`。本次只调整 smoke，复用上一轮已构建并验证的包。
+- 文件头按候选源码哈希单批使用 `gpt-6.1-terra`、`xhigh` 复核，37 份源码哈希匹配，集中更新 2 处职责说明，`check:headers` 通过。证据在 `.local/rtk-delivery/headers-review.log` 和 `header-only-updates.sha256`。
+- **开发过程 review**。最初查验只覆盖 SDK `Query` 接口；CLI 插件的 `$.tool.check` 能解决原命令预检。以后遇到类似权限语义时先查锁定 CLI 的插件类型，并用带执行次数的无害包装夹具验证。安装态覆盖保留用户 XDG Git 配置与绕过命令的原始输出。通用 smoke 核对 pacman 本地元数据，按结构化回执 ID 关联模型步骤，并在相邻场景间显式确认浏览器与首次引导的状态。下一轮用持久记录校验有序工具明细，移除批准方式与展示方式之间的过时假设。
+
+## 2026-11-26 · 本机 Skill 继承与会话限制（隔离验证通过）
+
+- 分支 `feat/skill-inheritance`，基线 `f48da53`。保留项目扩展管理，新增「本机继承」和「本会话 Skills」。全局默认关闭；打开后只加载逐项启用的本机 Skill。设置由运行时保存到 SQLite，不改本机目录或安装配置；已开始的运行保留原清单，受影响的待处理消息保留并提示重发。[决策与回退](../../../docs/decisions/2026-11-25-skill-inheritance.md)
+- `npm run check`、`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test`（运行时 686 通过、1 项既有跳过；前端 126 通过）、`npm run build`、`npm run build:desktop` 通过。追加的真实 SDK 子代理断言通过定向测试和类型检查。锁定 SDK 配回环模型验证同名来源、默认停用、显式调用、仅手动、全局与项目和会话范围、排队期间撤销及子代理请求不含停用内容；未调用实际模型。
+- 隔离 Electron 使用真实 API、临时数据根和独立 `userData` 验证中文 1440×900 全局操作、英文 1280×800 会话草稿、重载保留和 Esc 焦点恢复。截图及日志在 `.local/skill-inheritance/`。文件说明按已验证源码哈希单批核对，`npm run check:headers -- --files …` 检查 31 份源码通过。正式窗口仍承载当前会话，本轮不在运行中关闭它；候选版未切换、未提交。
+- **开发过程 review**。复用同一回环模型按阶段断言候选清单、工具回执和队列阻止；桌面夹具使用同一窗口切换语言，不重复装数据。下一轮先跑定向回归，再顺序运行构建和浏览器测试，避免 Markdown 包构建清空中间产物时影响测试。
 
 ## 2026-11-25 · Claude CLI Bash 控制与同目录并行（已验证并启动）
 
@@ -667,3 +718,11 @@
 - 更新 TanStack Query 5.108.4、React 类型 19.3.1、i18next 27.2.8、React Resizable Panels 4.24.2 和 tailwind-merge 3.7.1。核对锁文件只有这五项及配套的 query-core 发生变化。Node 24.21.0 的干净安装通过类型检查、前端及桌面构建，运行时 676 项、前端 119 项通过，1 项既有跳过。隔离真实 Electron 核对了中英文交互、拖动侧栏以及暂存和提交。
 - Renovate 44.262.1 仓库配置通过严格校验。提取试跑只识别两个预定清单，查询日志确认文件预览、PDF.js 和 Markdown 预览依赖被排除。工作流通过 actionlint，另外用 Ubuntu 24.04 用户态验证了安装动态加载器链接前后的真实 bubblewrap 探针。GitHub App 授权和首次远端工作流运行待完成。证据位于 .local/renovate-ci-20261125/。
 - **开发过程 review**。先核对实际 lockfile 节点，再做干净安装，避免把缓存安装误当成 CI 证据。复用了隔离 Electron 入口，提前发现 npm ci 对 Electron 45 采用按需下载。下次配置 Linux runner 时先对照命令沙箱的动态加载器路径，再启用必过检查。
+
+## 2026-11-26 · 本机信任会话的子代理插话
+
+- 在前台子代理运行时，用 Ctrl+Enter 或队列的「立即插入」发送一条兼容消息。SDK 按调用标识将该批前台子代理转到后台，主会话先接收指令，随后接收各子任务报告。后台分支继续使用原有任务身份，支持单独停止。受控模式沿用原有审批和检查点。[技术决策和回退](../../../docs/decisions/2026-11-25-claude-subagent-insertion.md)
+- 基线为 `f48da53`，候选源码按 SHA-256 复核。锁定 SDK 0.3.332 与 CLI 2.1.332 配合回环模型复现旧版将该插话标为停止后发送，验证新版在双分支未结束时送达指令，随后保持工具归属、收齐报告与清空队列。另验证停止一个后台分支、保留兄弟结果和拒绝不同会话或任务尝试的终态。
+- `npm run check`、`npm test`、前端及桌面构建通过。运行时 685 项通过、1 项既有用例跳过，前端 121 项通过。真实 Electron 45.4.1 在隔离数据和 profile 中通过中文快捷键和英文队列操作验收，复跑入口为 `node --import tsx scripts/smoke-subagent-insertion.mts`。模型请求由本地回环替身响应。原始验证日志位于候选工作树的 `.local/subagent-insertion/`。
+- **开发过程 review**。用同一个回环夹具把分支报告的释放时机固定在主会话应答之后，HTTP 回归和桌面验收复用该时序。桌面定位时直接选择外层任务的标题，区分嵌套的工具标题。清洁安装后先构建 Markdown 包再跑前端回归。
+- 文件说明单批核对五份输入，按验证快照集中更新两份运行时说明。文件说明检查覆盖本轮五份源码。

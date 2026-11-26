@@ -145,6 +145,7 @@ export function ToolDetailBody({
   const output = toolOutputView(tool);
   const message = toolOutputMessage(tool, output);
   const presentation = toolOutputPresentation(tool);
+  const rtk = input.isCommand ? tool.rtk : undefined;
   const excerptLabel = tool.bashLog ? t('tool.sdkPreviewWithSpace') : t('tool.recordedOutput');
   const waiting =
     tool.status === 'running' ||
@@ -180,8 +181,26 @@ export function ToolDetailBody({
         aria-label={t('tool.parameters')}
         className="tool-detail__section tool-detail__section--input"
       >
-        {!input.command ? <h4 className="tool-detail__label">{t('tool.parameters')}</h4> : null}
-        {input.command ? (
+        {!input.command && !rtk ? (
+          <h4 className="tool-detail__label">{t('tool.parameters')}</h4>
+        ) : null}
+        {rtk ? (
+          <>
+            <p className="tool-detail__label">{t('tool.builtinRtk')}</p>
+            <ToolText
+              label={t('tool.originalCommand')}
+              text={rtk.originalCommand}
+              showLabel
+              format="shell"
+            />
+            <ToolText
+              label={t('tool.executedCommand')}
+              text={rtk.executedCommand}
+              showLabel
+              format="shell"
+            />
+          </>
+        ) : input.command ? (
           <ToolText label={t('tool.command')} text={input.command} showLabel format="shell" />
         ) : input.isCommand ? (
           <p className="tool-detail__notice">{t('tool.commandNotRecorded')}</p>

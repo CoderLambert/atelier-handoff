@@ -17,6 +17,7 @@ import { createApp } from '../server/app.js';
 import { NativeBashTasks } from '../server/native-bash.js';
 import { desktopPairingHeader } from '../shared/desktop-host.js';
 import type {
+  Message,
   Run,
   SendSessionMessageResult,
   SessionMessageQueue,
@@ -312,6 +313,27 @@ test(
           .messageQueue.items.length,
         0,
       );
+      const snapshot = await request<{ messages: Message[]; runs: Run[] }>(
+        '/api/sessions/' + sessionA,
+      );
+      const recorded = snapshot.runs.find(({ id }) => id === runA);
+      assert.equal(recorded?.transcript?.version, 1);
+      const initial = snapshot.messages.find(({ text }) => text === hold);
+      const inserted = snapshot.messages.find(({ text }) => text === steer);
+      assert.ok(initial?.transcriptOrder && ended.transcriptOrder && inserted?.transcriptOrder);
+      assert.ok(initial.transcriptOrder < ended.transcriptOrder);
+      assert.ok(ended.transcriptOrder < inserted.transcriptOrder);
+      const replies = snapshot.messages.filter(
+        ({ runId, role, text }) => runId === runA && role === 'assistant' && text.trim(),
+      );
+      assert.ok(replies.length > 0);
+      for (const reply of replies) {
+        assert.ok(reply.transcriptParts?.length);
+        assert.equal(
+          reply.transcriptParts.map(({ start, end }) => reply.text.slice(start, end)).join('\n\n'),
+          reply.text,
+        );
+      }
 
       const sessionC = await newSession();
       const runC = await start(sessionC, timeout);

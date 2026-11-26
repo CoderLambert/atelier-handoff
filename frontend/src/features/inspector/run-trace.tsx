@@ -1,9 +1,10 @@
 /**
  * @file 展示单次运行的执行轨迹。
- * @implementation 以工具 ID 关联运行事件、命令、输出和审批，按运行展示用量、子任务与诊断信息。
- * @updated 2026-11-22T18:50:51+08:00
+ * @implementation 关联运行事件、工具、输出和审批，展示用量、子任务、诊断以及 Skill 来源。
+ * @updated 2026-11-26T00:06:59+08:00
  */
 import { useUiTranslation } from '@/i18n';
+import { skillInheritanceSourceSchema } from '@shared/skill-inheritance';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Activity, Download, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +65,16 @@ function TraceDetail({
   onSelect: (id: string) => void;
 }) {
   const { t, locale } = useUiTranslation('inspector');
+  const { t: skillT } = useUiTranslation('extensions');
+  const sourceLabels = {
+    atelier: 'inheritance.sourceAtelier',
+    workspace: 'inheritance.sourceWorkspace',
+    host: 'inheritance.sourceHost',
+  } as const;
+  function skillSource(value: unknown) {
+    const source = skillInheritanceSourceSchema.safeParse(value);
+    return source.success ? ` · ${skillT(sourceLabels[source.data])}` : '';
+  }
   const [eventFilter, setEventFilter] = useState('');
   const [eventOffset, setEventOffset] = useState(0);
   const [outputTool, setOutputTool] = useState<ToolCall>();
@@ -191,7 +202,7 @@ function TraceDetail({
         .filter((event) => event.type === 'skill.invoked')
         .map(
           ({ payload }) =>
-            `${String(payload.name ?? 'Skill')} · v${String(payload.version ?? '—')}`,
+            `${String(payload.name ?? 'Skill')} · v${String(payload.version ?? '—')}${skillSource(payload.source ?? 'atelier')}`,
         ),
     ),
   ];
@@ -208,7 +219,7 @@ function TraceDetail({
       run.extensions
         .map(
           (item) =>
-            `${item.name} · v${item.version}${item.tools?.length ? ` (${item.tools.join('、')})` : ''}`,
+            `${item.name} · v${item.version}${skillSource(item.source ?? (item.kind === 'skill' ? 'atelier' : undefined))}${item.tools?.length ? ` (${item.tools.join('、')})` : ''}`,
         )
         .join(' / '),
     ]);

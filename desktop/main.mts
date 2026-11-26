@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
- * @implementation 装配运行时监督、窗口和原生入口，将浏览器操作结果和结构化错误返回当前运行时。启动 Linux 安装包内置的 Shunt，并协调连接恢复和退出清理。
- * @updated 2026-11-20T22:16:28+08:00
+ * @implementation 装配窗口与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
+ * @updated 2026-11-26T01:32:35+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
@@ -11,6 +11,7 @@ import { createNativeFileActions } from './host/files.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join } from 'node:path';
 import { RuntimeSupervisor } from './host/runtime.mjs';
+import { rtkRelease } from '../shared/builtin-rtk.js';
 import { ManagedShunt, type ManagedShuntConnection } from './host/managed-shunt.mjs';
 import {
   bindPairing,
@@ -113,10 +114,16 @@ async function handleBrowserCall(child: ChildProcess, value: unknown): Promise<v
 }
 
 const lifecycle = new AbortController();
-const shuntResources = app.isPackaged
+const resources = app.isPackaged
   ? process.resourcesPath
   : join(root, 'dist', 'linux', 'atelier', 'resources');
-const shuntBinary = join(shuntResources, 'shunt', 'shunt');
+const shuntBinary = join(resources, 'shunt', 'shunt');
+// Only the application resource layout selects RTK. Runtime verifies the pinned
+// executable and launcher before enabling the capability; no host PATH fallback.
+const rtkBinary =
+  process.platform === rtkRelease.platform && process.arch === rtkRelease.arch
+    ? join(resources, rtkRelease.resourcePath)
+    : undefined;
 const managedShunt =
   process.platform === 'linux' && !process.env.ATELIER_GATEWAY && existsSync(shuntBinary)
     ? new ManagedShunt(shuntBinary, dataDir)
@@ -125,7 +132,7 @@ let unbindPairing: (() => void) | undefined;
 let recovery: Promise<void> | undefined;
 let quitting = false;
 const supervisor = new RuntimeSupervisor(
-  { packaged: app.isPackaged, root, dataDir },
+  { packaged: app.isPackaged, root, dataDir, rtkBinary },
   (child, value) => {
     void handleBrowserCall(child, value).catch(() => console.error('浏览器操作失败。'));
   },

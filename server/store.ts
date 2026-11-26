@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 管理会话、Git 工作树和多提交操作仓储的共享连接与版本迁移，并在运行中断后使相关审批失效。
- * @updated 2026-11-24T16:15:02+08:00
+ * @implementation 管理会话、Git 工作树及多提交仓储的共享连接与版本迁移。恢复中断运行时关闭审批、更新工具并收尾对话顺序。
+ * @updated 2026-11-26T01:17:56+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { openWorkbenchDatabase, type LegacyDatabase } from './db/connection.js';
 import type { SessionSnapshotRepository } from './modules/sessions/session-snapshot-repository.js';
 import type { SubagentRepository } from './modules/sessions/subagent-repository.js';
 import { subagentSchema, type Subagent } from '../shared/subagents.js';
+import { finalizeRunTranscript } from '../shared/ordered-transcript.js';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
@@ -41,6 +42,8 @@ export class Store {
   readonly gitMultiCommitPreferences: ReturnType<
     typeof openWorkbenchDatabase
   >['gitMultiCommitPreferences'];
+  readonly skillInheritance: ReturnType<typeof openWorkbenchDatabase>['skillInheritance'];
+  readonly rtkSettings: ReturnType<typeof openWorkbenchDatabase>['rtkSettings'];
   readonly events = new EventEmitter();
   private readonly subagents: SubagentRepository;
   private pendingEvents: RunEvent[] | undefined;
@@ -54,6 +57,8 @@ export class Store {
     this.sessionSnapshots = connection.sessionSnapshots;
     this.workspaceLayout = connection.workspaceLayout;
     this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
+    this.skillInheritance = connection.skillInheritance;
+    this.rtkSettings = connection.rtkSettings;
     this.readTransaction = connection.readTransaction;
     this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
     this.subagents = connection.subagents;
@@ -326,18 +331,44 @@ export class Store {
     this.transaction(() => {
       for (const subagent of this.subagents.interruptRunning(now()))
         this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
+      const runs = this.list('runs');
+      const orderedInterruptions = new Set(
+        runs
+          .filter((run) => run.transcript && activeStatuses.includes(run.status))
+          .map(({ id }) => id),
+      );
       for (const tool of this.list('tools')) {
-        if (!tool.bashExecution || tool.endedAt || tool.status !== 'running') continue;
+        if (
+          orderedInterruptions.has(tool.runId) &&
+          tool.transcriptOrder === undefined &&
+          tool.transcriptHookOrder !== undefined
+        )
+          this.update('tools', tool.id, {
+            transcriptOrder: tool.transcriptHookOrder,
+            transcriptHookOrder: undefined,
+          });
+        const pending = tool.status === 'running' || tool.status === 'awaiting_permission';
+        const interruptedBash = tool.bashExecution && tool.status === 'running';
+        if (tool.endedAt || !pending || (!interruptedBash && !orderedInterruptions.has(tool.runId)))
+          continue;
         this.update('tools', tool.id, {
           status: 'canceled',
           endedAt: now(),
-          bashExecution: { ...tool.bashExecution, phase: 'unknown', controllable: false },
+          ...(tool.bashExecution && {
+            bashExecution: { ...tool.bashExecution, phase: 'unknown', controllable: false },
+          }),
         });
-        this.event(tool.runId, tool.sessionId, 'tool.finished', { toolCallId: tool.id, status: 'canceled' });
+        this.event(tool.runId, tool.sessionId, 'tool.finished', {
+          toolCallId: tool.id,
+          status: 'canceled',
+        });
       }
-      for (const run of this.list('runs'))
+      for (const run of runs)
         if (activeStatuses.includes(run.status)) {
           this.update('runs', run.id, {
+            ...(run.transcript && {
+              transcript: finalizeRunTranscript(run.transcript),
+            }),
             status: 'interrupted',
             endedAt: now(),
             reason: '服务已重启，之前的运行中断。已发生的文件修改不会自动撤销，请先检查记录。',

@@ -509,7 +509,13 @@ export async function fixtures(): Promise<Fixtures> {
           record(value, 'message'),
         );
         const conversation = JSON.stringify(messages);
-        const latestUser = JSON.stringify(messages.findLast((item) => item.role === 'user') ?? {});
+        const userMessage = messages.findLast((item) => item.role === 'user');
+        const latestUser = JSON.stringify(userMessage ?? {});
+        const documentReceipt = Array.isArray(userMessage?.content) && userMessage.content.some(
+          (block: unknown) => typeof block === 'object' && block !== null &&
+            'type' in block && block.type === 'tool_result' &&
+            'tool_use_id' in block && block.tool_use_id === documentReadId,
+        );
         const currentTask = latestUser.split('用户本轮任务：').at(-1) ?? '';
         if (currentTask.includes(liveInserted)) {
           evidence.liveRequests.push(liveInserted);
@@ -522,7 +528,7 @@ export async function fixtures(): Promise<Fixtures> {
           streamMessage(res, undefined, 'Partial reply before insertion.', model, true);
           return;
         }
-        if (currentTask.includes(documentPrompt) || latestUser.includes(documentReadId)) {
+        if (currentTask.includes(documentPrompt) || documentReceipt) {
           if (++evidence.documentRequests === 1) {
             const path = /\/[^"\\\s]*\/sheet-0002\.txt/u.exec(latestUser)?.[0];
             assert.ok(path, 'SDK receives a local file reference for the target sheet');

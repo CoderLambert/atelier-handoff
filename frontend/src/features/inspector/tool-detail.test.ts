@@ -52,6 +52,65 @@ test('renderer public exports load in Node without importing CSS and the body re
   assert.match(markup, /stdout/u);
 });
 
+test('CLI details show both commands only for recorded RTK metadata, including confirmed nonzero exits', () => {
+  const rtk = {
+    hook: 'builtin-rtk' as const,
+    originalCommand: 'git status',
+    executedCommand: "'/fixture/RTK binary' git status",
+  };
+  for (const status of ['succeeded', 'failed'] as const) {
+    const value = tool({
+      command: rtk.originalCommand,
+      status,
+      output: JSON.stringify({
+        stdout: '',
+        stderr: 'fixture result',
+        exitCode: status === 'failed' ? 7 : 0,
+      }),
+      rtk,
+    });
+    const markup = renderToStaticMarkup(
+      createElement(ToolDetailBody, { tool: value, automaticallyApproved: false }),
+    );
+    assert.match(markup, /RTK · 内置 Hook/u);
+    assert.match(markup, /aria-label="原始命令"/u);
+    assert.match(markup, /aria-label="实际执行命令"/u);
+    assert.match(markup, /git status/u);
+    assert.match(markup, /RTK binary/u);
+    assert.doesNotMatch(markup, /aria-label="命令"/u);
+    assert.equal(toolInputView(value).command, rtk.originalCommand);
+    assert.equal(toolCallSummary(value), 'Bash · git status');
+    assert.equal(toolDisplayStatus(value, toolOutputView(value)), status);
+  }
+  for (const status of [
+    'running',
+    'awaiting_permission',
+    'succeeded',
+    'failed',
+    'denied',
+    'canceled',
+  ] as const) {
+    const value = tool({
+      command: rtk.executedCommand,
+      status,
+      inputSummary: JSON.stringify({ command: rtk.executedCommand, rtk }),
+      output: JSON.stringify({ stdout: 'RTK command', stderr: '', rtk }),
+    });
+    const markup = renderToStaticMarkup(
+      createElement(ToolDetailBody, { tool: value, automaticallyApproved: false }),
+    );
+    assert.doesNotMatch(markup, /RTK · 内置 Hook|aria-label="原始命令"|aria-label="实际执行命令"/u);
+    assert.match(markup, /aria-label="命令"/u);
+  }
+  const nonCli = renderToStaticMarkup(
+    createElement(ToolDetailBody, {
+      tool: tool({ name: 'Read', inputSummary: '{"file_path":"note.txt"}', rtk }),
+      automaticallyApproved: false,
+    }),
+  );
+  assert.doesNotMatch(nonCli, /RTK · 内置 Hook|实际执行命令/u);
+});
+
 test('tool summary uses the recorded command ahead of JSON input, preserves multiline command in details, and identifies other tools', () => {
   const command = 'printf first\nnode -e "console.log(\'second\')"';
   const value = tool({
@@ -817,6 +876,75 @@ test(
         await page.getByRole('region', { name: 'Output', exact: true }).isVisible(),
         true,
       );
+      const rtk = {
+        hook: 'builtin-rtk' as const,
+        originalCommand: 'git status',
+        executedCommand:
+          "'/fixture/RTK binary' git status --fixture='<script>window.pwned=true</script>'",
+      };
+      for (const locale of ['zh-CN', 'en'] as const) {
+        await page.evaluate((value) => Reflect.get(window, 'changeFixtureLanguage')(value), locale);
+        const chinese = locale === 'zh-CN';
+        const originalLabel = chinese ? '原始命令' : 'Original command';
+        const executedLabel = chinese ? '实际执行命令' : 'Executed command';
+        const hookLabel = chinese ? 'RTK · 内置 Hook' : 'RTK · Built-in hook';
+        for (const width of [1280, 1440, 1920]) {
+          await page.setViewportSize({ width, height: width === 1280 ? 800 : 900 });
+          await page.locator('#app').evaluate((element) => {
+            element.style.width = '320px';
+          });
+          await render(
+            tool({
+              id: `rtk-${locale}-${width}`,
+              command: rtk.originalCommand,
+              status: 'failed',
+              output: JSON.stringify({ stdout: '', stderr: 'fixture error', exitCode: 7 }),
+              rtk,
+            }),
+            'compact',
+          );
+          const disclosure = page.locator('.tool-detail__summary');
+          await disclosure.focus();
+          await page.keyboard.press('Enter');
+          assert.equal(await page.getByText(hookLabel, { exact: true }).isVisible(), true);
+          assert.equal(
+            await page.getByLabel(originalLabel, { exact: true }).textContent(),
+            rtk.originalCommand,
+          );
+          assert.equal(
+            await page.getByLabel(executedLabel, { exact: true }).textContent(),
+            rtk.executedCommand,
+          );
+          assert.match(
+            await disclosure.innerText(),
+            chinese ? /失败[\s\S]*退出码 7/u : /Failed[\s\S]*Exit 7/u,
+          );
+          await page.getByLabel(executedLabel, { exact: true }).focus();
+          assert.equal(
+            await page
+              .getByLabel(executedLabel, { exact: true })
+              .evaluate((element) => element === document.activeElement),
+            true,
+          );
+          const layout = await page
+            .locator('details')
+            .evaluate((element) => ({
+              width: element.clientWidth,
+              scrollWidth: element.scrollWidth,
+            }));
+          assert.ok(layout.scrollWidth <= layout.width + 1);
+          assert.equal(await page.locator('#app script, #app img').count(), 0);
+          assert.equal(await page.evaluate(() => Reflect.get(window, 'pwned')), undefined);
+        }
+        await render(tool({ id: `rtk-absent-${locale}`, command: rtk.executedCommand }));
+        await page.locator('.tool-detail__summary').click();
+        assert.equal(await page.getByText(hookLabel, { exact: true }).count(), 0);
+        assert.equal(await page.getByLabel(executedLabel, { exact: true }).count(), 0);
+        assert.equal(
+          await page.getByLabel(chinese ? '命令' : 'Command', { exact: true }).textContent(),
+          rtk.executedCommand,
+        );
+      }
       assert.deepEqual(errors, []);
       assert.deepEqual(external, []);
     } finally {

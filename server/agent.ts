@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 使用冻结的目录核对工作树，协调 SDK 子任务及工具回执。原生 Bash 在后台时保持所属会话可接收消息，直到实际终态。
- * @updated 2026-11-25T22:48:09+08:00
+ * @implementation 协调 SDK 子任务、插话、工作树和后台 Bash，记录运行顺序与回执，并按项目设置规划 RTK 包装。
+ * @updated 2026-11-26T03:01:01+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -9,7 +9,16 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { lstat, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { isDocumentAttachmentMime } from '../shared/document-attachments.js';
 import { prepareDocumentView } from './attachment-document-reader.js';
-import { join, relative } from 'node:path';
+import { delimiter, dirname, join, relative } from 'node:path';
+import {
+  builtinRtkAvailable,
+  builtinRtkLauncher,
+  confirmedRtkTrace,
+  mountBuiltinRtkPlugin,
+  publishBuiltinRtkPlan,
+} from './builtin-rtk.js';
+import { planBuiltinRtkCommand } from './rtk-rewrite.js';
+import type { RtkTrace } from '../shared/rtk-trace.js';
 import { existsSync } from 'node:fs';
 import {
   query,
@@ -31,6 +40,8 @@ import {
   type ToolCall,
 } from '../shared/types.js';
 import { Store } from './store.js';
+import { RunTranscript } from './run-transcript.js';
+import { finalizeRunTranscript, type TranscriptNotice } from '../shared/ordered-transcript.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
 import {
@@ -49,7 +60,6 @@ import { gatewaySearchArgs, gatewayToken, searchGateway } from './gateway-search
 import { magpieModel } from './magpie-models.js';
 import {
   hostEnvironment,
-  mountHostSkills,
   nativeReadTools,
   nativeSdkOptions,
   nativeWorkTools,
@@ -75,7 +85,7 @@ import type { EnabledMcp } from './extensions.js';
 import { desktopBrowserArgs, type DesktopBrowserToolName } from '../shared/desktop-browser.js';
 import { callDesktopBrowser } from './desktop-browser.js';
 import type { DesktopBrowserAccess } from './desktop-browser-access.js';
-import { mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
+import { mountLocalRunSkills, mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
 import { executeSkillPackage, readSkillResource, supportsSearch } from './skill-package-runtime.js';
 import { lookupWeather, weatherLocation } from './weather.js';
 import {
@@ -183,6 +193,7 @@ export class AgentRunner implements Runner {
     private readonly browserAccess?: DesktopBrowserAccess,
     private readonly verifyWorkspace?: (run: Run) => Promise<void>,
     private readonly onInputCheckpoint?: (sessionId: string) => void,
+    private readonly rtk?: { binary: string; enabled(projectId: string): boolean },
   ) {}
   start(
     run: Run,
@@ -309,13 +320,14 @@ export class AgentRunner implements Runner {
     };
     const automaticSkills = skills.filter((skill) => !skill.manual);
     const selectedSkills = (run.extensions ?? []).filter(({ kind }) => kind === 'skill');
-    const skillBindings = selectedSkills.flatMap((skill) =>
+    const installedSelections = selectedSkills.filter(({ source }) => !source || source === 'atelier');
+    const skillBindings = installedSelections.flatMap((skill) =>
       readSkillToolBindings(this.store, project.id, skill.id).map((binding) => ({
         skill,
         binding,
       })),
     );
-    const weatherEnabled = [...automaticSkills, ...selectedSkills].some(
+    const weatherEnabled = [...automaticSkills.filter(({ local }) => !local), ...installedSelections].some(
       (skill) =>
         skill.name === 'weather' && !hasSkillToolBindingConfig(this.store, project.id, skill.id),
     );
@@ -323,10 +335,18 @@ export class AgentRunner implements Runner {
     const packages = new Map(
       skills.filter((skill) => skill.package).map((skill) => [skill.name, skill]),
     );
-    const skillRefs = automaticSkills.map(({ id, name, version }) => ({ id, name, version }));
+    const skillRefs = automaticSkills.map(({ id, name, version, source }) => ({ id, name, version, source }));
     const skillCalls = new Map<string, RunSkill>();
     let pluginDirectory: string | undefined;
-    let hostSkillPlugins: string[] = [];
+    let localSkillPlugins: string[] = [];
+    let rtkPlugin: string | undefined;
+    let rtkLauncherPath: string | undefined;
+    const rtkPlans = new Map<string, RtkTrace>();
+    const recordRtkReceipt = (id: string, input: unknown) => {
+      const rtk = confirmedRtkTrace(rtkPlans.get(id), input);
+      rtkPlans.delete(id);
+      if (rtk) this.store.update('tools', id, { rtk });
+    };
     let documentDirectory: string | undefined;
     const documentPaths = new Map<string, string>();
     let attachmentGuidance = '';
@@ -430,16 +450,27 @@ export class AgentRunner implements Runner {
     let lastHeartbeat = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const commands = new Set<Promise<unknown>>();
-    const toolWork = new Set<Promise<unknown>>();
+    const toolWork = new Map<Promise<unknown>, string | undefined>();
     const delegate = process.env.ATELIER_DISABLE_SUBAGENTS !== '1';
-    const subagents = new SubagentRun(run, this.store, (id) => {
-      branchControllers.get(id)?.abort();
-      branchControllers.delete(id);
-    });
+    const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
+    const subagents = new SubagentRun(
+      run,
+      sdkSessionId,
+      native,
+      this.store,
+      (id, status, summary) => {
+        branchControllers.get(id)?.abort();
+        branchControllers.delete(id);
+        finishTool(
+          id,
+          status === 'stopped' || status === 'interrupted' ? 'stopped' : status === 'completed',
+          summary ?? (status === 'completed' ? '子任务已返回报告。' : '子任务未完成。'),
+        );
+      },
+    );
     const writeProject = <T>(effect: () => Promise<T>) =>
       this.writes.run(verifyDispatch, effect, workingDirectory);
-    const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
-    const runningTools = new Set<string>();
+    const runningTools = new Map<string, { useId?: string; subagentId?: string }>();
     const bash = native
       ? new NativeBashTasks(sdkSessionId, (id, execution) => {
           const record = this.store.get('tools', id);
@@ -468,29 +499,69 @@ export class AgentRunner implements Runner {
         text: '',
         createdAt: now(),
       }).id;
+    const transcript = new RunTranscript();
+    const transcriptNotices: TranscriptNotice[] = [];
+    const recordedNotices = new Set<string>();
+    const pendingDenials = new Map<string, Extract<TranscriptNotice, { kind: 'tool_blocked' }>>();
+    const transcriptState = () => ({
+      version: 1 as const,
+      notices: transcriptNotices,
+      pendingDenials: pendingDenials.size ? [...pendingDenials.values()] : undefined,
+    });
+    const saveTranscript = () =>
+      this.store.update('runs', run.id, { transcript: transcriptState() });
+    const initialOrder = transcript.nextOrder();
+    this.store.transaction(() => {
+      saveTranscript();
+      if (promptMessageId)
+        this.store.update('messages', promptMessageId, { transcriptOrder: initialOrder });
+    });
     let assistantId = createAssistant();
+    transcript.associateInput(promptMessageId, assistantId);
     let assistantAnchor: string | undefined;
     let insertion: { message: LiveInput; sent: boolean; preparing?: boolean } | undefined;
     let insertionIdleTimer: ReturnType<typeof setTimeout> | undefined;
     let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
-    const blocks = new Map<string, string>();
-    let messageId = '';
-    let blockIndex = 0;
-    let dirty = false;
     const flush = () => {
-      if (!dirty) return;
-      dirty = false;
-      this.store.update('messages', assistantId, { text: [...blocks.values()].join('\n\n') });
-      this.store.event(run.id, run.sessionId, 'message.delta', { messageId: assistantId });
+      const changes = transcript.takeChanges();
+      if (!changes.length) return;
+      this.store.transaction(() => {
+        for (const { id, text, transcriptParts } of changes) {
+          this.store.update('messages', id, { text, transcriptParts });
+          this.store.event(run.id, run.sessionId, 'message.delta', { messageId: id });
+        }
+      });
+    };
+    const recordNotice = (key: string, notice: TranscriptNotice) => {
+      if (recordedNotices.has(key)) return;
+      flush();
+      recordedNotices.add(key);
+      transcriptNotices.push(notice);
+      saveTranscript();
     };
     let atToolBoundary = false;
     let awaitingModel = true;
+    const hasDeferredWork = () => bash?.hasDeferredReceipt || subagents.hasBackground;
     const blockedByLocalWork = () =>
-      subagents.active ||
-      toolWork.size > 0 ||
+      (!native && subagents.active) ||
+      [...toolWork.values()].some((subagentId) => !native || !subagentId) ||
       commands.size > 0 ||
       this.store.get('runs', run.id).status === 'awaiting_permission';
-    const foregroundTools = () => [...runningTools].filter((id) => !bash?.isBackground(id));
+    const foregroundTools = () =>
+      [...runningTools]
+        .filter(
+          ([id, { subagentId }]) =>
+            !subagentId && !bash?.isBackground(id) && !subagents.isBackground(id),
+        )
+        .map(([id]) => id);
+    const canBackground = (id: string) => {
+      const useId = runningTools.get(id)?.useId;
+      return (
+        !!useId &&
+        (subagents.canMove(id) || bash?.canMove(id)) &&
+        [...runningTools.values()].filter((call) => call.useId === useId).length === 1
+      );
+    };
     const sendInsertion = () => {
       if (
         closing ||
@@ -514,7 +585,6 @@ export class AgentRunner implements Runner {
       message.dispatched();
       insertion.sent = true;
       flush();
-      blocks.clear();
       this.store.put('messages', {
         id: message.id,
         runId: run.id,
@@ -522,8 +592,10 @@ export class AgentRunner implements Runner {
         role: 'user',
         text: message.text,
         createdAt: now(),
+        transcriptOrder: transcript.nextOrder(),
       });
       assistantId = createAssistant();
+      transcript.associateInput(message.id, assistantId);
       assistantAnchor = undefined;
       awaitingModel = true;
       input.push(message.text, [], message.id, message.priority ?? 'now');
@@ -533,6 +605,67 @@ export class AgentRunner implements Runner {
     const appToolId = (id: string, agentId?: string) =>
       agentId ? `${run.id}:${agentId}:${id}` : `${run.id}:${id}`;
     const seenTools = new Set<string>();
+    const unpositionedTools = new Map<string, number>();
+    const toolNoticeIndex = (id: string) =>
+      transcriptNotices.findIndex((notice) => 'toolCallId' in notice && notice.toolCallId === id);
+    const placeToolNotice = (
+      id: string,
+      name: string,
+      order: number,
+      at: string,
+      kind: 'tool_preparing' | 'tool_blocked',
+    ) => {
+      const notice = { kind, order, at, toolCallId: id, toolName: name };
+      const index = toolNoticeIndex(id);
+      if (index === -1) transcriptNotices.push(notice);
+      else transcriptNotices[index] = notice;
+    };
+    const recordBlockedTool = (id: string, name: string) => {
+      if (seenTools.has(id) || pendingDenials.has(id)) return;
+      if (transcriptNotices[toolNoticeIndex(id)]?.kind === 'tool_blocked') return;
+      const at = now();
+      const position = transcript.toolPosition(id);
+      if (!position) {
+        pendingDenials.set(id, {
+          kind: 'tool_blocked',
+          toolCallId: id,
+          toolName: name,
+          order: transcript.nextOrder(),
+          at,
+        });
+        saveTranscript();
+        return;
+      }
+      placeToolNotice(id, name, position.order, at, 'tool_blocked');
+      saveTranscript();
+    };
+    const publishToolPositions = () => {
+      const observed = transcript.takeObservedTools();
+      if (!observed.length) return;
+      flush();
+      this.store.transaction(() => {
+        for (const { id, name, order, at } of observed) {
+          if (unpositionedTools.delete(id)) {
+            this.store.update('tools', id, {
+              transcriptOrder: order,
+              transcriptHookOrder: undefined,
+            });
+          } else {
+            const blocked = pendingDenials.get(id);
+            pendingDenials.delete(id);
+            placeToolNotice(
+              id,
+              name,
+              order,
+              blocked?.at ?? at,
+              blocked ? 'tool_blocked' : 'tool_preparing',
+            );
+          }
+          this.store.event(run.id, session.id, 'tool.announced', { toolCallId: id, tool: name });
+        }
+        saveTranscript();
+      });
+    };
     const createTool = (
       id: string,
       name: string,
@@ -542,6 +675,7 @@ export class AgentRunner implements Runner {
       sdkActorId?: string,
     ) => {
       if (seenTools.has(id)) return this.store.get('tools', id);
+      flush();
       const input = JSON.stringify(args);
       const command =
         (name === 'Bash' || name === 'mcp__atelier__run_command') &&
@@ -552,12 +686,18 @@ export class AgentRunner implements Runner {
         typeof args.command === 'string'
           ? args.command
           : undefined;
+      const topLevel = !subagentId && !sdkActorId;
+      const position = topLevel ? transcript.toolPosition(id) : undefined;
+      const hookOrder = topLevel && !position ? transcript.nextOrder() : undefined;
+      if (hookOrder !== undefined) unpositionedTools.set(id, hookOrder);
       const value: ToolCall = {
         id,
         runId: run.id,
         sessionId: run.sessionId,
         name,
         ...(subagentId ? { subagentId } : {}),
+        ...(position ? { transcriptOrder: position.order } : {}),
+        ...(hookOrder !== undefined ? { transcriptHookOrder: hookOrder } : {}),
         inputSummary: input.slice(0, 4000),
         ...(command === undefined ? {} : { command }),
         ...(name === 'Bash' &&
@@ -570,9 +710,15 @@ export class AgentRunner implements Runner {
         startedAt: now(),
         endedAt: null,
       };
-      this.store.put('tools', value);
+      const noticeIndex = toolNoticeIndex(id);
+      this.store.transaction(() => {
+        this.store.put('tools', value);
+        const removedDenial = pendingDenials.delete(id);
+        if (noticeIndex !== -1) transcriptNotices.splice(noticeIndex, 1);
+        if (noticeIndex !== -1 || removedDenial) saveTranscript();
+      });
       seenTools.add(id);
-      runningTools.add(id);
+      runningTools.set(id, { useId, subagentId });
       progress.started(value);
       this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
       return value;
@@ -602,7 +748,7 @@ export class AgentRunner implements Runner {
         return;
       bash?.complete(id);
       runningTools.delete(id);
-      atToolBoundary = true;
+      if (!prior.subagentId) atToolBoundary = true;
       const skill = skillCalls.get(id);
       if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
       if (output.length > 32000) this.files.saveOutput(id, output);
@@ -659,8 +805,8 @@ export class AgentRunner implements Runner {
       }
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
       if (skill && status === 'succeeded') {
-        const { id: extensionId, name, version } = skill;
-        this.store.event(run.id, run.sessionId, 'skill.invoked', { extensionId, name, version });
+        const { id: extensionId, name, version, source } = skill;
+        this.store.event(run.id, run.sessionId, 'skill.invoked', { extensionId, name, version, ...(source ? { source } : {}) });
       }
       return finished;
     };
@@ -708,7 +854,7 @@ export class AgentRunner implements Runner {
               };
             }
           });
-          toolWork.add(work);
+          toolWork.set(work, entry.subagentId);
           try {
             return await work;
           } finally {
@@ -1582,11 +1728,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           throw new Error('子任务未获此工具权限。');
         if (event.tool_name === 'Agent') {
           if (!delegate || actor) throw new Error('本轮未开放此委派。');
-          const request = subagents.reserve(id, args);
-          createTool(id, 'Agent', {
-            description: request.description,
-            subagent_type: request.subagent_type,
-          });
+          const request = subagents.reserve(id, event.tool_use_id, args);
+          createTool(
+            id,
+            'Agent',
+            { description: request.description, subagent_type: request.subagent_type },
+            undefined,
+            event.tool_use_id,
+          );
           return decision('allow', '允许本轮本地子代理任务。', request);
         }
         if (event.tool_name === 'Read') {
@@ -1617,7 +1766,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             .parse(args.todos);
         } else if (event.tool_name === 'Skill') {
           const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
-          if (!skill && !native) throw new Error('该 Skill 不在本轮自动调用名单中。');
+          if (!skill && (!native || (typeof args.skill === 'string' && /^(?:host-skills|workspace-skills|atelier-skills):/iu.test(args.skill))))
+            throw new Error('该 Skill 不在本轮自动调用名单中。');
           if (skill) skillCalls.set(id, skill);
         } else if (event.tool_name === 'TaskStop') {
           if (!bash?.authorizesStop(args, actor?.id))
@@ -1639,6 +1789,39 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           event.tool_use_id,
           event.agent_id,
         );
+        let rtkCandidate: Record<string, unknown> | undefined;
+        if (
+          event.tool_name === 'Bash' &&
+          !event.agent_id &&
+          event.session_id === sdkSessionId &&
+          rtkPlugin &&
+          rtkLauncherPath &&
+          this.rtk?.enabled(project.id) &&
+          typeof args.command === 'string' &&
+          typeof event.tool_use_id === 'string' &&
+          (await builtinRtkAvailable(this.rtk.binary))
+        ) {
+          const executedCommand = await planBuiltinRtkCommand(args.command, {
+            launcher: rtkLauncherPath,
+            scratch: rtkPlugin,
+            signal: toolSignal(),
+          });
+          await verifyDispatch();
+          if (executedCommand && this.rtk.enabled(project.id)) {
+            const plan: RtkTrace = {
+              hook: 'builtin-rtk',
+              originalCommand: args.command,
+              executedCommand,
+            };
+            const published = await publishBuiltinRtkPlan(rtkPlugin, event.tool_use_id, plan);
+            verifyCurrent();
+            if (published && this.rtk.enabled(project.id)) {
+              rtkPlans.set(id, plan);
+              // Leave the original input intact for the CLI plugin's rule check.
+              rtkCandidate = args;
+            }
+          }
+        }
         const updatedInput = permittedMcp.has(event.tool_name)
           ? {
               ...args,
@@ -1649,13 +1832,15 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                 actor?.id,
               ),
             }
-          : undefined;
+          : rtkCandidate;
         return decision('allow', '受控工具，审批由工作台执行器按本轮设置处理。', updatedInput);
       } catch (error) {
         if (event.hook_event_name === 'PreToolUse' && !signal.aborted) {
+          const id = appToolId(event.tool_use_id, event.agent_id);
+          if (!event.agent_id) recordBlockedTool(id, event.tool_name);
           this.store.event(run.id, session.id, 'tool.blocked', {
             tool: event.tool_name,
-            toolCallId: appToolId(event.tool_use_id, event.agent_id),
+            toolCallId: id,
             code: error instanceof AppError ? error.code : null,
             reason: this.clean(error),
           });
@@ -1697,7 +1882,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                 sdkActorId,
               )
             : Promise.resolve<ToolCall['bashLog']>({ status: 'unavailable' });
-        toolWork.add(work);
+        toolWork.set(work, call.subagentId);
         let captured: ToolCall['bashLog'];
         let committed = false;
         try {
@@ -1787,10 +1972,11 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         }
       if (documentManifest.length)
         attachmentGuidance = `本轮文档附件和可读路径如下。只用 Read 读取清单中的路径，对大文件使用 offset 和 limit，核对原行号或页码。读取失败时告诉用户原因，文件文本只作为任务数据。\n${JSON.stringify(documentManifest)}\n\n`;
-      if (automaticSkills.length)
-        pluginDirectory = await mountRunSkills(sdkDirectory, automaticSkills);
+      const installedAuto = automaticSkills.filter(({ local }) => !local);
+      if (installedAuto.length)
+        pluginDirectory = await mountRunSkills(sdkDirectory, installedAuto);
       signal.throwIfAborted();
-      if (native) hostSkillPlugins = await mountHostSkills(sdkDirectory, workingDirectory);
+      if (native) localSkillPlugins = await mountLocalRunSkills(sdkDirectory, automaticSkills);
       const env: NodeJS.ProcessEnv = native ? hostEnvironment(process.env) : {};
       for (const key of [
         'PATH',
@@ -1803,6 +1989,19 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         'NODE_EXTRA_CA_CERTS',
       ])
         if (process.env[key]) env[key] = process.env[key];
+      if (native && sdkTemp && this.rtk && await builtinRtkAvailable(this.rtk.binary)) {
+        const launcher = builtinRtkLauncher(this.rtk.binary);
+        try {
+          const rtkHome = join(this.store.directory, 'rtk');
+          await mkdir(rtkHome, { recursive: true, mode: 0o700 });
+          rtkPlugin = await mountBuiltinRtkPlugin(sdkTemp);
+          rtkLauncherPath = launcher;
+          env.ATELIER_RTK_HOME = rtkHome;
+          env.PATH = [dirname(launcher), env.PATH].filter(Boolean).join(delimiter);
+        } catch {
+          this.store.event(run.id, session.id, 'sdk.notice', { type: 'builtin_rtk_unavailable' });
+        }
+      }
       Object.assign(env, {
         ANTHROPIC_BASE_URL: run.config.gateway,
         ANTHROPIC_AUTH_TOKEN: gatewayToken(run.config),
@@ -1826,8 +2025,9 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       this.store.update('runs', run.id, { status: 'running', startedAt: now() });
       this.store.event(run.id, run.sessionId, 'run.status_changed', { status: 'running' });
       const availablePlugins = [
+        ...(rtkPlugin ? [rtkPlugin] : []),
         ...(pluginDirectory ? [pluginDirectory] : []),
-        ...hostSkillPlugins,
+        ...localSkillPlugins,
       ].map((path) => ({ type: 'local' as const, path }));
       connection = query({
         prompt: input,
@@ -1910,13 +2110,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (event.hook_event_name !== 'PostToolUse') return {};
                     if (event.tool_name === 'Agent') {
                       const id = appToolId(event.tool_use_id, event.agent_id);
-                      const completed = subagents.report(id, event.tool_response);
-                      if (!completed) subagents.finish(id, 'failed', '子代理未返回已完成的报告。');
-                      finishTool(
-                        id,
-                        completed,
-                        completed ? '子任务已返回报告。' : '子任务未完成。',
-                      );
+                      subagents.report(id, event.tool_response);
+                      atToolBoundary = true;
                       sendInsertion();
                       return {};
                     }
@@ -1939,7 +2134,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                       const response = event.tool_response;
                       const raw = JSON.stringify(response) ?? '';
                       if (event.tool_name === 'Bash' && bash && event.session_id === sdkSessionId) {
-                        atToolBoundary = true;
+                        recordRtkReceipt(id, event.tool_input);
+                        if (!event.agent_id) atToolBoundary = true;
                         const handoff = bash.handedOff(id, response);
                         if (handoff) {
                           if (handoff.terminal) await finishBashTask(handoff.terminal);
@@ -1996,11 +2192,18 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (event.hook_event_name === 'PostToolUseFailure') {
                       const id = appToolId(event.tool_use_id, event.agent_id);
                       const error = this.clean(event.error, Infinity);
+                      if (event.tool_name === 'Bash' && event.session_id === sdkSessionId && /^Exit code [1-9]\d*\b/u.test(error))
+                        recordRtkReceipt(id, event.tool_input);
                       if (event.tool_name === 'Bash' && bash?.deferFailureDuringStop(id, error))
                         return {};
                       if (event.tool_name === 'Agent') {
-                        subagents.finish(id, signal.aborted ? 'stopped' : 'failed', error);
+                        subagents.finish(
+                          id,
+                          signal.aborted || event.is_interrupt === true ? 'stopped' : 'failed',
+                          error,
+                        );
                         sendInsertion();
+                        return {};
                       }
                       const saved = finishTool(
                         id,
@@ -2114,14 +2317,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         input.end();
       };
       const awaitInsertionReceipt = () => {
-        if (!insertion || bash?.hasDeferredReceipt || insertionIdleTimer) return;
+        if (!insertion || hasDeferredWork() || insertionIdleTimer) return;
         insertionIdleTimer = setTimeout(() => {
           insertionIdleTimer = undefined;
-          if (!bash?.hasDeferredReceipt && (!bash || !foregroundTools().length)) drainInput();
+          if (!hasDeferredWork() && (!bash || !foregroundTools().length)) drainInput();
         }, 120_000);
       };
       const afterDeferredWork = () => {
-        if (bash?.hasDeferredReceipt || !finalResult || subagents.active) return;
+        if (hasDeferredWork() || !finalResult || subagents.active) return;
         if (insertion) awaitInsertionReceipt();
         else if (!awaitingModel) drainInput();
       };
@@ -2157,7 +2360,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               }
             };
             live.canInsertNow = () =>
-              !blockedByLocalWork() && foregroundTools().every((id) => bash.canMove(id));
+              !blockedByLocalWork() && foregroundTools().every(canBackground);
             live.canInsertNext = () =>
               !!live.insert &&
               !insertion &&
@@ -2178,15 +2381,23 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               try {
                 if (bash && (message.priority ?? 'now') === 'now') {
                   if (!live.canInsertNow?.())
-                    throw new AppError('BASH_CONTROL_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
+                    throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
                   if (message.canDispatch?.() === false)
                     throw new AppError('QUEUE_CHANGED', '队列或执行范围已变化。', 409);
                   const sdk = connection;
                   if (sdk)
                     for (const id of foregroundTools()) {
                       signal.throwIfAborted();
-                      if (runningTools.has(id) && !bash.isBackground(id))
-                        await bash.control(sdk, id, 'background');
+                      if (
+                        !runningTools.has(id) ||
+                        bash.isBackground(id) ||
+                        subagents.isBackground(id)
+                      )
+                        continue;
+                      if (!canBackground(id))
+                        throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
+                      if (subagents.canMove(id)) await subagents.moveToBackground(sdk, id);
+                      else await bash.control(sdk, id, 'background');
                     }
                 }
                 current.preparing = false;
@@ -2227,9 +2438,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           subagents.started(message);
           bash?.started(message);
         } else if (message.type === 'system' && message.subtype === 'task_updated') {
+          subagents.updated(message);
           bash?.updated(message);
+          sendInsertion();
         } else if (message.type === 'system' && message.subtype === 'task_notification') {
-          subagents.notify(message);
+          if (subagents.notify(message)) {
+            sendInsertion();
+            afterDeferredWork();
+          }
           const task = bash?.terminal(message);
           if (task && !capturing.has(task.id)) {
             await finishBashTask(task);
@@ -2238,24 +2454,23 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         } else if (message.type === 'stream_event') {
           if (message.parent_tool_use_id) continue;
           const event = message.event;
+          transcript.acceptStream(message, assistantId, appToolId);
+          publishToolPositions();
           if (event.type === 'message_start') {
-            messageId = event.message.id;
             atToolBoundary = false;
             awaitingModel = true;
           }
-          if (event.type === 'content_block_start') blockIndex = event.index;
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            if (firstText && event.delta.text) {
-              firstText = false;
-              this.store.event(run.id, session.id, 'sdk.first_text', {
-                elapsedMs:
-                  Date.now() -
-                  Date.parse(this.store.get('runs', run.id).startedAt ?? run.createdAt),
-              });
-            }
-            const key = `${messageId}:${event.index}`;
-            blocks.set(key, (blocks.get(key) ?? '') + event.delta.text);
-            dirty = true;
+          if (
+            firstText &&
+            event.type === 'content_block_delta' &&
+            event.delta.type === 'text_delta' &&
+            event.delta.text
+          ) {
+            firstText = false;
+            this.store.event(run.id, session.id, 'sdk.first_text', {
+              elapsedMs:
+                Date.now() - Date.parse(this.store.get('runs', run.id).startedAt ?? run.createdAt),
+            });
           }
         } else if (
           message.type === 'tool_progress' ||
@@ -2283,7 +2498,21 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   },
             );
           }
+        } else if (message.type === 'system' && message.subtype === 'permission_denied') {
+          const id = appToolId(message.tool_use_id, message.agent_id);
+          if (!message.agent_id) recordBlockedTool(id, message.tool_name);
+          this.store.event(run.id, session.id, 'sdk.notice', {
+            type: message.type,
+            subtype: message.subtype,
+          });
         } else if (message.type === 'system' && message.subtype === 'api_retry') {
+          recordNotice(message.uuid, {
+            kind: 'api_retry',
+            order: transcript.nextOrder(),
+            at: now(),
+            attempt: message.attempt,
+            maxRetries: message.max_retries,
+          });
           this.store.event(run.id, session.id, 'sdk.api_retry', {
             attempt: message.attempt,
             maxRetries: message.max_retries,
@@ -2294,35 +2523,53 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           });
         } else if (message.type === 'assistant') {
           if (message.parent_tool_use_id || message.agent_id) continue;
-          assistantAnchor =
-            !message.error && !message.message.content.some((block) => block.type === 'tool_use')
-              ? message.uuid
-              : undefined;
-          if (message.error)
+          const owner = transcript.acceptAssistant(message, assistantId, appToolId);
+          publishToolPositions();
+          if (owner === assistantId)
+            assistantAnchor =
+              !message.error && !message.message.content.some((block) => block.type === 'tool_use')
+                ? message.uuid
+                : undefined;
+          if (message.error) {
+            recordNotice(message.uuid, {
+              kind: 'api_error',
+              order: transcript.nextOrder(),
+              at: now(),
+              code: message.error,
+            });
             this.store.event(run.id, session.id, 'sdk.error', {
               stage: 'assistant',
               code: message.error,
             });
-          for (const [index, block] of message.message.content.entries())
-            if (block.type === 'text') {
-              const key = `${message.message.id}:${message.message.content.length === 1 ? blockIndex : index}`;
-              blocks.set(key, block.text);
-              dirty = true;
-            }
+          }
         } else if (message.type === 'user' && Array.isArray(message.message.content)) {
           for (const block of message.message.content)
             if (block.type === 'tool_result') {
-              const id = appToolId(
-                block.tool_use_id,
-                'agent_id' in message ? message.agent_id : undefined,
-              );
+              const actor = 'agent_id' in message ? message.agent_id : undefined;
+              const id = appToolId(block.tool_use_id, actor);
               let record: ToolCall;
               try {
                 record = this.store.get('tools', id);
               } catch {
+                // The SDK can reject an unavailable tool before invoking the hook.
+                const name =
+                  !actor && block.is_error ? transcript.toolPosition(id)?.name : undefined;
+                if (name) {
+                  recordBlockedTool(id, name);
+                  this.store.event(run.id, session.id, 'tool.blocked', {
+                    toolCallId: id,
+                    tool: name,
+                    code: null,
+                  });
+                }
                 continue;
               }
-              if (record.status === 'running' && !capturing.has(id) && !bash?.awaitingTerminal(id))
+              if (
+                record.status === 'running' &&
+                record.name !== 'Agent' &&
+                !capturing.has(id) &&
+                !bash?.awaitingTerminal(id)
+              )
                 finishTool(
                   id,
                   !block.is_error,
@@ -2344,10 +2591,12 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             clearTimeout(insertionIdleTimer);
             insertionIdleTimer = undefined;
           }
-          if (!continuingInsertion && !blocks.size && message.subtype === 'success') {
-            blocks.set('result', message.result);
-            dirty = true;
+          for (const denied of message.permission_denials) {
+            const id = appToolId(denied.tool_use_id);
+            if (transcript.toolPosition(id)?.name) recordBlockedTool(id, denied.tool_name);
           }
+          if (!continuingInsertion && message.subtype === 'success')
+            transcript.fallback(assistantId, message.result);
           const { usage, cumulativeCost } = readRunUsage(message, observedModel, previousCost);
           previousCost = cumulativeCost ?? previousCost;
           this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost ?? undefined });
@@ -2379,7 +2628,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             // Tell the SDK there is no more input if it becomes idle without acknowledging a delivery.
             // Closing input still allows an already accepted response to finish.
             awaitInsertionReceipt();
-          } else if (bash?.hasDeferredReceipt) {
+          } else if (hasDeferredWork()) {
             flush();
             sendInsertion();
           } else {
@@ -2400,6 +2649,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       if (insertion?.sent && !signal.aborted) failure = '补充消息未收到 SDK 回执。';
       else if (bash?.hasDeferredReceipt && !signal.aborted)
         failure = 'SDK 连接结束，Bash 命令未返回终态。';
+      else if (subagents.active && !signal.aborted) failure = '主会话结束时仍有未收尾的子任务。';
       else if (!finalResult && !signal.aborted) failure = 'SDK 连接已结束，但未返回终态。';
       else if (finalResult?.is_error)
         failure =
@@ -2408,11 +2658,19 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             : this.clean(finalResult.errors.join('\n'));
     } catch (error) {
       failure = this.clean(error);
-      if (!signal.aborted)
+      if (!signal.aborted) {
+        if (connection)
+          recordNotice('sdk-stream-error', {
+            kind: 'api_error',
+            order: transcript.nextOrder(),
+            at: now(),
+            code: 'stream_error',
+          });
         this.store.event(run.id, session.id, 'sdk.error', {
           stage: connection ? 'stream' : 'startup',
           code: (error as NodeJS.ErrnoException)?.code ?? null,
         });
+      }
     } finally {
       live.stopSubagent = undefined;
       live.insert = undefined;
@@ -2463,7 +2721,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       }
       clearTimeout(cancelChildTimer);
       signal.removeEventListener('abort', boundSdkCancellation);
-      await Promise.allSettled([...commands, ...toolWork]);
+      await Promise.allSettled([...commands, ...toolWork.keys()]);
       subagents.close(
         live.reason === 'user' ? 'stopped' : 'interrupted',
         failure ?? '父运行结束，子任务已清理。',
@@ -2478,7 +2736,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         });
       for (const directory of [
         ...(pluginDirectory ? [pluginDirectory] : []),
-        ...hostSkillPlugins,
+        ...localSkillPlugins,
       ]) {
         try {
           await rm(directory, { recursive: true, force: true });
@@ -2525,7 +2783,14 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           saveAnchor(assistantId, assistantAnchor);
       }
       this.store.transaction(() => {
+        // A hook whose native frame was lost still has its actual observed position.
+        for (const [id, order] of unpositionedTools)
+          this.store.update('tools', id, {
+            transcriptOrder: order,
+            transcriptHookOrder: undefined,
+          });
         this.store.update('runs', run.id, {
+          transcript: finalizeRunTranscript(transcriptState()),
           status,
           endedAt: now(),
           reason,

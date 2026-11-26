@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { z } from 'zod';
 import { AgentRunner } from '../server/agent.js';
+import { SkillInheritance, applySkillScope } from '../server/skill-inheritance.js';
 import { Store } from '../server/store.js';
 import { PermissionService } from '../server/permissions.js';
 import { FileRecords } from '../server/artifacts.js';
@@ -201,7 +202,10 @@ test(
           timeoutMs: 25_000,
         },
       });
-      await runner.start(run, run.prompt);
+      const inheritance = new SkillInheritance(store.skillInheritance, join(root, 'empty-home'));
+      const snapshot = inheritance.snapshot({ projectId: project.id, directory: projectPath, sessionId: session.id, native: true }, true);
+      const { skills } = applySkillScope(snapshot, { prompt: run.prompt, mcp: [], used: [] }, [], [], run.prompt);
+      await runner.start(run, run.prompt, [], skills);
       assert.deepEqual(errors, []);
       const finished = store.get('runs', run.id);
       assert.equal(finished.status, 'completed', finished.error ?? undefined);

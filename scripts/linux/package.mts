@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * @file 构建 Linux x64 应用发布包。
- * @implementation 校验输入、依赖、许可证和 native，归档 SQLite、终端与运行资源，并用随包 Node 执行探针。
- * @updated 2026-11-26T01:30:00+08:00
+ * @implementation 校验运行时、RTK、终端依赖和许可证，核对暂存与发行工件的资源、哈希和模式。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 // Linux x64/glibc only: build the production frontend, then run with tsx.
-// Uses installed inputs only; no downloads, dependency installs, root, or git.
+// Uses installed runtimes and one pinned RTK archive/cache; no dependency installs, root, or git.
 import {
   access,
   chmod,
@@ -41,6 +41,8 @@ import {
   terminalReleaseSchema,
   terminalRuntimeVersions,
 } from './terminal-resources.mjs';
+import { rtkLauncher, rtkRelease } from '../../shared/builtin-rtk.js';
+import { stageRtkRelease, verifyRtkArchive } from './rtk.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const output = join(root, 'dist/linux');
@@ -723,6 +725,13 @@ async function packageRelease(work: string): Promise<string[]> {
     plugins: [inputPlugin],
   };
   await build(runtimeBuild);
+  // The runtime copies this SDK plugin into the private directory for each run.
+  const rtkPluginPath = 'resources/runtime/server/rtk-plugin/register.js';
+  if (
+    !entryPoints.includes('server/rtk-plugin/register.ts') ||
+    !(await exists(join(stage, rtkPluginPath)))
+  )
+    throw new Error('Missing compiled RTK plugin payload.');
   const migrations: { path: string; sha256: string }[] = [];
   for (const path of RUNTIME_MIGRATIONS) {
     await copy(join(root, path), join(runtime, path));
@@ -750,6 +759,17 @@ async function packageRelease(work: string): Promise<string[]> {
     shuntLicenseTexts.push({ path: destination, sha256: text.sha256 });
   }
   const shuntRelease = { ...SHUNT, texts: shuntLicenseTexts };
+  const rtk = await stageRtkRelease(root, work, stage, process.env.ATELIER_BUILD_RTK_ARCHIVE);
+  if ((await rememberInput(rtk.inputs.archive, 'rtk-release-archive')) !== rtkRelease.archiveSha256)
+    throw new Error('Pinned RTK archive changed while staging.');
+  if ((await rememberInput(rtk.inputs.license, 'rtk-license')) !== rtkRelease.licenseSha256)
+    throw new Error('Pinned RTK license changed while staging.');
+  await rememberInput(join(root, 'scripts/linux/rtk.mts'), 'rtk-supply');
+  const rtkResources = [
+    rtk.release.path,
+    rtk.release.launcher.path,
+    ...rtk.release.texts.map((text) => text.path),
+  ];
   for (const name of await files(join(root, 'dist/client'))) {
     if (
       name.split('/').some((part) => part.startsWith('.')) ||
@@ -890,6 +910,7 @@ async function packageRelease(work: string): Promise<string[]> {
       sha256: NODE_LICENSE_SHA256,
     },
     shunt: shuntRelease,
+    rtk: rtk.release,
     packages: licenseInventory,
   });
   await copy(join(root, 'scripts/linux/atelier.desktop'), join(stage, 'atelier.desktop'));
@@ -928,6 +949,7 @@ async function packageRelease(work: string): Promise<string[]> {
       licenseSha256: NODE_LICENSE_SHA256,
     },
     shunt: shuntRelease,
+    rtk: rtk.release,
     sqlite: sqliteRelease,
     terminal: terminalRelease,
     sdk: {
@@ -1003,6 +1025,18 @@ async function packageRelease(work: string): Promise<string[]> {
   const stagedShunt = inventory.find((item) => item.path === SHUNT.path);
   if (stagedShunt?.sha256 !== SHUNT.sha256 || stagedShunt.mode !== '755')
     throw new Error('Staged Shunt checksum or executable mode does not match the release pin.');
+  const stagedRtk = inventory.find((item) => item.path === rtk.release.path);
+  const stagedRtkLauncher = inventory.find((item) => item.path === rtk.release.launcher.path);
+  if (
+    stagedRtk?.sha256 !== rtkRelease.binarySha256 ||
+    stagedRtk.mode !== '755' ||
+    stagedRtkLauncher?.sha256 !== createHash('sha256').update(rtkLauncher).digest('hex') ||
+    stagedRtkLauncher.mode !== '755'
+  )
+    throw new Error('Staged RTK executable or launcher does not match its pinned bytes and mode.');
+  for (const text of rtk.release.texts)
+    if (inventory.find((item) => item.path === text.path)?.sha256 !== text.sha256)
+      throw new Error('Staged RTK original license does not match its pin.');
   const resourceInventory = {
     schemaVersion: 1,
     sourceDateEpoch: epoch,
@@ -1017,6 +1051,7 @@ async function packageRelease(work: string): Promise<string[]> {
     'resources/app/main.mjs',
     'resources/app/preload.cjs',
     'resources/runtime/server/main.js',
+    rtkPluginPath,
   ])
     run(join(runtime, 'bin/node'), ['--check', join(stage, path)]);
   const runtimeIdentity = z
@@ -1136,6 +1171,7 @@ async function packageRelease(work: string): Promise<string[]> {
     'atelier/resources/runtime/dist/client/vendor/pdfjs/pdf.worker.min.mjs',
     'atelier/resources/licenses/inventory.json',
     ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map((path) => `atelier/${path}`),
+    ...[...rtkResources, rtkPluginPath].map((path) => `atelier/${path}`),
     'atelier/resources/input-inventory.json',
     `atelier/resources/runtime/node_modules/${nativeCli}/claude`,
     `atelier/${sqliteRelease.nativeBinding.path}`,
@@ -1152,8 +1188,10 @@ async function packageRelease(work: string): Promise<string[]> {
     ...[SHUNT.path, ...shuntLicenseTexts.map((text) => text.path)].map(
       (path) => `opt/atelier/${path}`,
     ),
+    ...[...rtkResources, rtkPluginPath].map((path) => `opt/atelier/${path}`),
     'usr/bin/atelier',
     'usr/share/applications/atelier.desktop',
+    'usr/share/licenses/atelier',
   ])
     if (!archListing.includes(path)) throw new Error(`Arch package is missing ${path}`);
   for (const listing of [portableListing, archListing])
@@ -1165,8 +1203,15 @@ async function packageRelease(work: string): Promise<string[]> {
       )
         throw new Error(`Invalid/private path entered an archive: ${name}`);
     }
+  verifyRtkArchive(root, join(artifacts, archiveName), 'atelier');
+  verifyRtkArchive(root, join(artifacts, packageName), 'opt/atelier', 'bsdtar');
   const pkgInfo = run('bsdtar', ['-xOf', join(artifacts, packageName), '.PKGINFO']);
-  for (const expected of ['pkgname = atelier', `pkgver = ${project.version}-1`, 'arch = x86_64'])
+  for (const expected of [
+    'pkgname = atelier',
+    `pkgver = ${project.version}-1`,
+    'arch = x86_64',
+    'license = Apache-2.0',
+  ])
     if (!pkgInfo.split('\n').includes(expected))
       throw new Error(`Arch metadata is missing ${expected}`);
   const packageInfo = run('pacman', ['-Qip', join(artifacts, packageName)]);
@@ -1210,6 +1255,16 @@ async function packageRelease(work: string): Promise<string[]> {
       runtimeImports: true,
       sdkCli: cliOutput,
       shunt: { version: SHUNT.version, sha256: stagedShunt.sha256, mode: stagedShunt.mode },
+      rtk: {
+        version: rtkRelease.version,
+        sha256: stagedRtk.sha256,
+        mode: stagedRtk.mode,
+        launcher: rtk.release.launcher,
+        originalLicenseVerified: true,
+        portableAndArchBytesVerified: true,
+        executionVerified: false,
+        plugin: { path: rtkPluginPath, sha256: await hash(join(stage, rtkPluginPath)) },
+      },
     },
     missingLicenseTexts: licenseInventory
       .filter((item) => item.missingLicenseText)
