@@ -42,6 +42,7 @@ import {
 import { useUiTranslation } from '@/i18n';
 import { useGitOverview } from '@/use-query/git/use-git-overview';
 import { useGitRepoStatus } from '@/use-query/git/use-git-repo-status';
+import { useGitWorkspaceSync } from '@/use-query/git/use-git-workspace-sync';
 import type { Project } from '@shared/types';
 import { CreateDevelopmentSession } from './create-development-session';
 import { GitFilesView, GitHistoryView, GitQueryFeedback } from './git-views';
@@ -166,13 +167,23 @@ export default function GitBoard({
     data?.worktrees.find(({ id }) => id === selectedTree) ??
     data?.worktrees.find(({ id }) => id === project.id);
 
-  const { status: repoStatus, invalidate: invalidateRepoStatus } = useGitRepoStatus(tree?.path);
+  const repoStatus = useGitRepoStatus(project.id, tree?.path);
   const { showToast, ToastRenderer } = useGitToast();
+  const visibleFile = fileTabs.items.find(({ key }) => key === fileTabs.active);
+  const observedTree =
+    visibleFile?.target.kind === 'worktree'
+      ? data?.worktrees.find(({ id }) => id === visibleFile.worktreeId)
+      : tree;
+  useGitWorkspaceSync(
+    project.id,
+    observedTree?.scope !== 'external' && observedTree?.state === 'ready'
+      ? observedTree.id
+      : undefined,
+  );
 
   const handleRefreshAll = useCallback(() => {
     void refresh();
-    void invalidateRepoStatus();
-  }, [refresh, invalidateRepoStatus]);
+  }, [refresh]);
 
   return (
     <section

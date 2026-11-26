@@ -48,7 +48,7 @@ export function GitHistoryView({
 }: GitHistoryViewProps) {
   const { t, locale } = useUiTranslation('git');
   const [ref, selectRef] = useState<GitBranch>();
-  const [selection, selectCommit] = useState<{ anchor: string; oid: string }>();
+  const [selection, selectCommit] = useState<GitCommit>();
   const detailPane = useRef<HTMLDivElement>(null);
   const detailTrigger = useRef<HTMLElement>(null);
 
@@ -95,7 +95,7 @@ export function GitHistoryView({
   const branch =
     ref && overview.branches.find((item) => item.kind === ref.kind && item.name === ref.name);
   const anchor = branch?.oid ?? tree.head ?? undefined;
-  const commit = selection?.anchor === anchor ? selection?.oid : undefined;
+  const commit = selection?.oid;
   useEffect(() => {
     if (commit) detailPane.current?.focus({ preventScroll: true });
   }, [commit]);
@@ -160,11 +160,12 @@ export function GitHistoryView({
 
   const handleSelectCommit = useCallback(
     (oid: string) => {
-      if (!anchor) return;
+      const item = visibleCommits.find((entry) => entry.oid === oid);
+      if (!item) return;
       detailTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      selectCommit({ anchor, oid });
+      selectCommit(item);
     },
-    [anchor],
+    [visibleCommits],
   );
   const handleCloseDetail = () => {
     selectCommit(undefined);
@@ -289,7 +290,7 @@ export function GitHistoryView({
               {diffRenderer ? (
                 diffRenderer(
                   commit,
-                  visibleCommits.find((c) => c.oid === commit),
+                  selection,
                   handleCloseDetail,
                 )
               ) : (
@@ -299,7 +300,7 @@ export function GitHistoryView({
                   worktreeId={tree.id}
                   onOpenFile={onOpenFile}
                   commitOid={commit}
-                  commitInfo={visibleCommits.find((c) => c.oid === commit)}
+                  commitInfo={selection}
                   onClose={handleCloseDetail}
                   showToast={showToast}
                 />

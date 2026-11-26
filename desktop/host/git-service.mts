@@ -138,11 +138,11 @@ export async function getGitRepoStatus(cwd: string): Promise<GitRepoStatus> {
     }
   }
 
-  const statusRes = await execGit(cwd, ['status', '--porcelain']);
+  const statusRes = await execGit(cwd, ['--no-optional-locks', 'status', '--porcelain']);
   const isDirty = statusRes.success && statusRes.stdout.trim().length > 0;
 
   const conflicts = new Set<string>();
-  const diffRes = await execGit(cwd, ['diff', '--name-only', '--diff-filter=U']);
+  const diffRes = await execGit(cwd, ['--no-optional-locks', 'diff', '--name-only', '--diff-filter=U']);
   if (diffRes.success && diffRes.stdout.trim()) {
     for (const file of diffRes.stdout.trim().split('\n')) {
       const trimmed = file.trim();

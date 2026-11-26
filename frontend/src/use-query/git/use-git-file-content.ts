@@ -1,7 +1,7 @@
 /**
  * @file 查询 Git 审阅中所选文件的完整文本。
- * @implementation 以工作树或提交、比较版本和路径区分完整文件查询。
- * @updated 2026-11-25T16:50:00+08:00
+ * @implementation 按工作树、提交、比较版本和路径查询完整文件。工作树内容参与实时刷新，按提交固定的历史内容保持缓存。
+ * @updated 2026-11-26T21:32:56+08:00
  */
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -18,9 +18,11 @@ export type GitFileContentTarget = { path: string } & (
 );
 
 export function useGitFileContent(projectId: string, target: GitFileContentTarget) {
-  const revision = target.kind === 'worktree' ? target.worktreeId : target.commitOid;
   return useQuery({
-    queryKey: gitKeys.fileContent(projectId, revision, target.source, target.path),
+    queryKey:
+      target.kind === 'worktree'
+        ? gitKeys.workingFileContent(projectId, target.worktreeId, target.source, target.path)
+        : gitKeys.commitFileContent(projectId, target.commitOid, target.source, target.path),
     queryFn: async ({ signal }) => {
       const base =
         target.kind === 'worktree'

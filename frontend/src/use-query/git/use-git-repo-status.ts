@@ -1,17 +1,16 @@
 /**
  * @file 查询桌面端 Git 仓库的状态、分支与未解决冲突。
- * @implementation 按工作树绝对路径隔离状态，周期性自动刷新并提供主动失效触发器。
- * @updated 2026-11-25T03:30:00+08:00
+ * @implementation 按项目和工作树路径通过桌面桥查询状态，刷新由工作区同步统一触发。
+ * @updated 2026-11-26T21:32:56+08:00
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { desktopGitBridge } from '@/desktop-git';
 import type { GitRepoStatus } from '@shared/desktop-git';
 import { gitKeys } from './keys';
 
-export function useGitRepoStatus(cwd?: string) {
-  const client = useQueryClient();
+export function useGitRepoStatus(projectId: string, cwd?: string) {
   const query = useQuery<GitRepoStatus | null>({
-    queryKey: gitKeys.repoStatus(cwd),
+    queryKey: gitKeys.repoStatus(projectId, cwd),
     queryFn: async () => {
       const bridge = desktopGitBridge();
       if (!bridge || !cwd) return null;
@@ -22,13 +21,6 @@ export function useGitRepoStatus(cwd?: string) {
       }
     },
     enabled: Boolean(cwd),
-    refetchInterval: 8_000,
   });
-
-  return {
-    status: query.data ?? null,
-    isLoading: query.isLoading,
-    refetch: () => query.refetch(),
-    invalidate: () => client.invalidateQueries({ queryKey: gitKeys.repoStatus(cwd) }),
-  };
+  return query.data ?? null;
 }

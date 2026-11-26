@@ -113,6 +113,7 @@ const runtimeRoots = [
   '@anthropic-ai/sdk',
   '@modelcontextprotocol/sdk',
   'better-sqlite3',
+  'chokidar',
   'diff',
   'drizzle-orm',
   'mammoth',
