@@ -693,6 +693,8 @@ export default function Workspace() {
                                 ...session.draft,
                                 extensionSelections: [selection],
                                 mode: editable ? 'edit' : 'readonly',
+                                executionPreference: 'project-v1',
+                                approvalMode: undefined,
                               },
                             });
                             openSession(session.id);

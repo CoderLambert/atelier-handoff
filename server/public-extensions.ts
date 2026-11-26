@@ -1,29 +1,22 @@
+/**
+ * @file 预览公开来源的项目扩展。
+ * @implementation 按来源分派 GitHub Skill、SkillHub 和 MCP Registry，并解析公开命令及 MCP 配置。
+ * @updated 2026-11-26T15:53:01+08:00
+ */
 import { createHash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join, posix } from 'node:path';
 import { parseDocument } from 'yaml';
-import { AppError, type McpTransport, type SkillPackage } from '../shared/types.js';
+import { AppError, type McpTransport } from '../shared/types.js';
+import type { GithubSkillVersion, PublicEntry as PublicEntryDto } from '../shared/public-extensions.js';
+import { previewGithubSkill, type PublicEntryWithPackage } from './github-skill.js';
 import { fingerprint } from './files.js';
 import { previewSkillHub } from './skillhub.js';
 
 const registry = 'https://registry.modelcontextprotocol.io/v0.1/servers';
-export type PublicKind = 'skill' | 'command' | 'mcp';
-export interface PublicEntry {
-  location: string;
-  key: string;
-  name: string;
-  description: string;
-  kind: PublicKind;
-  revision?: string;
-  sha256?: string;
-  upstreamName?: string;
-  upstreamVersion?: string;
-  body?: string;
-  package?: SkillPackage;
-  transport?: McpTransport;
-  issue?: string;
-}
+export type PublicKind = PublicEntryDto['kind'];
+export type PublicEntry = PublicEntryWithPackage;
 
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -241,7 +234,6 @@ function githubLocation(source: string) {
 }
 
 function fileEntry(path: string, kind: PublicKind) {
-  if (kind === 'skill') return posix.basename(path).toLowerCase() === 'skill.md';
   if (kind === 'command') return path.endsWith('.md') && /(?:^|\/)commands\//.test(path);
   return ['.mcp.json', 'mcp.json', 'server.json'].includes(posix.basename(path));
 }
@@ -250,7 +242,7 @@ export async function previewPublic(
   source: string,
   kind: PublicKind,
   request = fetch,
-  options: { includePackage?: boolean } = {},
+  options: { includePackage?: boolean; github?: GithubSkillVersion; packageDigest?: string; signal?: AbortSignal } = {},
 ): Promise<PublicEntry[]> {
   const invalidConfig = '此声明需要当前尚未支持的启动参数、传输方式或凭据格式。';
   try {
@@ -283,6 +275,7 @@ export async function previewPublic(
         }),
       );
     }
+    if (kind === 'skill') return await previewGithubSkill(source, request, options);
     const { owner, repo, ref, path, file } = githubLocation(source);
     const raw = (entry: string) =>
       `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${pathUrl(entry)}`;
@@ -298,13 +291,12 @@ export async function previewPublic(
         .map((entry) => ({
           location: raw(entry),
           key: entry,
-          name: kind === 'skill' ? posix.basename(posix.dirname(entry)) : posix.basename(entry),
+          name: posix.basename(entry),
           description: entry,
           kind,
         }));
     }
     if (
-      (kind === 'skill' && !fileEntry(path, kind)) ||
       (kind === 'command' && !path.endsWith('.md')) ||
       (kind === 'mcp' && !path.endsWith('.json'))
     )
@@ -315,8 +307,7 @@ export async function previewPublic(
     if (kind !== 'mcp') {
       const header = body.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---/);
       const parsed = header ? object(parseDocument(header[1]!).toJS({ maxAliasCount: 0 })) : {};
-      const fallback =
-        kind === 'skill' ? posix.basename(posix.dirname(path)) : posix.basename(path, '.md');
+      const fallback = posix.basename(path, '.md');
       return [
         {
           location,

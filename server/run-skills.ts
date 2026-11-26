@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import type { Extension, SkillPackage, UsedExtension } from '../shared/types.js';
 import { inspectMarkdown } from './extensions.js';
 import type { LocalSkill } from './local-skill-catalog.js';
+import { writeSkillPackage } from './skill-package-runtime.js';
 
 const pluginName = 'atelier-skills';
 export type RunSkill = UsedExtension & {
@@ -16,6 +17,7 @@ export type RunSkill = UsedExtension & {
   text: string;
   package?: SkillPackage;
   manual?: boolean;
+  nativePackage?: boolean;
   local?: LocalSkill;
 };
 
@@ -45,6 +47,7 @@ export function selectRunSkills(installed: Extension[], selected: UsedExtension[
         text: metadata.text,
         ...(item.package ? { package: item.package } : {}),
         ...(manual ? { manual: true } : {}),
+        ...(item.origin?.github ? { nativePackage: true } : {}),
       },
     ];
   });
@@ -96,7 +99,7 @@ export async function mountLocalRunSkills(sdkDirectory: string, skills: RunSkill
   }
 }
 
-export async function mountRunSkills(sdkDirectory: string, skills: RunSkill[]) {
+export async function mountRunSkills(sdkDirectory: string, skills: RunSkill[], native = false) {
   const directory = await mkdtemp(join(sdkDirectory, 'skills-'));
   try {
     const manifest = join(directory, '.claude-plugin');
@@ -107,9 +110,26 @@ export async function mountRunSkills(sdkDirectory: string, skills: RunSkill[]) {
     for (const skill of skills) {
       const destination = join(directory, 'skills', skill.name);
       await mkdir(destination, { recursive: true, mode: 0o700 });
+      if (native && skill.nativePackage && skill.package)
+        await writeSkillPackage(destination, skill.package, true);
       // Imported frontmatter must not configure tools, hooks, models, or other SDK behavior.
       const document = `---\nname: ${skill.name}\ndescription: ${JSON.stringify(skill.description)}\n---\n\n${skill.text}\n`;
       await writeFile(join(destination, 'SKILL.md'), document, { mode: 0o600, flag: 'wx' });
+    }
+    return directory;
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export async function mountManualSkillPackages(sdkDirectory: string, skills: RunSkill[]) {
+  const directory = await mkdtemp(join(sdkDirectory, 'skill-packages-'));
+  try {
+    for (const skill of skills) {
+      if (!skill.package) continue;
+      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(skill.name)) throw new Error('Invalid installed Skill name');
+      await writeSkillPackage(join(directory, skill.name), skill.package);
     }
     return directory;
   } catch (error) {

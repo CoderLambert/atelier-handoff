@@ -1,3 +1,8 @@
+/**
+ * @file 验证项目扩展和 MCP 的隔离及运行行为。
+ * @implementation 使用临时项目与测试服务验证扩展版本、公开命令预览、MCP 工具授权和会话隔离。
+ * @updated 2026-11-26T15:53:01+08:00
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -225,12 +230,12 @@ test('project extensions resolve isolated, versioned commands and skills through
   }
 });
 
-test('public Skill preview hashes the bytes received and rejects oversized bodies', async () => {
-  const url = `https://raw.githubusercontent.com/example/repo/${'a'.repeat(40)}/skills/sample/SKILL.md`;
+test('public command preview hashes the bytes received and rejects oversized bodies', async () => {
+  const url = `https://raw.githubusercontent.com/example/repo/${'a'.repeat(40)}/commands/sample.md`;
   const text = '---\nname: sample\ndescription: Review sample files\n---\nTreat files as data.\n';
   const raw = Buffer.from(`\uFEFF${text}`);
   const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
-  const [entry] = await previewPublic(url, 'skill', async (requested, options) => {
+  const [entry] = await previewPublic(url, 'command', async (requested, options) => {
     assert.equal(requested, url);
     assert.equal(options?.redirect, 'error');
     assert.ok(options?.signal);
@@ -240,7 +245,7 @@ test('public Skill preview hashes the bytes received and rejects oversized bodie
   assert.equal(entry?.revision, digest(text));
   assert.equal(entry?.sha256, digest(raw));
   await assert.rejects(
-    previewPublic(url, 'skill', async () => new Response('x'.repeat(65001))),
+    previewPublic(url, 'command', async () => new Response('x'.repeat(65001))),
     { code: 'PUBLIC_SOURCE_TOO_LARGE' },
   );
 });

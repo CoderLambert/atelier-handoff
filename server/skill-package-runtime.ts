@@ -1,6 +1,11 @@
+/**
+ * @file 管理运行时 Skill 包资源与脚本执行。
+ * @implementation 校验包内路径，读取文本资源，写入临时包目录并通过受控 Python 执行器发布允许的产物。
+ * @updated 2026-11-26T15:53:01+08:00
+ */
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { AppError, type Run } from '../shared/types.js';
+import { AppError, type Run, type SkillPackage } from '../shared/types.js';
 import type { FileRecords } from './artifacts.js';
 import type { RunSkill } from './run-skills.js';
 import { runPackagePython } from './skill-package-execution.js';
@@ -11,13 +16,38 @@ export function supportsSearch(skill: RunSkill) {
 }
 
 export function readSkillResource(skill: RunSkill, path: string) {
+  const unavailable = () =>
+    new AppError('SKILL_RESOURCE_UNAVAILABLE', '此 Skill 包没有对应的文本资源。', 404);
   const file = skill.package?.files.find((file) => file.path === path);
-  if (!file || !/\.(?:md|txt|json|ya?ml|csv|py)$/i.test(path))
-    throw new AppError('SKILL_RESOURCE_UNAVAILABLE', '此 Skill 包没有对应的文本资源。', 404);
+  if (!file) throw unavailable();
   const bytes = Buffer.from(file.data, 'base64');
   if (bytes.length > 65_000)
     throw new AppError('SKILL_RESOURCE_TOO_LARGE', '资源超过读取上限。', 413);
-  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  try {
+    if (bytes.includes(0)) throw unavailable();
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw unavailable();
+  }
+}
+
+export async function writeSkillPackage(root: string, pkg: SkillPackage, omitDocument = false) {
+  for (const file of pkg.files) {
+    if (omitDocument && file.path === 'SKILL.md') continue;
+    if (
+      !file.path ||
+      file.path
+        .split('/')
+        .some((part) => !part || part === '.' || part === '..' || /[\\:\x00-\x1f]/.test(part))
+    )
+      throw new AppError('SKILL_PACKAGE_INVALID', '技能包路径无效。', 400);
+    const destination = join(root, file.path);
+    await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
+    await writeFile(destination, Buffer.from(file.data, 'base64'), {
+      mode: file.executable ? 0o700 : 0o600,
+      flag: 'wx',
+    });
+  }
 }
 
 export async function executeSkillPackage(options: {
@@ -44,18 +74,7 @@ export async function executeSkillPackage(options: {
       ? join(storage, 'skill-state', run.projectId, skill.id)
       : join(scratch, 'state');
     for (const dir of [root, output, state]) await mkdir(dir, { recursive: true, mode: 0o700 });
-    for (const file of skill.package.files) {
-      if (
-        !file.path ||
-        file.path
-          .split('/')
-          .some((part) => !part || part === '.' || part === '..' || /[\\\x00-\x1f]/.test(part))
-      )
-        throw new AppError('SKILL_PACKAGE_INVALID', '技能包路径无效。', 400);
-      const destination = join(root, file.path);
-      await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
-      await writeFile(destination, Buffer.from(file.data, 'base64'), { mode: 0o600, flag: 'wx' });
-    }
+    await writeSkillPackage(root, skill.package);
     options.validate();
     const result = await runPackagePython({
       root,

@@ -52,12 +52,9 @@
   ],
   "features/extensions/editor.tsx": ["useQueryClient:88aaac3e2e5480e1"],
   "features/extensions/picker.tsx": ["useQueryClient:88aaac3e2e5480e1"],
-  "features/extensions/public-import.tsx": ["api:0a8940875a8e9b75", "useQuery:1f7825fddcbdfa88"],
   "features/extensions/skillhub-market.tsx": [
     "api:160d6c5696fd9022",
-    "api:aa5c6fbeeea280a0",
     "useQuery:1449319b96798a08",
-    "useQuery:e615fc1cb6fa2337",
     "useQuery:f8c0c5cb5a40d270"
   ],
   "features/inspector/permission-dialog.tsx": [

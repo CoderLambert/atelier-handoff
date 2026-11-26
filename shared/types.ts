@@ -4,6 +4,7 @@
  * @updated 2026-11-20T03:13:21+08:00
  */
 import { z } from 'zod';
+import type { GithubSkillVersion } from './public-extensions.js';
 import type { MessageQuote } from './message-quotes.js';
 import type { ContextUsage } from './context-usage.js';
 import type { BashExecution } from './bash-execution.js';
@@ -53,6 +54,10 @@ export interface ExtensionOrigin {
   revision: string;
   sha256?: string;
   upstreamVersion?: string;
+  github?: GithubSkillVersion;
+  packageDigest?: string;
+  importedName?: string;
+  importedDescription?: string;
 }
 export interface ExtensionBase {
   id: string;
@@ -66,7 +71,7 @@ export interface ExtensionBase {
 }
 export interface SkillPackage {
   digest: string;
-  files: { path: string; data: string }[];
+  files: { path: string; data: string; executable?: boolean }[];
 }
 export type Extension = ExtensionBase &
   (

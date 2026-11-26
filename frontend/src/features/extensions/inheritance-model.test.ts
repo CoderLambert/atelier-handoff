@@ -88,7 +88,7 @@ test('a session can undo its own restriction, but cannot override a disabled par
 test('GET and PATCH scope includes project, session identity and actual native mode', () => {
   const global = { type: 'global' } as const;
   const project = { type: 'project', projectId: 'project / one' } as const;
-  const controlled = { type: 'session', sessionId: 'session & one', native: false } as const;
+  const controlled = { type: 'session', projectId: 'p', sessionId: 'session & one', native: false } as const;
   const native = { ...controlled, native: true };
   assert.equal(skillInheritanceEndpoint(global), '/api/skill-inheritance');
   assert.equal(skillInheritanceEndpoint(project), '/api/skill-inheritance?projectId=project+%2F+one');

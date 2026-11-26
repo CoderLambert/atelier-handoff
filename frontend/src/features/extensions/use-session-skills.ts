@@ -10,12 +10,14 @@ import { useUpdateSkillInheritance } from '@/use-query/skill-inheritance/use-upd
 import { addDraftSkill, removeDraftSkill } from './inheritance-model';
 
 export function useSessionSkills({
+  projectId,
   sessionId,
   native,
   selections,
   disabled,
   onDraftChange,
 }: {
+  projectId: string;
   sessionId: string;
   native: boolean;
   selections?: ExtensionSelection[];
@@ -23,7 +25,7 @@ export function useSessionSkills({
   onDraftChange: (change: (draft: Draft) => Draft) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const scope = { type: 'session', sessionId, native } as const;
+  const scope = { type: 'session', projectId, sessionId, native } as const;
   const query = useSkillInheritance(scope, open || Boolean(selections?.length));
   const update = useUpdateSkillInheritance(scope);
   const items = query.data?.items ?? [];

@@ -8,13 +8,13 @@ import { ArrowLeft, ChevronRight, Search } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { usePublicExtensionPreview } from '@/use-query/extensions/use-public-extension-preview';
+import { useImportPublicExtension } from '@/use-query/extensions/use-import-public-extension';
 import {
   endpoint,
   extensionDetail,
   extensionsQuery,
   messageOf,
-  useExtensionMutation,
-  type PublicEntry,
   type StartSkill,
 } from './api';
 import { ActionButton, ErrorMessage, MarketCategoryIcon, MarkdownPreview } from './components';
@@ -86,7 +86,7 @@ export function SkillHubMarket({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [starting, setStarting] = useState(false);
-  const install = useExtensionMutation(projectId);
+  const install = useImportPublicExtension(projectId);
   const extensions = useQuery(extensionsQuery(projectId));
   const results = useQuery({
     queryKey: ['extensions', projectId, 'skillhub-search', query],
@@ -96,19 +96,8 @@ export function SkillHubMarket({
         { signal },
       ),
   });
-  const preview = useQuery({
-    queryKey: ['extensions', projectId, 'skillhub-preview', selected?.source],
-    enabled: Boolean(selected),
-    queryFn: async ({ signal }) => {
-      const { items } = await api<{ items: PublicEntry[] }>(endpoint(projectId, 'public-preview'), {
-        method: 'POST',
-        body: { source: selected?.source, kind: 'skill' },
-        signal,
-      });
-      return items[0];
-    },
-  });
-  const entry = preview.data;
+  const preview = usePublicExtensionPreview(projectId, { source: selected?.source ?? '', kind: 'skill' });
+  const entry = preview.data?.[0];
   const installed =
     entry &&
     extensions.data?.find(
@@ -146,15 +135,11 @@ export function SkillHubMarket({
     setError('');
     try {
       await install.mutateAsync({
-        suffix: 'public-import',
-        method: 'POST',
-        body: {
-          kind: 'skill',
-          source: selected.source,
-          key: entry.key,
-          revision: entry.revision,
-          packageDigest: entry.packageManifest?.digest,
-        },
+        kind: 'skill',
+        source: selected.source,
+        key: entry.key,
+        revision: entry.revision,
+        packageDigest: entry.packageManifest?.digest,
       });
       const status = t('market.importedNotice', { name: entry.name });
       setMessage(status);

@@ -767,3 +767,22 @@
 - `npm run check`、`npm test`、前端及桌面构建通过。运行时 685 项通过、1 项既有用例跳过，前端 121 项通过。真实 Electron 45.4.1 在隔离数据和 profile 中通过中文快捷键和英文队列操作验收，复跑入口为 `node --import tsx scripts/smoke-subagent-insertion.mts`。模型请求由本地回环替身响应。原始验证日志位于候选工作树的 `.local/subagent-insertion/`。
 - **开发过程 review**。用同一个回环夹具把分支报告的释放时机固定在主会话应答之后，HTTP 回归和桌面验收复用该时序。桌面定位时直接选择外层任务的标题，区分嵌套的工具标题。清洁安装后先构建 Markdown 包再跑前端回归。
 - 文件说明单批核对五份输入，按验证快照集中更新两份运行时说明。文件说明检查覆盖本轮五份源码。
+
+## 2026-11-26 · GitHub Skill 完整包与本机登录
+
+- 「扩展 → Skills → 从公开来源导入」支持公开仓库、目录和 `SKILL.md`，按选中提交保存正文、参考资源、二进制及执行位。同名候选显示路径并优先推荐 Claude 版。新安装默认手动，卡片支持自动调用和按目录摘要检查更新。原 GitHub 正文条目可保留身份和启用状态升级。[包格式、取舍与回退](../../../docs/decisions/2026-11-26-github-skill-packages.md)
+- 可在导入窗口连接本机 GitHub CLI。应用仅保存账号名。CLI 核对已连接账号及仓库公开性，只读取安装所需的 GitHub API 元数据。固定提交的文件仍按 Git blob 哈希校验。[认证设计与回退](../../../docs/decisions/2026-11-26-github-public-import-auth.md)
+- 真实 GitHub 验证单 Skill 仓库、Anthropic 仓库和 Impeccable。分别发现 1、20、27 项，Impeccable 的 Claude 版完整安装 63 个文件并保留脚本执行位。定向 HTTP 回归覆盖 ref 移动、附件变化、超限、损坏、下载中断、重试、同名与本地编辑冲突、项目隔离及旧版升级。
+- Electron 45.4.1 在隔离数据根和 profile 中通过中文连接与导入、英文检查更新、会话可用性与跨项目隔离。锁定 Claude Agent SDK 0.3.332 配合回环模型，在只读会话中调用包内读取工具，并从独立工作树通过原生 Bash 执行真实 `scripts/impeccable context`。复跑入口为 `ATELIER_TEST_GITHUB_AUTH=1 node --import tsx scripts/smoke-github-skills.mts`，已登录的 GitHub CLI 用于验证线上传输。
+- 旧窗口正常退出后，保留可恢复的数据库副本，沿用原数据根、Chromium profile 和本机网关启动新版。确认记录数量与 15 条现有设置一致，网关返回 200。Runtime 首页及 569 个 renderer 文件与已验收构建一致。连接与验证证据存放在 `.local/github-skills-evidence/`。
+- **开发过程 review**。先用独立 HTTP 夹具定位来源和安装错误，随后复用一套 Electron 流程验证只读与本机信任调用。GitHub 匿名额度耗尽时记录响应头与中英文提示，认证后重跑同一路径。「到对话中使用」曾继承桌面的本机信任偏好，真实窗口发现草稿保存冲突后改为明确应用会话模式。下次先记录安装 HTTP 回执，再核对工作台导航和工具结果。
+- `npm run check`、`npm run build`、`npm run build:desktop` 与 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 通过。最终工作区全量测试为运行时 787 项、前端 139 项通过，5 项既有用例跳过。
+- 文件说明以 `e04b07d` 与验收源码哈希核对，单批集中补齐六份说明。文件头检查覆盖本轮 33 份源码。
+
+## 2026-11-26 · GitHub Skill 仓库导入界面
+
+- 将链接和查询放在同一行，仓库候选与预览并列，安装操作固定在弹窗底部。唯一可用项或唯一推荐版本会自动打开固定提交的预览。用户可以切换候选，预览完成后自行安装。输入更改后会清除旧预览。
+- 加入 Chromium 回归，覆盖推荐版本、必须手动选择的仓库、旧预览清除，以及所选版本的提交参数。隔离 Electron 用 `pbakaus/impeccable.git` 验证了中文仓库查询、63 文件安装、英文检查更新、包内读取和独立工作树原生脚本。一次公网导入返回读取失败，重试同一固定来源后全链路通过。截图和日志位于 `.local/github-public-import-ui/`。
+- 旧窗口正常退出后沿用原数据和浏览器 profile 启动新版。运行时返回与已验收构建一致的首页，原 GitHub 连接可读。文件说明单批核对五份输入，按验收哈希集中更新三份说明。
+- `npm run check`、前端构建和全量测试通过。运行时 787 项、前端 140 项通过，5 项既有用例跳过。
+- **开发过程 review**。用合成仓库响应快速复现结果页没有安装按钮的问题，再复用既有 Electron 验收覆盖真实 GitHub 查询和安装。下次同类改动先检查候选、选择和安装在同一弹层里的可见性。

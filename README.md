@@ -113,7 +113,11 @@ Bash 调控、同目录并行与子代理插话的操作和验收依据见[会�
 
 在侧栏打开「扩展」并选择项目。Skills 和 Commands 分别管理 `SKILL.md` 与 Markdown 指令模板。导入时可预览内容。保存并启用后，在对话输入框输入 `/` 选择，或直接发送 `/summarize src/` 这类已经登记的指令。模板中的 `$ARGUMENTS` 会替换为用户输入的参数。
 
-「从公开来源导入」支持 GitHub 仓库或文件链接。Skills 与 Commands 标签可以浏览相应 Markdown 文件。MCP 标签还可以搜索官方 MCP Registry，或从 GitHub 导入 `.mcp.json`、`mcp.json` 和 `server.json`。预览并导入后，卡片上的「检查更新」会按原来源检查新版本，预览后可以应用更新。
+在「扩展 → Skills → 从公开来源导入」粘贴公开 GitHub 仓库、目录或 `SKILL.md` 链接。选择条目后可查看固定提交的正文、文件清单和可执行文件。项目会保存完整技能包，普通会话和独立工作树均可使用。安装后点「到对话中使用」，或在已有会话的输入框输入 `/`。新安装的 GitHub Skill 默认手动选用，可以在项目卡片开启自动调用。 导入窗口可连接已登录的本机 GitHub CLI 账号，使用认证后的 API 额度。
+
+只读模式可读取包内文本。受控修改模式沿用 Python 沙箱和审批，本机信任模式可以用原生工具运行包内 Shell 等脚本。卡片上的「检查更新」会比较完整包，附属文件变化也会出现在预览中。旧的 GitHub 正文导入可从原卡片升级。
+
+Commands 标签继续支持 GitHub Markdown 导入。MCP 标签可以搜索官方 MCP Registry，或从 GitHub 导入 `.mcp.json`、`mcp.json` 和 `server.json`。
 
 在扩展页打开「Skill 市场」可浏览 SkillHub 的推荐和分类，搜索并预览后导入当前项目。
 

@@ -5,8 +5,9 @@
  */
 import { getTranslator, translateError } from '@/i18n';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Extension, ExtensionSelection, McpTransport, SkillToolBinding } from '@shared/types';
+import type { Extension, ExtensionSelection, SkillToolBinding } from '@shared/types';
 import { api, ApiError } from '@/api/client';
+import { endpoint, extensionKeys } from '@/use-query/extensions/keys';
 
 export type ExtensionKind = Extension['kind'];
 export type McpExtension = Extract<Extension, { kind: 'mcp' }>;
@@ -16,21 +17,7 @@ export type StartSkill = (
   selection: ExtensionSelection,
   editable: boolean,
 ) => Promise<void>;
-export interface PublicEntry {
-  location: string;
-  key: string;
-  name: string;
-  description: string;
-  kind: ExtensionKind;
-  revision?: string;
-  sha256?: string;
-  upstreamName?: string;
-  upstreamVersion?: string;
-  packageManifest?: { digest: string; files: string[] };
-  body?: string;
-  transport?: McpTransport;
-  issue?: string;
-}
+export type { PublicEntry } from '@shared/public-extensions';
 export interface TestResult {
   status: 'connected' | 'needs-auth' | 'failed';
   tools: McpExtension['tools'];
@@ -70,9 +57,31 @@ const localResponseErrors = new Map([
   ['创建会话响应缺少会话信息，请刷新会话列表确认结果。', 'agents.missingSession'],
 ] as const);
 
+const publicSourceErrors = [
+  ['PUBLIC_SOURCE_INVALID', 'publicImport.invalidSource'],
+  ['PUBLIC_SOURCE_FAILED', 'publicImport.sourceFailed'],
+  ['PUBLIC_SOURCE_HTTP', 'publicImport.sourceFailed'],
+  ['PUBLIC_SOURCE_CHANGED', 'publicImport.sourceChanged'],
+  ['PUBLIC_SOURCE_TOO_LARGE', 'publicImport.sourceTooLarge'],
+  ['PUBLIC_SOURCE_EXISTS', 'publicImport.sourceExists'],
+  ['GITHUB_LOGIN_REQUIRED', 'publicImport.githubLoginRequired'],
+  ['GITHUB_PUBLIC_REPO_REQUIRED', 'publicImport.githubPublicOnly'],
+  ['GITHUB_SKILL_RATE_LIMIT', 'publicImport.githubRateLimit'],
+  ['GITHUB_SKILL_INVALID_MANIFEST', 'publicImport.manifestEncoding'],
+  ['GITHUB_SKILL_NOT_FOUND', 'publicImport.githubNotFound'],
+  ['GITHUB_SKILL_UNSUPPORTED', 'publicImport.githubUnsafeFiles'],
+  ['GITHUB_SKILL_TRUNCATED', 'publicImport.githubTruncated'],
+  ['EXTENSION_NAME_TAKEN', 'publicImport.nameTaken'],
+  ['EXTENSION_CHANGED', 'publicImport.extensionChanged'],
+  ['PUBLIC_LOCAL_MODIFIED', 'publicImport.localModified'],
+] as const;
+
 export function messageOf(error: unknown) {
   const t = getTranslator('extensions');
-  if (error instanceof ApiError) return translateError(error, t('common.operationFailed'));
+  if (error instanceof ApiError) {
+    const key = publicSourceErrors.find(([code]) => code === error.code)?.[1];
+    return key ? t(key) : translateError(error, t('common.operationFailed'));
+  }
   if (error instanceof Error) {
     // These pinned legacy callbacks still throw source messages. Translate them at display time.
     for (const [source, key] of localResponseErrors) {
@@ -94,6 +103,9 @@ const extensionMessages = new Map([
     '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。',
     'extensionDetail.unsupportedMarkdown',
   ],
+  ['SKILL.md 必须使用 UTF-8 编码。', 'publicImport.manifestEncoding'],
+  ['SKILL.md 超过读取上限。', 'publicImport.manifestTooLarge'],
+  ['此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。', 'publicImport.githubCompatibility'],
   ['MCP 服务要求有效的凭据。', 'extensionDetail.authRequired'],
   ['MCP 连接或调用失败。请检查地址、进程参数和服务端日志。', 'extensionDetail.connectionFailed'],
   ['已打开 8 个常驻 MCP。停用不再使用的服务后重试。', 'extensionDetail.processLimit'],
@@ -122,15 +134,7 @@ export const isConflict = (error: unknown) =>
 export const allowsAuto = (item?: MarkdownExtension) => item?.modelInvocable !== false;
 export const autoEnabled = (item?: MarkdownExtension) =>
   allowsAuto(item) && item?.autoInvoke !== false;
-export const endpoint = (projectId: string, suffix?: string) =>
-  `/api/projects/${encodeURIComponent(projectId)}/extensions${suffix ? `/${suffix}` : ''}`;
-export const extensionKeys = {
-  all: (projectId: string) => ['extensions', projectId] as const,
-  list: (projectId: string) => ['extensions', projectId, 'list'] as const,
-  mutations: (projectId: string) => ['extensions', projectId, 'mutation'] as const,
-  toolBindings: (projectId: string, skillId: string) =>
-    ['extensions', projectId, 'tool-bindings', skillId] as const,
-};
+export { endpoint, extensionKeys };
 export function returnedItem(result: ItemResponse) {
   if (!result) return undefined;
   if ('id' in result) return result;

@@ -4,6 +4,7 @@
  * @updated 2026-11-26T02:07:02+08:00
  */
 import { useUiTranslation } from '@/i18n';
+import { useInvalidateSkillCatalogs } from '@/use-query/skill-inheritance/keys';
 import { useDeferredValue, useId, useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
 import type { Extension, Project } from '@shared/types';
@@ -113,6 +114,7 @@ function ProjectExtensions({
   const projectId = project?.id ?? '';
   const query = useExtensions(projectId);
   const toggle = useExtensionMutation(projectId);
+  const invalidateSkills = useInvalidateSkillCatalogs(projectId);
   const pending = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
   const [kind, setKind] = useState<ExtensionTab>('skill');
   const showGlobal = kind === 'skill' && globalSkills;
@@ -125,6 +127,7 @@ function ProjectExtensions({
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState<Modal>();
   const [notice, setNotice] = useState('');
+  const [startingSkill, setStartingSkill] = useState<string>();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
@@ -150,6 +153,7 @@ function ProjectExtensions({
         method: 'PATCH',
         body: { version: item.version, [field]: !old },
       });
+      if (item.kind === 'skill') await invalidateSkills();
       setNotice(
         field === 'autoInvoke'
           ? old
@@ -161,6 +165,18 @@ function ProjectExtensions({
       );
     } catch (cause) {
       setErrors((value) => ({ ...value, [item.id]: messageOf(cause) }));
+    }
+  }
+  async function startSkill(item: Extension) {
+    if (!onStartSkill || startingSkill) return;
+    setStartingSkill(item.id);
+    setErrors((value) => ({ ...value, [item.id]: '' }));
+    try {
+      await onStartSkill(projectId, { id: item.id, version: item.version }, false);
+    } catch (cause) {
+      setErrors((value) => ({ ...value, [item.id]: messageOf(cause) }));
+    } finally {
+      setStartingSkill(undefined);
     }
   }
   const navigation = (
@@ -473,6 +489,16 @@ function ProjectExtensions({
                   >
                     {t('extensions.viewEdit')}
                   </ActionButton>
+                  {item.kind === 'skill' && item.origin?.github && item.userInvocable && item.enabled && onStartSkill ? (
+                    <ActionButton
+                      variant="ghost"
+                      size="sm"
+                      disabled={pending || Boolean(startingSkill)}
+                      onClick={() => void startSkill(item)}
+                    >
+                      {t('market.useInChat')}
+                    </ActionButton>
+                  ) : null}
                   {item.origin ? (
                     <ActionButton
                       variant="ghost"
@@ -536,6 +562,7 @@ function ProjectExtensions({
           projectName={project?.name ?? projectId}
           kind={modal.kind}
           updating={modal.item}
+          onStartSkill={onStartSkill}
           onClose={close}
           onSaved={setNotice}
         />

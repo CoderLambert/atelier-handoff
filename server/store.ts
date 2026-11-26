@@ -43,6 +43,7 @@ export class Store {
     typeof openWorkbenchDatabase
   >['gitMultiCommitPreferences'];
   readonly skillInheritance: ReturnType<typeof openWorkbenchDatabase>['skillInheritance'];
+  readonly githubPublicAuth: ReturnType<typeof openWorkbenchDatabase>['githubPublicAuth'];
   readonly rtkSettings: ReturnType<typeof openWorkbenchDatabase>['rtkSettings'];
   readonly events = new EventEmitter();
   private readonly subagents: SubagentRepository;
@@ -59,6 +60,7 @@ export class Store {
     this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
     this.skillInheritance = connection.skillInheritance;
     this.rtkSettings = connection.rtkSettings;
+    this.githubPublicAuth = connection.githubPublicAuth;
     this.readTransaction = connection.readTransaction;
     this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
     this.subagents = connection.subagents;

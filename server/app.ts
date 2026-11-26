@@ -118,6 +118,9 @@ import { RtkSettings } from './rtk-settings.js';
 import { builtinRtkAvailable } from './builtin-rtk.js';
 import { McpSessions, testMcp } from './extension-mcp.js';
 import { previewPublic } from './public-extensions.js';
+import { githubPublicAuthPatch } from '../shared/github-public-auth.js';
+import { authenticatedGithubFetch, currentGithubLogin } from './github-public-auth.js';
+import { publicImportSchema, publicPreviewSchema } from '../shared/public-extensions.js';
 import { searchSkillHub } from './skillhub.js';
 import { readSkillToolBindings, saveSkillToolBindings } from './skill-tool-bindings.js';
 import {
@@ -242,14 +245,14 @@ async function branchFor(root: string): Promise<string> {
     return '';
   }
 }
-const packageDigestSchema = z.string().regex(/^[a-f0-9]{64}$/);
-
 function publicExtension(item: Extension) {
   if (item.kind === 'mcp' || !item.package) return item;
   const { package: pkg, ...fields } = item;
   return {
     ...fields,
-    packageManifest: { digest: pkg.digest, files: pkg.files.map((file) => file.path) },
+    packageManifest: { digest: pkg.digest, files: pkg.files.map((file) => file.path),
+      ...(item.origin?.github ? { executables: pkg.files.filter((file) => file.executable).map((file) => file.path) } : {}),
+    },
   };
 }
 
@@ -263,6 +266,7 @@ export async function createApp(options: {
   magpie?: string;
   rtkBinary?: string;
   pickDirectory?: typeof pickProjectDirectory;
+  publicSourceFetch?: typeof fetch;
 }) {
   const nativeExecution =
     options.nativeExecution === true &&
@@ -1076,6 +1080,15 @@ export async function createApp(options: {
         });
         return;
       }
+      if (url.pathname === '/api/extensions/github-connection') {
+        if (method === 'GET') return json(res, { login: store.githubPublicAuth.read() });
+        if (method === 'PUT') {
+          const { connect } = githubPublicAuthPatch.parse(await body(req));
+          const login = connect ? await currentGithubLogin() : null;
+          store.githubPublicAuth.save(login);
+          return json(res, { login });
+        }
+      }
       if (url.pathname === '/api/skill-inheritance' && (method === 'GET' || method === 'PATCH')) {
         const patch = method === 'PATCH' ? skillInheritancePatchSchema.parse(await body(req)) : undefined;
         const scope = z.strictObject({
@@ -1283,22 +1296,34 @@ export async function createApp(options: {
           (id === 'public-preview' || id === 'public-import')
         ) {
           store.get('projects', projectId);
-          const input = z
-            .object({
-              source: z.string().trim().min(1).max(4096),
-              kind: z.enum(['skill', 'command', 'mcp']),
-              key: z.string().max(4096).optional(),
-              revision: z.string().optional(),
-              packageDigest: packageDigestSchema.optional(),
-              update: z
-                .object({ id: z.string().uuid(), version: z.number().int().positive() })
-                .optional(),
-            })
-            .parse(await body(req));
-          const items = await previewPublic(input.source, input.kind, undefined, {
-            includePackage: true,
-          });
-          if (id === 'public-preview')
+          const payload = await body(req);
+          const importing = id === 'public-import' ? publicImportSchema.parse(payload) : undefined;
+          const input = importing ?? publicPreviewSchema.parse(payload);
+          const githubSkill = input.kind === 'skill' && !input.source.startsWith('skillhub:');
+          if (importing && githubSkill && (!importing.github || !importing.packageDigest))
+            throw new AppError('PUBLIC_SOURCE_CHANGED', '请重新预览 GitHub Skill 后安装。', 409);
+          if (importing && githubSkill) {
+            const installed = extensions.installedGithubVersion(projectId, importing);
+            if (installed) return json(res, { item: publicExtension(installed), changed: false });
+          }
+          const controller = new AbortController();
+          const cancel = () => controller.abort();
+          res.once('close', cancel);
+          let items;
+          try {
+            const login = githubSkill ? store.githubPublicAuth.read() : null;
+            const request = options.publicSourceFetch ?? fetch;
+            items = await previewPublic(input.source, input.kind, login ? authenticatedGithubFetch(login, request) : request, {
+              includePackage: !githubSkill || Boolean(importing),
+              github: input.github,
+              packageDigest: importing?.packageDigest,
+              signal: controller.signal,
+            });
+            if (controller.signal.aborted) return;
+          } finally {
+            res.off('close', cancel);
+          }
+          if (!importing)
             return json(res, {
               items: items.map(({ package: pkg, ...entry }) =>
                 pkg
@@ -1314,18 +1339,18 @@ export async function createApp(options: {
             });
           const item = items.find(
             (entry) =>
-              entry.key === input.key &&
-              entry.revision === input.revision &&
-              entry.package?.digest === input.packageDigest,
+              entry.key === importing.key &&
+              entry.revision === importing.revision &&
+              entry.package?.digest === importing.packageDigest,
           );
           if (!item || !item.revision)
             throw new AppError('PUBLIC_SOURCE_CHANGED', '公开来源已更新，请重新预览。', 409);
-          const saved = extensions.savePublic(projectId, item, input.update);
+          const saved = extensions.savePublic(projectId, item, importing.update);
           if (saved.changed && saved.item.kind === 'mcp') await mcpSessions.close(saved.item.id);
           return json(
             res,
             { ...saved, item: publicExtension(saved.item) },
-            input.update ? 200 : 201,
+            saved.changed && !importing.update ? 201 : 200,
           );
         }
         if (parts.length === 5 && method === 'PATCH') {

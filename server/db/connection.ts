@@ -12,6 +12,7 @@ import { subagentRepository } from './repositories/subagents.js';
 import { workspaceLayoutRepository } from './repositories/workspace-layout.js';
 import { gitMultiCommitPreferencesRepository } from './repositories/git-multi-commit-preferences.js';
 import { skillInheritanceRepository } from './repositories/skill-inheritance.js';
+import { githubPublicAuthRepository } from './repositories/github-public-auth.js';
 import { rtkSettingsRepository } from './repositories/rtk-settings.js';
 
 import { applyGitWorktrees } from './migrations/apply-git-worktrees.js';
@@ -47,6 +48,7 @@ export function openWorkbenchDatabase(path: string) {
     gitMultiCommitPreferences: gitMultiCommitPreferencesRepository(orm),
     skillInheritance: skillInheritanceRepository(orm),
     rtkSettings: rtkSettingsRepository(orm),
+    githubPublicAuth: githubPublicAuthRepository(orm),
     applySnapshotIndexes: () => applySnapshotIndexes(db),
     applySubagents: () => applySubagents(db),
     gitWorktrees: gitWorktreeRepository(orm),

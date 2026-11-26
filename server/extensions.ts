@@ -17,6 +17,7 @@ import {
 } from '../shared/types.js';
 import { Store } from './store.js';
 import type { PublicEntry } from './public-extensions.js';
+import type { PublicImportInput } from '../shared/public-extensions.js';
 import { fingerprint } from './files.js';
 
 type McpExtension = Extract<Extension, { kind: 'mcp' }>;
@@ -72,7 +73,7 @@ const extensionInput = z.union([
   z.object({
     ...shared,
     kind: z.enum(['command', 'skill']),
-    source: z.string().max(200).default('本机'),
+    source: z.string().max(4096).default('本机'),
     body: z.string().min(1).max(65000),
     autoInvoke: z.boolean().optional(),
   }),
@@ -279,7 +280,7 @@ export class ProjectExtensions {
         input.kind === 'skill'
           ? (importedPackage ?? (previous?.kind === 'skill' ? previous.package : undefined))
           : undefined;
-      const skillPackage = savedPackage
+      const skillPackage = savedPackage && !importedPackage && previous?.kind === 'skill' && previous.body !== input.body
         ? {
             ...savedPackage,
             files: savedPackage.files.map((file) =>
@@ -288,7 +289,7 @@ export class ProjectExtensions {
                 : file,
             ),
           }
-        : undefined;
+        : savedPackage;
       const meta = inspectMarkdown(input.body, skillPackage);
       record = {
         ...base,
@@ -309,6 +310,33 @@ export class ProjectExtensions {
     return this.store.put('extensions', record);
   }
 
+  private assertPublicUnedited(item: Extension, checkLegacyMetadata = false) {
+    if (item.kind === 'mcp' || !item.origin) return;
+    const origin = item.origin;
+    if ((/^[a-f0-9]{64}$/.test(origin.revision) && fingerprint(item.body) !== origin.revision) ||
+        (origin.importedName !== undefined && item.name !== origin.importedName) ||
+        (origin.importedDescription !== undefined && item.description !== origin.importedDescription) ||
+        (checkLegacyMetadata && !origin.github && item.description !== inspectMarkdown(item.body).description.trim()))
+      throw new AppError('PUBLIC_LOCAL_MODIFIED', '此扩展包含本地修改，请保留副本后恢复来源内容，或移除原条目后再导入。', 409);
+  }
+
+  installedGithubVersion(projectId: string, input: PublicImportInput) {
+    if (input.update || !input.github || !input.packageDigest || input.kind !== 'skill') return;
+    const pin = input.github;
+    const existing = this.list(projectId).find((item) =>
+      item.kind === 'skill' &&
+      item.origin?.location === input.source &&
+      item.origin.key === input.key &&
+      item.origin.revision === input.revision &&
+      item.origin.github?.commit === pin.commit &&
+      item.origin.github.ref === pin.ref &&
+      item.origin.github.path === pin.path &&
+      item.package?.digest === input.packageDigest,
+    );
+    if (existing) this.assertPublicUnedited(existing);
+    return existing;
+  }
+
   savePublic(projectId: string, entry: PublicEntry, update?: { id: string; version: number }) {
     if (!entry.revision || entry.issue)
       throw new AppError(
@@ -327,31 +355,38 @@ export class ProjectExtensions {
       ) {
         throw new AppError('EXTENSION_CHANGED', '扩展来源或版本已变化，请刷新后重新同步。', 409);
       }
-      if (
-        previous &&
-        previous.origin?.revision === entry.revision &&
-        previous.origin?.upstreamVersion === entry.upstreamVersion &&
-        (previous.kind === 'mcp' || previous.package?.digest === entry.package?.digest)
-      )
-        return { item: previous, changed: false };
-      if (
-        previous?.kind !== 'mcp' &&
-        previous?.origin &&
-        /^[a-f0-9]{64}$/.test(previous.origin.revision) &&
-        fingerprint(previous.body) !== previous.origin.revision
-      )
-        throw new AppError(
-          'PUBLIC_LOCAL_MODIFIED',
-          '此扩展包含本地修改，请先复制或保存正文，再重新导入公开版本。',
-          409,
+      const sameContent = (item: Extension) =>
+        item.origin?.revision === entry.revision &&
+        item.origin?.upstreamVersion === entry.upstreamVersion &&
+        (item.kind === 'mcp' || item.package?.digest === entry.package?.digest);
+      if (previous) {
+        if (entry.github) this.assertPublicUnedited(previous, true);
+        if (sameContent(previous)) return { item: previous, changed: false };
+        if (!entry.github) this.assertPublicUnedited(previous);
+      }
+      if (!previous) {
+        const existing = this.list(projectId).find(
+          (item) => item.kind === entry.kind && item.origin?.location === entry.location && item.origin.key === entry.key,
         );
-      if (
-        !previous &&
-        this.list(projectId).some(
-          (item) => item.origin?.location === entry.location && item.origin.key === entry.key,
-        )
-      ) {
-        throw new AppError('PUBLIC_SOURCE_EXISTS', '当前项目已导入此条目，请从对应卡片同步。', 409);
+        const identicalGithubVersion = entry.github && this.list(projectId).find((item) =>
+          item.kind === 'skill' &&
+          item.origin?.key === entry.key &&
+          item.origin.github?.commit === entry.github?.commit &&
+          item.origin.location.split('/').slice(0, 5).join('/').toLowerCase() ===
+            entry.location.split('/').slice(0, 5).join('/').toLowerCase() &&
+          sameContent(item),
+        );
+        if (identicalGithubVersion) {
+          this.assertPublicUnedited(identicalGithubVersion);
+          return { item: identicalGithubVersion, changed: false };
+        }
+        if (existing) {
+          if (entry.github && sameContent(existing)) {
+            this.assertPublicUnedited(existing);
+            return { item: existing, changed: false };
+          }
+          throw new AppError('PUBLIC_SOURCE_EXISTS', '当前项目已导入此条目，请从对应卡片同步。', 409);
+        }
       }
       const fields = {
         name: previous?.name ?? entry.name,
@@ -374,7 +409,7 @@ export class ProjectExtensions {
               kind: entry.kind,
               body: entry.body,
               enabled: previous?.enabled ?? true,
-              ...(!previous && entry.location.startsWith('skillhub:') ? { autoInvoke: false } : {}),
+              ...(!previous && (entry.github || entry.location.startsWith('skillhub:')) ? { autoInvoke: false } : {}),
             };
       const item = this.saveRecord(projectId, payload, previous?.id, entry.package);
       return {
@@ -387,6 +422,7 @@ export class ProjectExtensions {
             revision: entry.revision!,
             sha256: entry.sha256,
             upstreamVersion: entry.upstreamVersion,
+            ...(entry.github ? { github: entry.github, packageDigest: entry.package?.digest, importedName: item.name, importedDescription: item.description } : {}),
           },
         }),
         changed: true,

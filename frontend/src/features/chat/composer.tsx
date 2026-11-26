@@ -110,6 +110,7 @@ export function Composer({
   const archived = snapshot.session.status === 'archived';
   const skillsDisabled = archived || submitting;
   const sessionSkills = useSessionSkills({
+    projectId: snapshot.session.projectId,
     sessionId,
     native: mode === 'native',
     selections: draft.extensionSelections,

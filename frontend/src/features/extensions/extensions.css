@@ -1,7 +1,7 @@
 /**
- * @file 定义扩展目录、编辑器和市场界面的样式。
- * @implementation 覆盖扩展卡片、工具绑定、输入补全及市场列表和详情，并适配窄屏与减少动态效果设置。
- * @updated 2026-11-23T05:01:08+08:00
+ * @file 定义扩展目录、编辑器、市场和公开导入界面的样式。
+ * @implementation 覆盖扩展卡片、工具绑定、市场列表、公开导入的候选与预览布局，并适配窄屏和减少动态效果。
+ * @updated 2026-11-26T16:11:06+08:00
  */
 /* Project extension UI. All component colors follow the active Atelier tokens. */
 .ext-page,
@@ -1642,5 +1642,162 @@
   }
   .market-result-arrow {
     grid-column: 3;
+  }
+}
+
+.ext-package-files {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.5rem 0;
+}
+
+.ext-public-import-dialog.ext-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+.ext-public-import {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  gap: 12px;
+}
+.ext-import-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.ext-import-source .ext-field input {
+  min-height: var(--ui-size-md);
+}
+.ext-import-account,
+.ext-import-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ext-import-account {
+  justify-content: space-between;
+}
+.ext-import-content {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.ext-import-content:empty {
+  display: none;
+}
+.ext-import-content > * + * {
+  margin-top: 12px;
+}
+.ext-import-catalog {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: 16px;
+}
+.ext-import-results h3,
+.ext-import-skill h3 {
+  color: var(--fg);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+.ext-import-choices {
+  display: grid;
+  gap: 2px;
+  max-height: clamp(150px, 42dvh, 410px);
+  margin: 8px 0 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+.ext-import-choice.ext-button {
+  display: grid;
+  justify-content: stretch;
+  justify-items: start;
+  width: 100%;
+  height: auto;
+  padding: 8px 10px;
+  gap: 4px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ext-import-choice-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ext-import-choice code,
+.ext-import-skill header code {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.ext-import-choice[aria-pressed='true'] {
+  border-color: var(--border);
+}
+.ext-import-skill {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+.ext-import-skill > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.ext-import-skill > p:not(.ext-help) {
+  font-size: var(--text-sm);
+}
+.ext-import-files > summary {
+  cursor: pointer;
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+}
+.ext-import-empty {
+  color: var(--muted);
+  padding: 14px 0;
+  font-size: var(--text-sm);
+}
+.ext-import-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+.ext-import-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-inline-end: auto;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.ext-import-status svg {
+  width: var(--ui-icon-size);
+  height: var(--ui-icon-size);
+}
+@media (max-width: 700px) {
+  .ext-import-catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ext-import-choices {
+    max-height: 180px;
   }
 }
