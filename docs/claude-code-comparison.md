@@ -2,6 +2,41 @@
 
 本页记录真实模型对照和本地诊断。每次测试后追加一条记录，保存用例、版本、模型路由、推理档位、通过条件、结果、失败与证据。结论以覆盖过的场景为限。每次任务评分使用最终交付物、独立验证和磁盘状态，恢复机制及耗时单列。
 
+## 会话并行与插话
+
+这组改动让用户能核对长时间运行的 Bash 的真实结果、在工具运行期间向主会话补充指令，以及在同一工作目录运行多个独立会话。对齐基准为 Linux 上锁定的 Claude Agent SDK 0.3.332 和随附的 Claude Code CLI 2.1.332。
+
+| 操作 | Atelier 行为 | 技术决策 |
+| --- | --- | --- |
+| Bash 长时间运行 | 本机信任使用 SDK 原生 Bash 和前台时限。超时可由 SDK 转后台，用户也可从工具详情选择「转到后台」或「停止命令」。以前台退出回执或匹配的后台终态确认结果，缺少终态时显示待核对。 | [Bash 生命周期和日志](decisions/2026-11-25-claude-bash-and-parallel-sessions.md) |
+| 运行中补充指令 | 普通兼容消息在主会话工具检查点发送。按 `Ctrl+Enter` 或点击队列中的「立即插入」，将可转后台的前台 Bash 或同批子代理交给 SDK 继续执行，主会话先收到新指令。子代理完成后交回报告，也可单独停止。 | [子代理交接和结果回送](decisions/2026-11-25-claude-subagent-insertion.md) |
+| 在相同目录继续另一项工作 | 切到同一工作目录的另一个会话即可发送。各会话并行时分别持有自己的 SDK 进程、消息、审批和取消。单会话串行，工作台全局最多三个活动会话。父子目录重叠、Git 目录操作及归档继续检查目录租约和占用。需要隔离文件变更时可创建独立工作树。 | [执行席位及目录规则](decisions/2026-11-25-claude-bash-and-parallel-sessions.md) · [Git 开发会话](decisions/2026-11-24-git-development-sessions.md) |
+
+Atelier 的「立即插入」按一条消息操作。可插入的是与当前运行的模型、推理档位、执行模式、工作目录和授权范围兼容的纯文本消息。新增上下文、附件、扩展选择以及 `/` 和 `!` 命令的请求按下一轮任务处理。需要结束当前轮才能发送时，队列提供「停止本轮并发送」。受控模式按会话的审批和执行检查点处理任务。同目录的受控写入仍按目录串行并在执行时复核基线。Claude CLI 的队列批量发送语义见[交互文档](https://code.claude.com/docs/en/interactive-mode#when-claude-code-sends-what-you-queued)。
+
+### 回执与回退
+
+运行时逐调用使用 `backgroundTasks(toolUseId)`，以 `stopTask(taskId)` 停止指定原生任务。回执按所属 SDK 会话、调用和任务身份归档。前台 Agent 通过完成回调交回报告，后台 Agent 通过任务终态交回摘要。早到的完成通知在后台交接确认后入账。主会话先展示新答复，并保持 SDK 连接收取后台结果。分支工具沿用原子代理的身份和授权。
+
+两项改动使用原有会话、工具和子任务记录。可按各决策的回退范围恢复此前的 Bash 控制、目录执行席位或前台子代理等待。排查时从会话的「执行轨迹」核对本轮工具回执、子任务报告和停止结果。
+
+### 验收版本与复测
+
+- `f48da53` 交付 Bash 调控和同目录并行。真实 SDK 与回环模型核对超时、非零退出、逐命令停止、实际日志和跨会话隔离。中英文隔离 Electron 验收通过，随后用原数据根和浏览器 profile 启动过用户桌面。[执行日志](../openspec/roadmaps/build-atelier-desktop/task-log.md)
+- `9d282ab` 交付子代理插话。真实 SDK 与回环模型验证双分支同时在前台、主会话提前收到指令、两个报告返回以及单分支停止。中英文隔离 Electron 分别覆盖快捷键和队列按钮。全量测试 806 项通过，1 项既有用例跳过。该提交的桌面验收证据来自隔离窗口。[执行日志](../openspec/roadmaps/build-atelier-desktop/task-log.md)
+
+在仓库根目录安装依赖后可运行以下检查。桌面烟测需要锁定版本的 Electron 可执行文件，首次可通过 `node node_modules/electron/install.js` 准备。模型传输使用本地回环夹具。
+
+```bash
+npm run check
+ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test
+npm run build
+npm run build:desktop
+node --import tsx --test tests/native-bash-control-sdk.test.ts tests/native-subagent-insertion-sdk.test.ts
+node --import tsx scripts/smoke-tool-activity.mts
+node --import tsx scripts/smoke-subagent-insertion.mts
+```
+
 ## 2026-11-23 · 常规任务基线
 
 - 使用 Linux x64、Node 24.21.0、Claude Agent SDK 0.3.326 及同版本 CLI 2.1.326。两边都向本机 Magpie 的 `codex/gpt-6.2-sol` 请求 `medium`。atelier 经应用 HTTP API 使用 `native-v1`，CLI 使用 `claude -p` 和同类 Shell、文件工具。试验在隔离目录运行。网关返回的模型标识和请求档位经过核对，实际计费和上游内部推理参数未核实。
