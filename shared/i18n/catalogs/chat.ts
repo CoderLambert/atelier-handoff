@@ -591,7 +591,7 @@ export const chat = {
     '{{count}} 项读取与搜索已完成',
     '{{count}} reads and searches completed',
   ],
-  'progress.elapsed': ['用时 {{duration}}', '{{duration}} elapsed'],
+  'progress.elapsed': ['本轮用时 {{duration}}', 'Turn elapsed {{duration}}'],
   'progress.awaitingApproval': ['等待操作审批', 'Waiting for action approval'],
   'progress.callingTool': ['正在调用 {{name}}', 'Calling {{name}}'],
   'progress.backgroundBash': ['Bash 在后台运行', 'Bash running in background'],

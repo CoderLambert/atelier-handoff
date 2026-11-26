@@ -195,6 +195,7 @@ export function eventName(type: string) {
     'process.exited': t('event.processExited'),
     'sdk.initialized': t('event.sdkInitialized'),
     'sdk.first_text': t('event.firstText'),
+    'sdk.input_confirmed': t('event.sdkInputConfirmed'),
     'sdk.api_retry': t('event.apiRetry'),
     'sdk.error': t('event.sdkError'),
     'sdk.result': t('event.sdkResult'),

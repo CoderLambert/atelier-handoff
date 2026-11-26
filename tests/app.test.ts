@@ -298,6 +298,7 @@ test('native executor is pinned across queued turns, live dispatch and reopening
   fixture(async (base, project) => {
     const starts: Run[] = [];
     let live: LiveInput | undefined;
+    let inputSlotReady = false;
     const pairing = 'queue-fixture';
     const launch = async () => {
       const app = await createApp({
@@ -313,6 +314,7 @@ test('native executor is pinned across queued turns, live dispatch and reopening
           insert(_id, input) {
             live = input;
           },
+          hasLiveInputSlot: () => inputSlotReady,
           stop(id) {
             store.update('runs', id, { status: 'stopped', endedAt: now() });
           },
@@ -359,6 +361,15 @@ test('native executor is pinned across queued turns, live dispatch and reopening
         202,
       );
       assert.ok(controlled.queuedMessage && native.queuedMessage);
+      assert.equal(native.queuedMessage.insertion, undefined);
+      await running.request(
+        `${path}/message-queue/${native.queuedMessage.id}/insert`,
+        'POST',
+        { runId: first.run.id, mode: 'live' },
+        409,
+      );
+      assert.equal(Boolean(live), false);
+      inputSlotReady = true;
       const snapshot = await running.request<{ messageQueue: SessionMessageQueue }>(path);
       assert.equal(
         snapshot.messageQueue.items.find((item) => item.id === controlled.queuedMessage.id)

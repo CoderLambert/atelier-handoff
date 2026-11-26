@@ -1,7 +1,7 @@
 /**
  * @file 管理父运行内的原生子代理派发与工具归属。
- * @implementation 由 SDK 调度同批前台委派，按任务与调用标识确认后台交接和终态。通过单次票据将分支身份传给本机工具。
- * @updated 2026-11-26T00:04:19+08:00
+ * @implementation 本机信任沿用 SDK 前后台选择。按任务与调用标识核对启动、交接和终态，以单次票据传递分支身份。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -14,7 +14,7 @@ const dispatchSchema = z.object({
   description: z.string().trim().min(1).max(180),
   prompt: z.string().trim().min(1).max(20_000),
   subagent_type: z.enum(['atelier-explore', 'atelier-worker']),
-  run_in_background: z.literal(false).optional(),
+  run_in_background: z.boolean().optional(),
 });
 const reportSchema = z.object({
   status: z.literal('completed'),
@@ -29,6 +29,7 @@ const taskFrame = z.object({
 const startedFrame = taskFrame.extend({
   task_type: z.literal('local_agent'),
   parent_task_id: z.undefined().optional(),
+  is_backgrounded: z.boolean().optional(),
 });
 const updatedFrame = taskFrame.extend({ patch: z.object({ is_backgrounded: z.literal(true) }) });
 const terminalFrame = taskFrame.extend({
@@ -50,7 +51,7 @@ interface Task {
   taskId?: string;
   sdkRunId?: string;
   background?: boolean;
-  handedOff?: boolean;
+  handoffAgentId?: string;
   terminal?: Terminal;
   moveRejected?: boolean;
 }
@@ -102,13 +103,14 @@ export class SubagentRun {
 
   reserve(id: string, toolUseId: string, input: unknown) {
     const args = dispatchSchema.strict().parse(input);
+    if (!this.native && args.run_in_background) throw new Error('受控子代理只能在前台运行。');
     if (this.tasks.has(id)) throw new Error('子任务已分配。');
     this.tasks.set(id, {
       kind: agentKinds[args.subagent_type],
       title: args.description,
       toolUseId,
     });
-    return { ...args, run_in_background: false };
+    return this.native ? args : { ...args, run_in_background: false };
   }
 
   started(input: unknown) {
@@ -139,6 +141,9 @@ export class SubagentRun {
     task.taskId = message.task_id;
     task.sdkRunId = message.run_id;
     this.bySdkId.set(message.task_id, id);
+    if (this.native && message.is_backgrounded) task.background = true;
+    if (task.handoffAgentId && task.handoffAgentId !== message.task_id)
+      this.finish(id, 'failed', '子代理后台交接与当前任务不匹配。');
   }
 
   actor(sdkAgentId: string) {
@@ -178,7 +183,8 @@ export class SubagentRun {
     if (!id || !task || !this.matches(task, message)) return false;
     // Foreground completion is recorded from the Agent hook, which carries the full report.
     const terminal = (task.terminal ??= message);
-    if (task.handedOff || terminal.status !== 'completed') this.finishFromNotice(id, terminal);
+    if (task.handoffAgentId === message.task_id || terminal.status !== 'completed')
+      this.finishFromNotice(id, terminal);
     return true;
   }
 
@@ -194,9 +200,17 @@ export class SubagentRun {
     const task = this.tasks.get(id);
     if (!task) return;
     const handoff = handoffSchema.safeParse(output);
-    if (this.native && handoff.success && task.taskId === handoff.data.agentId) {
+    if (this.native && handoff.success) {
+      const agentId = handoff.data.agentId;
+      if (
+        (task.taskId && task.taskId !== agentId) ||
+        (task.handoffAgentId && task.handoffAgentId !== agentId)
+      ) {
+        this.finish(id, 'failed', '子代理后台交接与当前任务不匹配。');
+        return;
+      }
       task.background = true;
-      task.handedOff = true;
+      task.handoffAgentId = agentId;
       if (task.terminal) this.finishFromNotice(id, task.terminal);
       return;
     }

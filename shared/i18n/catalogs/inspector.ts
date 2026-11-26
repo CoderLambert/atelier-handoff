@@ -716,6 +716,10 @@ export const inspector = {
   'subagents.total_one': ['子任务 · {{count}}', 'Subtasks · {{count}}'],
   'subagents.total_other': ['子任务 · {{count}}', 'Subtasks · {{count}}'],
   'subagents.elapsed': ['耗时 {{duration}}', 'Elapsed {{duration}}'],
+  'subagents.lastToolActivity': [
+    '最近工具活动 · {{name}} · {{elapsed}}前',
+    'Last tool activity · {{name}} · {{elapsed}} ago',
+  ],
   'subagents.pending_one': ['待审批 {{count}}', '{{count}} pending approval'],
   'subagents.pending_other': ['待审批 {{count}}', '{{count}} pending approvals'],
   'subagents.pendingOperations_one': ['待审批操作 · {{count}}', 'Pending operations · {{count}}'],
@@ -789,6 +793,7 @@ export const inspector = {
   'event.processSpawned': ['启动执行进程', 'Execution process started'],
   'event.processExited': ['执行进程退出', 'Execution process exited'],
   'event.sdkInitialized': ['SDK 初始化', 'SDK initialized'],
+  'event.sdkInputConfirmed': ['Claude 已接收补充消息', 'Claude received the inserted message'],
   'event.firstText': ['收到首段文本', 'First text received'],
   'event.apiRetry': ['模型请求重试', 'Model request retry'],
   'event.sdkError': ['SDK 错误', 'SDK error'],

@@ -104,7 +104,7 @@ export default function SessionChat({
     if (!result) return;
     if (insertIntoRunId && result.queuedMessage?.insertion === 'priority') {
       onError(t('session.insertRequiresStop'));
-    } else if (insertIntoRunId && result.queuedMessage) {
+    } else if (insertIntoRunId && result.queuedMessage?.insertion === 'live') {
       try {
         await insert.mutateAsync({
           itemId: result.queuedMessage.id,

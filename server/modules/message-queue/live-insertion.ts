@@ -24,7 +24,7 @@ export function createLiveInsertion({
 }: {
   store: Pick<Store, 'get' | 'skillInheritance'>;
   gateway: Pick<GatewayService, 'effectiveConfig' | 'magpie'>;
-  runner: Pick<Runner, 'insert' | 'canInsertNow'>;
+  runner: Pick<Runner, 'insert' | 'canInsertNow' | 'hasLiveInputSlot'>;
   messageQueue: Pick<MessageQueue, 'beginLive' | 'dispatched' | 'confirmLive' | 'releaseLive'>;
   skills: SkillScope;
   nativeExecution: boolean;
@@ -77,6 +77,10 @@ export function createLiveInsertion({
       ? 'live'
       : 'priority';
   }
+  function insertionAction(item: PendingSessionMessage, run: Run, current?: AppConfig) {
+    const mode = insertionMode(item, run, current);
+    return mode === 'live' && runner.hasLiveInputSlot?.(run.id) === false ? undefined : mode;
+  }
   async function insertLive(item: PendingSessionMessage, run: Run, priority: 'next' | 'now') {
     const intent = queuedIntent.parse(item.intent);
     const { id: runId, sessionId } = run;
@@ -116,7 +120,7 @@ export function createLiveInsertion({
     }
     queueChanged(sessionId);
   }
-  return { insertionMode, insertionAction: insertionMode, insertLive };
+  return { insertionMode, insertionAction, insertLive };
 }
 
 export type LiveInsertion = ReturnType<typeof createLiveInsertion>;

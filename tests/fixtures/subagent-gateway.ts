@@ -1,3 +1,8 @@
+/**
+ * @file 为原生 SDK 回归提供回环模型流式响应。
+ * @implementation 将文本和工具调用构造成模型 SSE 事件及用量，供隔离回归复用。
+ * @updated 2026-11-26T23:08:48+08:00
+ */
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 
@@ -13,7 +18,7 @@ const defaultUsage = {
 export function sendModelReply(
   res: ServerResponse,
   model: string,
-  reply: string | FixtureTool[],
+  reply: string | Array<string | FixtureTool>,
   usage = defaultUsage,
 ) {
   res.writeHead(200, {
@@ -35,12 +40,13 @@ export function sendModelReply(
       usage: { ...usage, output_tokens: 0 },
     },
   });
-  if (typeof reply === 'string') {
-    send('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
-    send('content_block_delta', { index: 0, delta: { type: 'text_delta', text: reply } });
-    send('content_block_stop', { index: 0 });
-  } else {
-    reply.forEach(({ name, id, input }, index) => {
+  const blocks = typeof reply === 'string' ? [reply] : reply;
+  blocks.forEach((block, index) => {
+    if (typeof block === 'string') {
+      send('content_block_start', { index, content_block: { type: 'text', text: '' } });
+      send('content_block_delta', { index, delta: { type: 'text_delta', text: block } });
+    } else {
+      const { name, id, input } = block;
       send('content_block_start', {
         index,
         content_block: { type: 'tool_use', name, id, input: {} },
@@ -49,12 +55,12 @@ export function sendModelReply(
         index,
         delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) },
       });
-      send('content_block_stop', { index });
-    });
-  }
+    }
+    send('content_block_stop', { index });
+  });
   send('message_delta', {
     delta: {
-      stop_reason: typeof reply === 'string' ? 'end_turn' : 'tool_use',
+      stop_reason: blocks.some((block) => typeof block !== 'string') ? 'tool_use' : 'end_turn',
       stop_sequence: null,
     },
     usage,

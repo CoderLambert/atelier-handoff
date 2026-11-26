@@ -1,7 +1,7 @@
 /**
- * @file 回归本机信任会话运行前台子代理时的插话。
- * @implementation 使用真实 Claude SDK 和回环模型验证同批交接、消息送达、工具归属及报告收尾。
- * @updated 2026-11-25T23:48:00+08:00
+ * @file 回归本机信任会话的子代理派发与插话。
+ * @implementation 使用真实 Claude SDK 和回环模型验证前后台派发、输入回执、单分支停止及汇总期间插话。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -19,23 +19,55 @@ import type { Subagent } from '../shared/subagents.js';
 import type {
   Message,
   Run,
+  RunEvent,
   SendSessionMessageResult,
   SessionMessageQueue,
   ToolCall,
 } from '../shared/types.js';
 import { subagentInsertionFixture } from './fixtures/subagent-insertion.js';
 
-for (const stopOne of [false, true])
+const scenarios = [
+  [
+    'foreground',
+    'native insertion releases foreground Agent tools and delivers both reports after the new message',
+  ],
+  [
+    'stop-one',
+    'stopping one background subagent preserves the other report and parent conversation',
+  ],
+  [
+    'steered',
+    'a delivered insertion frees the queue while its two new foreground tasks are still running',
+  ],
+  ['stop-after-delivery', 'stopping a foreground batch keeps the delivered insertion confirmed'],
+  ['hold-reply', 'stopping without an SDK receipt retains the insertion for review without replay'],
+  [
+    'native-background',
+    'native default and explicit background Agent dispatch let the parent continue before either report',
+  ],
+] as const;
+
+for (const [scenario, title] of scenarios)
   test(
-    stopOne
-      ? 'stopping one background subagent preserves the other report and parent conversation'
-      : 'native insertion releases foreground Agent tools and delivers both reports after the new message',
-    { skip: process.platform !== 'linux', timeout: 45_000 },
+    title,
+    {
+      skip: process.platform !== 'linux' && 'The native harness requires Linux',
+      timeout: 45_000,
+    },
     async () => {
       const directory = await mkdtemp(join(tmpdir(), 'atelier-subagent-insertion-'));
       const project = join(directory, 'project');
       await mkdir(project);
-      const fixture = subagentInsertionFixture(project);
+      const steered =
+        scenario === 'steered' || scenario === 'stop-after-delivery' || scenario === 'hold-reply';
+      const fixture = subagentInsertionFixture(
+        project,
+        scenario === 'hold-reply' || scenario === 'native-background'
+          ? scenario
+          : steered
+            ? 'steered'
+            : 'foreground',
+      );
       const { gateway } = fixture;
       await writeFile(join(project, fixture.sampleName), fixture.sampleText);
       const oldToken = process.env.ATELIER_GATEWAY_TOKEN;
@@ -120,25 +152,78 @@ for (const stopOne of [false, true])
         const { run } = await send(fixture.initial);
         assert.equal(run?.executor, 'native-v1');
         assert.ok(run);
-        const trace = () => request<{ run: Run; tools: ToolCall[] }>('/api/runs/' + run.id);
-        const batch = await waitFor(async () => {
-          const { subagents } = await snapshot();
-          if (subagents.length === 2 && fixture.children.every(({ started }) => started))
-            return subagents;
-        }, 'two simultaneous foreground subagents');
-        const { queuedMessage } = await send(fixture.steer);
-        assert.ok(queuedMessage);
-        assert.equal(queuedMessage.insertion, 'live');
-        assert.ok(fixture.parentInputs.every((text) => !text.includes(fixture.steer)));
-        await request(path + '/message-queue/' + queuedMessage.id + '/insert', 'POST', {
-          runId: run.id,
-          mode: 'live',
-        });
+        const trace = () =>
+          request<{ run: Run; tools: ToolCall[]; events: RunEvent[] }>('/api/runs/' + run.id);
+        const waitForBatch = () =>
+          waitFor(async () => {
+            const { subagents } = await snapshot();
+            if (subagents.length === 2 && fixture.children.every(({ started }) => started))
+              return subagents;
+          }, 'two simultaneous foreground subagents');
+        const insert = async (text: string) => {
+          const { queuedMessage } = await send(text);
+          assert.ok(queuedMessage);
+          assert.equal(queuedMessage.insertion, 'live');
+          await request(path + '/message-queue/' + queuedMessage.id + '/insert', 'POST', {
+            runId: run.id,
+            mode: 'live',
+          });
+          return queuedMessage.id;
+        };
         const assistantReply = (reply: string) =>
           waitFor(
             async () => (await snapshot()).messages.find((message) => message.text.includes(reply)),
             reply,
           );
+        const stopRun = async () => {
+          await request('/api/runs/' + run.id + '/stop', 'POST', {});
+          await waitFor(async () => {
+            const { run: current } = await trace();
+            if (current.endedAt) return current;
+          }, 'stopped run cleanup').then(({ status }) => assert.equal(status, 'stopped'));
+        };
+        let steerId: string;
+        if (steered) {
+          await waitFor(
+            async () => (fixture.parentInputs.length ? true : undefined),
+            'first request held by the loopback model',
+          );
+          steerId = await insert(fixture.steer);
+          fixture.releaseInitial();
+          if (scenario === 'hold-reply') {
+            await waitFor(
+              async () =>
+                fixture.parentInputs.some((text) => text.includes(fixture.steer))
+                  ? true
+                  : undefined,
+              'inserted model request held before its first frame',
+            );
+            const beforeStop = await snapshot();
+            assert.ok(
+              beforeStop.messages.every(({ text }) => !text.includes(fixture.acknowledgement)),
+            );
+            assert.equal(beforeStop.messageQueue.items[0]?.delivery, 'sending');
+            await stopRun();
+            assert.deepEqual(
+              (await snapshot()).messageQueue.items.map(({ id, delivery }) => [id, delivery]),
+              [[steerId, 'unknown']],
+            );
+            assert.equal(
+              fixture.parentInputs.filter((text) => text.includes(fixture.steer)).length,
+              1,
+            );
+            return;
+          }
+        } else {
+          if (scenario === 'native-background') {
+            await assistantReply(fixture.waiting);
+            assert.equal((await trace()).run.status, 'running');
+          }
+          await waitForBatch();
+          assert.ok(fixture.parentInputs.every((text) => !text.includes(fixture.steer)));
+          steerId = await insert(fixture.steer);
+        }
+        const batch = await waitForBatch();
         assert.equal((await assistantReply(fixture.acknowledgement)).runId, run.id);
         assert.ok((await snapshot()).subagents.every(({ status }) => status === 'running'));
         assert.ok(
@@ -148,9 +233,31 @@ for (const stopOne of [false, true])
         );
         assert.equal((await trace()).run.status, 'running');
 
-        assert.ok((await send(fixture.ordinary)).queuedMessage);
+        if (scenario === 'stop-after-delivery') {
+          await waitFor(
+            async () =>
+              fixture.children.every(({ readReturned }) => readReturned) ? true : undefined,
+            'both branches finished reading and are waiting to report',
+          );
+          await stopRun();
+          assert.deepEqual((await snapshot()).messageQueue.items, []);
+          assert.equal((await snapshot()).messages.filter(({ id }) => id === steerId).length, 1);
+          return;
+        }
+        if (scenario === 'steered') {
+          assert.ok(!(await snapshot()).messageQueue.items.some(({ id }) => id === steerId));
+          const receipts = (await trace()).events.filter(
+            ({ type }) => type === 'sdk.input_confirmed',
+          );
+          assert.equal(receipts.length, 1);
+          assert.equal(receipts[0]?.payload.messageId, steerId);
+          assert.match(String(receipts[0]?.payload.receipt), /^(replay|reply)$/u);
+          await insert(fixture.ordinary);
+        } else {
+          assert.ok((await send(fixture.ordinary)).queuedMessage);
+        }
         assert.equal((await assistantReply(fixture.queuedAcknowledgement)).runId, run.id);
-        const toStop = stopOne ? fixture.children[1] : undefined;
+        const toStop = scenario === 'stop-one' ? fixture.children[1] : undefined;
         if (toStop) {
           const target = batch.find(({ title }) => title === toStop.title);
           assert.ok(target);
@@ -186,6 +293,13 @@ for (const stopOne of [false, true])
           assert.equal(read?.status, 'succeeded');
           assert.equal(tools.find(({ id }) => id === ended.id)?.status, 'succeeded');
         }
+        if (scenario === 'steered') {
+          await fixture.collectionStarted;
+          assert.equal((await trace()).run.status, 'running');
+          await insert(fixture.duringCollection);
+          fixture.releaseCollection();
+          assert.equal((await assistantReply(fixture.collectionAcknowledgement)).runId, run.id);
+        }
         if (!toStop) assert.equal((await assistantReply(fixture.collected)).runId, run.id);
         await waitFor(async () => {
           const { run: current } = await trace();
@@ -200,6 +314,9 @@ for (const stopOne of [false, true])
         if (toStop)
           assert.ok(!(await trace()).tools.some(({ id }) => id.endsWith(':' + toStop.readId)));
       } finally {
+        fixture.releaseInitial();
+        fixture.releaseReply();
+        fixture.releaseCollection();
         for (const child of fixture.children) child.release();
         await app?.close();
         gateway.closeAllConnections();
@@ -248,4 +365,43 @@ test('an early background completion waits for the matching handoff and cannot c
   assert.equal(tasks.notify(terminal), false);
   assert.deepEqual(ended, [['run:spawn-a', 'run', 'completed', 'Observed report']]);
   assert.deepEqual(tasks.actor(second.task_id), { id: 'run:spawn-b', kind: 'explore' });
+});
+
+test('a native background handoff can arrive before registration of the same task ID', () => {
+  const finished: unknown[] = [];
+  const tasks = new SubagentRun(
+    { id: 'run', sessionId: 'workbench-session' },
+    'sdk-session',
+    true,
+    { startSubagent() {}, finishSubagent: (...args) => finished.push(args) },
+    () => {},
+  );
+  const args = {
+    description: 'Read an isolated sample',
+    prompt: 'Read and report.',
+    subagent_type: 'atelier-explore',
+  };
+  const started = {
+    session_id: 'sdk-session',
+    task_type: 'local_agent',
+    is_backgrounded: true,
+    run_id: 'attempt-a',
+  };
+  for (const [call, taskId, handoffId] of [
+    ['matching', 'branch-a', 'branch-a'],
+    ['foreign', 'branch-b', 'other-branch'],
+  ] as const) {
+    const id = 'run:' + call;
+    const info = { ...started, task_id: taskId, tool_use_id: call };
+    assert.deepEqual(tasks.reserve(id, call, args), args);
+    tasks.report(id, { status: 'async_launched', agentId: handoffId });
+    assert.ok(tasks.hasBackground);
+    tasks.started(info);
+    tasks.notify({ ...info, status: 'completed', summary: 'Branch report' });
+  }
+  assert.deepEqual(finished, [
+    ['run:matching', 'run', 'completed', 'Branch report'],
+    ['run:foreign', 'run', 'failed', '子代理后台交接与当前任务不匹配。'],
+  ]);
+  assert.equal(tasks.active, false);
 });

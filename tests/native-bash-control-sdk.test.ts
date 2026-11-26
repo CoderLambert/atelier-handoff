@@ -338,15 +338,12 @@ test(
       const sessionC = await newSession();
       const runC = await start(sessionC, timeout);
       await tool(runC, (value) => value.status === 'running');
-      assert.ok((await send(sessionC, queuedBeforeTimeout)).queuedMessage);
+      const queued = (await send(sessionC, queuedBeforeTimeout)).queuedMessage;
+      assert.ok(queued);
       await wait(async () => {
         if (!timeoutCheckpointObserved) return undefined;
-        const { messageQueue } = await request<{ messageQueue: SessionMessageQueue }>(
-          '/api/sessions/' + sessionC,
-        );
-        return messageQueue.items.some(
-          (item) => item.text === queuedBeforeTimeout && item.delivery === 'sending',
-        )
+        const { messages } = await request<{ messages: Message[] }>('/api/sessions/' + sessionC);
+        return messages.some((message) => message.id === queued.id && message.runId === runC)
           ? true
           : undefined;
       }, 'prompt dispatch at the timeout checkpoint before the model responds');

@@ -1,7 +1,7 @@
 /**
  * @file 按会话和轮次展示子代理任务、工具结果与审批入口。
- * @implementation 从已有会话快照派生主助手和子任务分组，保留独立展开状态，复用工具详情并在运行时更新耗时。
- * @updated 2026-11-21T02:17:11+08:00
+ * @implementation 按分组展示状态、耗时及各分支最近的工具活动，提供单独停止、审批和工具详情入口。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useEffect, useState } from 'react';
@@ -11,7 +11,7 @@ import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { Activity, ChevronRight, LoaderCircle, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { StatusBadge, formatDuration, permissionOperation } from './shared';
+import { StatusBadge, formatDate, formatDuration, permissionOperation } from './shared';
 import { ToolDetail } from './tool-detail';
 import { useStopSubagent } from '@/use-query/runs/use-stop-subagent';
 import { errorMessage, ErrorNotice } from './shared';
@@ -96,6 +96,14 @@ export function SubagentProgress({
           subagent && (end || (active && subagent.status === 'running'))
             ? (end ? Date.parse(end) : now) - Date.parse(subagent.startedAt)
             : null;
+        const running = active && subagent?.status === 'running';
+        const latestTool = running
+          ? tools.reduce<ToolCall | undefined>((latest, tool) => {
+              const at = tool.endedAt ?? tool.startedAt;
+              return !latest || at > (latest.endedAt ?? latest.startedAt) ? tool : latest;
+            }, undefined)
+          : undefined;
+        const lastActivity = latestTool?.endedAt ?? latestTool?.startedAt;
         return (
           <details
             key={id}
@@ -120,6 +128,19 @@ export function SubagentProgress({
               </span>
               {pending.length ? (
                 <Badge variant="warning">{t('subagents.pending', { count: pending.length })}</Badge>
+              ) : null}
+              {running && latestTool && lastActivity ? (
+                <time
+                  className="basis-full pl-6 text-muted-foreground"
+                  dateTime={lastActivity}
+                  title={formatDate(lastActivity, locale)}
+                  data-subagent-last-tool
+                >
+                  {t('subagents.lastToolActivity', {
+                    name: latestTool.name.replace(/^mcp__atelier__/, ''),
+                    elapsed: formatDuration(Math.max(0, now - Date.parse(lastActivity)), locale),
+                  })}
+                </time>
               ) : null}
             </summary>
             <div className="flex min-w-0 flex-col gap-3 border-t border-border p-4">

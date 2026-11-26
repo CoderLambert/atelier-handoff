@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、工具调用与取消。
- * @implementation 协调 SDK 子任务、插话、工作树和后台 Bash，记录运行顺序与回执，并按项目设置规划 RTK 包装。
- * @updated 2026-11-26T03:01:01+08:00
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK。按输入 UUID 确认消息，原生运行空闲后收尾。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -154,11 +154,19 @@ export interface LiveInput {
   confirmed(): void;
   released(): void;
 }
+
+function sdkInputIds(message: { user_message_uuid?: string; user_message_uuids?: string[] }) {
+  return (
+    message.user_message_uuids ?? (message.user_message_uuid ? [message.user_message_uuid] : [])
+  );
+}
+
 interface LiveRun {
   cancellation: AbortController;
   reason?: 'user' | 'timeout' | 'shutdown';
   done: Promise<void>;
   insert?: (message: LiveInput) => void | Promise<void>;
+  hasLiveInputSlot?: () => boolean;
   canInsertNext?: () => boolean;
   canInsertNow?: () => boolean;
   controlBash?: (toolId: string, action: BashControl['action']) => Promise<void>;
@@ -175,6 +183,7 @@ export interface Runner {
     promptMessageId?: NonNullable<SDKUserMessage['uuid']>,
   ): void | Promise<void>;
   insert?(id: string, message: LiveInput): void | Promise<void>;
+  hasLiveInputSlot?(id: string): boolean;
   canInsertNext?(id: string): boolean;
   canInsertNow?(id: string): boolean | undefined;
   controlBash?(runId: string, toolId: string, action: BashControl['action']): Promise<void>;
@@ -227,6 +236,10 @@ export class AgentRunner implements Runner {
         409,
       );
     return live.insert(message);
+  }
+  hasLiveInputSlot(id: string) {
+    const live = this.active.get(id);
+    return Boolean(live?.insert && !live.cancellation.signal.aborted && live.hasLiveInputSlot?.());
   }
   canInsertNext(id: string) {
     return this.active.get(id)?.canInsertNext?.() === true;
@@ -521,7 +534,32 @@ export class AgentRunner implements Runner {
     transcript.associateInput(promptMessageId, assistantId);
     let assistantAnchor: string | undefined;
     let insertion: { message: LiveInput; sent: boolean; preparing?: boolean } | undefined;
+    live.hasLiveInputSlot = () => !insertion;
     let insertionIdleTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearInputIdleTimer = () => {
+      clearTimeout(insertionIdleTimer);
+      insertionIdleTimer = undefined;
+    };
+    let awaitingResultFor: string | undefined;
+    const hasUnsettledInput = () => Boolean(insertion || awaitingResultFor);
+    const acknowledgeInsertion = (
+      sdkSession: string | undefined,
+      consumed: readonly string[],
+      receipt: 'replay' | 'reply' | 'result',
+    ) => {
+      if (signal.aborted || sdkSession !== sdkSessionId || !insertion?.sent) return;
+      const { message } = insertion;
+      if (!consumed.includes(message.id)) return;
+      message.confirmed();
+      transcript.acknowledgeInput(message.id);
+      awaitingResultFor = message.id;
+      insertion = undefined;
+      clearInputIdleTimer();
+      this.store.event(run.id, run.sessionId, 'sdk.input_confirmed', {
+        messageId: message.id,
+        receipt,
+      });
+    };
     let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
     const flush = () => {
       const changes = transcript.takeChanges();
@@ -542,6 +580,7 @@ export class AgentRunner implements Runner {
     };
     let atToolBoundary = false;
     let awaitingModel = true;
+    let sdkSessionIdle = false;
     const hasDeferredWork = () => bash?.hasDeferredReceipt || subagents.hasBackground;
     const blockedByLocalWork = () =>
       (!native && subagents.active) ||
@@ -599,6 +638,8 @@ export class AgentRunner implements Runner {
       transcript.associateInput(message.id, assistantId);
       assistantAnchor = undefined;
       awaitingModel = true;
+      sdkSessionIdle = false;
+      if (native) clearInputIdleTimer();
       input.push(message.text, [], message.id, message.priority ?? 'now');
       this.store.event(run.id, session.id, 'message.delta', { messageId: message.id });
     };
@@ -2020,6 +2061,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         CLAUDE_CONFIG_DIR: sdkDirectory,
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+        ...(native ? { CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: '1' } : {}),
         ...(sdkTemp
           ? { CLAUDE_CODE_TMPDIR: sdkTemp, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '0' }
           : { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' }),
@@ -2095,6 +2137,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           canUseTool: async () => ({ behavior: 'deny', message: '请使用工作台提供的受控工具。' }),
           persistSession: true,
           includePartialMessages: true,
+          extraArgs: { 'replay-user-messages': null },
           ...(run.config.limitExecution ? { maxTurns: run.config.maxTurns } : {}),
           ...(resumeExisting ? { resume: sdkSessionId } : { sessionId: sdkSessionId }),
           env,
@@ -2115,6 +2158,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   async (event) => {
                     if (event.hook_event_name !== 'PostToolUse') return {};
                     if (event.tool_name === 'Agent') {
+                      if (event.session_id !== sdkSessionId || event.agent_id) return {};
                       const id = appToolId(event.tool_use_id, event.agent_id);
                       subagents.report(id, event.tool_response);
                       atToolBoundary = true;
@@ -2335,17 +2379,31 @@ ${JSON.stringify(nativePackagePaths)}
         live.insert = undefined;
         input.end();
       };
-      const awaitInsertionReceipt = () => {
-        if (!insertion || hasDeferredWork() || insertionIdleTimer) return;
+      const awaitInputSettlement = () => {
+        // A result for an older input does not tell us whether the native CLI
+        // is already processing the next one. Use its explicit idle signal.
+        if (
+          (native && !sdkSessionIdle) ||
+          !hasUnsettledInput() ||
+          hasDeferredWork() ||
+          insertionIdleTimer
+        )
+          return;
         insertionIdleTimer = setTimeout(() => {
           insertionIdleTimer = undefined;
-          if (!hasDeferredWork() && (!bash || !foregroundTools().length)) drainInput();
+          if (
+            hasUnsettledInput() &&
+            (native ? sdkSessionIdle : !(awaitingResultFor && awaitingModel)) &&
+            !hasDeferredWork() &&
+            (!bash || !foregroundTools().length)
+          )
+            drainInput();
         }, 120_000);
       };
       const afterDeferredWork = () => {
         if (hasDeferredWork() || !finalResult || subagents.active) return;
-        if (insertion) awaitInsertionReceipt();
-        else if (!awaitingModel) drainInput();
+        if (hasUnsettledInput()) awaitInputSettlement();
+        else if (native ? sdkSessionIdle : !awaitingModel) drainInput();
       };
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {
@@ -2453,6 +2511,11 @@ ${JSON.stringify(nativePackagePaths)}
             tools: message.tools,
             resumed: !!resumeExisting,
           });
+        } else if (message.type === 'system' && message.subtype === 'session_state_changed') {
+          if (!native || message.session_id !== sdkSessionId) continue;
+          sdkSessionIdle = message.state === 'idle';
+          if (!sdkSessionIdle) clearInputIdleTimer();
+          else afterDeferredWork();
         } else if (message.type === 'system' && message.subtype === 'task_started') {
           subagents.started(message);
           bash?.started(message);
@@ -2473,6 +2536,7 @@ ${JSON.stringify(nativePackagePaths)}
         } else if (message.type === 'stream_event') {
           if (message.parent_tool_use_id) continue;
           const event = message.event;
+          acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
           transcript.acceptStream(message, assistantId, appToolId);
           publishToolPositions();
           if (event.type === 'message_start') {
@@ -2542,6 +2606,8 @@ ${JSON.stringify(nativePackagePaths)}
           });
         } else if (message.type === 'assistant') {
           if (message.parent_tool_use_id || message.agent_id) continue;
+          if (!message.error)
+            acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
           const owner = transcript.acceptAssistant(message, assistantId, appToolId);
           publishToolPositions();
           if (owner === assistantId)
@@ -2561,6 +2627,13 @@ ${JSON.stringify(nativePackagePaths)}
               code: message.error,
             });
           }
+        } else if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
+          if (
+            message.parent_tool_use_id === null &&
+            !('agent_id' in message && message.agent_id) &&
+            !message.isSynthetic
+          )
+            acknowledgeInsertion(message.session_id, [message.uuid], 'replay');
         } else if (message.type === 'user' && Array.isArray(message.message.content)) {
           for (const block of message.message.content)
             if (block.type === 'tool_result') {
@@ -2598,18 +2671,17 @@ ${JSON.stringify(nativePackagePaths)}
         } else if (message.type === 'result') {
           finalResult = message;
           awaitingModel = false;
-          const consumedInputs =
-            message.user_message_uuids ??
-            (message.user_message_uuid ? [message.user_message_uuid] : []);
-          const continuingInsertion = Boolean(
-            insertion && !consumedInputs.includes(insertion.message.id),
-          );
-          if (insertion?.sent && !continuingInsertion) {
-            insertion.message.confirmed();
-            insertion = undefined;
-            clearTimeout(insertionIdleTimer);
-            insertionIdleTimer = undefined;
+          const consumedInputs = sdkInputIds(message);
+          if (!message.is_error) acknowledgeInsertion(message.session_id, consumedInputs, 'result');
+          if (
+            message.session_id === sdkSessionId &&
+            awaitingResultFor &&
+            consumedInputs.includes(awaitingResultFor)
+          ) {
+            awaitingResultFor = undefined;
+            clearInputIdleTimer();
           }
+          const continuingInsertion = hasUnsettledInput();
           for (const denied of message.permission_denials) {
             const id = appToolId(denied.tool_use_id);
             if (transcript.toolPosition(id)?.name) recordBlockedTool(id, denied.tool_name);
@@ -2642,14 +2714,15 @@ ${JSON.stringify(nativePackagePaths)}
           });
           this.store.event(run.id, session.id, 'usage.updated', {});
           if (drainingInput) continue;
-          if (continuingInsertion) {
+          if (hasUnsettledInput()) {
             sendInsertion();
-            // Tell the SDK there is no more input if it becomes idle without acknowledging a delivery.
-            // Closing input still allows an already accepted response to finish.
-            awaitInsertionReceipt();
+            // End input only if the query is idle with no matching reply or result.
+            awaitInputSettlement();
           } else if (hasDeferredWork()) {
             flush();
             sendInsertion();
+          } else if (native && !message.is_error && !subagents.active) {
+            afterDeferredWork();
           } else {
             live.insert = undefined;
             if (subagents.active) {
@@ -2666,6 +2739,8 @@ ${JSON.stringify(nativePackagePaths)}
         }
       }
       if (insertion?.sent && !signal.aborted) failure = '补充消息未收到 SDK 回执。';
+      else if (awaitingResultFor && !signal.aborted && !finalResult?.is_error)
+        failure = 'SDK 连接已结束，但未返回补充消息的终态。';
       else if (bash?.hasDeferredReceipt && !signal.aborted)
         failure = 'SDK 连接结束，Bash 命令未返回终态。';
       else if (subagents.active && !signal.aborted) failure = '主会话结束时仍有未收尾的子任务。';

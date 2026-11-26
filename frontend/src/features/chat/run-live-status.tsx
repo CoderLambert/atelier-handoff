@@ -1,7 +1,7 @@
 /**
  * @file 在当前对话轮次末尾展示运行状态与耗时。
- * @implementation 根据运行状态、工具、事件和子任务选择阶段，每秒刷新本轮耗时。
- * @updated 2026-11-26T02:33:51+08:00
+ * @implementation 根据运行状态、工具、事件和运行中的子任务选择阶段，标示整轮耗时与最近实际活动。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Shield } from 'lucide-react';
@@ -27,8 +27,15 @@ export function RunLiveStatus({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+  const runningSubagents = subagents?.filter(
+    (agent) => agent.runId === run.id && agent.status === 'running',
+  );
   const ongoing = tools.findLast(
-    (tool) => tool.status === 'running' && tool.bashExecution?.phase !== 'background',
+    (tool) =>
+      tool.status === 'running' &&
+      !tool.subagentId &&
+      tool.bashExecution?.phase !== 'background' &&
+      !runningSubagents?.some((task) => task.id === tool.id),
   );
   const event = events.findLast((event) =>
     [
@@ -42,9 +49,6 @@ export function RunLiveStatus({
     ].includes(event.type),
   );
   const preparing = run.transcript?.notices.findLast((notice) => notice.kind === 'tool_preparing');
-  const runningSubagents = subagents?.filter(
-    (agent) => agent.runId === run.id && agent.status === 'running',
-  ).length;
   let stage: string = t('progress.waitingModel');
   if (run.status === 'queued') stage = t('progress.queued');
   else if (run.status === 'awaiting_permission') stage = t('progress.awaitingApproval');
@@ -56,18 +60,19 @@ export function RunLiveStatus({
     stage = t('transcript.toolPreparing', {
       name: preparing.toolName.replace(/^mcp__atelier__/, ''),
     });
-  else if (runningSubagents) stage = t('progress.runningSubtasks', { count: runningSubagents });
+  else if (event?.type === 'message.delta' && now - Date.parse(event.at) < 2000)
+    stage = t('progress.receiving');
+  else if (runningSubagents?.length)
+    stage = t('progress.runningSubtasks', { count: runningSubagents.length });
   else if (event?.type === 'sdk.api_retry') stage = t('progress.retryingModel');
   else if (
     tools.some((tool) => tool.status === 'running' && tool.bashExecution?.phase === 'background')
   )
     stage = t('progress.backgroundBash');
-  else if (event?.type === 'message.delta' && now - Date.parse(event.at) < 2000)
-    stage = t('progress.receiving');
   else if (!event && !tools.length) stage = t('progress.starting');
   const lastTool = tools.at(-1);
   const lastActivityAt =
-    events.at(-1)?.at ?? lastTool?.endedAt ?? lastTool?.startedAt ?? run.startedAt ?? run.createdAt;
+    event?.at ?? lastTool?.endedAt ?? lastTool?.startedAt ?? run.startedAt ?? run.createdAt;
   const elapsed = Math.max(0, now - Date.parse(run.startedAt ?? run.createdAt));
   return (
     <section

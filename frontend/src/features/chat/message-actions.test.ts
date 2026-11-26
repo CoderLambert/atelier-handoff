@@ -14,7 +14,13 @@ import { chromium } from 'playwright-core';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
-import { activeStatuses, type Draft, type Permission, type Run, type ToolCall } from '@shared/types';
+import {
+  activeStatuses,
+  type Draft,
+  type Permission,
+  type Run,
+  type ToolCall,
+} from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { MessageActions } from './message-actions';
 import { rewindUnavailableReason } from './message-actions-model';
@@ -271,6 +277,8 @@ test(
       const root = createRoot(document.getElementById('app'));
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
       window.events = [];
+      let historyReads = 0;
+      let renderTimes;
       let rewindMode = 'reject';
       async function rewind(messageId, expectedHeadId) {
         const id = current.session.id;
@@ -287,13 +295,29 @@ test(
       }
       function render() {
         root.render(<Provider store={store}><QueryClientProvider client={client}>
+          <React.Profiler id="chat" onRender={(_, phase, duration) => renderTimes?.push(duration)}>
           <SessionChat snapshot={current} defaultModel="default" onSent={async (id) => { window.events.push(['sent', id]); }}
             onError={(error) => window.events.push(['error', error])} onTrace={() => {}}
             onStop={() => {}} onRetry={(id) => window.events.push(['retry', id])}
             onForkMessage={(id) => window.events.push(['fork', id])} onRewindMessage={rewind} />
+          </React.Profiler>
         </QueryClientProvider></Provider>);
       }
       window.fixture = {
+        longHistory: () => {
+          const history = Array.from({ length: 60 }, (_, index) => ({
+            id: 'history-' + index, role: 'assistant', createdAt: initial.session.createdAt,
+            text: initial.messages[1].text.repeat(6),
+          }));
+          current = { ...current, get inheritedMessages() { historyReads++; return history; } };
+          render();
+        },
+        startTypingSample: () => { historyReads = 0; renderTimes = []; },
+        finishTypingSample: () => {
+          const sample = { historyReads, renderTimes };
+          renderTimes = undefined;
+          return sample;
+        },
         rewindMode: (mode) => { rewindMode = mode; },
         appendMessage: () => {
           current = { ...current, messages: [...current.messages, { ...initial.messages[1], id: 'later-message', sessionId: current.session.id }] };
@@ -375,6 +399,7 @@ test(
     const sends: { path: string; body: Draft & { idempotencyKey: string } }[] = [];
     const inserts: { path: string; body: unknown }[] = [];
     let rejectInsert = false;
+    let insertionAvailable = true;
     const server = createServer(async (req, res) => {
       const path = req.url ?? '/';
       if (path === '/bundle.js') {
@@ -417,6 +442,7 @@ test(
                 createdAt: at,
                 error: null,
                 extensions: [],
+                ...(insertionAvailable ? { insertion: 'live' } : {}),
               },
             }),
           );
@@ -754,6 +780,19 @@ test(
         ),
       );
       assert.equal(await input.inputValue(), '');
+      const errorsBeforeQueueing = await page.evaluate(
+        "window.events.filter(([type]) => type === 'error').length",
+      );
+      insertionAvailable = false;
+      await input.fill('启动期间排队');
+      await input.press('Control+Enter');
+      await page.waitForFunction("window.events.filter(([type]) => type === 'sent').length === 4");
+      assert.equal(sends[4]?.body.text, '启动期间排队');
+      assert.equal(inserts.length, 2);
+      assert.equal(
+        await page.evaluate("window.events.filter(([type]) => type === 'error').length"),
+        errorsBeforeQueueing,
+      );
       await page.evaluate('window.fixture.patch({ active: false })');
       const progress = page.getByRole('button', { name: '检查任务进度', exact: true });
       await progress.click();
@@ -991,9 +1030,9 @@ test(
       await finalToggle.press('Enter');
       assert.equal(await dock.getByRole('listitem').count(), 3);
       assert.equal(
-        await dock.getByText('验证结果', { exact: true }).evaluate(
-          (element) => getComputedStyle(element).textDecorationLine,
-        ),
+        await dock
+          .getByText('验证结果', { exact: true })
+          .evaluate((element) => getComputedStyle(element).textDecorationLine),
         'none',
       );
       assert.equal(
@@ -1042,6 +1081,24 @@ test(
       assert.equal(await page.locator('.chat-task-plan').count(), 0);
       await page.setViewportSize({ width: 1440, height: 900 });
       assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+      await setRuns([{ ...running, sessionId: 'session-b' }]);
+      await toggle.waitFor();
+      await page.evaluate('window.fixture.longHistory()');
+      await page.locator('.inherited-message').last().waitFor({ state: 'attached' });
+      await input.fill('');
+      await page.evaluate('window.fixture.startTypingSample()');
+      await input.pressSequentially('typing a draft');
+      assert.equal(await input.inputValue(), 'typing a draft');
+      assert.equal((await readDraft()).text, 'typing a draft');
+      const sample = (await page.evaluate('window.fixture.finishTypingSample()')) as {
+        historyReads: number;
+        renderTimes: number[];
+      };
+      console.log('Composer typing sample', JSON.stringify(sample));
+      assert.equal(sample.historyReads, 0, 'Draft keystrokes should not render conversation history');
+      await page.evaluate("window.fixture.patch({ assistantText: '更新中的回复' })");
+      await assistant.getByText('更新中的回复', { exact: true }).waitFor();
+      assert.equal(await input.inputValue(), 'typing a draft');
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();

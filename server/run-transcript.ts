@@ -1,7 +1,7 @@
 /**
  * @file 记录一次运行的公开正文与工具调用顺序。
- * @implementation 按 SDK 响应和内容块关联增量及完整回执，生成可随正文一同持久化的片段区间。
- * @updated 2026-11-26T00:58:00+08:00
+ * @implementation 按 SDK 输入标识关联响应归属，合并流式和完整回执，生成可随正文持久化的有序片段。
+ * @updated 2026-11-26T23:08:48+08:00
  */
 import type {
   SDKAssistantMessage,
@@ -51,6 +51,10 @@ export class RunTranscript {
     const input = { id: owner, order: this.ordinal };
     if (id) this.owners.set(id, input);
     this.sdkOwner ??= input;
+  }
+
+  acknowledgeInput(id: string): void {
+    this.inputOwner(id);
   }
 
   private observeTool(id: string, name: string): void {
