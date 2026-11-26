@@ -1,7 +1,7 @@
 /**
  * @file 定义聊天消息、输入区及执行反馈的布局和状态。
- * @implementation 用工作台主题组织消息、编辑、附件、队列和进度，并维护流式阅读、输入及弹层的布局。
- * @updated 2026-11-23T05:10:26+08:00
+ * @implementation 用工作台主题组织消息、输入和进度，为草稿预留滚动槽并定义 Electron 原生滚动条的外观。
+ * @updated 2026-11-27T00:45:45+08:00
  */
 .chat-markdown {
   --markdown-bg: var(--ui-card);
@@ -557,13 +557,40 @@
   min-height: 44px;
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-color: auto;
   border: 0;
   padding: 0;
+  padding-inline-end: 4px;
   resize: none;
   background: transparent;
   color: var(--ui-card-foreground);
   font-size: var(--text-base);
   line-height: 1.6;
+}
+
+@media (forced-colors: none) {
+  .chat-composer .composer-box textarea::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .chat-composer .composer-box textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb {
+    border-radius: var(--radius-sm);
+    background: var(--ui-muted-foreground);
+  }
+
+  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb:hover,
+  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb:active {
+    background: var(--ui-foreground);
+  }
+
+  .chat-composer .composer-box textarea::-webkit-scrollbar-button {
+    display: none;
+  }
 }
 
 .chat-composer .composer-mode-trigger:is([data-mode='readonly'], [data-mode='edit']) {
