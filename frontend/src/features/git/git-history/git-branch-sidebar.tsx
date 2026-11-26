@@ -1,7 +1,7 @@
 /**
  * @file 展示 Git 工作树 HEAD 卡片与可筛选的分组分支侧栏。
- * @implementation 组合吸顶筛选、新建/检出/重命名/删除分支操作、右键菜单与 400ms 悬停信息卡片。
- * @updated 2026-11-25T03:39:00+08:00
+ * @implementation 按本地和远端分组分支，确认时标明来源与工作树目标，将合并结果反馈给用户。
+ * @updated 2026-11-27T01:02:41+08:00
  */
 import { useCallback, useMemo, useState } from 'react';
 import { Plus, Search, X } from 'lucide-react';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { useUiTranslation } from '@/i18n';
 import type { GitBranch, GitOverview, GitWorktree } from '@shared/git-workbench';
-import type { GitRepoStatus } from '@shared/desktop-git';
+import type { GitMergeRequest, GitRepoStatus } from '@shared/desktop-git';
 import { getDesktopGitBridge } from '@/desktop-git';
 import { GitContextMenu, type GitContextMenuItem } from '../git-context-menu';
 import {
@@ -74,7 +74,7 @@ export function GitBranchSidebar({
   const [renameBranch, setRenameBranch] = useState<string | null>(null);
   const [deleteBranch, setDeleteBranch] = useState<string | null>(null);
   const [dirtyCheckoutBranch, setDirtyCheckoutBranch] = useState<string | null>(null);
-  const [mergeConfirmBranch, setMergeConfirmBranch] = useState<string | null>(null);
+  const [mergeRequest, setMergeRequest] = useState<GitMergeRequest | null>(null);
   const [merging, setMerging] = useState(false);
 
   const bq = branchQuery.trim().toLowerCase();
@@ -158,9 +158,15 @@ export function GitBranchSidebar({
   // 右键弹出分支操作菜单
   const handleContextMenuBranch = useCallback(
     (branch: GitBranch, e: React.MouseEvent) => {
-      const isHead = branch.name === tree.branch || branch.oid === tree.head;
+      const isHead = branch.kind === 'local' && branch.name === tree.branch;
       const bridge = getDesktopGitBridge();
       if (!bridge || !tree.path) return;
+      const mergeIntoWorktree = () =>
+        setMergeRequest({
+          cwd: tree.path,
+          source: { kind: branch.kind, name: branch.name },
+          targetBranch: tree.branch,
+        });
 
       if (branch.kind === 'local') {
         const items: GitContextMenuItem[] = [
@@ -172,7 +178,7 @@ export function GitBranchSidebar({
           {
             label: t('branch.contextMerge'),
             disabled: isHead,
-            onClick: () => setMergeConfirmBranch(branch.name),
+            onClick: mergeIntoWorktree,
           },
           {
             label: t('branch.contextRename'),
@@ -206,35 +212,47 @@ export function GitBranchSidebar({
           },
           {
             label: t('branch.contextMerge'),
-            onClick: () => setMergeConfirmBranch(branch.name),
+            onClick: mergeIntoWorktree,
           },
         ];
         setContextMenu({ x: e.clientX, y: e.clientY, items });
       }
     },
-    [tree.branch, tree.head, tree.path, t, handleDoubleClickBranch, showToast, onRefreshAll],
+    [tree.branch, tree.path, t, handleDoubleClickBranch, showToast, onRefreshAll],
   );
+
+  const mergeTargetName = mergeRequest?.targetBranch ?? t('worktree.detached');
 
   // 执行合并操作
   const handleConfirmMerge = async () => {
-    if (!mergeConfirmBranch || !tree.path) return;
+    if (!mergeRequest || merging) return;
     const bridge = getDesktopGitBridge();
     if (!bridge) return;
 
     setMerging(true);
     try {
-      const res = await bridge.mergeBranch(tree.path, mergeConfirmBranch);
-      if (!res.success) {
-        showToast?.('合并分支失败', 'error', res.stderr);
-        return;
+      const res = await bridge.mergeBranch(mergeRequest);
+      const branches = { name: mergeRequest.source.name, target: mergeTargetName };
+      switch (res.status) {
+        case 'merged':
+          showToast?.(t('branch.mergeDone', branches));
+          break;
+        case 'upToDate':
+          showToast?.(t('branch.mergeUpToDate', branches));
+          break;
+        case 'targetChanged':
+          showToast?.(t('branch.mergeTargetChanged'), 'error');
+          break;
+        case 'failed':
+          showToast?.(t('branch.mergeFailed'), 'error', res.stderr || res.stdout);
+          break;
       }
-      showToast?.(`已将 ${mergeConfirmBranch} 合并到当前分支`, 'success');
       onRefreshAll?.();
     } catch (err) {
-      showToast?.('合并分支异常', 'error', err instanceof Error ? err.message : String(err));
+      showToast?.(t('branch.mergeFailed'), 'error', err instanceof Error ? err.message : String(err));
     } finally {
       setMerging(false);
-      setMergeConfirmBranch(null);
+      setMergeRequest(null);
     }
   };
 
@@ -309,7 +327,7 @@ export function GitBranchSidebar({
                     key={item.name}
                     branch={item}
                     isSelected={selectedBranch?.kind === 'local' && selectedBranch.name === item.name}
-                    isHead={item.oid === tree.head || item.name === tree.branch}
+                    isHead={item.name === tree.branch}
                     worktreePath={item.worktreeId ? worktreePathMap.get(item.worktreeId) : undefined}
                     searchQuery={branchQuery}
                     onSelect={onSelectBranch}
@@ -335,7 +353,7 @@ export function GitBranchSidebar({
                       key={item.name}
                       branch={item}
                       isSelected={selectedBranch?.kind === 'remote' && selectedBranch.name === item.name}
-                      isHead={item.oid === tree.head || item.name === tree.branch}
+                      isHead={false}
                       searchQuery={branchQuery}
                       onSelect={onSelectBranch}
                       onDoubleClick={handleDoubleClickBranch}
@@ -406,13 +424,16 @@ export function GitBranchSidebar({
       )}
 
       {/* 合并分支确认对话框 */}
-      {mergeConfirmBranch && (
-        <Dialog open onOpenChange={(o) => !merging && !o && setMergeConfirmBranch(null)}>
+      {mergeRequest && (
+        <Dialog open onOpenChange={(o) => !merging && !o && setMergeRequest(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{t('branch.mergeConfirmTitle')}</DialogTitle>
               <DialogDescription className="text-xs pt-2">
-                {t('branch.mergeConfirmDesc', { name: mergeConfirmBranch })}
+                {t('branch.mergeConfirmDesc', {
+                  name: mergeRequest.source.name,
+                  target: mergeTargetName,
+                })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-4 gap-2">
@@ -421,7 +442,7 @@ export function GitBranchSidebar({
                 variant="outline"
                 size="sm"
                 disabled={merging}
-                onClick={() => setMergeConfirmBranch(null)}
+                onClick={() => setMergeRequest(null)}
               >
                 {t('actions.cancel')}
               </Button>

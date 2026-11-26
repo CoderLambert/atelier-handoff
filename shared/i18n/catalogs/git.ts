@@ -891,9 +891,19 @@ export const git = {
   'branch.mergeSubmit': ['确认合并', 'Confirm merge'],
   'branch.mergeConfirmTitle': ['确认合并分支', 'Confirm merge branch'],
   'branch.mergeConfirmDesc': [
-    '即将把分支 {{name}} 合并到当前分支。是否继续？',
-    'Merge branch {{name}} into current branch. Continue?',
+    '即将把分支 {{name}} 合并到 {{target}}。是否继续？',
+    'Merge branch {{name}} into {{target}}?',
   ],
+  'branch.mergeDone': ['已将 {{name}} 合并到 {{target}}', 'Merged {{name}} into {{target}}'],
+  'branch.mergeUpToDate': [
+    '{{target}} 已包含 {{name}} 的全部提交，分支未移动。',
+    '{{target}} already contains all commits from {{name}}.',
+  ],
+  'branch.mergeTargetChanged': [
+    '工作树当前分支已变更，请核对后重新合并。',
+    'The checked-out branch changed. Check the target and try again.',
+  ],
+  'branch.mergeFailed': ['合并分支失败', 'Could not merge branch'],
   'commit.inputPlaceholder': ['输入提交信息 (Ctrl+Enter 提交)...', 'Commit message (Ctrl+Enter to commit)...'],
   'commit.undoHint': ['执行 git reset --soft HEAD~1', 'Run git reset --soft HEAD~1'],
   'commit.amendSubmit': ['确认修改提交 (Amend)', 'Amend commit'],

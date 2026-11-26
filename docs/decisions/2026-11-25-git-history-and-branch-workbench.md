@@ -32,3 +32,11 @@ Git 工作区「分支与提交」面板原先依赖手动点击「加载更多�
   - `npm run build && npm run build:desktop` 构建通过。
   - Electron 桌面实例平滑切换，验证即时过滤、无限滚动加载、分支折叠与短 Hash 复制功能正常。
 - **回退方案**：若出现滚动异常或检索不兼容，回退 `git-history` 目录及 `server/modules/git/git-reader.ts`，历史与工作树底层数据结构保持向下兼容，无需迁移数据库。
+
+## 合并分支的引用和结果
+
+本地分支 `remotes/origin/feat/compact-workbench-layout` 和远端跟踪引用 `refs/remotes/origin/feat/compact-workbench-layout` 都能匹配同一个简称。旧桌面在隔离 Electron 中切到 `main`、右键本地功能分支并确认合并，界面提示成功，但 `main` 保持原提交。Git 会优先匹配 `refs/<简称>`，该远端提交已是 `main` 的祖先。[Git 引用解析](https://git-scm.com/docs/gitrevisions)
+
+确认弹窗显示来源与目标，IPC 传工作树路径、来源的分支类型和名称，以及确认时的目标分支。主进程按类型构造完整引用并验证存在，执行前检查该工作树的当前分支。沿用 Git 原生合并和冲突处理。GitHub Desktop 使用 `--` 分隔引用并区分 `Already up to date.` 与实际合并，本项目沿用这两点，在已固定 C locale 的执行服务中返回结构化结果。[Git 合并](https://git-scm.com/docs/git-merge) · [GitHub Desktop 合并实现](https://github.com/desktop/desktop/blob/5c566a49a3c3612c490a1c6f0f90edb3686c57c6/app/src/lib/git/merge.ts)
+
+在独立仓库复测本地与远端名称碰撞、无变更合并、目标在确认后切换和现有冲突中止流程。回退需同时恢复 renderer、preload、主进程的合并契约。Git 数据格式保持原有版本。

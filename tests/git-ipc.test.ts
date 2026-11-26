@@ -1,7 +1,7 @@
 /**
  * @file 测试桌面端 Git 执行服务及基础操作。
- * @implementation 使用真实临时 Git 仓库验证状态检测、提交统计、分支生命周期、同步、储藏与异常状态处理。
- * @updated 2026-11-25T16:31:33+08:00
+ * @implementation 使用真实临时仓库验证 Git 操作，覆盖引用碰撞、合并无变更、目标变更和冲突恢复。
+ * @updated 2026-11-27T01:02:41+08:00
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -125,12 +125,51 @@ describe('桌面端 Git 基础 IPC 能力', () => {
 
       // 切回 main 并合并
       await gitCheckoutBranch(dir, 'main');
-      const mergeRes = await gitMergeBranch(dir, 'feature-renamed');
-      assert.equal(mergeRes.success, true);
+      const mergeRes = await gitMergeBranch({
+        cwd: dir,
+        source: { kind: 'local', name: 'feature-renamed' },
+        targetBranch: 'main',
+      });
+      assert.equal(mergeRes.status, 'merged');
 
       // 4. 删除分支
       const delRes = await gitDeleteBranch(dir, 'feature-renamed', false);
       assert.equal(delRes.success, true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('精确合并选中的本地或远端分支，核对目标分支和无变更结果', async () => {
+    const { dir, cleanup } = createTestRepo();
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).trim();
+    try {
+      git('commit', '--allow-empty', '-m', 'main base');
+      const base = git('rev-parse', 'HEAD');
+      const remote = 'origin/feature';
+      const local = `remotes/${remote}`;
+      git('update-ref', `refs/remotes/${remote}`, base);
+      git('switch', '-c', local);
+      writeFileSync(join(dir, 'feature.txt'), 'local feature\n');
+      git('add', 'feature.txt');
+      git('commit', '-m', 'local feature');
+      const feature = git('rev-parse', 'HEAD');
+      git('switch', 'main');
+
+      const request = { cwd: dir, source: { kind: 'local' as const, name: local }, targetBranch: 'main' };
+      const remoteResult = await gitMergeBranch({ ...request, source: { kind: 'remote', name: remote } });
+      assert.equal(remoteResult.status, 'upToDate');
+      const stale = await gitMergeBranch({ ...request, targetBranch: local });
+      assert.equal(stale.status, 'targetChanged');
+      const missing = await gitMergeBranch({ ...request, source: { kind: 'local', name: 'missing' } });
+      assert.equal(missing.status, 'failed');
+      assert.equal(git('rev-parse', 'HEAD'), base);
+
+      assert.equal((await gitMergeBranch(request)).status, 'merged');
+      assert.equal(git('rev-parse', 'refs/heads/main'), feature);
+      assert.equal(git('show', 'HEAD:feature.txt'), 'local feature');
+      assert.equal((await gitMergeBranch(request)).status, 'upToDate');
     } finally {
       cleanup();
     }
@@ -226,8 +265,9 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       execFileSync('git', ['commit', '-am', 'branch change'], { cwd: dir });
 
       // 触发合并冲突
-      const mergeRes = await gitMergeBranch(dir, 'main');
-      assert.equal(mergeRes.success, false);
+      const merge = { cwd: dir, source: { kind: 'local' as const, name: 'main' }, targetBranch: 'conflict-branch' };
+      const mergeRes = await gitMergeBranch(merge);
+      assert.equal(mergeRes.status, 'failed');
 
       // 状态应为 MERGING 且包含冲突文件
       const mergeStatus = await getGitRepoStatus(dir);
@@ -243,7 +283,7 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       assert.deepEqual(statusAfterAbort.conflictFiles, []);
 
       // 再次制造冲突并解决后调用 continueOp
-      await gitMergeBranch(dir, 'main');
+      await gitMergeBranch(merge);
       assert.equal((await getGitRepoStatus(dir)).repoState, 'MERGING');
 
       // 解决冲突并暂存

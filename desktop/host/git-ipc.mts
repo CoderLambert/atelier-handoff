@@ -1,11 +1,12 @@
 /**
  * @file 绑定桌面端 Git 操作的 IPC 通道。
- * @implementation 校验可信窗口与主 frame 来源，调用安全 Git 服务并向渲染进程返回结构化结果。
- * @updated 2026-11-25T03:15:00+08:00
+ * @implementation 校验可信窗口与主 frame 来源，按共享契约解析合并请求并调用 Git 服务。
+ * @updated 2026-11-27T01:02:41+08:00
  */
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import {
   desktopGitChannels,
+  gitMergeRequestSchema,
   type GitFetchOptions,
   type GitPullOptions,
   type GitPushOptions,
@@ -216,19 +217,9 @@ export function bindDesktopGit(
     },
   );
 
-  ipcMain.handle(desktopGitChannels.mergeBranch, async (event, input: unknown, nameArg?: unknown) => {
+  ipcMain.handle(desktopGitChannels.mergeBranch, async (event, input: unknown) => {
     trusted(event);
-    let cwd: string;
-    let name: string;
-    if (typeof input === 'object' && input !== null && 'name' in input) {
-      cwd = parseCwd(input);
-      name = String((input as { name: unknown }).name);
-    } else {
-      cwd = parseCwd(input);
-      name = typeof nameArg === 'string' ? nameArg : '';
-    }
-    if (!name) throw new Error('Missing branch name parameter.');
-    return gitMergeBranch(cwd, name);
+    return gitMergeBranch(gitMergeRequestSchema.parse(input));
   });
 
   ipcMain.handle(

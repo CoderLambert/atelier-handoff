@@ -172,6 +172,7 @@ contextBridge.exposeInMainWorld('atelierUiNotifications', uiNotifications);
 import {
   desktopGitChannels,
   gitCommitStatsSchema,
+  gitMergeResultSchema,
   gitOpResultSchema,
   gitRepoStatusSchema,
   gitStashItemSchema,
@@ -243,12 +244,9 @@ const gitBridge: DesktopGitBridge = {
     });
     return gitOpResultSchema.parse(response);
   },
-  async mergeBranch(cwd, name) {
-    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.mergeBranch, {
-      cwd,
-      name,
-    });
-    return gitOpResultSchema.parse(response);
+  async mergeBranch(request) {
+    const response: unknown = await ipcRenderer.invoke(desktopGitChannels.mergeBranch, request);
+    return gitMergeResultSchema.parse(response);
   },
   async reset(cwd, hash, mode) {
     const response: unknown = await ipcRenderer.invoke(desktopGitChannels.reset, {

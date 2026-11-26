@@ -1,7 +1,7 @@
 /**
  * @file 提供主进程 Git CLI 执行服务与基础操作。
- * @implementation 通过参数数组调用 execFile，限制时间和输出并返回结果，提供仓库状态、统计、同步、分支及储藏操作。
- * @updated 2026-11-25T16:31:33+08:00
+ * @implementation 通过参数数组执行 Git。分支合并使用完整引用并核对工作树目标，区分改动、无变更和失败。
+ * @updated 2026-11-27T01:02:41+08:00
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -9,6 +9,8 @@ import { isAbsolute, join } from 'node:path';
 import type {
   GitCommitStats,
   GitFetchOptions,
+  GitMergeRequest,
+  GitMergeResult,
   GitOpResult,
   GitPullOptions,
   GitPushOptions,
@@ -300,9 +302,36 @@ export async function gitDeleteBranch(
   return { success: res.success, stdout: res.stdout, stderr: res.stderr };
 }
 
-export async function gitMergeBranch(cwd: string, name: string): Promise<GitOpResult> {
-  const res = await execGit(cwd, ['merge', name]);
-  return { success: res.success, stdout: res.stdout, stderr: res.stderr };
+export async function gitMergeBranch({
+  cwd,
+  source,
+  targetBranch,
+}: GitMergeRequest): Promise<GitMergeResult> {
+  const sourceRef = `refs/${source.kind === 'local' ? 'heads' : 'remotes'}/${source.name}`;
+  const sourceResult = await execGit(cwd, ['show-ref', '--verify', '--', sourceRef]);
+  if (!sourceResult.success) {
+    return { status: 'failed', stdout: sourceResult.stdout, stderr: sourceResult.stderr };
+  }
+
+  const target = await execGit(cwd, ['symbolic-ref', '--quiet', 'HEAD']);
+  if (!target.success && target.code !== 1) {
+    return { status: 'failed', stdout: target.stdout, stderr: target.stderr };
+  }
+  const actualTarget = target.success ? target.stdout.trim() : null;
+  const expectedTarget = targetBranch === null ? null : `refs/heads/${targetBranch}`;
+  if (actualTarget !== expectedTarget) {
+    return { status: 'targetChanged', stdout: '', stderr: '' };
+  }
+
+  const result = await execGit(cwd, ['merge', '--', sourceRef]);
+  if (!result.success) {
+    return { status: 'failed', stdout: result.stdout, stderr: result.stderr };
+  }
+  return {
+    status: result.stdout.trim() === 'Already up to date.' ? 'upToDate' : 'merged',
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
 }
 
 export async function gitReset(

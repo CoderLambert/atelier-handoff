@@ -1,7 +1,7 @@
 /**
  * @file 定义桌面端 Git 操作的共享 IPC 契约、类型与校验 Schema。
- * @implementation 声明 IPC 通道常量、状态/统计/储藏/结果校验结构以及暴露给渲染进程的桥接接口。
- * @updated 2026-11-25T03:15:00+08:00
+ * @implementation 声明 Git IPC 通道和校验结构。分支合并按工作树绑定来源及目标，并返回明确结果。
+ * @updated 2026-11-27T01:02:41+08:00
  */
 import { z } from 'zod';
 
@@ -74,6 +74,19 @@ export const gitOpResultSchema = z.strictObject({
 });
 export type GitOpResult = z.infer<typeof gitOpResultSchema>;
 
+const existingBranchName = z.string().min(1).regex(/^[^\x00-\x20\x7f]+$/u);
+export const gitMergeRequestSchema = z.strictObject({
+  cwd: z.string().min(1),
+  source: z.strictObject({ kind: z.enum(['local', 'remote']), name: existingBranchName }),
+  targetBranch: existingBranchName.nullable(),
+});
+export type GitMergeRequest = z.infer<typeof gitMergeRequestSchema>;
+
+export const gitMergeResultSchema = gitOpResultSchema.omit({ success: true }).extend({
+  status: z.enum(['merged', 'upToDate', 'targetChanged', 'failed']),
+});
+export type GitMergeResult = z.infer<typeof gitMergeResultSchema>;
+
 export const gitFetchOptionsSchema = z
   .strictObject({
     remote: z.string().optional(),
@@ -113,7 +126,7 @@ export interface DesktopGitBridge {
   checkoutBranch(cwd: string, name: string, autoStash?: boolean): Promise<GitOpResult>;
   renameBranch(cwd: string, oldName: string, newName: string): Promise<GitOpResult>;
   deleteBranch(cwd: string, name: string, force?: boolean): Promise<GitOpResult>;
-  mergeBranch(cwd: string, name: string): Promise<GitOpResult>;
+  mergeBranch(request: GitMergeRequest): Promise<GitMergeResult>;
   reset(cwd: string, hash: string, mode: GitResetMode): Promise<GitOpResult>;
   revert(cwd: string, hash: string): Promise<GitOpResult>;
   cherryPick(cwd: string, hash: string): Promise<GitOpResult>;
