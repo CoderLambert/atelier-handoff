@@ -1,7 +1,7 @@
 /**
  * @file 验证本机 Git 看板、开发会话和暂存提交。
- * @implementation 用独立 SQLite、真实 Git 和回环模型验证目录生命周期、分层文件操作、各版本完整内容和暂存提交核对。
- * @updated 2026-11-25T16:53:09+08:00
+ * @implementation 用独立 SQLite、真实 Git 和回环模型验证工作树生命周期、文件与提交操作，以及工作树和共享引用变动通知。
+ * @updated 2026-11-26T21:32:56+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type { Session, Run, Project } from '../shared/types.js';
@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { commandsAvailable, runCommand } from '../server/commands.js';
 import { migrateWorkspace } from '../server/data-migration.js';
@@ -132,6 +133,100 @@ test('Git board reads the exact stage, file diff, local refs, and paged commits'
       assert.match(commit.text, /\+base/);
       assert.deepEqual(await readFile(join(repo, '.git/index')), originalIndex);
     } finally {
+      await app.close();
+    }
+  }));
+
+test('Git worktree streams observe external edits, the selected index, and shared refs', () =>
+  fixture(async (repo, data, base) => {
+    const app = await createApp({ root, data });
+    const lifetime = new AbortController();
+    try {
+      const request = await client(app);
+      const bind = async (path: string) =>
+        (await request<{ project: Project }>('/api/projects', 'POST', { path }, 201)).project;
+      const project = await bind(repo);
+      const gitUrl = '/api/projects/' + project.id + '/git';
+      const input = { requestId: randomUUID(), mode: 'linked', branch: 'nested/feature', base: { kind: 'head' } };
+      const preview = await request<GitDevelopmentPreview>(gitUrl + '/preview', 'POST', input);
+      const { workspace } = await request<{ workspace: GitSessionWorkspace }>(
+        gitUrl + '/sessions', 'POST', { ...input, expectedOid: preview.oid }, 201,
+      );
+      const otherRoot = join(base, 'other project');
+      await mkdir(otherRoot);
+      const other = await bind(otherRoot);
+      const main = gitUrl + '/worktrees/' + project.id;
+      const linked = gitUrl + '/worktrees/' + workspace.id;
+      await request('/api/projects/' + other.id + '/git/worktrees/' + workspace.id + '/changes', 'GET', undefined, 404);
+
+      const address = app.server.address();
+      assert.ok(address && typeof address === 'object');
+      const origin = 'http://127.0.0.1:' + address.port;
+      async function openStream(path: string) {
+        const response = await fetch(origin + path + '/changes', {
+          signal: AbortSignal.any([lifetime.signal, AbortSignal.timeout(12_000)]),
+        });
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('content-type') ?? '', /text\/event-stream/);
+        assert.ok(response.body);
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffered = '';
+        return async () => {
+          for (;;) {
+            const end = buffered.indexOf('\n\n');
+            if (end !== -1) {
+              const frame = buffered.slice(0, end);
+              buffered = buffered.slice(end + 2);
+              if (frame.startsWith('data: ')) return frame;
+            } else {
+              const chunk = await reader.read();
+              assert.equal(chunk.done, false, 'change stream ended early');
+              buffered += chunk.value;
+            }
+          }
+        };
+      }
+      await mkdir(join(workspace.path, 'cache'));
+      await writeFile(join(workspace.path, 'cache', 'ignored.txt'), 'generated');
+      const [projectChange, linkedChange] = await Promise.all([openStream(main), openStream(linked)]);
+      await Promise.all([projectChange(), linkedChange()]);
+
+      const nextProjectChange = projectChange();
+      const nextLinkedChange = linkedChange();
+      await writeFile(join(workspace.path, 'cache', 'ignored.txt'), 'generated again');
+      assert.equal(
+        await Promise.race([nextLinkedChange.then(() => 'changed'), delay(400, 'quiet')]),
+        'quiet',
+      );
+      await writeFile(join(workspace.path, 'same.txt'), 'changed while a session can still run\n');
+      await nextLinkedChange;
+      assert.equal(
+        await Promise.race([nextProjectChange.then(() => 'changed'), delay(400, 'quiet')]),
+        'quiet',
+      );
+      assert.deepEqual((await request<{ files: unknown[] }>(main + '/status')).files, []);
+      const linkedStatus = await request<{ files: { path: string; index: string; worktree: string }[] }>(
+        linked + '/status',
+      );
+      assert.deepEqual(linkedStatus.files.map(({ path, index, worktree }) => [path, index, worktree]), [
+        ['same.txt', '.', 'M'],
+      ]);
+
+      git(workspace.path, 'add', 'same.txt');
+      await linkedChange();
+      const staged = await request<{ files: { index: string; worktree: string }[] }>(linked + '/status');
+      assert.deepEqual(staged.files.map(({ index, worktree }) => [index, worktree]), [['M', '.']]);
+
+      git(workspace.path, 'commit', '-m', 'external commit');
+      await nextProjectChange;
+      const overview = await request<{ branches: { name: string; oid: string }[] }>(gitUrl);
+      assert.equal(
+        overview.branches.find(({ name }) => name === 'nested/feature')?.oid,
+        git(workspace.path, 'rev-parse', 'HEAD').trim(),
+      );
+      assert.deepEqual((await request<{ files: unknown[] }>(linked + '/status')).files, []);
+    } finally {
+      lifetime.abort();
       await app.close();
     }
   }));

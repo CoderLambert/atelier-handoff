@@ -98,6 +98,7 @@ import {
   readGitStatus,
 } from './modules/git/git-reader.js';
 import { updateGitFileIndex } from './modules/git/git-file-index.js';
+import { streamGitChanges } from './modules/git/git-changes.js';
 import { readGitFileContent } from './modules/git/git-file-content.js';
 import { discardGitFiles } from './modules/git/git-file-discard.js';
 import { pickProjectDirectory } from './project-picker.js';
@@ -1855,6 +1856,11 @@ export async function createApp(options: {
               }
               if (parts[6] === 'status')
                 return json(res, { ...(await readGitStatus(git, abort.signal)), rebuildable });
+              if (parts[6] === 'changes') {
+                await streamGitChanges(git, res, streams, abort.signal);
+                if (shuttingDown) res.end();
+                return;
+              }
               if (parts[6] === 'file-content') {
                 const path = gitPath.parse(url.searchParams.get('path'));
                 const source = gitWorkingFileSource.parse(url.searchParams.get('source'));
