@@ -63,6 +63,7 @@ const routeTree = root.addChildren([
   }),
   page('/settings/models'),
   page('/settings/layout'),
+  page('/settings/shortcuts'),
   page('/settings/notifications'),
   page('/settings/diagnostics'),
 ]);

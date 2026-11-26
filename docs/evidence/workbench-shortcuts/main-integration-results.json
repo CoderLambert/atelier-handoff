@@ -1,0 +1,20 @@
+{
+  "platform": "linux",
+  "node": "v24.22.3",
+  "isolatedHost": true,
+  "checked": [
+    "left sidebar toggle from composer and navigation",
+    "right collapse restores Git component state",
+    "restored Git panel refreshes hidden edits and resumes live change subscription",
+    "terminal shortcut capture and idempotent restore without new PTY",
+    "browser panel open and collapse/restore",
+    "input focus returns from content page without losing draft",
+    "continuous typing, conversation search and adjacent navigation preserve both drafts",
+    "IME Escape keeps picker open; cancel restores composer focus",
+    "conversation switch reveals center under full-window Git",
+    "narrow window navigation drawer and browser-to-composer focus",
+    "custom direct shortcut persists across renderer reload"
+  ],
+  "modelRequests": 0,
+  "pageErrors": []
+}

@@ -41,6 +41,7 @@ export class Store {
   readonly sessionEvents: ReturnType<typeof openWorkbenchDatabase>['sessionEvents'];
   readonly runReceipts: ReturnType<typeof openWorkbenchDatabase>['runReceipts'];
   readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
+  readonly shortcutPreferences: ReturnType<typeof openWorkbenchDatabase>['shortcutPreferences'];
   readonly gitMultiCommitPreferences: ReturnType<
     typeof openWorkbenchDatabase
   >['gitMultiCommitPreferences'];
@@ -61,6 +62,7 @@ export class Store {
     this.sessionEvents = connection.sessionEvents;
     this.runReceipts = connection.runReceipts;
     this.workspaceLayout = connection.workspaceLayout;
+    this.shortcutPreferences = connection.shortcutPreferences;
     this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
     this.skillInheritance = connection.skillInheritance;
     this.rtkSettings = connection.rtkSettings;

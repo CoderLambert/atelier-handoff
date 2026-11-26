@@ -1,0 +1,142 @@
+/**
+ * @file 定义快捷导航与快捷设置的局部布局。
+ * @implementation 使用工作台主题呈现命令、键位和验证反馈，长表格只在自身区域滚动。
+ * @updated 2026-11-26T22:00:00+08:00
+ */
+.shortcut-navigator.react-dialog {
+  width: min(560px, calc(100% - 32px));
+}
+.shortcut-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.shortcut-command-list .shortcut-command {
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 40px;
+  padding-inline: 10px;
+}
+.shortcut-command[data-selected='true'] {
+  background: var(--ui-selected);
+  color: var(--ui-selected-foreground);
+}
+.shortcut-command-label {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  white-space: normal;
+}
+.shortcut-command kbd {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  color: var(--ui-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+.shortcut-command .shortcut-navigation-key {
+  min-width: 26px;
+  text-align: center;
+}
+.shortcut-command-status,
+.shortcut-footer,
+.shortcut-help,
+.shortcut-save-status {
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+.shortcut-footer {
+  margin: 16px 0 0;
+}
+.shortcut-settings .settings-section-intro {
+  margin-bottom: 0;
+}
+.shortcut-bindings {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.shortcut-config-scroll {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+}
+.shortcut-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  text-align: start;
+}
+.shortcut-config-table th,
+.shortcut-config-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--ui-border);
+  text-align: start;
+  vertical-align: top;
+}
+.shortcut-config-table th:first-child {
+  padding-inline-start: 0;
+}
+.shortcut-config-table thead th {
+  color: var(--ui-muted-foreground);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.shortcut-config-table tbody th {
+  min-width: 148px;
+  font-weight: 500;
+}
+.shortcut-setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ui-size-sm);
+}
+.shortcut-setting-label svg {
+  width: var(--ui-icon-size);
+  height: var(--ui-icon-size);
+  flex: none;
+  color: var(--ui-muted-foreground);
+}
+.shortcut-binding-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.shortcut-binding-controls .shortcut-record {
+  min-width: 134px;
+  justify-content: flex-start;
+  font-family: var(--font-mono);
+}
+.shortcut-config-table .shortcut-nav-input {
+  width: 52px;
+  min-height: var(--ui-size-sm);
+  padding: 4px 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.shortcut-field-error {
+  max-width: 260px;
+  margin: 6px 0 0;
+  color: var(--ui-destructive);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+.shortcut-help {
+  margin: 12px 0 0;
+}
+.shortcut-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+}
+.shortcut-save-status {
+  flex: 1;
+  min-width: 120px;
+}

@@ -1,0 +1,59 @@
+/**
+ * @file 定义工作台会话切换浮层的局部样式。
+ * @implementation 约束对话框尺寸并设置搜索栏、可滚动列表与选中项的布局和视觉反馈。
+ * @updated 2026-11-26T21:58:23+08:00
+ */
+.react-dialog.workspace-session-switcher {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(640px, calc(100dvh - 48px));
+  gap: 14px;
+}
+.workspace-switcher-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.workspace-switcher-search > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--muted);
+}
+.workspace-switcher-search > input {
+  min-width: 0;
+  flex: 1;
+}
+.workspace-switcher-list {
+  min-height: 0;
+  overflow: auto;
+}
+.workspace-switcher-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-align: left;
+}
+.workspace-switcher-item[aria-selected='true'] {
+  background: var(--accent);
+}
+.workspace-switcher-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+.workspace-switcher-copy > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+}
+.workspace-switcher-copy > span {
+  color: var(--muted);
+  font-size: 12px;
+}

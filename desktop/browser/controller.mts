@@ -1,7 +1,7 @@
 /**
  * @file 管理项目浏览器的原生标签、控制权、工具执行和下载接入。
- * @implementation 校验 IPC 和项目隔离边界，管理人工接管与下载归属。按操作类型处理超时和取消，优先保留原页，必要时只替换受影响的标签。
- * @updated 2026-11-20T22:16:28+08:00
+ * @implementation 校验 IPC 和项目隔离边界，仲裁人工、Agent 与工作台输入，管理下载归属、操作超时和标签恢复。
+ * @updated 2026-11-26T21:40:00+08:00
  */
 import {
   BrowserWindow,
@@ -40,6 +40,7 @@ interface BrowserHost {
   getWindow(): BrowserWindow | undefined;
   getOrigin(): string | undefined;
   isStopping(): boolean;
+  onShortcutInput?(event: Event, input: Input): void;
 }
 
 export function createBrowserController(host: BrowserHost) {
@@ -267,9 +268,13 @@ export function createBrowserController(host: BrowserHost) {
     wc.on('will-attach-webview', (event) => event.preventDefault());
     wc.on('before-input-event', (event, input) => {
       if (ownsTab(tab)) {
-        if (human.has(projectId) && current(projectId) === tab) return;
         if (tab.expectedKey?.(input)) {
           tab.expectedKey = undefined;
+          return;
+        }
+        if (human.has(projectId) && current(projectId) === tab) {
+          if (visible === tab && !transferring.has(projectId) && wc.isFocused())
+            host.onShortcutInput?.(event, input);
           return;
         }
       }
@@ -321,8 +326,12 @@ export function createBrowserController(host: BrowserHost) {
     if (!visible) return;
     const tab = visible;
     visible = undefined;
-    if (!tab.owner.isDestroyed() && tab.owner.contentView.children.includes(tab.view))
+    if (!tab.owner.isDestroyed() && tab.owner.contentView.children.includes(tab.view)) {
+      const contents = tab.view.webContents;
+      const returnFocus = tab.owner.isFocused() && !contents.isDestroyed() && contents.isFocused();
       tab.owner.contentView.removeChildView(tab.view);
+      if (returnFocus && !tab.owner.webContents.isDestroyed()) tab.owner.webContents.focus();
+    }
   }
 
   function show({ projectId, bounds }: DesktopBrowserLayout): void {

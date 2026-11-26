@@ -214,6 +214,7 @@ export async function createApp(options: CreateAppOptions) {
         isShuttingDown,
         workspaceLayout: store.workspaceLayout,
         gitMultiCommitPreferences: store.gitMultiCommitPreferences,
+        shortcutPreferences: store.shortcutPreferences,
         rtkSettings,
         rtkBinary: options.rtkBinary,
         nativeExecution,

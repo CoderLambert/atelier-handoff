@@ -1,0 +1,101 @@
+/**
+ * @file 提供工作台快捷导航、会话切换与配置的双语文案。
+ * @implementation 覆盖按键提示、录制、冲突、保存反馈及键盘可访问名称。
+ * @updated 2026-11-26T22:00:00+08:00
+ */
+export const shortcuts = {
+  settingsTitle: ['快捷操作', 'Shortcuts'],
+  settingsNavDescription: ['快捷入口与按键配置', 'Quick access and key bindings'],
+  settingsDescription: [
+    '设置快捷入口和导航按键。保存后生效，空白导航键表示停用。',
+    'Configure direct shortcuts and navigation keys. Changes take effect after saving. An empty navigation key disables it.',
+  ],
+  navigatorTitle: ['快捷导航', 'Quick navigation'],
+  navigatorDescription: [
+    '按提示字母执行操作，或用方向键选择后按 Enter。',
+    'Press a shown key, or use arrow keys and Enter.',
+  ],
+  navigatorHint: ['按 Esc 返回', 'Esc to return'],
+  nativeUnavailable: [
+    '原生网页的快捷入口暂不可用；工作台内仍可使用。',
+    'Shortcuts in native web pages are temporarily unavailable. Workspace shortcuts remain available.',
+  ],
+  unavailable: ['当前不可用', 'Unavailable here'],
+  switcherTitle: ['切换会话', 'Switch conversation'],
+  switcherDescription: [
+    '按最近更新排序，输入标题或项目名快速查找。',
+    'Recently updated first. Search by title or project.',
+  ],
+  switcherPlaceholder: ['搜索会话或项目…', 'Search conversations or projects…'],
+  switcherEmpty: ['没有匹配的会话。', 'No matching conversations.'],
+  switcherLoading: ['正在读取会话…', 'Loading conversations…'],
+  switcherFailed: ['会话读取失败，请重试。', 'Conversations could not be loaded. Try again.'],
+  retry: ['重试', 'Retry'],
+  current: ['当前会话', 'Current conversation'],
+  archived: ['已归档', 'Archived'],
+  'command.toggleLeft': ['展开 / 收起左侧栏', 'Toggle left sidebar'],
+  'command.toggleRight': ['展开 / 收起右侧栏', 'Toggle right sidebar'],
+  'command.previous': ['上一会话', 'Previous conversation'],
+  'command.next': ['下一会话', 'Next conversation'],
+  'command.git': ['打开 Git 面板', 'Open Git panel'],
+  'command.terminal': ['打开终端面板', 'Open terminal panel'],
+  'command.browser': ['打开浏览器面板', 'Open browser panel'],
+  'command.focus': ['聚焦会话输入框', 'Focus conversation input'],
+  enabled: ['启用快捷操作', 'Enable shortcuts'],
+  enabledDescription: [
+    '关闭后停止所有自定义快捷键；原有操作按键保持可用。',
+    'Disable custom shortcuts while keeping existing controls available.',
+  ],
+  action: ['操作', 'Action'],
+  directKey: ['直接快捷键', 'Direct shortcut'],
+  navigationKey: ['导航键', 'Navigation key'],
+  navigationHint: [
+    '导航键只在快捷导航浮层内生效。',
+    'Navigation keys work only while quick navigation is open.',
+  ],
+  bindingLabel: ['{{action}}的直接快捷键', 'Direct shortcut for {{action}}'],
+  navigationLabel: ['{{action}}的导航键', 'Navigation key for {{action}}'],
+  record: ['录制按键', 'Record shortcut'],
+  recording: ['请按组合键…', 'Press a key combination…'],
+  recordingHint: [
+    '按 Esc 取消。修饰键加其他按键可录制；Tab 保留焦点导航。',
+    'Esc cancels. Use a modifier with another key. Tab keeps focus navigation.',
+  ],
+  disable: ['停用', 'Disable'],
+  disableLabel: ['停用{{action}}的直接快捷键', 'Disable direct shortcut for {{action}}'],
+  reset: ['恢复默认', 'Reset'],
+  resetLabel: ['恢复{{action}}的默认按键', 'Reset shortcuts for {{action}}'],
+  resetAll: ['全部恢复默认', 'Reset all shortcuts'],
+  notAssigned: ['未绑定', 'Unassigned'],
+  defaultValue: ['默认', 'Default'],
+  customValue: ['自定义', 'Custom'],
+  disabledValue: ['已停用', 'Disabled'],
+  save: ['保存快捷键', 'Save shortcuts'],
+  saving: ['正在保存…', 'Saving…'],
+  saved: ['快捷键已保存。', 'Shortcuts saved.'],
+  unsaved: ['有未保存的更改', 'Unsaved changes'],
+  loading: ['正在读取快捷键…', 'Loading shortcuts…'],
+  loadFailed: [
+    '快捷键配置读取失败。当前页面仍可正常操作。',
+    'Shortcut settings could not be loaded. Other page controls remain available.',
+  ],
+  saveFailed: [
+    '保存失败，修改已保留，请重试。',
+    'Save failed. Your changes are retained. Try again.',
+  ],
+  invalidBinding: [
+    '此组合键不可用。请避开系统、浏览器和现有操作的保留键。',
+    'This combination is unavailable. Avoid keys reserved by the system, browser, or existing actions.',
+  ],
+  invalidNavigation: ['导航键只接受单个字母、数字或逗号。', 'Use one letter, number, or comma.'],
+  duplicateBinding: ['此快捷键与另一操作重复。', 'This shortcut is assigned to another action.'],
+  duplicateNavigation: [
+    '此导航键与另一操作重复。',
+    'This navigation key is assigned to another action.',
+  ],
+  invalidPreferences: ['请修正按键配置后再保存。', 'Correct the shortcut settings before saving.'],
+  systemNote: [
+    '已避开常见保留键；系统和浏览器扩展的自定义按键请按实际环境调整。',
+    'Common reserved keys are excluded. Adjust for shortcuts customized by your system or browser extensions.',
+  ],
+} as const;

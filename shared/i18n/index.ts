@@ -14,6 +14,7 @@ import { inspector } from './catalogs/inspector.js';
 import { navigation } from './catalogs/navigation.js';
 import { workbench } from './catalogs/workbench.js';
 import { terminal } from './catalogs/terminal.js';
+import { shortcuts } from './catalogs/shortcuts.js';
 import { uiLocales, type UiLocale } from './locale.js';
 
 export const catalogs = {
@@ -27,6 +28,7 @@ export const catalogs = {
   navigation,
   git,
   terminal,
+  shortcuts,
 };
 export type UiNamespace = keyof typeof catalogs;
 

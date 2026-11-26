@@ -1,9 +1,17 @@
 /**
  * @file 编排工作区、会话及功能面板。
- * @implementation 协调路由、工具栏中的会话标签与键盘切换，以及 Git、浏览器和终端面板的展示、尺寸与焦点，并将所选代码加入同项目会话草稿。
- * @updated 2026-11-26T17:15:12+08:00
+ * @implementation 协调路由与 Git、浏览器、终端面板，向快捷宿主提供语义动作和可用性，并按目标会话交接输入焦点请求。
+ * @updated 2026-11-26T21:58:23+08:00
  */
-import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import {
+  Activity as ViewActivity,
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare, X } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
@@ -58,6 +66,9 @@ import { PanelHost } from './panels/panel-host';
 import { panels } from './panels/registry';
 import { panelLocation } from './panels/panel-location';
 import { useWorkspacePanel } from './panels/use-workspace-panel';
+import { ShortcutHost, useShortcutCommandLabels, type ShortcutCommand } from '@/features/shortcuts';
+import { WorkspaceSessionSwitcher } from './workspace-session-switcher';
+import { adjacentSessionId, sessionSwitchItems } from './session-switcher-model';
 import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
 import type { SessionAction, SettingsSection } from './types';
 
@@ -91,6 +102,7 @@ const collectionPaths = {
 const settingsPaths = {
   models: '/settings/models',
   layout: '/settings/layout',
+  shortcuts: '/settings/shortcuts',
   notifications: '/settings/notifications',
   diagnostics: '/settings/diagnostics',
 } as const;
@@ -148,11 +160,13 @@ export default function Workspace() {
   const section: SettingsSection =
     pathname === settingsPaths.layout
       ? 'layout'
-      : pathname === settingsPaths.notifications
-        ? 'notifications'
-        : pathname === settingsPaths.diagnostics
-          ? 'diagnostics'
-          : 'models';
+      : pathname === settingsPaths.shortcuts
+        ? 'shortcuts'
+        : pathname === settingsPaths.notifications
+          ? 'notifications'
+          : pathname === settingsPaths.diagnostics
+            ? 'diagnostics'
+            : 'models';
   const drawer = useWorkspace((state) => state.workspace.drawer);
   const connected = useWorkspace((state) => state.workspace.connected);
   const ready = useQuery({ queryKey: keys.bootstrap, queryFn: bootstrap, staleTime: 30_000 });
@@ -172,6 +186,10 @@ export default function Workspace() {
   const desktop = Boolean(window.atelierDesktop);
   const nativeBrowser = useDesktopBrowser(desktop ? previewProject : undefined);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [inputFocus, setInputFocus] = useState<{ sessionId: string; request: number }>();
+  const focusSequence = useRef(0);
+  const shortcutLabels = useShortcutCommandLabels();
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
   const {
@@ -218,6 +236,17 @@ export default function Workspace() {
   };
   const showBrowserRight =
     view === 'chat' && browserActive && (width > 1120 || (width >= 900 && desktop));
+  const inputTarget = sessionId
+    ? snapshot && snapshot.session.id === sessionId
+      ? snapshot.session
+      : ready.data?.sessions.find(({ id }) => id === sessionId)
+    : (ready.data?.sessions.find(({ id, status }) => id === lastSession() && status === 'active') ??
+      sessionSwitchItems(ready.data?.sessions ?? [], ready.data?.projects ?? [], '').find(
+        ({ session }) => session.status === 'active',
+      )?.session);
+  const inputSubmitting = useWorkspace((state) =>
+    Boolean(inputTarget && state.workspace.submitting[inputTarget.id]),
+  );
   const drawerTrigger = useRef<HTMLElement | null>(null);
   function openDrawer(next: 'navigation' | 'details') {
     drawerTrigger.current =
@@ -229,6 +258,38 @@ export default function Workspace() {
     updateLayout.mutate(next, {
       onError: (error) => setNotice(translateError(error, t('layout.saveFailed'))),
     });
+  }
+  useEffect(() => {
+    setInputFocus((current) =>
+      current?.sessionId === sessionId && tab === 'conversation' ? current : undefined,
+    );
+  }, [sessionId, tab, pathname]);
+
+  async function focusComposer() {
+    if (
+      !inputTarget ||
+      inputTarget.status === 'archived' ||
+      inputTarget.creatingFork ||
+      inputSubmitting ||
+      gitBusy
+    )
+      return;
+    const targetId = inputTarget.id;
+    const request = ++focusSequence.current;
+    dispatch(actions.setDrawer(undefined));
+    if (gitFullWindow || panel.terminalFullWindow || (browserActive && !showBrowserRight))
+      panel.collapseRight(false);
+    if (targetId !== sessionId || tab !== 'conversation' || messageId || view !== 'chat') {
+      await navigate({ to: '/sessions/$sessionId', params: { sessionId: targetId } });
+    }
+    const currentLocation = router.state.location;
+    const currentContent = panelLocation(
+      currentLocation.pathname,
+      targetId,
+      currentLocation.state,
+    ).contentPath;
+    if (focusSequence.current === request && currentContent === `/sessions/${targetId}`)
+      setInputFocus({ sessionId: targetId, request });
   }
   const [sessionChange, setSessionChange] = useState<{ type: SessionAction; session: Session }>();
   const [title, setTitle] = useState('');
@@ -305,6 +366,13 @@ export default function Workspace() {
     else if (runId)
       void navigate({ to: '/sessions/$sessionId/trace/$runId', params: { sessionId: id, runId } });
     else void navigate({ to: '/sessions/$sessionId', params: { sessionId: id } });
+  }
+  function openShortcutSession(id: string) {
+    if (gitBusy) return;
+    focusSequence.current++;
+    setInputFocus(undefined);
+    if (gitFullWindow) panel.collapseRight(false);
+    openSession(id);
   }
   function openView(next: View) {
     dispatch(actions.setDrawer(undefined));
@@ -529,20 +597,115 @@ export default function Workspace() {
     ) : null;
   const archiveLabel = sessionChange ? t(sessionActions[sessionChange.type]) : '';
   const sessionTitle = snapshot?.session.title;
+  const previousSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, -1);
+  const nextSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, 1);
+  const shortcutActions: {
+    id: keyof typeof shortcutLabels;
+    available: boolean;
+    run: () => void;
+  }[] = [
+    {
+      id: 'layout.toggleLeft',
+      available: true,
+      run: () =>
+        showLeft
+          ? changeLayout({ ...layout, collapsed: !layout.collapsed })
+          : drawer === 'navigation'
+            ? dispatch(actions.setDrawer(undefined))
+            : openDrawer('navigation'),
+    },
+    {
+      id: 'layout.toggleRight',
+      available: panel.hasRightPanel && !gitBusy,
+      run: panel.toggleRight,
+    },
+    { id: 'sessions.switch', available: !gitBusy, run: () => setSwitcherOpen(true) },
+    {
+      id: 'sessions.previous',
+      available: Boolean(previousSession) && !gitBusy,
+      run: () => {
+        if (previousSession) openShortcutSession(previousSession);
+      },
+    },
+    {
+      id: 'sessions.next',
+      available: Boolean(nextSession) && !gitBusy,
+      run: () => {
+        if (nextSession) openShortcutSession(nextSession);
+      },
+    },
+    {
+      id: 'panels.git',
+      available: Boolean(project?.available) && !gitBusy,
+      run: () => {
+        if (project) openGit(project);
+      },
+    },
+    {
+      id: 'panels.terminal',
+      available: Boolean(sessionId && snapshot) && !gitBusy && !panel.terminalLoading,
+      run: panel.openTerminal,
+    },
+    {
+      id: 'panels.browser',
+      available: Boolean(sessionId && project?.available) && !gitBusy,
+      run: openBrowser,
+    },
+    {
+      id: 'composer.focus',
+      available:
+        Boolean(inputTarget && inputTarget.status === 'active' && !inputTarget.creatingFork) &&
+        !inputSubmitting &&
+        !gitBusy,
+      run: () => {
+        void focusComposer();
+      },
+    },
+    {
+      id: 'shortcuts.settings',
+      available: !gitBusy,
+      run: () => {
+        if (gitFullWindow || panel.terminalFullWindow) panel.collapseRight(false);
+        void navigate({ to: settingsPaths.shortcuts });
+      },
+    },
+  ];
+  const shortcutCommands: ShortcutCommand[] = shortcutActions.flatMap((action) => {
+    const label = shortcutLabels[action.id];
+    return label ? [{ ...label, ...action }] : [];
+  });
   return (
     <div
       className={cn(
         'app react-workspace',
         desktop && 'desktop-workspace',
-        browserActive && 'browser-preview-open',
+        browserActive && !panel.rightCollapsed && 'browser-preview-open',
       )}
     >
+      <ShortcutHost
+        commands={shortcutCommands}
+        contextKey={`${pathname}:${project?.id ?? ''}:${gitBoard?.instance.instanceId ?? routePanel ?? ''}:${panel.rightCollapsed}`}
+      />
+      <WorkspaceSessionSwitcher
+        open={switcherOpen}
+        onOpenChange={setSwitcherOpen}
+        sessions={ready.data?.sessions ?? []}
+        projects={ready.data?.projects ?? []}
+        current={sessionId}
+        loading={ready.isPending}
+        failed={ready.isError}
+        onRetry={() => {
+          void ready.refetch();
+        }}
+        onSelect={openShortcutSession}
+      />
       <WorkspacePanels
         layout={layout}
         width={width}
         showLeft={showLeft}
         showRight={Boolean(gitBoard) || panel.terminalActive || showBrowserRight}
-        focusRight={gitFullWindow || panel.terminalFullWindow}
+        rightCollapsed={panel.rightCollapsed}
+        focusRight={!panel.rightCollapsed && (gitFullWindow || panel.terminalFullWindow)}
         rightPane={
           gitBoard
             ? {
@@ -612,7 +775,9 @@ export default function Workspace() {
               projectPath={project?.path}
               onOpenProjects={sideProps.onProjects}
               sessionNavigation={
-                view === 'chat' && sessionId && (!browserActive || showBrowserRight) ? (
+                view === 'chat' &&
+                sessionId &&
+                (!browserActive || showBrowserRight || panel.rightCollapsed) ? (
                   <div
                     role="tablist"
                     className="session-tabs workspace-session-tabs"
@@ -677,11 +842,13 @@ export default function Workspace() {
               gitAction={
                 project
                   ? {
-                      open: gitBoard?.project.id === project.id,
+                      open: gitBoard?.project.id === project.id && !panel.rightCollapsed,
                       busy: gitBusy,
                       trigger: gitTrigger,
                       onToggle: () =>
-                        gitBoard?.project.id === project.id ? closeGit() : openGit(project),
+                        gitBoard?.project.id === project.id && !panel.rightCollapsed
+                          ? closeGit()
+                          : openGit(project),
                     }
                   : undefined
               }
@@ -691,10 +858,10 @@ export default function Workspace() {
               sessionActions={
                 view === 'chat' && sessionId
                   ? {
-                      browserOpen: browserActive,
+                      browserOpen: browserActive && !panel.rightCollapsed,
                       browserTrigger,
                       onToggleBrowser: panel.toggleBrowser,
-                      terminalOpen: panel.terminalActive,
+                      terminalOpen: panel.terminalActive && !panel.rightCollapsed,
                       terminalTrigger: panel.terminalTrigger,
                       terminalDisabled: gitBusy || panel.terminalLoading,
                       onToggleTerminal: panel.toggleTerminal,
@@ -704,8 +871,11 @@ export default function Workspace() {
             />
             <div className="react-center">
               {browserActive && !showBrowserRight ? (
-                browserPanel
-              ) : (
+                <ViewActivity mode={panel.rightCollapsed ? 'hidden' : 'visible'}>
+                  {browserPanel}
+                </ViewActivity>
+              ) : null}
+              {(!browserActive || showBrowserRight || panel.rightCollapsed) && (
                 <>
                   {ready.isError ? (
                     <div className="px-5 py-4" role="alert">
@@ -937,6 +1107,16 @@ export default function Workspace() {
                                     : undefined
                                 }
                                 focusMessageId={messageId}
+                                inputFocusRequest={
+                                  inputFocus?.sessionId === snapshot.session.id
+                                    ? inputFocus.request
+                                    : undefined
+                                }
+                                onInputFocused={(request) =>
+                                  setInputFocus((current) =>
+                                    current?.request === request ? undefined : current,
+                                  )
+                                }
                                 onSent={revalidate}
                                 onError={setNotice}
                                 onStop={(id) =>
