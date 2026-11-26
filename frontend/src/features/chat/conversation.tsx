@@ -134,6 +134,72 @@ function ModelLoadingIndicator({ label }: { label: string }) {
   );
 }
 
+function RunSummary({
+  run,
+  tools,
+  history,
+  onTrace,
+}: {
+  run: Run;
+  tools: ToolCall[];
+  history?: { open: boolean; contentId: string; onToggle: () => void };
+  onTrace: () => void;
+}) {
+  const { t, locale } = useUiTranslation('chat');
+  const duration =
+    run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : NaN;
+  const status = statusLabel(run.status);
+  const summary =
+    Number.isFinite(duration) && duration >= 0
+      ? t('progress.historyDuration', { status, duration: formatDuration(duration, locale) })
+      : status;
+  const completed = tools.filter((tool) => tool.status === 'succeeded').length;
+  const content = (
+    <>
+      <span>{summary}</span>
+      {tools.length ? (
+        <span
+          className="run-summary-tools"
+          title={t('conversation.toolsCompleted', { completed, count: tools.length })}
+        >
+          {t('conversation.toolSummary', { completed, count: tools.length })}
+        </span>
+      ) : null}
+    </>
+  );
+  return (
+    <div className="run-summary" data-status={run.status}>
+      {history ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="run-history-toggle"
+          title={t('progress.history')}
+          aria-expanded={history.open}
+          aria-controls={history.contentId}
+          onClick={history.onToggle}
+        >
+          {content}
+          <ChevronRight data-icon="inline-end" aria-hidden="true" />
+        </Button>
+      ) : (
+        <span className="run-history-status">{content}</span>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('conversation.viewTrace')}
+        title={t('conversation.viewTrace')}
+        onClick={onTrace}
+      >
+        <Activity aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
 function RunProgress({
   run,
   tools,
@@ -197,13 +263,6 @@ function RunProgress({
     if (hasText) return null;
     return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
   }
-  const duration =
-    run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : NaN;
-  const status = active ? '' : statusLabel(run.status);
-  const summary =
-    !active && Number.isFinite(duration) && duration >= 0
-      ? t('progress.historyDuration', { status, duration: formatDuration(duration, locale) })
-      : status;
   const lastTool = tools.at(-1);
   const lastActivityAt =
     events.at(-1)?.at ?? lastTool?.endedAt ?? lastTool?.startedAt ?? run.startedAt ?? run.createdAt;
@@ -231,23 +290,22 @@ function RunProgress({
       data-active={active}
       aria-label={active ? t('progress.label') : t('progress.history')}
     >
-      {!active &&
-        (hasDetails ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="run-history-toggle"
-            aria-expanded={historyOpen}
-            aria-controls={historyId}
-            onClick={() => setHistoryOpen(!historyOpen)}
-          >
-            {summary}
-            <ChevronRight data-icon="inline-end" aria-hidden="true" />
-          </Button>
-        ) : (
-          <p className="run-history-status">{summary}</p>
-        ))}
+      {!active ? (
+        <RunSummary
+          run={run}
+          tools={tools}
+          history={
+            hasDetails
+              ? {
+                  open: historyOpen,
+                  contentId: historyId,
+                  onToggle: () => setHistoryOpen(!historyOpen),
+                }
+              : undefined
+          }
+          onTrace={onTrace}
+        />
+      ) : null}
       {work.tools.length ? null : liveHeading}
       {hasDetails ? (
         <div
@@ -315,16 +373,12 @@ function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () 
 
 function RunResult({
   run,
-  tools,
-  hasArtifacts,
   hasText,
   retryDisabled,
   onRetry,
   onTrace,
 }: {
   run: Run;
-  tools: ToolCall[];
-  hasArtifacts: boolean;
   hasText: boolean;
   retryDisabled: boolean;
   onRetry: (id: string) => void;
@@ -333,46 +387,39 @@ function RunResult({
   const { t } = useUiTranslation('chat');
   if (isActive(run)) return null;
   const canRetry = recoverable(run);
-  if (!canRetry && !hasArtifacts && (hasText || !tools.length)) return null;
+  if (!canRetry && !run.error && !run.reason) return null;
   const title = canRetry
     ? hasText
       ? t('conversation.partialReply')
       : t('conversation.incompleteReply')
     : t('conversation.executionResult');
-  const completedTools = tools.filter((tool) => tool.status === 'succeeded').length;
   return (
     <section
       className="run-recovery"
       data-status={run.status}
       aria-label={t('conversation.runResult')}
     >
-      <strong>{title}</strong>
-      {run.error || run.reason ? <p>{run.error || run.reason}</p> : null}
-      {tools.length > 0 ? (
-        <div className="run-recovery-progress-group">
-          <p>
-            {t('conversation.toolsCompleted', {
-              completed: completedTools,
-              count: tools.length,
-            })}
-          </p>
-          <div className="run-recovery-progress" aria-hidden="true">
-            <span style={{ width: `${(completedTools / tools.length) * 100}%` }} />
-          </div>
-        </div>
-      ) : null}
-      <div className="run-recovery-actions">
-        <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
-          <Activity data-icon="inline-start" aria-hidden="true" />
-          {t('conversation.viewTrace')}
-        </Button>
-        {canRetry ? (
-          <Button type="button" size="sm" disabled={retryDisabled} onClick={() => onRetry(run.id)}>
-            <RotateCcw data-icon="inline-start" aria-hidden="true" />
-            {t('conversation.checkProgress')}
+      <div className="run-recovery-heading">
+        <strong>{title}</strong>
+        <div className="run-recovery-actions">
+          <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
+            <Activity data-icon="inline-start" aria-hidden="true" />
+            {t('conversation.viewTrace')}
           </Button>
-        ) : null}
+          {canRetry ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={retryDisabled}
+              onClick={() => onRetry(run.id)}
+            >
+              <RotateCcw data-icon="inline-start" aria-hidden="true" />
+              {t('conversation.checkProgress')}
+            </Button>
+          ) : null}
+        </div>
       </div>
+      {run.error || run.reason ? <p>{run.error || run.reason}</p> : null}
       {canRetry ? <p>{t('conversation.retryHelp')}</p> : null}
     </section>
   );
@@ -796,36 +843,10 @@ export function Conversation({
                       ) : null}
                       <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
                       {!isActive(run) ? (
-                        <div className="transcript-summary">
-                          <span>
-                            {run.startedAt && run.endedAt
-                              ? t('progress.historyDuration', {
-                                  status: statusLabel(run.status),
-                                  duration: formatDuration(
-                                    Math.max(
-                                      0,
-                                      Date.parse(run.endedAt) - Date.parse(run.startedAt),
-                                    ),
-                                    locale,
-                                  ),
-                                })
-                              : statusLabel(run.status)}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => onTrace(run.id)}
-                          >
-                            <Activity data-icon="inline-start" aria-hidden="true" />
-                            {t('conversation.viewTrace')}
-                          </Button>
-                        </div>
+                        <RunSummary run={run} tools={tools} onTrace={() => onTrace(run.id)} />
                       ) : null}
                       <RunResult
                         run={run}
-                        tools={tools}
-                        hasArtifacts={artifacts.length > 0}
                         hasText={hasText}
                         retryDisabled={retryDisabled}
                         onRetry={onRetry}
@@ -836,11 +857,15 @@ export function Conversation({
                           className="chat-deliverables"
                           aria-label={t('conversation.deliverables')}
                         >
-                          <h3>{t('conversation.deliverables')}</h3>
+                          <h3 className="sr-only">{t('conversation.deliverables')}</h3>
                           <ul>
                             {artifacts.map((artifact) => (
                               <li key={artifact.id}>
-                                <ArtifactAction artifact={artifact} showDownload />
+                                <ArtifactAction
+                                  artifact={artifact}
+                                  showDownload
+                                  variant="compact"
+                                />
                               </li>
                             ))}
                           </ul>
@@ -953,8 +978,6 @@ export function Conversation({
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunResult
                       run={run}
-                      tools={tools}
-                      hasArtifacts={artifacts.length > 0}
                       hasText={hasText}
                       retryDisabled={retryDisabled}
                       onRetry={onRetry}
@@ -970,11 +993,11 @@ export function Conversation({
                       className="chat-deliverables"
                       aria-label={t('conversation.deliverables')}
                     >
-                      <h3>{t('conversation.deliverables')}</h3>
+                      <h3 className="sr-only">{t('conversation.deliverables')}</h3>
                       <ul>
                         {artifacts.map((artifact) => (
                           <li key={artifact.id}>
-                            <ArtifactAction artifact={artifact} showDownload />
+                            <ArtifactAction artifact={artifact} showDownload variant="compact" />
                           </li>
                         ))}
                       </ul>

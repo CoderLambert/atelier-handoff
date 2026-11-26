@@ -17,7 +17,6 @@
   .react-workspace .react-center .conversation-screen {
     flex: 1;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
   }
   .react-workspace .react-conversation-body {
     min-width: 0;
@@ -160,9 +159,84 @@
   gap: 6px;
 }
 
-.breadcrumbs > span:last-of-type {
+.breadcrumbs > h1 {
+  min-width: 0;
+  margin: 0;
+  font: inherit;
   color: var(--ui-foreground);
   font-weight: 600;
+}
+
+.topbar .workspace-project-trigger {
+  flex: 0 1 auto;
+  max-width: 35%;
+  padding-inline: 4px;
+  color: var(--ui-muted-foreground);
+}
+
+.topbar .workspace-session-tabs {
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-inline-end: 8px;
+  border-inline-end: 1px solid var(--ui-border-subtle);
+}
+
+.topbar .workspace-session-tabs .session-tab {
+  position: relative;
+  justify-content: center;
+  gap: 5px;
+  min-width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 6px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+.workspace-session-tabs .session-tab > svg {
+  flex: none;
+  inline-size: var(--ui-icon-size);
+  block-size: var(--ui-icon-size);
+}
+
+.workspace-session-tabs .session-tab[aria-selected='true'] {
+  background: var(--ui-selected);
+  color: var(--ui-selected-foreground);
+}
+
+.workspace-session-tabs .session-tab:hover {
+  background: var(--ui-accent);
+}
+
+.workspace-session-tabs .session-tab:focus-visible {
+  outline: 2px solid var(--ui-ring);
+  outline-offset: -2px;
+}
+
+.workspace-session-tabs .session-tab::after {
+  content: attr(aria-label);
+  position: absolute;
+  z-index: 10;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-sm);
+  background: var(--ui-popover);
+  color: var(--ui-popover-foreground);
+  box-shadow: var(--ui-shadow-overlay);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.workspace-session-tabs .session-tab:is(:hover, :focus-visible)::after {
+  opacity: 1;
 }
 
 .breadcrumb-slash {
@@ -232,11 +306,10 @@
 .react-workspace .breadcrumbs {
   flex: 1;
 }
-.react-workspace .breadcrumbs > span:first-of-type {
+.react-workspace .breadcrumbs > .breadcrumb-slash {
   flex: none;
-  max-width: 35%;
 }
-.react-workspace .breadcrumbs > span:last-of-type {
+.react-workspace .breadcrumbs > h1 {
   flex: 1;
   min-width: 0;
 }
@@ -249,8 +322,16 @@
   .react-workspace .topbar-actions {
     gap: 4px;
   }
-  .react-workspace .topbar .workspace-action-label {
+  .react-workspace .topbar :is(.workspace-project-trigger > svg, .tab-count) {
     display: none;
+  }
+  .topbar .workspace-project-trigger {
+    max-width: 38%;
+    padding-inline: 2px;
+    gap: 0;
+  }
+  .topbar .workspace-session-tabs {
+    padding-inline-end: 4px;
   }
 }
 
@@ -264,12 +345,21 @@
 }
 
 .react-workspace .conversation-screen {
+  grid-template-rows: minmax(0, 1fr);
   max-width: 1100px;
   padding-inline: clamp(16px, 4vw, 40px);
 }
 
+.react-workspace .conversation-screen[data-has-context='true'] {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .react-workspace .session-header {
-  padding-block: 18px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding-block: 8px;
 }
 
 .react-workspace .session-title-row {
@@ -279,28 +369,19 @@
   min-width: 0;
 }
 
-.react-workspace .session-title-row h1 {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: clamp(20px, 2vw, 26px);
+.react-workspace .session-title-row:empty {
+  display: none;
 }
 
 .react-workspace .session-title-row > [data-slot='button'] {
   flex: 0 1 auto;
-  max-width: 40%;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
 }
 
 .react-workspace .session-meta {
-  margin-top: 7px;
-}
-
-.react-workspace .react-center .conversation-screen[data-has-session='false'] {
-  grid-template-rows: minmax(0, 1fr);
+  margin-top: 0;
 }
 
 .workspace-welcome {

@@ -1,14 +1,13 @@
 /**
  * @file 展示工作台导航、项目与会话侧栏。
- * @implementation 管理搜索、项目及分支展开和分页，结合活动运行与未查看结果呈现会话状态，通过回调处理导航和会话操作。
- * @updated 2026-11-25T19:11:00+08:00
+ * @implementation 组合会话与项目菜单、分组会话树和底部导航；管理折叠、分页及原位搜索，并在关闭搜索时清空条件并恢复焦点。
+ * @updated 2026-11-26T17:15:12+08:00
  */
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Archive,
   Bot,
-  Boxes,
   ChevronDown,
   ChevronRight,
   FolderOpen,
@@ -18,17 +17,23 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
-  Palette,
   Plus,
+  Puzzle,
   Search,
-  Settings2,
+  Settings,
+  X,
 } from 'lucide-react';
 import { type Project, type RunStatus, type Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
-import { ThemePicker } from '@/components/theme-picker';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
-import { useUiTheme } from '@/theme';
 import { useActiveRuns } from '@/use-query/runs/use-active-runs';
 import {
   buildProjectSessionGroups,
@@ -42,10 +47,9 @@ import { formatSessionTime } from '@/utils/format';
 import './sidebar.css';
 
 const links = [
-  { id: 'chat', labelKey: 'links.chat', Icon: MessagesSquare },
   { id: 'artifacts', labelKey: 'links.artifacts', Icon: Package },
   { id: 'runs', labelKey: 'links.runs', Icon: Activity },
-  { id: 'extensions', labelKey: 'links.extensions', Icon: Boxes },
+  { id: 'extensions', labelKey: 'links.extensions', Icon: Puzzle },
   { id: 'agents', labelKey: 'links.agents', Icon: Bot },
 ] as const;
 
@@ -87,16 +91,6 @@ export function Sidebar({
   onToggleCollapsed?: () => void;
 }) {
   const { t, locale } = useUiTranslation('navigation');
-  const { theme } = useUiTheme();
-  const themeLabels: Record<string, string> = {
-    obsidian: t('sidebar.themeObsidian'),
-    classic: t('sidebar.themeClassic'),
-    parchment: t('sidebar.themeParchment'),
-    nordic: t('sidebar.themeNordic'),
-    rose: t('sidebar.themeRose'),
-    midnight: t('sidebar.themeMidnight'),
-  };
-  const activeThemeLabel = themeLabels[theme] ?? t('sidebar.themeObsidian');
   const numberFormat = new Intl.NumberFormat(locale);
   const runStatus: Partial<Record<RunStatus | 'idle', string>> = {
     queued: t('status.queued'),
@@ -109,6 +103,22 @@ export function Sidebar({
     interrupted: t('status.interrupted'),
   };
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (collapsed) {
+      setSearchOpen(false);
+      setSearch('');
+    } else if (searchOpen) {
+      searchInput.current?.focus();
+    }
+  }, [collapsed, searchOpen]);
+  function closeSearch() {
+    setSearch('');
+    setSearchOpen(false);
+    requestAnimationFrame(() => searchTrigger.current?.focus());
+  }
   const [pagination, setPagination] = useState(() => new Map<string, SessionTreePagination>());
   const [closedBranches, setClosedBranches] = useState(() => new Map<string, string | undefined>());
   const [closedProjects, setClosedProjects] = useState(() => new Map<string, string | undefined>());
@@ -146,9 +156,10 @@ export function Sidebar({
         ? t('session.branch')
         : undefined;
     const BranchIcon = priorVersion ? History : GitBranch;
-    const dot = archived ? null : (
-      <span className="sidebar-session-status" title={statusLabel} aria-hidden="true" />
-    );
+    const dot =
+      archived || status === 'idle' ? null : (
+        <span className="sidebar-session-status" title={statusLabel} aria-hidden="true" />
+      );
     const hasChildren = children.length > 0;
     const revealSelected =
       selectedPath.includes(session.id) && closedBranches.get(session.id) !== selected;
@@ -162,6 +173,8 @@ export function Sidebar({
           className="history-node-row sidebar-session-row"
           data-selected={selected === session.id || undefined}
           data-status={archived ? undefined : status}
+          data-has-children={hasChildren || undefined}
+          data-has-status={Boolean(dot) || undefined}
         >
           {hasChildren ? (
             <Button
@@ -171,6 +184,9 @@ export function Sidebar({
               aria-expanded={expanded}
               aria-controls={groupId}
               aria-label={t(expanded ? 'session.collapseBranches' : 'session.expandBranches', {
+                title: session.title,
+              })}
+              title={t(expanded ? 'session.collapseBranches' : 'session.expandBranches', {
                 title: session.title,
               })}
               disabled={Boolean(filter)}
@@ -248,107 +264,124 @@ export function Sidebar({
       aria-label={t('sidebar.navigation')}
       data-collapsed={collapsed}
     >
-      <div className="sidebar-brand-row">
-        {!collapsed ? (
-          <div className="wordmark">
-            <span className="brand-symbol" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>
-              {t('brand.name')}
-              <span className="brand-period">.</span>
-            </span>
-          </div>
-        ) : null}
-        {onToggleCollapsed ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onToggleCollapsed}
-            aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-            title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-          >
-            {collapsed ? (
-              <PanelLeftOpen aria-hidden="true" />
-            ) : (
-              <PanelLeftClose aria-hidden="true" />
-            )}
-          </Button>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        className="workspace-switch"
-        onClick={onProjects}
-        aria-label={t('sidebar.openWorkspaceSettings')}
-        title={collapsed ? t('sidebar.workspaceSettings') : project?.path}
-      >
-        <span className="workspace-avatar">
-          <FolderOpen aria-hidden="true" />
-        </span>
-        {!collapsed ? (
-          <span className="sidebar-workspace-name">
-            <span className="overline">{t('sidebar.workingDirectory')}</span>
-            <strong>{project?.name ?? t('sidebar.bindProject')}</strong>
-          </span>
-        ) : null}
-      </button>
-      <Button
-        size={collapsed ? 'icon' : 'default'}
-        variant="outline"
-        className="new-session"
-        onClick={onNew}
-        aria-label={t('sidebar.newSession')}
-        title={collapsed ? t('sidebar.newSession') : undefined}
-      >
-        <Plus data-icon="inline-start" aria-hidden="true" />
-        {!collapsed ? t('sidebar.newSession') : null}
-      </Button>
-      {!collapsed ? (
-        <label className="sidebar-search">
-          <span className="sr-only">{t('sidebar.search')}</span>
-          <Search aria-hidden="true" />
-          <input
-            className="field w-full"
-            type="search"
-            placeholder={t('sidebar.searchPlaceholder')}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-      ) : null}
-      <div className="main-nav" aria-label={t('sidebar.mainNavigation')}>
-        {links.map(({ id, labelKey, Icon }) => (
-          <Button
-            key={id}
-            size={collapsed ? 'icon' : 'sm'}
-            variant="ghost"
-            className="nav-item"
-            aria-label={t(labelKey)}
-            aria-current={view === id ? 'page' : undefined}
-            title={collapsed ? t(labelKey) : undefined}
-            onClick={() => onView(id)}
-          >
-            <Icon data-icon="inline-start" aria-hidden="true" />
-            {!collapsed ? (
-              <>
-                <span>{t(labelKey)}</span>
-                {id === 'chat' ? (
-                  <span className="ml-auto">{numberFormat.format(sessions?.length ?? 0)}</span>
-                ) : null}
-                {id === 'artifacts' && artifactCount !== undefined ? (
-                  <span className="ml-auto">{numberFormat.format(artifactCount)}</span>
-                ) : null}
-              </>
-            ) : null}
-          </Button>
-        ))}
+      <div className="sidebar-toolbar">
+        {searchOpen && !collapsed ? (
+          <>
+            <label className="sidebar-search">
+              <span className="sr-only">{t('sidebar.search')}</span>
+              <Search aria-hidden="true" />
+              <input
+                ref={searchInput}
+                className="field w-full"
+                type="search"
+                placeholder={t('sidebar.searchPlaceholder')}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeSearch();
+                  }
+                }}
+              />
+            </label>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="sidebar-icon"
+              aria-label={t('sidebar.closeSearch')}
+              title={t('sidebar.closeSearch')}
+              onClick={closeSearch}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size={collapsed ? 'icon-sm' : 'sm'}
+                  className="sidebar-home"
+                  aria-label={t('sidebar.sessionsAndProjects')}
+                  title={t('sidebar.sessionsAndProjects')}
+                >
+                  {collapsed ? <MessagesSquare aria-hidden="true" /> : t('sidebar.sessions')}
+                  {!collapsed ? <ChevronDown data-icon="inline-end" aria-hidden="true" /> : null}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="sidebar-session-menu"
+                side="bottom"
+                align="start"
+                sideOffset={6}
+                collisionPadding={8}
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    className="sidebar-session-menu-item"
+                    onSelect={() => onView('chat')}
+                  >
+                    <MessagesSquare aria-hidden="true" />
+                    {t('links.chat')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="sidebar-session-menu-item" onSelect={onProjects}>
+                    <FolderOpen aria-hidden="true" />
+                    {t('sidebar.workspaceSettings')}
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="sidebar-toolbar-actions">
+              <Button
+                ref={searchTrigger}
+                variant="ghost"
+                size="icon-sm"
+                className="sidebar-icon"
+                aria-label={t('sidebar.search')}
+                title={t('sidebar.search')}
+                disabled={collapsed && !onToggleCollapsed}
+                onClick={() => {
+                  if (collapsed) onToggleCollapsed?.();
+                  setSearchOpen(true);
+                }}
+              >
+                <Search aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="sidebar-icon"
+                onClick={onNew}
+                aria-label={t('sidebar.newSession')}
+                title={t('sidebar.newSession')}
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+              {onToggleCollapsed ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="sidebar-icon"
+                  onClick={onToggleCollapsed}
+                  aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+                  title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+                >
+                  {collapsed ? (
+                    <PanelLeftOpen aria-hidden="true" />
+                  ) : (
+                    <PanelLeftClose aria-hidden="true" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
       {!collapsed ? (
         <>
-          <div className="sidebar-section-label">{t('sidebar.projectSessions')}</div>
           <div className="history-wrap min-h-0 flex-1 overflow-auto">
             {sessionsFailed ? (
               <Button variant="ghost" onClick={onRetrySessions}>
@@ -361,9 +394,17 @@ export function Sidebar({
               </p>
             ) : null}
             {sessions && !groups.length ? (
-              <p className="search-empty">
-                {filter ? t('sidebar.noMatches') : t('sidebar.noProjectsOrSessions')}
-              </p>
+              <div className="sidebar-empty">
+                <p className="search-empty">
+                  {filter ? t('sidebar.noMatches') : t('sidebar.noProjectsOrSessions')}
+                </p>
+                {!filter ? (
+                  <Button variant="outline" size="sm" onClick={onProjects}>
+                    <FolderOpen data-icon="inline-start" aria-hidden="true" />
+                    {t('sidebar.bindProject')}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
             {groups.map((group) => {
               const page = paginateSessionTree(
@@ -489,28 +530,35 @@ export function Sidebar({
           </div>
         </>
       ) : null}
-      <div className="sidebar-bottom">
-        <ThemePicker align="start" side="right">
+      <div className="sidebar-bottom" aria-label={t('sidebar.mainNavigation')}>
+        {links.map(({ id, labelKey, Icon }) => (
           <Button
+            key={id}
             variant="ghost"
-            size={collapsed ? 'icon-sm' : 'default'}
-            aria-label={t('sidebar.themeToggle')}
-            title={t('sidebar.themeCurrent', { theme: activeThemeLabel })}
+            size="icon-sm"
+            className="sidebar-icon"
+            aria-label={t(labelKey)}
+            aria-current={view === id ? 'page' : undefined}
+            title={
+              id === 'artifacts' && artifactCount !== undefined
+                ? t('sidebar.artifactCount', { count: artifactCount })
+                : t(labelKey)
+            }
+            onClick={() => onView(id)}
           >
-            <Palette data-icon="inline-start" aria-hidden="true" />
-            {!collapsed ? activeThemeLabel : null}
+            <Icon aria-hidden="true" />
           </Button>
-        </ThemePicker>
+        ))}
         <Button
           variant="ghost"
-          size={collapsed ? 'icon-sm' : 'default'}
+          size="icon-sm"
+          className="sidebar-icon sidebar-settings"
           onClick={onSettings}
           aria-label={t('sidebar.settings')}
           aria-current={view === 'settings' ? 'page' : undefined}
-          title={collapsed ? t('sidebar.settings') : undefined}
+          title={t('sidebar.settings')}
         >
-          <Settings2 data-icon="inline-start" aria-hidden="true" />
-          {!collapsed ? t('sidebar.settings') : null}
+          <Settings aria-hidden="true" />
         </Button>
       </div>
     </nav>

@@ -157,6 +157,12 @@ try {
   await page.goto(`http://127.0.0.1:${address.port}/sidebar-fixture`);
   const nav = page.getByRole('navigation', { name: '工作空间导航' });
   await nav.waitFor();
+  const initialRow = await nav.locator('.sidebar-session-row').first().boundingBox();
+  assert.ok(
+    initialRow && initialRow.y <= 110,
+    'sessions begin immediately below the compact toolbar',
+  );
+  assert.equal(await nav.getByRole('searchbox').count(), 0, 'search does not reserve another row');
   assert.equal(await page.locator('[data-project-id="Alpha"] [data-session-node="b"]').count(), 0);
   assert.equal(await page.locator('[data-project-id="Beta"] [data-session-node="a"]').count(), 0);
   assert.equal(await nav.getByText('Missing project history', { exact: true }).count(), 1);
@@ -168,11 +174,11 @@ try {
   const openSession = (id: string) => row(id).locator('.history-item').press('Enter');
   const dotColor = (id: string, label: string) =>
     status(id, label).evaluate((element) => getComputedStyle(element).backgroundColor);
+  const idle = (id: string) =>
+    row(id).locator('.sidebar-session-status').waitFor({ state: 'detached' });
   assert.equal(await status('a-head', '待审批').textContent(), '');
   assert.equal(await row('a-head').locator('.history-item .sr-only').textContent(), '待审批');
-  await status('a', '空闲').waitFor();
-  const idleColor = await dotColor('a', '空闲');
-  assert.notEqual(idleColor, 'rgba(0, 0, 0, 0)');
+  await idle('a');
   await openSession('b');
   await page.evaluate("window.sidebarFixture.setRunning('b')");
   await status('b', '执行中').waitFor();
@@ -182,14 +188,11 @@ try {
   await status('b', '执行中').waitFor();
   await page.evaluate('window.sidebarFixture.setRunning()');
   await status('b', '已完成').waitFor();
-  await status('a', '空闲').waitFor();
-  const dot = await status('a-branch', '空闲').boundingBox();
-  const title = await row('a-branch').locator('.history-title').boundingBox();
-  assert.ok(dot && title && dot.x + dot.width <= title.x);
+  await idle('a');
+  await idle('a-branch');
   await page.evaluate("window.sidebarFixture.finish('b-long', 'failed')");
   await status('b-long', '执行异常').waitFor();
   const stateColors = [
-    idleColor,
     runningColor,
     await dotColor('b', '已完成'),
     await dotColor('a-head', '待审批'),
@@ -203,22 +206,22 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 });
   }
   await status('b', '已完成').click();
-  await status('b', '空闲').waitFor();
+  await idle('b');
   await status('b-long', '执行异常').waitFor();
   await openSession('a');
   await page.evaluate("window.sidebarFixture.finish('b', 'completed', true)");
-  await status('b', '空闲').waitFor();
+  await idle('b');
   await page.evaluate("window.sidebarFixture.finish('b', 'failed')");
   await status('b', '执行异常').waitFor();
   await openSession('b');
-  await status('b', '空闲').waitFor();
+  await idle('b');
   await openSession('b-long');
-  await status('b-long', '空闲').waitFor();
+  await idle('b-long');
   await openSession('a-head');
   await status('a-head', '待审批').waitFor();
   await openSession('a');
   await page.evaluate("window.sidebarFixture.finish('a', 'completed')");
-  await status('a', '空闲').waitFor();
+  await idle('a');
   assert.equal(await page.evaluate('window.sidebarFixture.connections()'), 1);
   const longRow = nav.locator('[data-session-node="b-long"] .sidebar-session-row');
   const longTitle = longRow.locator('.history-title');
@@ -316,7 +319,9 @@ try {
   await page.getByRole('button', { name: '取消', exact: true }).click();
   assert.equal(await nav.getByText('Beta other row', { exact: true }).count(), 1);
 
+  await nav.getByRole('button', { name: '搜索项目或会话', exact: true }).click();
   const search = nav.getByRole('searchbox', { name: '搜索项目或会话' });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('type') === 'search');
   await search.fill('Needle');
   assert.equal(await page.locator('.sidebar-project').count(), 1);
   assert.equal(await nav.getByText('Restarted head', { exact: true }).count(), 1);
@@ -331,7 +336,11 @@ try {
   await search.fill('Beta');
   assert.equal(await page.locator('.sidebar-project').count(), 1);
   assert.equal(await nav.getByText('Beta archived', { exact: true }).count(), 1);
-  await search.fill('');
+  await search.press('Escape');
+  assert.equal(await nav.getByRole('searchbox').count(), 0);
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute('aria-label') === '搜索项目或会话',
+  );
   await page.locator('[data-project-id="Alpha"] .sidebar-project-toggle').click();
   assert.equal(await nav.getByText('Needle branch', { exact: true }).isVisible(), false);
   await page.locator('#fixture-select-branch').click();
@@ -342,7 +351,8 @@ try {
     await nav.getByRole('button', { name: '工作台设置', exact: true }).isVisible(),
     true,
   );
-  assert.equal(await nav.getByRole('button', { name: '全部会话', exact: true }).isVisible(), true);
+  await nav.getByRole('button', { name: '会话与项目', exact: true }).click();
+  await page.getByRole('menuitem', { name: '全部会话', exact: true }).click();
   assert.equal(
     await nav.evaluate((element) => element.scrollWidth <= element.clientWidth),
     true,

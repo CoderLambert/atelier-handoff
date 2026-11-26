@@ -499,7 +499,8 @@ async function settings(page: Page, offline: boolean): Promise<void> {
     .getByText(offline ? '本机网关未连接' : '本机网关可访问', { exact: true })
     .waitFor({ state: 'visible' });
   await page.getByText('命令执行：当前环境不可用', { exact: true }).waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: '工作台后退', exact: true }).click();
+  await page.getByRole('button', { name: '更多导航操作', exact: true }).click();
+  await page.getByRole('menuitem', { name: '工作台后退', exact: true }).click();
   await page.waitForURL(from);
 }
 
@@ -2150,7 +2151,8 @@ async function main(): Promise<void> {
       .waitFor({ state: 'visible' });
     await gatewaySettings.getByText('尚无账户文件', { exact: false }).waitFor({ state: 'visible' });
     await active.page.screenshot({ path: join(root, 'managed-shunt-settings.png') });
-    await active.page.getByRole('button', { name: '工作台后退', exact: true }).click();
+    await active.page.getByRole('button', { name: '更多导航操作', exact: true }).click();
+    await active.page.getByRole('menuitem', { name: '工作台后退', exact: true }).click();
     await gatewaySettings.waitFor({ state: 'hidden' });
     const localConfig = await readFile(firstGateway.configPath, 'utf8');
     const marked = localConfig + '\n# installation smoke persistence marker\n';

@@ -116,9 +116,10 @@ export const chat = {
     '当前无法粘贴截图，请等操作结束后重试。',
     'Screenshots cannot be pasted right now. Wait for the current operation to finish.',
   ],
-  'composer.placeholder': [
-    '输入消息…（/ 调用 Command 或 Skill，# 选择 MCP）',
-    'Type a message… (/ for a Command or Skill, # to choose MCP)',
+  'composer.placeholder': ['输入消息…', 'Type a message…'],
+  'composer.inputHint': [
+    '/ 调用 Command 或 Skill，# 选择 MCP',
+    '/ for a Command or Skill, # to choose MCP',
   ],
   'composer.processingAttachments': ['正在处理附件…', 'Processing attachments…'],
   'composer.projectUnavailable': [
@@ -317,6 +318,14 @@ export const chat = {
   'conversation.runResult': ['本轮运行结果', 'Run result for this turn'],
   'conversation.sourceSession': ['来源会话', 'Source session'],
   'conversation.toolFailed': ['{{name}}失败', '{{name}} failed'],
+  'conversation.toolSummary_one': [
+    '{{completed}} / {{count}} 项工具',
+    '{{completed}} / {{count}} tool',
+  ],
+  'conversation.toolSummary_other': [
+    '{{completed}} / {{count}} 项工具',
+    '{{completed}} / {{count}} tools',
+  ],
   'conversation.toolsCompleted_one': [
     '已完成 {{completed}} / {{count}} 次工具调用。',
     'Completed {{completed}} / {{count}} tool call.',

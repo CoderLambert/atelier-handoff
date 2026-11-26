@@ -1,11 +1,11 @@
 /**
  * @file 编排工作区、会话及功能面板。
- * @implementation 协调路由、Git、浏览器和终端面板的展示、尺寸、焦点与全窗口切换，并将所选代码加入同项目会话草稿。
- * @updated 2026-11-26T04:17:21+08:00
+ * @implementation 协调路由、工具栏中的会话标签与键盘切换，以及 Git、浏览器和终端面板的展示、尺寸与焦点，并将所选代码加入同项目会话草稿。
+ * @updated 2026-11-26T17:15:12+08:00
  */
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileDiff, FolderOpen, X } from 'lucide-react';
+import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare, X } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
 import { WorkspaceToolbar } from './workspace-toolbar';
 import { WorkspaceNotice } from './workspace-notice';
@@ -104,9 +104,9 @@ function currentView(pathname: string): View {
   );
 }
 const tabs = [
-  { id: 'conversation', labelKey: 'tab.conversation' },
-  { id: 'trace', labelKey: 'tab.trace' },
-  { id: 'artifacts', labelKey: 'section.artifacts' },
+  { id: 'conversation', labelKey: 'tab.conversation', Icon: MessagesSquare },
+  { id: 'trace', labelKey: 'tab.trace', Icon: Activity },
+  { id: 'artifacts', labelKey: 'section.artifacts', Icon: FileText },
 ] as const;
 const active = new Set(['queued', 'running', 'awaiting_permission', 'stopping']);
 
@@ -609,6 +609,66 @@ export default function Workspace() {
           <main className="main">
             <WorkspaceToolbar
               projectName={project?.name}
+              projectPath={project?.path}
+              onOpenProjects={sideProps.onProjects}
+              sessionNavigation={
+                view === 'chat' && sessionId && (!browserActive || showBrowserRight) ? (
+                  <div
+                    role="tablist"
+                    className="session-tabs workspace-session-tabs"
+                    aria-label={t('session.content')}
+                  >
+                    {tabs.map(({ id, labelKey, Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        className="session-tab"
+                        id={`${sessionContentId}-${id}`}
+                        aria-controls={`${sessionContentId}-panel`}
+                        aria-selected={tab === id}
+                        aria-label={t(labelKey)}
+                        aria-description={
+                          id === 'trace'
+                            ? t('tab.toolCount', { count: snapshot?.tools.length ?? 0 })
+                            : id === 'artifacts'
+                              ? t('tab.artifactCount', { count: snapshot?.artifacts.length ?? 0 })
+                              : undefined
+                        }
+                        title={t(labelKey)}
+                        tabIndex={tab === id ? 0 : -1}
+                        onClick={() => selectTab(id)}
+                        onKeyDown={(event) => {
+                          const index = tabs.findIndex((item) => item.id === id);
+                          const indexes: Record<string, number> = {
+                            ArrowLeft: (index - 1 + tabs.length) % tabs.length,
+                            ArrowRight: (index + 1) % tabs.length,
+                            Home: 0,
+                            End: tabs.length - 1,
+                          };
+                          const next = tabs[indexes[event.key] ?? -1];
+                          if (!next) return;
+                          event.preventDefault();
+                          document.getElementById(`${sessionContentId}-${next.id}`)?.focus();
+                          selectTab(next.id);
+                        }}
+                      >
+                        <Icon aria-hidden="true" />
+                        {id === 'trace' && snapshot?.tools.length ? (
+                          <span className="tab-count" aria-hidden="true">
+                            {numberFormat.format(snapshot.tools.length)}
+                          </span>
+                        ) : null}
+                        {id === 'artifacts' && snapshot?.artifacts.length ? (
+                          <span className="tab-count" aria-hidden="true">
+                            {numberFormat.format(snapshot.artifacts.length)}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : undefined
+              }
               title={
                 view === 'chat' ? (sessionTitle ?? t('tab.conversation')) : t(sectionNames[view])
               }
@@ -717,146 +777,97 @@ export default function Workspace() {
                         className="conversation-screen"
                         aria-label={t('session.workspace')}
                         data-has-session={Boolean(sessionId)}
+                        data-has-context={Boolean(
+                          snapshot?.agent || snapshot?.workspace || snapshot?.session.fork,
+                        )}
                       >
-                        {sessionId ? (
-                          <>
-                            <header className="session-header">
-                              <div className="session-title-row">
-                                <h1 title={sessionTitle}>{sessionTitle ?? t('session.begin')}</h1>
-                                {snapshot?.agent?.canUpgrade ? (
-                                  <Button
-                                    size="sm"
-                                    disabled={upgradeAgent.isPending}
-                                    onClick={() =>
-                                      upgradeAgent.mutate(
-                                        {
-                                          sessionId: snapshot.session.id,
-                                          revisionId: snapshot.agent!.revisionId,
-                                        },
-                                        {
-                                          onSuccess: () => revalidate(snapshot.session.id),
-                                          onError: showSessionError,
-                                        },
-                                      )
-                                    }
-                                  >
-                                    {t('session.useNewVersion')}
-                                  </Button>
-                                ) : null}
-                                {snapshot?.agent ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => openView('agents')}
-                                    title={t('session.manageAgent')}
-                                  >
-                                    {t('session.agentVersion', {
-                                      name: snapshot.agent.name,
-                                      version: snapshot.agent.version,
-                                    })}
-                                  </Button>
-                                ) : null}
-                              </div>
-                              {snapshot?.workspace ? (
-                                <SessionWorktree
-                                  session={snapshot.session}
-                                  workspace={snapshot.workspace}
-                                  onShowTree={() => openGit(snapshot.project, 'worktrees')}
-                                  onRefresh={async () => {
-                                    await revalidate(snapshot.session.id);
-                                    void client.invalidateQueries({ queryKey: keys.bootstrap });
-                                  }}
-                                />
-                              ) : project ? (
-                                <p className="session-meta">
-                                  {project.branch || t('session.localDirectory')} <span>·</span>{' '}
-                                  {snapshot?.session.fork
-                                    ? t('session.sharedDirectory')
-                                    : t('session.localWorkspace')}
-                                </p>
-                              ) : null}
-                              {snapshot?.session.fork
-                                ? (() => {
-                                    const origin = snapshot.session.fork;
-                                    const label =
-                                      origin.kind === 'rewind'
-                                        ? t('session.beforeRewind')
-                                        : t('session.source');
-                                    const exists = ready.data?.sessions.some(
-                                      (item) => item.id === origin.sourceSessionId,
-                                    );
-                                    return exists ? (
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() =>
-                                          void navigate({
-                                            to: '/sessions/$sessionId/messages/$messageId',
-                                            params: {
-                                              sessionId: origin.sourceSessionId,
-                                              messageId: origin.sourceMessageId,
-                                            },
-                                          })
-                                        }
-                                      >
-                                        {label} · {origin.sourceTitle}
-                                      </Button>
-                                    ) : (
-                                      <p className="session-meta">
-                                        {t('session.sourceUnavailable', {
-                                          label,
-                                          title: origin.sourceTitle,
-                                        })}
-                                      </p>
-                                    );
-                                  })()
-                                : null}
-                            </header>
-                            <div
-                              role="tablist"
-                              className="session-tabs"
-                              aria-label={t('session.content')}
-                            >
-                              {tabs.map(({ id, labelKey }) => (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  role="tab"
-                                  className="session-tab"
-                                  id={`${sessionContentId}-${id}`}
-                                  aria-controls={`${sessionContentId}-panel`}
-                                  aria-selected={tab === id}
-                                  tabIndex={tab === id ? 0 : -1}
-                                  onClick={() => selectTab(id)}
-                                  onKeyDown={(event) => {
-                                    const index = tabs.findIndex((item) => item.id === id);
-                                    const indexes: Record<string, number> = {
-                                      ArrowLeft: (index - 1 + tabs.length) % tabs.length,
-                                      ArrowRight: (index + 1) % tabs.length,
-                                      Home: 0,
-                                      End: tabs.length - 1,
-                                    };
-                                    const next = tabs[indexes[event.key] ?? -1];
-                                    if (!next) return;
-                                    event.preventDefault();
-                                    document
-                                      .getElementById(`${sessionContentId}-${next.id}`)
-                                      ?.focus();
-                                    selectTab(next.id);
-                                  }}
+                        {sessionId &&
+                        (snapshot?.agent || snapshot?.workspace || snapshot?.session.fork) ? (
+                          <header className="session-header">
+                            <div className="session-title-row">
+                              {snapshot?.agent?.canUpgrade ? (
+                                <Button
+                                  size="sm"
+                                  disabled={upgradeAgent.isPending}
+                                  onClick={() =>
+                                    upgradeAgent.mutate(
+                                      {
+                                        sessionId: snapshot.session.id,
+                                        revisionId: snapshot.agent!.revisionId,
+                                      },
+                                      {
+                                        onSuccess: () => revalidate(snapshot.session.id),
+                                        onError: showSessionError,
+                                      },
+                                    )
+                                  }
                                 >
-                                  {t(labelKey)}
-                                  {id === 'trace' && snapshot?.tools.length
-                                    ? ` ${numberFormat.format(snapshot.tools.length)}`
-                                    : ''}
-                                  {id === 'artifacts' && snapshot?.artifacts.length
-                                    ? ` ${numberFormat.format(snapshot.artifacts.length)}`
-                                    : ''}
-                                </button>
-                              ))}
+                                  {t('session.useNewVersion')}
+                                </Button>
+                              ) : null}
+                              {snapshot?.agent ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openView('agents')}
+                                  title={t('session.manageAgent')}
+                                >
+                                  {t('session.agentVersion', {
+                                    name: snapshot.agent.name,
+                                    version: snapshot.agent.version,
+                                  })}
+                                </Button>
+                              ) : null}
                             </div>
-                          </>
+                            {snapshot?.workspace ? (
+                              <SessionWorktree
+                                session={snapshot.session}
+                                workspace={snapshot.workspace}
+                                onShowTree={() => openGit(snapshot.project, 'worktrees')}
+                                onRefresh={async () => {
+                                  await revalidate(snapshot.session.id);
+                                  void client.invalidateQueries({ queryKey: keys.bootstrap });
+                                }}
+                              />
+                            ) : null}
+                            {snapshot?.session.fork
+                              ? (() => {
+                                  const origin = snapshot.session.fork;
+                                  const label =
+                                    origin.kind === 'rewind'
+                                      ? t('session.beforeRewind')
+                                      : t('session.source');
+                                  const exists = ready.data?.sessions.some(
+                                    (item) => item.id === origin.sourceSessionId,
+                                  );
+                                  return exists ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        void navigate({
+                                          to: '/sessions/$sessionId/messages/$messageId',
+                                          params: {
+                                            sessionId: origin.sourceSessionId,
+                                            messageId: origin.sourceMessageId,
+                                          },
+                                        })
+                                      }
+                                    >
+                                      {label} · {origin.sourceTitle}
+                                    </Button>
+                                  ) : (
+                                    <p className="session-meta">
+                                      {t('session.sourceUnavailable', {
+                                        label,
+                                        title: origin.sourceTitle,
+                                      })}
+                                    </p>
+                                  );
+                                })()
+                              : null}
+                          </header>
                         ) : null}
                         <div
                           className="react-conversation-body"

@@ -101,7 +101,7 @@ export function ContextUsagePopover({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size={remaining === undefined ? 'icon-xs' : 'xs'}
           className="context-usage-trigger"
           data-level={level}
           data-stale={sample?.previous || undefined}
@@ -111,12 +111,14 @@ export function ContextUsagePopover({
               ? `${remainingLabel} · ${triggerTitle}`
               : remainingLabel
           }
-          title={triggerTitle}
+          title={remainingLabel ? `${triggerTitle} · ${remainingLabel}` : triggerTitle}
         >
           <Gauge aria-hidden="true" data-icon="inline-start" />
-          <span className="tabular-nums" aria-hidden="true">
-            {remainingLabel ?? t('window.triggerEmpty')}
-          </span>
+          {remaining !== undefined ? (
+            <span className="tabular-nums" aria-hidden="true">
+              {percent.format(remaining)}
+            </span>
+          ) : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent

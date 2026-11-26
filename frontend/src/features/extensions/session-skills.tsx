@@ -44,11 +44,13 @@ export function SessionSkillsControl({
   activeRun,
   disabled,
   selectionCount,
+  compact = false,
 }: {
   skills: SessionSkills;
   activeRun?: Run;
   disabled: boolean;
   selectionCount: number;
+  compact?: boolean;
 }) {
   const { t } = useUiTranslation('extensions');
   const title = useRef<HTMLHeadingElement>(null);
@@ -59,9 +61,17 @@ export function SessionSkillsControl({
   return (
     <Dialog open={skills.open} onOpenChange={skills.setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="ghost" size="xs" className="composer-action-btn" disabled={disabled}>
+        <Button
+          type="button"
+          variant="ghost"
+          size={compact ? 'icon-xs' : 'xs'}
+          className="composer-action-btn"
+          disabled={disabled}
+          aria-label={t('inheritance.sessionTitle')}
+          title={t('inheritance.sessionTitle')}
+        >
           <Sparkles data-icon="inline-start" aria-hidden="true" />
-          {t('inheritance.sessionTitle')}
+          {compact ? null : t('inheritance.sessionTitle')}
         </Button>
       </DialogTrigger>
       <DialogContent
@@ -72,25 +82,38 @@ export function SessionSkillsControl({
         }}
       >
         <DialogHeader>
-          <DialogTitle ref={title} tabIndex={-1}>{t('inheritance.sessionTitle')}</DialogTitle>
+          <DialogTitle ref={title} tabIndex={-1}>
+            {t('inheritance.sessionTitle')}
+          </DialogTitle>
           <DialogDescription>{t('inheritance.sessionDescription')}</DialogDescription>
         </DialogHeader>
         <div className="skill-inheritance-dialog-body">
-          {activeRun ? <p className="text-sm text-muted-foreground">{t('inheritance.activeRun')}</p> : null}
+          {activeRun ? (
+            <p className="text-sm text-muted-foreground">{t('inheritance.activeRun')}</p>
+          ) : null}
           <SkillAvailabilityFeedback
-            error={query.isError} loading={query.isPending} fetching={query.isFetching}
-            reload={() => void query.refetch()} saveError={update.error} saving={update.saving}
+            error={query.isError}
+            loading={query.isPending}
+            fetching={query.isFetching}
+            reload={() => void query.refetch()}
+            saveError={update.error}
+            saving={update.saving}
           />
           {query.isSuccess ? (
             <>
-              <p className="text-sm font-medium">{t('inheritance.availableCount', { count: available })}</p>
+              <p className="text-sm font-medium">
+                {t('inheritance.availableCount', { count: available })}
+              </p>
               {items.length ? (
                 <ul className="skill-inheritance-list">
                   {items.map((item) => {
                     const selection = skills.draftSkills.find(({ id }) => id === item.id);
                     const names = { name: item.name, source: t(skillSources[item.source]) };
                     return (
-                      <li className="skill-inheritance-row skill-inheritance-session-row" key={item.id}>
+                      <li
+                        className="skill-inheritance-row skill-inheritance-session-row"
+                        key={item.id}
+                      >
                         <div className="grid gap-2">
                           <SkillIdentity item={item} />
                           {recordedOnRun(item, activeRun?.extensions) ? (
@@ -107,7 +130,13 @@ export function SessionSkillsControl({
                               { value: 'follow', label: t('inheritance.sessionFollow') },
                               { value: 'off', label: t(policies.off) },
                               ...(item.mode === 'auto' || item.override === 'manual'
-                                ? [{ value: 'manual' as const, label: t(policies.manual), disabled: !item.manual }]
+                                ? [
+                                    {
+                                      value: 'manual' as const,
+                                      label: t(policies.manual),
+                                      disabled: !item.manual,
+                                    },
+                                  ]
                                 : []),
                             ]}
                             onChange={(mode) => update.save({ type: 'session', id: item.id, mode })}
@@ -115,18 +144,32 @@ export function SessionSkillsControl({
                           {selection ? (
                             <>
                               <p className="text-xs text-muted-foreground" role="status">
-                                {t(isCurrentSkillSelection(selection, item) ? 'inheritance.draftSelected' : 'inheritance.draftStale')}
+                                {t(
+                                  isCurrentSkillSelection(selection, item)
+                                    ? 'inheritance.draftSelected'
+                                    : 'inheritance.draftStale',
+                                )}
                               </p>
-                              <Button type="button" variant="ghost" size="sm" disabled={disabled}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={disabled}
                                 aria-label={t('inheritance.removeFromDraftLabel', names)}
-                                onClick={() => skills.remove(item.id)}>
+                                onClick={() => skills.remove(item.id)}
+                              >
                                 {t('inheritance.removeFromDraft')}
                               </Button>
                             </>
                           ) : canSelectSkill(item) ? (
-                            <Button type="button" variant="outline" size="sm" disabled={controlsDisabled || selectionLimit}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={controlsDisabled || selectionLimit}
                               aria-label={t('inheritance.addToDraftLabel', names)}
-                              onClick={() => skills.add(item.id)}>
+                              onClick={() => skills.add(item.id)}
+                            >
                               {t('inheritance.addToDraft')}
                             </Button>
                           ) : null}
@@ -135,7 +178,9 @@ export function SessionSkillsControl({
                     );
                   })}
                 </ul>
-              ) : <p className="text-sm text-muted-foreground">{t('inheritance.sessionEmpty')}</p>}
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('inheritance.sessionEmpty')}</p>
+              )}
               {skills.missing.length ? (
                 <div className="grid gap-2">
                   <h3 className="text-sm font-semibold">{t('inheritance.missingSelections')}</h3>
@@ -144,11 +189,18 @@ export function SessionSkillsControl({
                       <li key={id} className="skill-inheritance-row">
                         <div className="skill-inheritance-identity">
                           <code className="text-xs">{id}</code>
-                          <p className="text-xs text-muted-foreground">{t('inheritance.draftStale')}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t('inheritance.draftStale')}
+                          </p>
                         </div>
-                        <Button type="button" variant="ghost" size="sm" disabled={disabled}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={disabled}
                           aria-label={t('inheritance.removeMissing', { id })}
-                          onClick={() => skills.remove(id)}>
+                          onClick={() => skills.remove(id)}
+                        >
                           {t('inheritance.removeFromDraft')}
                         </Button>
                       </li>
@@ -166,7 +218,9 @@ export function SessionSkillsControl({
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="outline" size="sm">{t('common.close')}</Button>
+            <Button type="button" variant="outline" size="sm">
+              {t('common.close')}
+            </Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -174,7 +228,13 @@ export function SessionSkillsControl({
   );
 }
 
-export function DraftSessionSkills({ skills, disabled }: { skills: SessionSkills; disabled: boolean }) {
+export function DraftSessionSkills({
+  skills,
+  disabled,
+}: {
+  skills: SessionSkills;
+  disabled: boolean;
+}) {
   const { t } = useUiTranslation('extensions');
   if (!skills.draftSkills.length) return null;
   return (
@@ -190,9 +250,14 @@ export function DraftSessionSkills({ skills, disabled }: { skills: SessionSkills
               <strong>{item.name}</strong> · {names.source}
               {stale ? <small className="block">{t('inheritance.draftStale')}</small> : null}
             </span>
-            <Button type="button" variant="ghost" size="icon-xs" disabled={disabled}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              disabled={disabled}
               aria-label={t('inheritance.removeFromDraftLabel', names)}
-              onClick={() => skills.remove(item.id)}>
+              onClick={() => skills.remove(item.id)}
+            >
               <X aria-hidden="true" />
             </Button>
           </Badge>

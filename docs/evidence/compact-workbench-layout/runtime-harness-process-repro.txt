@@ -1,0 +1,26 @@
+Captured output excerpt (not a full log). Command run in /workspace/scratch/454565d6bee4/atelier-layout:
+timeout -k 2 25 node --import tsx --test --test-reporter=spec tests/harness-process.test.ts
+External timeout exit code: 124
+
+✖ observed detached shell session and reparented grandchild are also cleaned (4209.265012ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 10
+ℹ fail 1
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24942.532981
+
+✖ failing tests:
+
+test at tests/harness-process.test.ts:34:2440
+✖ observed detached shell session and reparented grandchild are also cleaned (4209.265012ms)
+  AssertionError [ERR_ASSERTION]: Process fixture did not reach its expected state.
+      at eventually (/workspace/scratch/454565d6bee4/atelier-layout/tests/harness-process.test.ts:63:14)
+      at async assertGone (/workspace/scratch/454565d6bee4/atelier-layout/tests/harness-process.test.ts:147:27)
+      at async TestContext.<anonymous> (/workspace/scratch/454565d6bee4/atelier-layout/tests/harness-process.test.ts:287:5)
+
+test at tests/harness-process.test.ts:1:1
+✖ tests/harness-process.test.ts (24954.427961ms)
+  'Promise resolution is still pending but the event loop has already resolved'

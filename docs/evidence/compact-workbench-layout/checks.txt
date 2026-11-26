@@ -1,0 +1,4 @@
+Checked 7 rule scopes, source and import boundaries, and database access sites.
+Query boundaries checked; 8 legacy files tracked for migration.
+UI translations and message boundaries checked.
+UI semantics checked.

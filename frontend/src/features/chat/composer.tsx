@@ -325,7 +325,9 @@ export function Composer({
                     className="attachment-remove"
                     disabled={archived || submitting || isRemoving}
                     aria-label={t('composer.removeAttachment', { name })}
-                    title={isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')}
+                    title={
+                      isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')
+                    }
                     onClick={() => removeAttachment(id)}
                   >
                     <X data-icon="inline-start" aria-hidden="true" />
@@ -371,7 +373,14 @@ export function Composer({
           </p>
         ) : null}
         {draft.messageQuotes?.length ? (
-          <ul className="composer-quotes" aria-label={t(draft.messageQuotes.some(({ file }) => file) ? 'composer.fileQuotes' : 'composer.quotes')}>
+          <ul
+            className="composer-quotes"
+            aria-label={t(
+              draft.messageQuotes.some(({ file }) => file)
+                ? 'composer.fileQuotes'
+                : 'composer.quotes',
+            )}
+          >
             {draft.messageQuotes.map((item, index) => (
               <li key={item.id} className="composer-quote">
                 <Quote
@@ -381,12 +390,17 @@ export function Composer({
                 />
                 {item.file ? (
                   <div className="composer-file-quote">
-                    <code className="composer-file-quote-location" title={fileQuoteLocation(item.file)}>
+                    <code
+                      className="composer-file-quote-location"
+                      title={fileQuoteLocation(item.file)}
+                    >
                       {fileQuoteLocation(item.file)}
                     </code>
                     <span className="composer-quote-excerpt">{item.text}</span>
                   </div>
-                ) : <span className="composer-quote-excerpt">{item.text}</span>}
+                ) : (
+                  <span className="composer-quote-excerpt">{item.text}</span>
+                )}
                 <Button
                   type="button"
                   variant="ghost"
@@ -417,6 +431,7 @@ export function Composer({
               : 'input-help chat-composer-error'
           }
           placeholder={t('composer.placeholder')}
+          title={t('composer.inputHint')}
           onPaste={(event) => {
             const files = Array.from(event.clipboardData.files)
               .filter((file) => file.type === 'image/png' || file.type === 'image/jpeg')
@@ -493,13 +508,14 @@ export function Composer({
             <Button
               type="button"
               variant="ghost"
-              size="xs"
+              size="icon-xs"
               className="composer-action-btn"
+              aria-label={t('composer.context')}
+              title={t('context.title')}
               disabled={!contextAllowed || archived || submitting || !directoryAvailable}
               onClick={() => setContextOpen(true)}
             >
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              {t('composer.context')}
+              <Plus aria-hidden="true" />
             </Button>
             <Button
               type="button"
@@ -520,6 +536,7 @@ export function Composer({
               <Paperclip data-icon="inline-start" aria-hidden="true" />
             </Button>
             <SessionSkillsControl
+              compact
               skills={sessionSkills}
               activeRun={run?.startedAt ? run : undefined}
               disabled={skillsDisabled}
@@ -535,25 +552,31 @@ export function Composer({
           </div>
           <div className="composer-toolbar-right">
             <span className="composer-run-status" data-status={run?.status} role="status">
-              {dragging
-                ? dropAllowed
-                  ? t('composer.dropToAdd')
-                  : t('composer.cannotAdd')
-                : submitting
-                  ? t('composer.sending')
-                  : busy
-                    ? t('composer.processingAttachments')
-                    : run
-                      ? run.status === 'running'
-                        ? <span className="sr-only">{t('composer.running')}</span>
-                        : (
-                            {
-                              queued: t('composer.queued'),
-                              awaiting_permission: t('composer.awaitingPermission'),
-                              stopping: t('composer.stoppingStatus'),
-                            } as Record<string, string>
-                          )[run.status]
-                      : ''}
+              {dragging ? (
+                dropAllowed ? (
+                  t('composer.dropToAdd')
+                ) : (
+                  t('composer.cannotAdd')
+                )
+              ) : submitting ? (
+                t('composer.sending')
+              ) : busy ? (
+                t('composer.processingAttachments')
+              ) : run ? (
+                run.status === 'running' ? (
+                  <span className="sr-only">{t('composer.running')}</span>
+                ) : (
+                  (
+                    {
+                      queued: t('composer.queued'),
+                      awaiting_permission: t('composer.awaitingPermission'),
+                      stopping: t('composer.stoppingStatus'),
+                    } as Record<string, string>
+                  )[run.status]
+                )
+              ) : (
+                ''
+              )}
             </span>
             {run ? (
               <Button
@@ -565,7 +588,11 @@ export function Composer({
                 disabled={run.status === 'stopping'}
                 onClick={() => onStop(run.id)}
               >
-                <span className="composer-stop-icon-wrapper" data-icon="inline-start" aria-hidden="true">
+                <span
+                  className="composer-stop-icon-wrapper"
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                >
                   <svg className="composer-stop-spinner" viewBox="0 0 16 16">
                     <circle className="composer-stop-track" cx="8" cy="8" r="6" />
                     <circle className="composer-stop-indicator" cx="8" cy="8" r="6" />
@@ -616,7 +643,7 @@ export function Composer({
           action: t(queueing ? 'composer.queueAction' : 'composer.sendAction'),
           insertHelp: insertRunId ? t('composer.insertShortcut') : '',
         })}{' '}
-        {t(modeFooter[mode])}
+        {t('composer.inputHint')} {t(modeFooter[mode])}
       </p>
       <p id="chat-composer-error" className="chat-composer-error" role="alert">
         {draftActionError ||

@@ -318,7 +318,8 @@ test(
         true,
       );
       await fullCenter();
-      await page.getByRole('button', { name: '工作台前进', exact: true }).click();
+      await page.getByRole('button', { name: '更多导航操作', exact: true }).click();
+      await page.getByRole('menuitem', { name: '工作台前进', exact: true }).click();
       await splitter.waitFor();
       await page.waitForFunction(
         (width) =>
