@@ -1,3 +1,8 @@
+/**
+ * @file 配置工作台前端开发服务器与构建。
+ * @implementation 配置 React、Tailwind、模块别名和访问范围，将本机 API 的 HTTP 与 WebSocket 请求代理到运行时。
+ * @updated 2026-11-26T04:17:21+08:00
+ */
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -43,7 +48,9 @@ export default defineConfig(({ mode }) => {
           '**/.claude/**',
         ],
       },
-      proxy: { '/api': { target: `http://127.0.0.1:${backendPort}`, changeOrigin: false } },
+      proxy: {
+        '/api': { target: `http://127.0.0.1:${backendPort}`, changeOrigin: false, ws: true },
+      },
     },
     build: { outDir: '../dist/client', emptyOutDir: true },
   };

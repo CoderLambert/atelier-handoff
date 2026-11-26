@@ -31,7 +31,7 @@ jobs:
       - name: Install Linux test tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y apparmor-profiles bubblewrap
+          sudo apt-get install --no-install-recommends -y apparmor-profiles bubblewrap xvfb xauth
           if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]] &&
             [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" == "1" ]]; then
             sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
@@ -64,3 +64,19 @@ jobs:
         run: |
           npm run build
           npm run build:desktop
+
+      - name: Verify Terminal in an isolated Electron window
+        env:
+          ATELIER_TERMINAL_EVIDENCE: ${{ runner.temp }}/terminal-evidence
+        run: |
+          node node_modules/electron/install.js
+          xvfb-run -a node --import tsx scripts/smoke-terminal.mts
+
+      - name: Preserve Terminal screenshots and receipts
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terminal-electron-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/terminal-evidence/
+          if-no-files-found: ignore
+          retention-days: 7

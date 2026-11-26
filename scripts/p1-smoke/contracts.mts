@@ -1,7 +1,7 @@
 /**
  * @file 定义 Linux 安装验收的数据契约和通用工具。
- * @implementation 提供安装配置、原生浏览器与自动化证据类型，以及输入校验、脱敏和限时轮询。
- * @updated 2026-11-20T14:25:31+08:00
+ * @implementation 提供安装配置、浏览器与自动化证据类型，记录进程启动身份，并复用校验、脱敏和限时轮询。
+ * @updated 2026-11-26T01:30:00+08:00
  */
 import assert from 'node:assert/strict';
 import { desktopBrowserAccessStateSchema } from '../../shared/desktop-browser.js';
@@ -76,7 +76,13 @@ export interface LaunchEvidence {
   readyMs: number | null;
   peakRssMiB: number;
   samples: number;
-  processes: { pid: number; parent: number; executable: string; role: string }[];
+  processes: {
+    pid: number;
+    parent: number;
+    startTicks: string;
+    executable: string;
+    role: string;
+  }[];
   shutdownMs: number | null;
   exit: { code: number | null; signal: NodeJS.Signals | null } | null;
   remaining: number[];

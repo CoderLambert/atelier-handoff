@@ -216,7 +216,7 @@
   color: var(--ui-success);
 }
 
-.topbar-changes-btn[data-pending='true'] {
+.session-changes-button[data-pending='true'] {
   background: var(--ui-warning-soft);
   border-color: var(--ui-warning-border);
   color: var(--ui-warning);

@@ -1,7 +1,7 @@
 /**
  * @file 生成 Windows x64 和 macOS arm64 桌面候选 ZIP。
- * @implementation 校验共享与平台资源，替换 SQLite 驱动并核对包括工作树迁移的发行资源。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 替换平台资源和 SQLite，排除 Linux PTY 并同步非终端候选清单，核对迁移、许可证与归档。
+ * @updated 2026-11-26T01:30:00+08:00
  */
 import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -23,6 +23,12 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import {
+  isPtyRuntimeResource,
+  ptyPackagePath,
+  terminalPreviewMetadata,
+  terminalReleaseSchema,
+} from './linux/terminal-resources.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const linux = join(root, 'dist/linux/atelier');
@@ -133,6 +139,7 @@ const release = z
     version: z.string().regex(/^\d+\.\d+\.\d+$/),
     electron: z.object({ version: z.literal(electronVersion) }),
     node: z.object({ version: z.literal(nodeVersion) }),
+    terminal: terminalReleaseSchema.optional(),
     sdk: z.object({
       version: z.string(),
       cliPackage: z.literal('@anthropic-ai/claude-agent-sdk-linux-x64'),
@@ -210,6 +217,7 @@ for (const resource of inventory.files) {
   if (!/^resources\/(app|runtime|licenses)\//.test(resource.path)) continue;
   if (
     resource.path.includes(nativeRoot) ||
+    isPtyRuntimeResource(resource.path) ||
     resource.path === linuxSqliteBinding ||
     resource.path.startsWith('resources/runtime/bin/') ||
     ['resources/licenses/node-LICENSE', 'resources/licenses/inventory.json'].includes(resource.path)
@@ -239,6 +247,14 @@ for (const resource of inventory.files) {
   sharedFiles++;
 }
 assert.ok(sharedFiles > 100);
+const terminalPreview = terminalPreviewMetadata(
+  await readJson(join(inputs, 'runtime/package.json')),
+  release,
+);
+await writeFile(
+  join(inputs, 'runtime/package.json'),
+  JSON.stringify(terminalPreview.runtimePackage, null, 2) + '\n',
+);
 for (const migration of release.sqlite.migrations)
   assert.equal(
     await hash(join(inputs, migration.path.slice('resources/'.length))),
@@ -337,7 +353,11 @@ await writeFile(
       ...notices,
       node: { ...notices.node, sha256: await hash(nodeLicense) },
       packages: [
-        ...notices.packages.filter((pkg) => pkg.name !== nativeRoot),
+        ...notices.packages
+          .filter((pkg) => pkg.name !== nativeRoot)
+          .map((pkg) =>
+            pkg.name === 'node-pty' ? { ...pkg, shippedAsRuntimePackage: false } : pkg,
+          ),
         {
           name: cliPackage,
           version: sdk.version,
@@ -397,7 +417,7 @@ assert.equal(await hash(join(resources, 'runtime', sqlitePackage, sqliteBinding)
 assert.deepEqual(await readdir(join(resources, 'runtime', sqlitePackage, 'prebuilds')), [
   `${targetName}.node`,
 ]);
-const runtimeDependencies = release.runtimeDependencies.map((item) => {
+const runtimeDependencies = terminalPreview.runtimeDependencies.map((item) => {
   if (item.path === sqlitePackage)
     return {
       ...item,
@@ -444,7 +464,8 @@ await writeFile(
       },
       sdk: { ...release.sdk, cliPackage },
       sqlite: sqliteRelease,
-      runtimeDependencyRoots: release.runtimeDependencyRoots,
+      terminal: terminalPreview.terminal,
+      runtimeDependencyRoots: terminalPreview.runtimeDependencyRoots,
       runtimeDependencies,
     },
     null,
@@ -462,6 +483,14 @@ for (const name of [
   `runtime/${sqlitePackage}/${sqliteBinding}`,
 ])
   assert.ok((await stat(join(resources, name))).isFile(), name);
+assert.equal(
+  await stat(join(resources, 'runtime', ptyPackagePath)).then(
+    () => true,
+    () => false,
+  ),
+  false,
+  'Non-Terminal candidates must not contain node-pty',
+);
 if (target.platform === 'darwin')
   assert.ok(
     (await readdir(join(app, 'Contents/Frameworks'))).some((name) =>
@@ -482,6 +511,7 @@ const evidence = {
   node: nodeVersion,
   sdk: { ...release.sdk, cliPackage },
   sqlite: sqliteRelease,
+  terminal: terminalPreview.terminal,
   targetCli: cliPackage,
   packager: manifest.version,
   sharedFiles,

@@ -48,6 +48,7 @@ const routeTree = root.addChildren([
   page('/sessions/$sessionId/trace/$runId'),
   page('/sessions/$sessionId/artifacts'),
   page('/sessions/$sessionId/browser'),
+  page('/sessions/$sessionId/terminal'),
   page('/sessions/$sessionId/messages/$messageId'),
   page('/runs'),
   page('/artifacts'),

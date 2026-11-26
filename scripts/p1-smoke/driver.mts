@@ -1,7 +1,7 @@
 /**
  * @file 执行 Linux 安装态验收。
- * @implementation 驱动隔离窗口和回环 SDK，从自动审批与有序工具明细验证到原生浏览器、离线重开、托管网关和进程回收。
- * @updated 2026-11-26T02:21:29+08:00
+ * @implementation 驱动隔离窗口与回环 SDK，验证有序工具明细、浏览器、队列、人工终端和退出清理。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 // External acceptance controller, compiled from TS into a temporary test resource.
 import assert from 'node:assert/strict';
@@ -32,6 +32,12 @@ import {
   type LaunchEvidence,
   type ProcessSample,
 } from './contracts.mjs';
+import {
+  allowTerminalShell,
+  installedOrTerminalProcess,
+  runTerminalSmoke,
+  type TerminalProcessIdentity,
+} from './terminal.mjs';
 import {
   alternateModel,
   answer,
@@ -83,6 +89,7 @@ const evidence: AcceptanceEvidence = {
   checks: {},
   launches: [],
 };
+const terminalShells: TerminalProcessIdentity[] = [];
 const redactLog = (text: string): string => redact(text).replace(/\b[a-f0-9]{64}\b/gi, '<hex-64>');
 
 async function appFetch(
@@ -290,8 +297,16 @@ async function launch(
       metric.processes = [...seen.values()].map((row) => ({
         pid: row.pid,
         parent: row.parent,
+        startTicks: row.startTicks,
         executable: row.executable,
-        role: role(row),
+        role: terminalShells.some(
+          (shell) =>
+            shell.pid === row.pid &&
+            shell.startTicks === row.startTicks &&
+            shell.executable === row.executable,
+        )
+          ? 'terminal-shell'
+          : role(row),
       }));
     })().finally(() => {
       sampling = undefined;
@@ -2045,7 +2060,34 @@ async function main(): Promise<void> {
       await save();
       active = await launch(cfg, chromium, fixture, index, false);
       try {
-        if (index === 1) ids = await functional(active, fixture);
+        if (index === 1) {
+          ids = await functional(active, fixture);
+          evidence.phase = 'terminal';
+          await save();
+          const run = active;
+          evidence.checks.terminal = await runTerminalSmoke({
+            page: run.page,
+            sessionId: ids.sessionId,
+            initialCwd: join(run.directory, 'project'),
+            screenshotDirectory: root,
+            observeShell: async (pid) => {
+              await run.sample();
+              const sidecar = [...run.seen.values()].find(
+                (row) => role(row) === 'packaged-sidecar',
+              );
+              assert.ok(sidecar, 'Terminal must belong to the observed installed sidecar');
+              const shell = allowTerminalShell(pid, sidecar.pid, await processes());
+              terminalShells.push(shell);
+              await run.sample();
+              return shell;
+            },
+            shellExited: async (shell) =>
+              !(await processes()).some(
+                (row) => row.pid === shell.pid && row.startTicks === shell.startTicks,
+              ),
+          });
+          await save();
+        }
       } catch (error) {
         await active.page
           .screenshot({ path: join(root, 'failure.png'), timeout: 2000 })
@@ -2150,11 +2192,12 @@ async function main(): Promise<void> {
     assert.deepEqual(fixture.evidence.errors, []);
     const allProcesses = evidence.launches.flatMap((item) => item.processes);
     assert.ok(
-      allProcesses.every((item) => item.executable.startsWith('/opt/atelier/')),
-      'Every app process must execute an installed binary',
+      allProcesses.every((item) => installedOrTerminalProcess(item, terminalShells)),
+      'App processes must use installed binaries or explicitly observed Terminal shells',
     );
     evidence.checks.processOwnership = {
-      installedExecutablesOnly: true,
+      installedExecutablesOrDeclaredTerminalShells: true,
+      terminalShells,
       cleanExitCount: evidence.launches.length,
       remainingProcesses: 0,
     };

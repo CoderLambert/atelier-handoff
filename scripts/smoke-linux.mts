@@ -1,8 +1,8 @@
 #!/usr/bin/env -S tsx
 /**
  * @file 组织已安装 Linux 应用的冒烟验收。
- * @implementation 在隔离环境运行验收驱动，核对 SQLite、迁移及固定 RTK 二进制、启动器、许可证和静态插件资源的完整清单。
- * @updated 2026-11-26T01:32:35+08:00
+ * @implementation 在隔离环境运行验收驱动，核对 SQLite、PTY 和 RTK 资源清单及完整性。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 // Controller only. esbuild emits the driver into a private test-resource directory;
 // neither the driver nor its dependencies are copied into the distributed app.
@@ -27,6 +27,12 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { rtkLauncher, rtkRelease } from '../shared/builtin-rtk.js';
+import {
+  assertPtyNativeFiles,
+  ptyPackagePath,
+  terminalReleaseSchema,
+  terminalRuntimeVersions,
+} from './linux/terminal-resources.mjs';
 import {
   array,
   errorText,
@@ -277,6 +283,30 @@ async function verifyResources(
     JSON.parse(await readFile(join(install, 'resources/runtime/package.json'), 'utf8')) as unknown,
   );
   const runtimeDependencies = record(runtimePackage.dependencies);
+  const terminal = terminalReleaseSchema.parse(release.terminal);
+  const ptyPrefix = `resources/runtime/${ptyPackagePath}/`;
+  assertPtyNativeFiles(
+    [...seen]
+      .filter((name) => name.startsWith(ptyPrefix))
+      .map((name) => name.slice(ptyPrefix.length)),
+  );
+  assert.equal(
+    terminal.nativeBinding.sha256,
+    await hashFile(join(install, terminal.nativeBinding.path)),
+    'Terminal native binding SHA-256',
+  );
+  for (const [name, version] of Object.entries(terminalRuntimeVersions)) {
+    assert.equal(runtimeDependencies[name], version, `Terminal runtime manifest: ${name}`);
+    const installedPackage = record(
+      JSON.parse(
+        await readFile(
+          join(install, 'resources/runtime/node_modules', name, 'package.json'),
+          'utf8',
+        ),
+      ) as unknown,
+    );
+    assert.equal(installedPackage.version, version, `Terminal installed dependency: ${name}`);
+  }
   for (const [key, name, version] of [
     ['driver', 'better-sqlite3', '13.2.0'],
     ['orm', 'drizzle-orm', '0.45.4'],
@@ -303,6 +333,7 @@ async function verifyResources(
     complete: true,
     testDriverDistributed: false,
     sqlite: { ...sqlite, manifestsVerified: true, exclusiveNativePrebuild: true },
+    terminal: { ...terminal, manifestsVerified: true, exclusiveNativeBinding: true },
     rtk: { ...rtk, manifestsVerified: true, pinnedResourcesVerified: true, plugin: rtkPlugin },
   };
 }

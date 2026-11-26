@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 组织会话、Git、审批和运行接口，校验多提交与命令归属，并解析 Skill 继承设置及运行范围。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 装配会话、Git、审批、Skill 继承和 RTK 接口，协调人工终端及运行时关闭清理。
+ * @updated 2026-11-26T04:17:21+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -68,6 +68,9 @@ import { executeCommitPlan } from './modules/git/commit-plan-execution.js';
 import { abandonCommitPlan, recoverCommitPlan } from './modules/git/commit-plan-recovery.js';
 import { hashCommitRepositoryIdentity } from './modules/git/commit-operation-repository.js';
 import { DevelopmentWorktrees, directoriesOverlap } from './modules/git/development-worktrees.js';
+import { TerminalManager } from './modules/terminal/manager.js';
+import { handleTerminalRoutes } from './modules/terminal/routes.js';
+import { registerTerminalTransport } from './modules/terminal/transport.js';
 import { commitStagedChanges, readStagedChanges } from './modules/git/staged-commit.js';
 import { suggestCommitMessage } from './modules/git/commit-suggestion.js';
 import {
@@ -358,7 +361,13 @@ export async function createApp(options: {
   }
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
-    new AgentRunner(store, permissions, files, mcpSessions, browserAccess, verifyWorkspace,
+    new AgentRunner(
+      store,
+      permissions,
+      files,
+      mcpSessions,
+      browserAccess,
+      verifyWorkspace,
       (sessionId) => {
         if (messageQueue.hasPending(sessionId)) wakeQueue();
       },
@@ -390,6 +399,17 @@ export async function createApp(options: {
   };
   const deletingSessions = new Set<string>();
   const uploadingSessions = new Set<string>();
+  const terminals = new TerminalManager({
+    store,
+    worktrees,
+    supported: nativeExecution && process.arch === 'x64',
+    unavailableReason: !options.desktopPairing
+      ? 'desktop-required'
+      : process.platform !== 'linux' || process.arch !== 'x64'
+        ? 'platform-unsupported'
+        : 'native-execution-disabled',
+    isSessionDeleting: (id) => deletingSessions.has(id),
+  });
   let directoryPicker: AbortController | undefined;
   const streams = new Set<ServerResponse>();
   const requests = new Set<Promise<unknown>>();
@@ -990,6 +1010,10 @@ export async function createApp(options: {
         req.headers[desktopPairingHeader] !== options.desktopPairing
       )
         throw new AppError('DESKTOP_PAIRING_REQUIRED', '此运行时仅接受配对的桌面窗口。', 403);
+      if (
+        await handleTerminalRoutes({ manager: terminals, req, res, url, parts, method, body, json })
+      )
+        return;
       if (url.pathname === '/api/bootstrap' && method === 'GET') {
         const projectList = await projects();
         const info = await configInfo();
@@ -2007,6 +2031,7 @@ export async function createApp(options: {
             })
             .parse(await body(req));
           const prior = store.get('sessions', id);
+          if (update.status === 'archived') terminals.assertSessionIdle(id);
           if (update.draft?.executionPreference === 'native-v1')
             assertNativeExecution(prior, update.draft.mode, update.draft.approvalMode);
           if (
@@ -2049,6 +2074,7 @@ export async function createApp(options: {
         }
         if (parts.length === 3 && method === 'DELETE') {
           store.get('sessions', id);
+          terminals.assertSessionIdle(id);
           if (sameSessionRunning(id) || messageQueue.hasPending(id))
             throw new AppError('RUN_ACTIVE', '请先处理活动运行和待处理消息再删除会话。', 409);
           if (deletingSessions.has(id))
@@ -2059,6 +2085,7 @@ export async function createApp(options: {
             throw new AppError('ATTACHMENT_UPLOAD_ACTIVE', '请等附件上传结束再删除会话。', 409);
           deletingSessions.add(id);
           try {
+            await terminals.disposeSession(id);
             await files.deleteSessionFiles(id);
             store.transaction(() => {
               for (const table of [
@@ -2529,6 +2556,21 @@ export async function createApp(options: {
     requests.add(task);
     void task.finally(() => requests.delete(task));
   });
+  const terminalTransport = registerTerminalTransport(server, terminals, {
+    validateUpgrade: (req) => {
+      if (shuttingDown) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
+      const address = server.address();
+      const host = req.headers.host;
+      if (
+        !address ||
+        typeof address === 'string' ||
+        (host !== `127.0.0.1:${address.port}` && host !== `localhost:${address.port}`) ||
+        req.headers.origin !== `http://${host}` ||
+        req.headers['sec-fetch-site'] === 'cross-site'
+      )
+        throw new AppError('ORIGIN_DENIED', '拒绝跨站终端连接。', 403);
+    },
+  });
   let close: Promise<void> | undefined;
   return {
     server,
@@ -2544,7 +2586,22 @@ export async function createApp(options: {
         const networkClosed = new Promise<void>((resolve) => server.close(() => resolve()));
         try {
           store.events.off('event', wakeAfterRun);
-          await Promise.all([runner.shutdown(), gatewayLogin.dispose(), drain]);
+          const results = await Promise.allSettled([
+            runner.shutdown(),
+            gatewayLogin.dispose(),
+            drain,
+            terminals.shutdown().then((report) => {
+              if (report.failed.length)
+                throw new AppError(
+                  'TERMINAL_CLEANUP_FAILED',
+                  `终端清理未完成：${report.failed.join(', ')}`,
+                  500,
+                );
+            }),
+            terminalTransport.dispose(),
+          ]);
+          const failure = results.find((result) => result.status === 'rejected');
+          if (failure?.status === 'rejected') throw failure.reason;
         } finally {
           for (const stream of streams) stream.end();
           await Promise.allSettled(requests);
