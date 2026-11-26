@@ -1,7 +1,7 @@
 /**
  * @file 编排工作区功能面板的身份、导航和焦点。
- * @implementation Git 暂时覆盖路由面板；独立保留尺寸和展开，关闭保护绑定实例，Terminal 仅显式点击产生启动意图。
- * @updated 2026-11-26T01:00:00+08:00
+ * @implementation 管理 Git 与路由面板的打开、关闭和独立尺寸；折叠右栏时保留面板状态并按需交还焦点，终端启动意图由显式操作产生。
+ * @updated 2026-11-26T21:58:23+08:00
  */
 import { useEffect, useRef, useState } from 'react';
 import { useCanGoBack, useLocation, useNavigate, useRouter } from '@tanstack/react-router';
@@ -49,6 +49,7 @@ export function useWorkspacePanel({
   const [terminalWidth, setTerminalWidth] = useState(640);
   const [terminalExpanded, expandTerminal] = useState(false);
   const [terminalLaunch, setTerminalLaunch] = useState<TerminalLaunchIntent>();
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const capabilities = useTerminalCapabilities();
   useEffect(() => {
     if (capabilities.data) activateTerminalRuntime(capabilities.data.runtimeId);
@@ -69,6 +70,8 @@ export function useWorkspacePanel({
 
   function openGit(target: Project, tab?: 'files' | 'worktrees') {
     if (busyRef.current) return;
+    setRightCollapsed(false);
+    if (gitBoard?.project.id === target.id && !tab) return;
     const instanceId = crypto.randomUUID();
     gitInstance.current = instanceId;
     setGitBoard({
@@ -108,6 +111,7 @@ export function useWorkspacePanel({
   }
   function openRoute(panel: RoutePanel) {
     if (!sessionId || busyRef.current) return;
+    setRightCollapsed(false);
     dispatch(actions.setDrawer(undefined));
     if (gitBoard) closeGit(false);
     if (route.routePanel === panel) return;
@@ -140,16 +144,18 @@ export function useWorkspacePanel({
     );
   }
   function toggleBrowser() {
-    if (browserActive) closeRoute('browser');
+    if (browserActive && !rightCollapsed) closeRoute('browser');
     else openRoute('browser');
   }
-  function toggleTerminal() {
+  function openTerminal() {
     if (busyRef.current) return;
-    if (terminalActive) {
-      closeRoute('terminal');
-      return;
-    }
-    if (capabilities.data?.supported && snapshot && sessionId && terminalCanCreate) {
+    if (
+      route.routePanel !== 'terminal' &&
+      capabilities.data?.supported &&
+      snapshot &&
+      sessionId &&
+      terminalCanCreate
+    ) {
       setTerminalLaunch({
         terminalId: crypto.randomUUID(),
         runtimeId: capabilities.data.runtimeId,
@@ -159,6 +165,22 @@ export function useWorkspacePanel({
       });
     }
     openRoute('terminal');
+  }
+  function toggleTerminal() {
+    if (terminalActive && !rightCollapsed) closeRoute('terminal');
+    else openTerminal();
+  }
+  function collapseRight(restoreFocus = true) {
+    if (busyRef.current) return;
+    const returnFocus = document.activeElement?.closest(
+      '.git-board, .terminal-panel, .desktop-browser',
+    );
+    setRightCollapsed(true);
+    if (restoreFocus && returnFocus)
+      requestAnimationFrame(() => {
+        const trigger = gitBoard ? gitTrigger : terminalActive ? terminalTrigger : browserTrigger;
+        trigger.current?.focus({ preventScroll: true });
+      });
   }
   return {
     gitBoard,
@@ -184,6 +206,15 @@ export function useWorkspacePanel({
     terminalFullWindow,
     expandTerminal,
     terminalLaunch,
+    rightCollapsed,
+    hasRightPanel: Boolean(gitBoard || route.routePanel),
+    toggleRight: () => {
+      if (busyRef.current || (!gitBoard && !route.routePanel)) return;
+      if (rightCollapsed) setRightCollapsed(false);
+      else collapseRight();
+    },
+    collapseRight,
+    openTerminal,
     toggleTerminal,
     closeTerminal: () => closeRoute('terminal'),
     terminalCanCreate: Boolean(terminalCanCreate),

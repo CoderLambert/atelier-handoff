@@ -1,7 +1,7 @@
 /**
- * @file 提供模型、工作区布局和诊断的独立设置页面。
- * @implementation 维护网关与执行偏好，独立保存 Magpie 开关。按已保存的配置展示默认模型目录，提供布局和桌面诊断操作。
- * @updated 2026-11-22T13:50:57+08:00
+ * @file 提供模型、布局、快捷操作、通知和诊断设置页面。
+ * @implementation 维护网关与执行偏好，装配各设置区块；已访问的快捷设置区块保持挂载，并展示模型目录与桌面诊断操作。
+ * @updated 2026-11-26T21:58:23+08:00
  */
 import { useUiTranslation, getTranslator, useUiLanguage } from '@/i18n';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
@@ -16,6 +16,7 @@ import {
   Download,
   ExternalLink,
   LayoutPanelLeft,
+  Keyboard,
   LoaderCircle,
   Plug,
   RefreshCw,
@@ -43,6 +44,7 @@ import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
 import { errorMessage } from './shared';
 import { WorkspaceLayoutForm, type WorkspaceLayoutFormProps } from './workspace-layout-form';
 import { NotificationSettings } from './notification-settings';
+import { ShortcutSettings } from '@/features/shortcuts';
 import type { SettingsSection } from '@/app/types';
 import './settings-page.css';
 
@@ -57,6 +59,7 @@ export interface SettingsPageProps {
 
 function translatedSections() {
   const t = getTranslator('inspector');
+  const shortcuts = getTranslator('shortcuts');
   return [
     {
       id: 'models',
@@ -69,6 +72,12 @@ function translatedSections() {
       label: t('settings.layout'),
       description: t('settings.layoutNavDescription'),
       icon: LayoutPanelLeft,
+    },
+    {
+      id: 'shortcuts',
+      label: shortcuts('settingsTitle'),
+      description: shortcuts('settingsNavDescription'),
+      icon: Keyboard,
     },
     {
       id: 'notifications',
@@ -147,7 +156,9 @@ export default function SettingsPage({
                 <span>{label}</span>
                 <span className="settings-page-nav-description">{description}</span>
               </span>
-              {currentSection === id ? <ArrowRight data-icon="inline-end" aria-hidden="true" /> : null}
+              {currentSection === id ? (
+                <ArrowRight data-icon="inline-end" aria-hidden="true" />
+              ) : null}
             </Button>
           ))}
           <p className="settings-page-nav-note">{t('settings.localSettings')}</p>
@@ -169,6 +180,11 @@ export default function SettingsPage({
                 <p>{t('settings.layoutDescription')}</p>
               </div>
               <WorkspaceLayoutForm {...layout} />
+            </section>
+          ) : null}
+          {visited.includes('shortcuts') ? (
+            <section hidden={currentSection !== 'shortcuts'}>
+              <ShortcutSettings />
             </section>
           ) : null}
           {visited.includes('notifications') ? (

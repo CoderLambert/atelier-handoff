@@ -1,9 +1,9 @@
 /**
  * @file 管理工作区分栏和右侧面板尺寸。
- * @implementation 限制 Git 分隔条的拖动范围，保留导航和浏览器宽度偏好；全窗口时停用背景交互，并通知原生网页更新坐标。
- * @updated 2026-11-24T04:13:00+08:00
+ * @implementation 限制分隔条拖动范围并保留分栏宽度；右栏折叠时用 Activity 保留状态、暂停副作用，布局变化通知原生网页更新坐标。
+ * @updated 2026-11-26T21:58:23+08:00
  */
-import { useLayoutEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { Activity, useLayoutEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { Group, Panel, Separator, useGroupRef } from 'react-resizable-panels';
 import { useUiTranslation } from '@/i18n';
 import {
@@ -32,6 +32,7 @@ interface WorkspacePanelsProps {
   width: number;
   showLeft: boolean;
   showRight: boolean;
+  rightCollapsed?: boolean;
   left: ReactNode;
   center: ReactNode;
   right: ReactNode;
@@ -51,6 +52,7 @@ export function WorkspacePanels({
   width,
   showLeft,
   showRight,
+  rightCollapsed = false,
   left,
   center,
   right,
@@ -60,17 +62,22 @@ export function WorkspacePanels({
 }: WorkspacePanelsProps) {
   const { t } = useUiTranslation('navigation');
   const group = useGroupRef();
-  const usable = width - (Number(showLeft) + Number(showRight)) * separatorWidth;
+  const visibleRight = showRight && !rightCollapsed;
+  const usable = width - (Number(showLeft) + Number(visibleRight)) * separatorWidth;
   const centerMin = width < 768 ? 0 : centerMinimum;
-  const rightMin = focusRight ? 0 : (rightPane?.minWidth ?? minInspectorWidth);
+  const rightMin = focusRight || rightCollapsed ? 0 : (rightPane?.minWidth ?? minInspectorWidth);
   const savedLeft = layout.collapsed ? collapsedNavigationWidth : layout.recent.left;
   const leftWidth = showLeft
-    ? Math.min(savedLeft, usable - centerMin - (showRight ? rightMin : 0))
+    ? Math.min(savedLeft, usable - centerMin - (visibleRight ? rightMin : 0))
     : 0;
   const rightSpace = usable - centerMin - leftWidth;
   // At its limit the right divider can otherwise resize the navigation through the center.
-  const rightMax = rightPane ? Math.min(rightPane.maxWidth, rightSpace) : maxInspectorWidth;
-  const rightWidth = focusRight ? 0 : (rightPane?.width ?? layout.recent.right);
+  const rightMax = rightCollapsed
+    ? 0
+    : rightPane
+      ? Math.min(rightPane.maxWidth, rightSpace)
+      : maxInspectorWidth;
+  const rightWidth = focusRight || rightCollapsed ? 0 : (rightPane?.width ?? layout.recent.right);
   const notifySlot = () => {
     window.dispatchEvent(new Event(workspaceLayoutEvent));
   };
@@ -121,14 +128,15 @@ export function WorkspacePanels({
             : Math.round(leftPixels) === collapsedNavigationWidth;
         const leftSize = collapsed ? undefined : leftPixels;
         const rightSize = pixels(sizes.inspector);
-        if (rightPane && rightSize !== undefined) rightPane.onResize(Math.round(rightSize));
+        if (rightPane && rightSize !== undefined && !rightCollapsed)
+          rightPane.onResize(Math.round(rightSize));
         const recent = {
           left:
             leftSize === undefined
               ? layout.recent.left
               : Math.max(minNavigationWidth, Math.min(maxNavigationWidth, Math.round(leftSize))),
           right:
-            rightPane || rightSize === undefined
+            rightCollapsed || rightPane || rightSize === undefined
               ? layout.recent.right
               : Math.max(minInspectorWidth, Math.min(maxInspectorWidth, Math.round(rightSize))),
         };
@@ -166,7 +174,7 @@ export function WorkspacePanels({
       <Panel id="conversation" className="workspace-pane" minSize={centerMin} inert={focusRight}>
         {center}
       </Panel>
-      {showRight && (
+      {visibleRight && (
         <Separator
           id="resize-inspector"
           inert={focusRight}
@@ -178,12 +186,14 @@ export function WorkspacePanels({
         <Panel
           id="inspector"
           className="workspace-pane"
+          inert={rightCollapsed}
+          aria-hidden={rightCollapsed || undefined}
           defaultSize={rightWidth}
           minSize={rightMin}
           maxSize={rightMax}
           groupResizeBehavior="preserve-pixel-size"
         >
-          {right}
+          <Activity mode={rightCollapsed ? 'hidden' : 'visible'}>{right}</Activity>
         </Panel>
       )}
     </Group>

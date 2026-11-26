@@ -1,7 +1,7 @@
 /**
  * @file 组合会话消息、待处理队列、任务清单和输入界面。
- * @implementation 选定输入区显示清单的运行，协调其在消息中的展示。按会话隔离编辑确认、输入焦点及草稿引用。
- * @updated 2026-11-23T13:35:40+08:00
+ * @implementation 按会话隔离编辑确认和草稿引用，协调任务清单展示；输入可用时执行外部焦点请求并在成功聚焦后回执。
+ * @updated 2026-11-26T21:58:23+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -42,6 +42,8 @@ export interface ChatProps {
   forkingMessageId?: string;
   onOpenLink?: ChatLinkOpener;
   submitting: boolean;
+  inputFocusRequest?: number;
+  onInputFocused?: (request: number) => void;
 }
 
 export default function Chat(props: ChatProps) {
@@ -100,6 +102,16 @@ function SessionChat(props: ChatProps) {
     const length = input?.value.length ?? 0;
     input?.setSelectionRange(length, length);
   }, [focusRequest]);
+
+  useLayoutEffect(() => {
+    const request = props.inputFocusRequest;
+    if (request === undefined || draftDisabled) return;
+    const input = inputRef.current;
+    if (!input || input.closest('[inert]')) return;
+    input.focus({ preventScroll: true });
+    input.scrollIntoView({ block: 'nearest' });
+    if (document.activeElement === input) props.onInputFocused?.(request);
+  }, [props.inputFocusRequest, props.onInputFocused, draftDisabled]);
 
   function focusInput() {
     setFocusRequest((previous) => previous + 1);

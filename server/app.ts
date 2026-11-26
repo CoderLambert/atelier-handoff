@@ -1,7 +1,7 @@
 /**
  * @file 创建工作台 HTTP 应用并组织业务服务。
- * @implementation 装配会话、Git、审批、Skill 继承和 RTK 接口，协调人工终端及运行时关闭清理。
- * @updated 2026-11-26T04:17:21+08:00
+ * @implementation 装配会话、Git、审批、Skill 继承和 RTK 接口，校验快捷偏好请求并交由仓储读写，同时协调终端及运行时关闭清理。
+ * @updated 2026-11-26T21:58:23+08:00
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -107,6 +107,7 @@ import { magpieModel, magpieModels, magpieOrigin } from './magpie-models.js';
 import { gatewayToken } from './gateway-search.js';
 import { workspaceLocationSchema } from '../shared/workspace-location.js';
 import { workspaceLayoutSchema } from '../shared/workspace-layout.js';
+import { shortcutPreferencesSchema } from '../shared/shortcuts.js';
 import { uiThemeSchema } from '../shared/desktop-ui-theme.js';
 import { ManagedGatewayLogin } from './managed-gateway-login.js';
 import { ProjectExtensions, extensionSelections, inspectMarkdown } from './extensions.js';
@@ -1134,6 +1135,14 @@ export async function createApp(options: {
           return json(
             res,
             store.gitMultiCommitPreferences.save(gitMultiCommitPreferences.parse(await body(req))),
+          );
+      }
+      if (url.pathname === '/api/settings/shortcuts') {
+        if (method === 'GET') return json(res, store.shortcutPreferences.read());
+        if (method === 'PATCH')
+          return json(
+            res,
+            store.shortcutPreferences.save(shortcutPreferencesSchema.parse(await body(req))),
           );
       }
       if (url.pathname === '/api/settings/ui-theme') {

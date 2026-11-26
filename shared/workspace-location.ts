@@ -15,6 +15,7 @@ const pages = [
   '/agents',
   '/settings/models',
   '/settings/layout',
+  '/settings/shortcuts',
   '/settings/diagnostics',
 ] as const;
 const uuid = z.uuid();

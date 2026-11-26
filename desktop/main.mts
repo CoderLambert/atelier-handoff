@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
- * @implementation 装配窗口与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
- * @updated 2026-11-26T01:32:35+08:00
+ * @implementation 装配窗口、快捷键与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
+ * @updated 2026-11-26T21:40:00+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
@@ -22,6 +22,7 @@ import {
 } from './host/window.mjs';
 import { homedir } from 'node:os';
 import { createBrowserController } from './browser/controller.mjs';
+import { createDesktopShortcuts } from './shortcuts.mjs';
 import {
   desktopBrowserCallSchema,
   desktopBrowserCancelSchema,
@@ -68,10 +69,15 @@ const nativeFiles = createNativeFileActions(
   () => runtimeConnection,
 );
 let stopping = false;
-const browser = createBrowserController({
+const windowHost = {
   getWindow: () => window,
   getOrigin: () => origin,
   isStopping: () => stopping,
+};
+const desktopShortcuts = createDesktopShortcuts(windowHost);
+const browser = createBrowserController({
+  ...windowHost,
+  onShortcutInput: desktopShortcuts.handleGuestInput,
 });
 
 function requireAbsolutePath(value: string, name: string): string {
@@ -129,6 +135,7 @@ const managedShunt =
     ? new ManagedShunt(shuntBinary, dataDir)
     : undefined;
 let unbindPairing: (() => void) | undefined;
+let unbindShortcutWindow: (() => void) | undefined;
 let recovery: Promise<void> | undefined;
 let quitting = false;
 const supervisor = new RuntimeSupervisor(
@@ -147,6 +154,8 @@ function clearRuntimeWindow(): void {
   nativeFiles.reset();
   unbindPairing?.();
   unbindPairing = undefined;
+  unbindShortcutWindow?.();
+  unbindShortcutWindow = undefined;
   browser.reset();
   if (window && !window.isDestroyed()) window.hide();
 }
@@ -172,6 +181,7 @@ async function start(): Promise<void> {
   owner.webContents.removeListener('render-process-gone', rendererGone);
   owner.webContents.on('render-process-gone', rendererGone);
   unbindPairing = bindPairing(owner, origin, connection.pairing);
+  unbindShortcutWindow = desktopShortcuts.attachWindow(owner);
   await loadWindow(owner, origin);
   if (!supervisor.connected || stopping) throw new DesktopHostError('host.failure.disconnected');
   focusWindow(owner);
@@ -268,11 +278,13 @@ else {
           () => runtimeConnection,
           () => stopping,
         );
+        const unbindDesktopShortcutIpc = desktopShortcuts.bindIpc();
         app.once('will-quit', () => {
           unbindUiLanguage();
           unbindUiTheme();
           unbindUiNotifications();
           unbindDesktopGit();
+          unbindDesktopShortcutIpc();
         });
         return start();
       }

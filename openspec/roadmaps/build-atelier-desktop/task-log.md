@@ -801,3 +801,12 @@
 - `npm run check`、`npm run build`、`npm run build:desktop` 与 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 通过。运行时 786 项、前端 140 项通过，6 项跳过。隔离 Electron 核对了中英文项目切换、状态筛选、键盘焦点和弹窗选择。排序会话烟测通过新版下拉框打开了旧运行的事件记录。截图和日志位于 `.local/select-polish-evidence/`。
 - 旧桌面正常退出后，沿用原数据根、浏览器 profile 和网关启动新版。运行时返回与已验收构建一致的首页，核对原有 3 个项目、18 个会话、158 条运行、10 条扩展与 16 条设置记录。文件说明单批核对本轮 17 份源码，按验收快照更新通用控件和测试说明，`npm run check:headers` 通过。
 - **开发过程 review**。先用共享工具栏的 Chromium 夹具验证原生下拉框无法满足新交互，再在同一夹具中覆盖键盘、焦点、空值和必填行为。真实 Electron 验收只核对主题、页面切换和弹窗焦点，避免重复全量操作。
+
+## 2026-11-26 · 可配置工作台快捷操作
+
+- 基于最新 `main@909d3b8`，分支 `feat/workbench-shortcuts`。保持现有布局，新增 `Mod+;` 会话切换、`Mod+Shift+;` 快捷导航，以及左右栏、相邻会话、Git/终端/浏览器和输入聚焦。设置提供逐项录制、导航键、停用、恢复默认和持久化。用户字母输入仅在浮层作用域内解释。[决策与边界](../../../docs/decisions/2026-11-26-workbench-shortcuts.md)
+- 快捷模块通过语义动作和可用性接入工作台；共享 schema/matcher、SQLite 设置仓储、Query、renderer 与桌面桥接保持独立。右栏使用已有 React Activity 隐藏并保留状态，恢复终端复用同一个实例；输入焦点请求绑定会话与实际 composer 生命周期。
+- 核心/HTTP/SQLite/会话测试 7 项通过；真实 Electron 原生桥接 2 项、renderer 7 项通过；实际 client 与 RuntimeSupervisor 的完整交互 10 个场景通过，0 个页面异常和 0 次模型请求。四组类型检查、架构、Query、i18n、UI 语义及前端/桌面构建通过。源码说明按 43 份哈希的单批只读建议集中维护。
+- 全量检查已执行并保留失败证据：tsx CLI 和生产桌面单实例锁受 Unix socket `EPERM` 限制，使用相同 Node loader 与隔离测试宿主验收；15 项既有前端用例无法启动缺失的 Chromium。全量运行时的短超时及迁移取消经独立复跑 83 项全部通过；detached shell 回收失败在未修改的 `909d3b8` 基线中复现。没有修改架构门禁、生产启动保护或无关进程回收功能。[验收详情及复跑命令](../../../docs/evidence/workbench-shortcuts/verification.md)
+- 独立审查修复了全窗口 Git 遮住会话切换结果、选择器取消时焦点丢失、持按键泄漏及 IME Escape 误关闭，未留下 Critical/Important 项。IME 修复有真实 Electron 合成事件的独立红绿对照；未声称实体键盘、系统热键和真实输入法候选窗口已验收。
+- **开发过程 review**。先固定共享配置与动作接口，再按持久化、renderer、原生边界分工，减少并行冲突。最终用同一个真实工作台脚本覆盖状态和焦点。环境阻碍分别做最小复现，不为通过测试改动生产保护；全量测试的挂起应及早增加有界诊断，避免重复等待。测试专用桌面组合入口归入 fixtures，保持生产导入边界。

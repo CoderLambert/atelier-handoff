@@ -1,7 +1,7 @@
 /**
  * @file 连接会话输入、运行偏好与消息发送。
- * @implementation 按会话保存本机或项目执行偏好和草稿，将快捷插入投递到发送回执指定的队列项。
- * @updated 2026-11-22T16:28:35+08:00
+ * @implementation 按会话保存执行偏好和草稿，将快捷插入投递到发送回执指定的队列项，并向 Chat 交接输入焦点请求及完成回执。
+ * @updated 2026-11-26T21:58:23+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -28,6 +28,8 @@ export default function SessionChat({
   onRewindMessage,
   forkingMessageId,
   focusMessageId,
+  inputFocusRequest,
+  onInputFocused,
 }: {
   snapshot: Snapshot;
   defaultModel: string;
@@ -42,6 +44,8 @@ export default function SessionChat({
   onRewindMessage?: (messageId: string, expectedHeadId: string) => Promise<void>;
   forkingMessageId?: string;
   focusMessageId?: string;
+  inputFocusRequest?: number;
+  onInputFocused?: (request: number) => void;
 }) {
   const { t } = useUiTranslation('chat');
   const { id, draft: serverDraft } = snapshot.session;
@@ -123,6 +127,8 @@ export default function SessionChat({
   }
   return (
     <Chat
+      inputFocusRequest={inputFocusRequest}
+      onInputFocused={onInputFocused}
       snapshot={snapshot}
       draft={savedDraft ?? fallback}
       defaultModel={defaultModel}

@@ -1,9 +1,16 @@
 /**
  * @file 向渲染进程提供受限的桌面能力桥接。
- * @implementation 通过 Electron IPC 转发浏览器、文件、界面设置、通知和 Git 操作，校验适用的请求及响应并管理浏览器状态订阅。
- * @updated 2026-11-25T16:31:33+08:00
+ * @implementation 通过 Electron IPC 转发浏览器、快捷键、文件、界面设置、通知和 Git 操作，校验请求与响应并管理订阅。
+ * @updated 2026-11-26T21:40:00+08:00
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import {
+  desktopShortcutChannels,
+  desktopShortcutCommandSchema,
+  desktopShortcutRegistrationSchema,
+  desktopShortcutUpdateResultSchema,
+  type DesktopShortcutsBridge,
+} from '../shared/desktop-shortcuts.js';
 import {
   desktopBrowserChannels,
   desktopBrowserCommandSchema,
@@ -57,6 +64,25 @@ const bridge: DesktopBrowserBridge = {
 
 contextBridge.exposeInMainWorld('atelierDesktop', bridge);
 
+const shortcuts: DesktopShortcutsBridge = {
+  async update(registration) {
+    const request = desktopShortcutRegistrationSchema.parse(registration);
+    const response: unknown = await ipcRenderer.invoke(desktopShortcutChannels.update, request);
+    desktopShortcutUpdateResultSchema.parse(response);
+  },
+  onCommand(callback) {
+    if (typeof callback !== 'function')
+      throw new TypeError('A shortcut command callback is required.');
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      const command = desktopShortcutCommandSchema.safeParse(value);
+      if (command.success) callback(command.data);
+    };
+    ipcRenderer.on(desktopShortcutChannels.command, listener);
+    return () => ipcRenderer.removeListener(desktopShortcutChannels.command, listener);
+  },
+};
+contextBridge.exposeInMainWorld('atelierShortcuts', shortcuts);
+
 import {
   desktopArtifactIdSchema,
   desktopArtifactSaveSchema,
@@ -92,7 +118,10 @@ const files: DesktopFilesBridge = {
   },
   async revealGitFile(file) {
     return desktopFileActionResultSchema.parse(
-      await ipcRenderer.invoke(desktopFilesChannels.revealGitFile, desktopGitFileSchema.parse(file)),
+      await ipcRenderer.invoke(
+        desktopFilesChannels.revealGitFile,
+        desktopGitFileSchema.parse(file),
+      ),
     );
   },
 };
