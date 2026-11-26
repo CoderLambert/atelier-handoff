@@ -1,6 +1,6 @@
 /**
  * @file 验证人工终端的幂等、连接代次和清理屏障。
- * @implementation 用真实会话与 headless 屏幕测试 manager，仅替代进程边界以注入关闭竞态。
+ * @implementation 用真实会话与 headless 屏幕测试 manager，仅替代进程边界以验证关闭竞态及慢渲染时的流控。
  * @updated 2026-11-26T01:00:00+08:00
  */
 import assert from 'node:assert/strict';
@@ -185,6 +185,132 @@ test('natural exit drains final output, releases the session guard and keeps the
     assert.equal((await again.sink.frame('readyAccepted')).writable, false);
     await f.manager.disposeSession(f.session.id);
     assert.deepEqual(f.manager.list(f.session.id).terminals, []);
+  } finally {
+    await f.dispose();
+  }
+});
+
+test('a delayed renderer can catch up without disconnecting or losing input receipts', async () => {
+  const f = await fixture();
+  try {
+    const request = f.request();
+    await f.manager.create(f.session.id, request);
+    const { attachment, sink, ready } = await f.attach(request.terminalId);
+    await ready();
+    const process = f.processes[0];
+    assert.ok(process);
+    const output = ('x'.repeat(100) + '\r\n').repeat(9000) + 'BURST_END';
+    process.output(output);
+
+    const sent = () => sink.frames.filter((frame) => frame.type === 'output');
+    const outputBytes = () =>
+      sent().reduce((sum, frame) => sum + Buffer.byteLength(JSON.stringify(frame)), 0);
+    await until(
+      () => outputBytes() >= terminalLimits.outputWindowBytes - terminalLimits.frameBytes,
+    );
+    // Give the producer time to cross the former disconnect threshold before allowing ACKs.
+    await new Promise<void>((done) => setTimeout(done, 250));
+    assert.equal(sink.closed, undefined);
+    assert.ok(process.paused);
+    assert.ok(outputBytes() <= terminalLimits.outputWindowBytes);
+
+    const partial = sent()[0];
+    assert.ok(partial);
+    const beforePartialAck = sent().length;
+    await attachment.receive({
+      type: 'outputAck',
+      attachmentId: attachment.attachmentId,
+      seq: partial.seq,
+    });
+    await new Promise<void>((done) => setTimeout(done, 80));
+    assert.equal(
+      sent().length,
+      beforePartialAck,
+      'One small ACK cannot reopen the high-water gate',
+    );
+
+    await attachment.receive({
+      type: 'input',
+      attachmentId: attachment.attachmentId,
+      inputSeq: 1,
+      payload: { encoding: 'utf8', data: 'x' },
+    });
+    assert.deepEqual(process.writes, ['x']);
+    assert.equal((await sink.frame('inputAccepted')).inputSeq, 1);
+
+    let lastAck = 0;
+    while (!sent().at(-1)?.data.endsWith('BURST_END')) {
+      const frame = sent().at(-1);
+      if (frame && frame.seq > lastAck) {
+        await attachment.receive({
+          type: 'outputAck',
+          attachmentId: attachment.attachmentId,
+          seq: frame.seq,
+        });
+        lastAck = frame.seq;
+      }
+      await until(() => (sent().at(-1)?.seq ?? 0) > lastAck || sink.closed !== undefined);
+      assert.equal(sink.closed, undefined);
+    }
+    assert.equal(
+      sent()
+        .map((frame) => frame.data)
+        .join(''),
+      output,
+    );
+    await until(() => !process.paused);
+  } finally {
+    await f.dispose();
+  }
+});
+
+test('output arriving during snapshot recovery uses the live ACK window after ready', async () => {
+  const f = await fixture();
+  try {
+    const request = f.request();
+    await f.manager.create(f.session.id, request);
+    const first = await f.attach(request.terminalId);
+    await first.ready();
+    const process = f.processes[0];
+    assert.ok(process);
+    process.output('BEFORE_SNAPSHOT\r\n');
+    await first.sink.frame('output');
+    const next = await f.attach(request.terminalId);
+    assert.match(next.snapshot.screen, /BEFORE_SNAPSHOT/);
+    // Mimic a PTY delivering bytes already in flight at the pause boundary.
+    const output = ('z'.repeat(100) + '\r\n').repeat(7_000) + 'AFTER_SNAPSHOT';
+    process.output(output);
+    await new Promise<void>((done) => setTimeout(done, 300));
+    assert.equal(
+      next.sink.closed,
+      undefined,
+      'Snapshot rendering must not exhaust the live window',
+    );
+    assert.deepEqual(
+      next.sink.frames.map((frame) => frame.type),
+      ['snapshot'],
+    );
+    await next.ready();
+    const live = () => next.sink.frames.filter((frame) => frame.type === 'output');
+    let confirmed = next.snapshot.seq;
+    let text = '';
+    while (!text.endsWith('AFTER_SNAPSHOT')) {
+      await until(() => (live().at(-1)?.seq ?? 0) > confirmed || next.sink.closed !== undefined);
+      assert.equal(next.sink.closed, undefined);
+      for (const frame of live().filter((frame) => frame.seq > confirmed)) {
+        assert.equal(frame.seq, confirmed + 1);
+        confirmed = frame.seq;
+        text += frame.data;
+      }
+      await next.attachment.receive({
+        type: 'outputAck',
+        attachmentId: next.attachment.attachmentId,
+        seq: confirmed,
+      });
+    }
+    assert.equal(text, output);
+    assert.equal(next.sink.frames[1]?.type, 'readyAccepted');
+    await until(() => !process.paused);
   } finally {
     await f.dispose();
   }

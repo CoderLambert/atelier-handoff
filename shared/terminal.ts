@@ -20,6 +20,7 @@ export const terminalLimits = {
   frameBytes: 128 * 1024,
   outputChunkBytes: 32 * 1024,
   outputWindowBytes: 512 * 1024,
+  outputAckTimeoutMs: 5_000,
   liveBufferBytes: 1024 * 1024,
   snapshotBytes: 8 * 1024 * 1024,
   snapshotBufferBytes: 8 * 1024 * 1024 + 64 * 1024,

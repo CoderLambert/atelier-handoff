@@ -54,10 +54,11 @@ interface Attachment {
   lastAck: number;
   inputSeq: number;
   commandSeq: number;
-  pending: TerminalServerFrame[];
-  pendingBytes: number;
+  finishSnapshot?: () => void;
   outstanding: Map<number, number>;
   outstandingBytes: number;
+  releaseOutputWait?: () => void;
+  outputWaitTimer?: ReturnType<typeof setTimeout>;
   timer?: ReturnType<typeof setTimeout>;
   readyWork?: Promise<void>;
 }
@@ -100,6 +101,8 @@ const terminalError = (code: string, status = 409) =>
 const copy = (entry: Entry): TerminalRecord => ({ ...entry.record });
 const closedStates = new Set(['closed', 'closing', 'cleanup-failed', 'failed']);
 const frameBytes = (frame: TerminalServerFrame) => Buffer.byteLength(JSON.stringify(frame));
+const outputPauseBytes = terminalLimits.outputWindowBytes - terminalLimits.frameBytes;
+const outputResumeBytes = outputPauseBytes / 2;
 
 /** Keep both UTF-8 data and its escaped JSON representation within frame budgets. */
 function outputChunks(data: string): string[] {
@@ -380,8 +383,6 @@ export class TerminalManager {
       lastAck: entry.seq,
       inputSeq: 0,
       commandSeq: 0,
-      pending: [],
-      pendingBytes: 0,
       outstanding: new Map(),
       outstandingBytes: 0,
     };
@@ -392,7 +393,7 @@ export class TerminalManager {
       terminalLimits.snapshotTimeoutMs,
     );
     attachment.timer.unref();
-    void this.order(entry, () => {
+    void this.order(entry, async () => {
       this.current(entry, attachment);
       const screen = entry.screen;
       if (!screen) throw terminalError('TERMINAL_CLOSED');
@@ -410,7 +411,12 @@ export class TerminalManager {
       attachment.lastAck = entry.seq;
       if (connection.bufferedAmount + frameBytes(frame) > terminalLimits.snapshotBufferBytes)
         throw terminalError('TERMINAL_SLOW_CONSUMER');
+      // Fence live writes behind snapshot consumption in the same ordered screen queue.
+      const snapshotReady = new Promise<void>((resolve) => {
+        attachment.finishSnapshot = resolve;
+      });
       connection.send(frame);
+      await snapshotReady;
     }).catch((error: unknown) =>
       this.detach(
         entry,
@@ -446,9 +452,10 @@ export class TerminalManager {
     if (attachment.closed) return;
     attachment.closed = true;
     clearTimeout(attachment.timer);
-    attachment.pending = [];
+    attachment.finishSnapshot?.();
+    attachment.finishSnapshot = undefined;
+    attachment.releaseOutputWait?.();
     attachment.outstanding.clear();
-    attachment.pendingBytes = 0;
     attachment.outstandingBytes = 0;
     if (entry.attachment === attachment) entry.attachment = undefined;
     this.pause(entry, attachment.id, false);
@@ -475,18 +482,8 @@ export class TerminalManager {
   }
   private send(entry: Entry, frame: TerminalServerFrame): void {
     const attachment = entry.attachment;
-    if (!attachment || attachment.closed || frame.attachmentId !== attachment.id) return;
+    if (!attachment?.ready || attachment.closed || frame.attachmentId !== attachment.id) return;
     const bytes = frameBytes(frame);
-    if (!attachment.ready) {
-      if (attachment.snapshotSeq === undefined) return;
-      attachment.pendingBytes += bytes;
-      if (attachment.pendingBytes > terminalLimits.outputWindowBytes) {
-        this.detach(entry, attachment, 'TERMINAL_SLOW_CONSUMER');
-        return;
-      }
-      attachment.pending.push(frame);
-      return;
-    }
     if (
       attachment.connection.bufferedAmount + bytes > terminalLimits.liveBufferBytes ||
       ('seq' in frame && attachment.outstandingBytes + bytes > terminalLimits.outputWindowBytes)
@@ -516,6 +513,24 @@ export class TerminalManager {
         terminal: copy(entry),
       });
   }
+  private async waitForOutputCapacity(entry: Entry, attachment: Attachment): Promise<void> {
+    // Only the ordered screen writer waits. The transport can still accept ACKs and input.
+    await new Promise<void>((resolve) => {
+      attachment.outputWaitTimer = setTimeout(
+        () => this.detach(entry, attachment, 'TERMINAL_SLOW_CONSUMER'),
+        terminalLimits.outputAckTimeoutMs,
+      );
+      attachment.outputWaitTimer.unref();
+      attachment.releaseOutputWait = () => {
+        clearTimeout(attachment.outputWaitTimer);
+        attachment.outputWaitTimer = undefined;
+        attachment.releaseOutputWait = undefined;
+        resolve();
+      };
+      this.pause(entry, attachment.id, true);
+    });
+    if (!attachment.closed) this.pause(entry, attachment.id, false);
+  }
   private output(entry: Entry, data: string): void {
     if (!entry.screen || ['closed', 'failed'].includes(entry.record.state)) return;
     const bytes = Buffer.byteLength(data);
@@ -532,6 +547,10 @@ export class TerminalManager {
         const screen = entry.screen;
         if (!screen) return;
         for (const chunk of outputChunks(data)) {
+          const active = entry.attachment;
+          if (active?.ready && active.outstandingBytes >= outputPauseBytes)
+            await this.waitForOutputCapacity(entry, active);
+          if (entry.screen !== screen) return;
           await screen.write(chunk);
           entry.seq++;
           const attachment = entry.attachment;
@@ -627,10 +646,8 @@ export class TerminalManager {
           writable: entry.record.state === 'running' && !entry.observedExit,
           terminal: copy(entry),
         });
-        const pending = attachment.pending;
-        attachment.pending = [];
-        attachment.pendingBytes = 0;
-        for (const pendingFrame of pending) this.send(entry, pendingFrame);
+        attachment.finishSnapshot?.();
+        attachment.finishSnapshot = undefined;
         this.pause(entry, attachment.id, false);
       })().catch((error: unknown) => {
         this.detach(
@@ -646,12 +663,15 @@ export class TerminalManager {
     if (frame.type === 'outputAck') {
       if (frame.seq < attachment.lastAck || frame.seq > attachment.lastSent)
         throw terminalError('TERMINAL_PROTOCOL_ERROR');
+      if (frame.seq === attachment.lastAck) return;
       attachment.lastAck = frame.seq;
       for (const [seq, bytes] of attachment.outstanding)
         if (seq <= frame.seq) {
           attachment.outstanding.delete(seq);
           attachment.outstandingBytes -= bytes;
         }
+      if (attachment.outstandingBytes <= outputResumeBytes) attachment.releaseOutputWait?.();
+      else attachment.outputWaitTimer?.refresh();
       return;
     }
     this.session(entry.record.sessionId, true);
