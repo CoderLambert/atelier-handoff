@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具调用与取消。
- * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识，在运行收尾时关联并保存请求跨度及流计时。
- * @updated 2026-11-27T12:27:05+08:00
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，并标注停止后收到的通知。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -2630,14 +2630,8 @@ ${JSON.stringify(nativePackagePaths)}
             subtype: message.subtype,
           });
         } else if (message.type === 'system' && message.subtype === 'api_retry') {
-          recordNotice(message.uuid, {
-            kind: 'api_retry',
-            order: transcript.nextOrder(),
-            at: now(),
-            attempt: message.attempt,
-            maxRetries: message.max_retries,
-          });
           this.store.event(run.id, session.id, 'sdk.api_retry', {
+            ...(live.reason && { afterStopRequested: true }),
             attempt: message.attempt,
             maxRetries: message.max_retries,
             retryDelayMs: message.retry_delay_ms,

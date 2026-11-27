@@ -1,7 +1,7 @@
 /**
  * @file 展示单次运行的执行轨迹。
- * @implementation 关联运行事件、工具、输出和审批，展示用量、请求计时、子任务与 Skill 来源，提供诊断下载。
- * @updated 2026-11-27T03:04:32+08:00
+ * @implementation 关联运行事件、工具、输出和审批，展示用量、请求计时、子任务与 Skill 来源，标注 SDK 重试通知与停止请求的先后并提供诊断下载。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
@@ -119,6 +119,9 @@ function TraceDetail({
     Math.max(0, Math.ceil(filtered.length / EVENT_PAGE_SIZE) - 1) * EVENT_PAGE_SIZE,
   );
   const visibleEvents = filtered.slice(offset, offset + EVENT_PAGE_SIZE);
+  const stopSequence = events.find(
+    (event) => event.type === 'run.status_changed' && event.payload.status === 'stopping',
+  )?.seq;
   const result = events.findLast((event) => event.type === 'sdk.result')?.payload;
   const init = events.findLast((event) => event.type === 'sdk.initialized')?.payload;
   const firstText = events.find((event) => event.type === 'sdk.first_text')?.payload;
@@ -407,6 +410,7 @@ function TraceDetail({
                 <TraceEvent
                   key={event.id}
                   event={event}
+                  stopSequence={stopSequence}
                   tool={tool}
                   automaticallyApproved={tool ? automaticallyApproved.has(tool.id) : false}
                   onOutput={setOutputTool}
@@ -469,11 +473,13 @@ function TraceDetail({
 
 function TraceEvent({
   event,
+  stopSequence,
   tool,
   automaticallyApproved,
   onOutput,
 }: {
   event: RunEvent;
+  stopSequence?: number;
   tool?: ToolCall;
   automaticallyApproved: boolean;
   onOutput: (tool: ToolCall) => void;
@@ -482,7 +488,11 @@ function TraceEvent({
   const [open, setOpen] = useState(false);
   const name = eventName(event.type);
   let label = name;
-  if (tool) label = `${name} · ${toolCallSummary(tool)}`;
+  if (event.type === 'sdk.api_retry') {
+    if (event.payload.afterStopRequested === true || (stopSequence !== undefined && event.seq > stopSequence))
+      label = `${name} · ${t('trace.retryAfterStop')}`;
+    else if (stopSequence !== undefined) label = `${name} · ${t('trace.retryBeforeStop')}`;
+  } else if (tool) label = `${name} · ${toolCallSummary(tool)}`;
   else if (event.type === 'permission.resolved' && event.payload.decisionSource === 'automatic')
     label = t('trace.approvedOperation');
   else if (event.type.startsWith('harness.') && typeof event.payload.summary === 'string')

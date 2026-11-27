@@ -1,7 +1,7 @@
 /**
  * @file 构建脱敏的运行诊断数据。
- * @implementation 按白名单汇总运行配置、用量、事件和工具，通过共享 schema 校验并导出请求计时。
- * @updated 2026-11-27T03:02:10+08:00
+ * @implementation 按白名单汇总运行配置、用量、工具及事件（包括 SDK 重试的停止后标记），校验并导出请求计时。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { now, type Run, type RunEvent, type ToolCall } from '../shared/types.js';
 import { runRequestTimingSchema } from '../shared/request-timing.js';
@@ -14,7 +14,7 @@ const eventFields: Record<string, readonly string[]> = {
   'process.exited': ['code', 'signal', 'stderrBytes'],
   'sdk.initialized': ['model', 'version', 'resumed'],
   'sdk.first_text': ['elapsedMs'],
-  'sdk.api_retry': ['attempt', 'maxRetries', 'retryDelayMs', 'httpStatus', 'error'],
+  'sdk.api_retry': ['attempt', 'maxRetries', 'retryDelayMs', 'httpStatus', 'error', 'afterStopRequested'],
   'sdk.error': ['stage', 'code'],
   'sdk.result': [
     'subtype',
