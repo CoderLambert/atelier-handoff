@@ -8,6 +8,7 @@ import {
   Activity,
   Bot,
   ChevronDown,
+  Clock,
   FolderOpen,
   MessagesSquare,
   Package,
@@ -44,6 +45,7 @@ const links = [
   { id: 'runs', labelKey: 'links.runs', Icon: Activity },
   { id: 'extensions', labelKey: 'links.extensions', Icon: Puzzle },
   { id: 'agents', labelKey: 'links.agents', Icon: Bot },
+  { id: 'schedules', labelKey: 'links.schedules', Icon: Clock },
 ] as const;
 
 export function Sidebar({

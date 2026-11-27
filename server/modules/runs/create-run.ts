@@ -303,6 +303,7 @@ export function createRunStarter({
       config: selectedConfig,
       ...(bundle?.used.length ? { extensions: bundle.used } : {}),
       ...(revision && capabilities ? { agent: agentRunInfo(revision, capabilities) } : {}),
+      ...(request.scheduleMeta ? { scheduleMeta: request.scheduleMeta } : {}),
     };
     const raced = store.transaction(() => {
       const duplicate = existingReceipt();

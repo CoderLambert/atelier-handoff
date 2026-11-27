@@ -12,11 +12,13 @@ import type { AppConfig, ReasoningEffort } from './models.js';
 import type { RunTranscript, TranscriptPart } from './ordered-transcript.js';
 import type { RunRequestTiming } from './request-timing.js';
 import type { RtkTrace } from './rtk-trace.js';
+import type { RunScheduleMeta } from './schedules.js';
 
 export * from './errors.js';
 export * from './models.js';
 export * from './extensions.js';
 export * from './agents.js';
+export * from './schedules.js';
 
 export type RunStatus =
   | 'queued'
@@ -66,6 +68,7 @@ export interface Session {
   fork?: SessionForkOrigin;
   inheritedMessages?: InheritedMessage[];
   creatingFork?: true;
+  origin?: 'schedule';
   title: string;
   status: 'active' | 'archived';
   sdkSessionId: string | null;
@@ -123,6 +126,7 @@ export interface Run {
   config: AppConfig;
   extensions?: UsedExtension[];
   agent?: AgentRunInfo;
+  scheduleMeta?: RunScheduleMeta;
 }
 
 export interface QueuedSessionMessage {

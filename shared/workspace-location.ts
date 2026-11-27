@@ -13,6 +13,7 @@ const pages = [
   '/artifacts',
   '/extensions',
   '/agents',
+  '/schedules',
   '/settings/models',
   '/settings/layout',
   '/settings/shortcuts',

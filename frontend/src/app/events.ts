@@ -17,6 +17,7 @@ export const keys = {
   runs: ['runs'] as const,
   artifacts: ['artifacts'] as const,
   trace: ['trace'] as const,
+  schedules: ['schedules'] as const,
 };
 
 type RefreshKey = readonly [string, ...unknown[]];
@@ -68,7 +69,15 @@ export function useRunEvents(client: QueryClient, cursor?: number, viewedSession
       scheduleRefresh();
     }
     function refreshVisible() {
-      schedule(keys.bootstrap, keys.sessions, keys.runs, keys.artifacts, keys.trace, ['snapshot']);
+      schedule(
+        keys.bootstrap,
+        keys.sessions,
+        keys.runs,
+        keys.artifacts,
+        keys.trace,
+        keys.schedules,
+        ['snapshot'],
+      );
     }
     source.onopen = () => {
       store.dispatch(actions.setConnected(true));
@@ -100,6 +109,7 @@ export function useRunEvents(client: QueryClient, cursor?: number, viewedSession
         schedule(keys.sessions, keys.runs);
       }
       if (event.type === 'artifact.created') schedule(keys.artifacts);
+      if (event.type.startsWith('schedule.')) schedule(keys.schedules);
       if (event.type === 'run.finished') {
         markUnseenOutcome(event);
         notifyRunFinished(

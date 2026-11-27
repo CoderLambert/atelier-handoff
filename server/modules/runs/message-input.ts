@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { composerTextLimit } from '../../../shared/message-quotes.js';
+import { runScheduleMetaSchema } from '../../../shared/schedules.js';
 import { reasoningEfforts } from '../../../shared/types.js';
 import { extensionSelections } from '../../extensions.js';
 import { gatewayModelId } from '../../gateway-models.js';
@@ -22,6 +23,7 @@ export const sessionMessageInput = z.object({
   attachmentIds: z.array(z.string().uuid()).max(20).default([]),
   extensionSelections: extensionSelections.default([]),
   idempotencyKey: z.string().uuid(),
+  scheduleMeta: runScheduleMetaSchema.optional(),
 });
 
 export const queuedIntent = z.object({

@@ -8,6 +8,7 @@ export const workbench = {
   'section.artifacts': ['交付物', 'Deliverables'],
   'section.extensions': ['扩展', 'Extensions'],
   'section.agents': ['智能体', 'Agents'],
+  'section.schedules': ['自动化任务', 'Scheduled tasks'],
   'section.settings': ['工作台设置', 'Workbench settings'],
   'tab.conversation': ['会话', 'Conversation'],
   'tab.trace': ['执行轨迹', 'Activity'],

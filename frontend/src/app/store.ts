@@ -7,7 +7,8 @@ import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolki
 import { useDispatch, useSelector } from 'react-redux';
 import type { Draft, RunStatus } from '@shared/types';
 
-export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents' | 'settings';
+export type View =
+  'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents' | 'schedules' | 'settings';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
 type UnseenRunOutcome = Extract<RunStatus, 'completed' | 'failed' | 'interrupted'>;
 

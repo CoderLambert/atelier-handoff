@@ -28,6 +28,8 @@ import { applyGitCommitOperations } from './migrations/apply-git-commit-operatio
 import { applyGitCommitOperationLifecycle } from './migrations/apply-git-commit-operation-lifecycle.js';
 import { gitCommitOperationRepository } from './repositories/git-commit-operations.js';
 import { assertForeignKeyIntegrity } from './maintenance/foreign-key-integrity.js';
+import { applyScheduledTasks } from './migrations/apply-scheduled-tasks.js';
+import { scheduleRepository } from './repositories/schedules.js';
 
 // The transitional Store only uses scalar bindings and ordinary row-object statements.
 type Scalar = string | number | bigint | Uint8Array | null;
@@ -41,7 +43,7 @@ export interface LegacyDatabase {
   close(): void;
 }
 
-export const LATEST_SCHEMA_VERSION = 11;
+export const LATEST_SCHEMA_VERSION = 12;
 export type SchemaMigration = { version: number; apply: () => void };
 
 export function openWorkbenchDatabase(path: string) {
@@ -55,6 +57,7 @@ export function openWorkbenchDatabase(path: string) {
     { version: 9, apply: () => applyGitCommitOperations(db) },
     { version: 10, apply: () => applyGitCommitOperationLifecycle(db) },
     { version: 11, apply: () => applyRuntimeHotpathIndexes(db) },
+    { version: 12, apply: () => applyScheduledTasks(db) },
   ];
   const repos = {
     sessionSnapshots: sessionSnapshotRepository(orm),
@@ -72,6 +75,7 @@ export function openWorkbenchDatabase(path: string) {
     githubPublicAuth: githubPublicAuthRepository(orm),
     gitWorktrees: gitWorktreeRepository(orm),
     gitCommitOperations: gitCommitOperationRepository(orm),
+    schedules: scheduleRepository(orm),
   };
   return {
     db,

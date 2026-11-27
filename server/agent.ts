@@ -71,7 +71,7 @@ import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
 import { resolveRunOutcome } from './modules/runs/run-outcome.js';
 import { SdkTaskCoordinator } from './modules/runs/sdk-task-coordinator.js';
 import { ProjectWrites, ToolInvocationGate } from './modules/runs/tool-invocation-gate.js';
-import { buildRunMcpTools } from './modules/runs/mcp-tools/index.js';
+import { buildRunMcpTools, type RunMcpToolHost } from './modules/runs/mcp-tools/index.js';
 import { hasSkillToolBindingConfig, readSkillToolBindings } from './skill-tool-bindings.js';
 
 export type { AttachmentImages, LiveInput } from './modules/runs/live-turn-coordinator.js';
@@ -118,6 +118,7 @@ export class AgentRunner implements Runner {
     private readonly verifyWorkspace?: (run: Run) => Promise<void>,
     private readonly onInputCheckpoint?: (sessionId: string) => void,
     private readonly rtk?: { binary: string; enabled(projectId: string): boolean },
+    private readonly schedules?: RunMcpToolHost['schedules'],
   ) {}
   start(
     run: Run,
@@ -604,6 +605,7 @@ export class AgentRunner implements Runner {
       storage: this.store.directory,
       executePackage: (options) =>
         executeSkillPackage({ ...options, run, storage: this.store.directory, files: this.files }),
+      schedules: this.schedules,
     });
     if (bindingGuidance.length)
       this.store.event(run.id, session.id, 'skill.tools_resolved', { entries: bindingGuidance });

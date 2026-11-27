@@ -47,6 +47,8 @@ interface SessionLifecycleOptions {
   nativeExecution: boolean;
   sameSessionRunning(id: string): boolean;
   isShuttingDown(): boolean;
+  onSessionArchived?(id: string): void;
+  onSessionDeleted?(id: string): void;
 }
 
 export function createSessionLifecycle({
@@ -62,14 +64,22 @@ export function createSessionLifecycle({
   nativeExecution,
   sameSessionRunning,
   isShuttingDown,
+  onSessionArchived,
+  onSessionDeleted,
 }: SessionLifecycleOptions) {
-  async function create(input: { projectId: string; agentRevisionId?: string }) {
+  async function create(input: {
+    projectId: string;
+    agentRevisionId?: string;
+    title?: string;
+    origin?: 'schedule';
+  }) {
     const project = store.get('projects', input.projectId);
     await resolveProjectPath(project.path, '', { directory: true });
     const session: Session = {
       id: randomUUID(),
       projectId: project.id,
-      title: '新会话',
+      title: input.title?.trim() || '新会话',
+      ...(input.origin ? { origin: input.origin } : {}),
       status: 'active',
       sdkSessionId: null,
       createdAt: now(),
@@ -163,6 +173,7 @@ export function createSessionLifecycle({
         : update.status === 'active'
           ? await worktrees.sessionWorkspace(session)
           : undefined;
+    if (update.status === 'archived') onSessionArchived?.(id);
     if (!update.draft) store.event('session-' + id, id, 'session.updated', {});
     return { session: publicSession(session), ...(workspace ? { workspace } : {}) };
   }
@@ -195,6 +206,7 @@ export function createSessionLifecycle({
         store.sessionEvents.deleteForSession(id);
         store.runReceipts.deleteForSession(id);
       });
+      onSessionDeleted?.(id);
       await rm(join(data, 'sdk', id), { recursive: true, force: true });
       store.event('deleted-' + id, '', 'session.deleted', { sessionId: id });
     });

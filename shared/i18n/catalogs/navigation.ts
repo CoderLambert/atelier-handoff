@@ -10,6 +10,7 @@ export const navigation = {
   'links.runs': ['执行记录', 'Run history'],
   'links.extensions': ['扩展', 'Extensions'],
   'links.agents': ['智能体', 'Agents'],
+  'links.schedules': ['自动化任务', 'Schedules'],
   'status.queued': ['排队中', 'Queued'],
   'status.running': ['执行中', 'Running'],
   'status.awaitingPermission': ['待审批', 'Awaiting approval'],

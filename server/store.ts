@@ -76,6 +76,9 @@ export class Store {
   get rtkSettings() {
     return this.repos.rtkSettings;
   }
+  get schedules() {
+    return this.repos.schedules;
+  }
   readonly events = new EventEmitter();
   private pendingEvents: RunEvent[] | undefined;
   constructor(readonly directory: string) {

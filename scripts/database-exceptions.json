@@ -40,5 +40,11 @@
     "key": "driver-call:6b6d6c89e9578ea9",
     "decision": "docs/decisions/2026-11-27-orm-queue-and-hotpath-queries.md",
     "test": "tests/runtime-orm-queries.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-scheduled-tasks.ts",
+    "key": "driver-call:7d784e0c97c5e809",
+    "decision": "docs/decisions/2026-11-27-scheduled-tasks.md",
+    "test": "tests/schedules.test.ts"
   }
 ]

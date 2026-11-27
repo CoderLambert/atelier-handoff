@@ -10,6 +10,7 @@ import { customOutputSummary, modelOutputSummary } from '../../../tool-output-co
 import { registerBrowserTools } from './browser-tools.js';
 import { registerBuiltinTools, registerWeatherAndCommand } from './builtin-tools.js';
 import { registerExtensionTools, registerSkillBindings } from './extension-tools.js';
+import { registerScheduleTools } from './schedule-tools.js';
 import type { CustomToolRegistrar, McpTools, RunMcpToolHost, ToolRegistration } from './types.js';
 
 export type { RunMcpToolHost, ToolRegistration };
@@ -96,5 +97,6 @@ export function buildRunMcpTools(host: RunMcpToolHost, dispatchMcp: typeof callM
   const bindingGuidance = registerSkillBindings(mcpExecution, registration);
   registerWeatherAndCommand(host, registration);
   registerExtensionTools(mcpExecution, registration);
+  registerScheduleTools(host, registration);
   return { mcpTools, bindingGuidance };
 }

@@ -14,6 +14,7 @@ export const collectionPaths = {
   artifacts: '/artifacts',
   extensions: '/extensions',
   agents: '/agents',
+  schedules: '/schedules',
 } as const;
 
 export const settingsPaths = {

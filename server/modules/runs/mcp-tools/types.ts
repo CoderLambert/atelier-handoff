@@ -21,6 +21,7 @@ import type { McpSessions } from '../../../extension-mcp.js';
 import type { RequestedOperation } from '../../../permissions.js';
 import type { RunSkill } from '../../../run-skills.js';
 import type { executeSkillPackage } from '../../../skill-package-runtime.js';
+import type { ScheduleService } from '../../schedules/service.js';
 
 export type McpTools = NonNullable<Parameters<typeof createSdkMcpServer>[0]['tools']>;
 
@@ -76,6 +77,7 @@ export interface RunMcpToolHost {
   executePackage(
     options: Omit<Parameters<typeof executeSkillPackage>[0], 'storage' | 'run' | 'files'>,
   ): Promise<unknown>;
+  schedules?: Pick<ScheduleService, 'list' | 'get' | 'create' | 'update' | 'remove'>;
 }
 
 export interface ToolRegistration {

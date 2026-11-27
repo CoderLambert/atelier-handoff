@@ -54,6 +54,7 @@ const routeTree = root.addChildren([
   page('/artifacts'),
   page('/extensions'),
   page('/agents'),
+  page('/schedules'),
   createRoute({
     getParentRoute: () => root,
     path: '/settings',

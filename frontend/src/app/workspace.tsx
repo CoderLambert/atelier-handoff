@@ -66,6 +66,7 @@ import { WorkspaceToolbar } from './workspace-toolbar';
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
+const SchedulesPage = lazy(() => import('@/features/schedules'));
 
 const SessionChanges = lazy(() =>
   import('@/features/inspector').then(({ SessionChanges }) => ({ default: SessionChanges })),
@@ -83,6 +84,7 @@ const sectionNames = {
   artifacts: 'section.artifacts',
   extensions: 'section.extensions',
   agents: 'section.agents',
+  schedules: 'section.schedules',
   settings: 'section.settings',
 } as const;
 
@@ -644,6 +646,16 @@ export default function Workspace() {
                   <div className="react-collections">
                     <AgentsPage
                       projects={ready.data?.projects ?? []}
+                      projectId={project?.id}
+                      onOpenSession={(id) => nav.openSession(id)}
+                    />
+                  </div>
+                ) : null}
+                {view === 'schedules' ? (
+                  <div className="react-collections">
+                    <SchedulesPage
+                      projects={ready.data?.projects ?? []}
+                      sessions={ready.data?.sessions ?? []}
                       projectId={project?.id}
                       onOpenSession={(id) => nav.openSession(id)}
                     />

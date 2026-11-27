@@ -14,24 +14,10 @@ import { desktopBrowserEnabled } from './desktop-browser.js';
 import { DesktopBrowserAccess } from './desktop-browser-access.js';
 import { McpSessions } from './extension-mcp.js';
 import { ProjectExtensions } from './extensions.js';
-import { createAgentRoutes } from './http/agents/routes.js';
-import { createBootstrapRoutes } from './http/bootstrap/routes.js';
-import { createEventRoutes } from './http/events/routes.js';
-import { createExtensionRoutes } from './http/extensions/routes.js';
-import { createArtifactRoutes } from './http/files/artifact-routes.js';
-import { createToolOutputRoutes } from './http/files/tool-output-routes.js';
-import { createGitRoutes } from './http/git/routes.js';
-import { createPermissionRoutes } from './http/permissions/routes.js';
 import { createProjectRoutes } from './http/projects/routes.js';
 import { createRequestHandler } from './http/request-handler.js';
-import { createRunRoutes } from './http/runs/routes.js';
+import { buildRuntimeRoutes } from './http/runtime-routes.js';
 import { createRuntimeHttpServer } from './http/server.js';
-import { createAttachmentRoutes } from './http/sessions/attachment-routes.js';
-import { createSessionMessageRoutes } from './http/sessions/message-routes.js';
-import { createSessionRoutes } from './http/sessions/routes.js';
-import { createSettingsRoutes } from './http/settings/routes.js';
-import { createSkillRoutes } from './http/skills/routes.js';
-import { createTerminalRoutes } from './http/terminal/routes.js';
 import { validateTerminalUpgrade } from './http/terminal/upgrade.js';
 import { MessageQueue } from './message-queue.js';
 import { createGatewayService } from './modules/gateway/service.js';
@@ -43,6 +29,7 @@ import { createExecutionSlots } from './modules/runs/execution-slots.js';
 import { createSessionAttachments } from './modules/sessions/attachments.js';
 import { createGetSessionSnapshot } from './modules/sessions/get-session-snapshot.js';
 import { createSessionLifecycle } from './modules/sessions/lifecycle.js';
+import { createSchedulesRuntime } from './modules/schedules/index.js';
 import { createSessionOperations } from './modules/sessions/operations.js';
 import { createSkillScope } from './modules/skills/scope.js';
 import { TerminalManager } from './modules/terminal/manager.js';
@@ -54,7 +41,6 @@ import { createMessageRuntime } from './runtime/message-runtime.js';
 import type { CreateAppOptions } from './runtime/types.js';
 import { SessionForks } from './session-forks.js';
 import { SkillInheritance } from './skill-inheritance.js';
-import { readSkillToolBindings, saveSkillToolBindings } from './skill-tool-bindings.js';
 import { Store } from './store.js';
 
 export async function createApp(options: CreateAppOptions) {
@@ -111,6 +97,13 @@ export async function createApp(options: CreateAppOptions) {
     nativeExecution,
     sessionDirectory,
   });
+  const schedulesRuntime = createSchedulesRuntime({
+    store,
+    agents,
+    sameSessionRunning: execution.sameSessionRunning,
+    isShuttingDown,
+  });
+  const schedules = schedulesRuntime.service;
   const runner =
     options.runnerFactory?.(store, permissions, files) ??
     new AgentRunner(
@@ -126,6 +119,7 @@ export async function createApp(options: CreateAppOptions) {
       options.rtkBinary
         ? { binary: options.rtkBinary, enabled: (id) => rtkSettings.enabled(id) }
         : undefined,
+      schedules,
     );
   const csrfToken = randomBytes(32).toString('hex');
   const gateway = createGatewayService({
@@ -133,15 +127,16 @@ export async function createApp(options: CreateAppOptions) {
     nativeExecution,
     magpie: options.magpie,
   });
+  const unavailableReason = !desktopPaired
+    ? 'desktop-required'
+    : process.platform !== 'linux' || process.arch !== 'x64'
+      ? 'platform-unsupported'
+      : 'native-execution-disabled';
   const terminals = new TerminalManager({
     store,
     worktrees,
     supported: nativeExecution && process.arch === 'x64',
-    unavailableReason: !desktopPaired
-      ? 'desktop-required'
-      : process.platform !== 'linux' || process.arch !== 'x64'
-        ? 'platform-unsupported'
-        : 'native-execution-disabled',
+    unavailableReason,
     isSessionDeleting: operations.isDeleting,
   });
 
@@ -186,6 +181,12 @@ export async function createApp(options: CreateAppOptions) {
     nativeExecution,
     sameSessionRunning: execution.sameSessionRunning,
     isShuttingDown,
+    onSessionArchived: (id) => schedules.pauseForArchivedSession(id),
+    onSessionDeleted: (id) => schedules.pauseForDeletedSession(id),
+  });
+  const scheduleScheduler = schedulesRuntime.attach({
+    createSession: (input) => lifecycle.create(input),
+    createRun,
   });
   const attachments = createSessionAttachments({ store, agents, files, operations, messageQueue });
   const runControls = createRunControls({ store, runner, nativeExecution, createRun });
@@ -204,61 +205,40 @@ export async function createApp(options: CreateAppOptions) {
     csrfToken,
     desktopPairing: options.desktopPairing,
     isShuttingDown,
-    routes: [
-      createTerminalRoutes(terminals),
-      createBootstrapRoutes({ store, projects, gateway, csrfToken }),
-      createEventRoutes(store, streams),
-      createSkillRoutes({ store, skills, inheritance, nativeExecution, wakeQueue }),
-      createSettingsRoutes({
-        gateway,
-        isShuttingDown,
-        workspaceLayout: store.workspaceLayout,
-        gitMultiCommitPreferences: store.gitMultiCommitPreferences,
-        shortcutPreferences: store.shortcutPreferences,
-        rtkSettings,
-        rtkBinary: options.rtkBinary,
-        nativeExecution,
-        requireProject: (id) => {
-          store.get('projects', id);
-        },
-      }),
-      createAgentRoutes(agents),
-      createExtensionRoutes({
-        extensions,
-        mcpSessions,
-        getProject: (id) => store.get('projects', id),
-        githubPublicAuth: store.githubPublicAuth,
-        publicSourceFetch: options.publicSourceFetch,
-        skillToolBindings: {
-          read: (projectId, skillId) => readSkillToolBindings(store, projectId, skillId),
-          save: (projectId, skillId, input) =>
-            saveSkillToolBindings(store, projectId, skillId, input),
-        },
-      }),
-      createGitRoutes({
-        store,
-        worktrees,
-        commitAnalyses,
-        gateway,
-        desktopPaired,
-        streams,
-        isShuttingDown,
-      }),
-      projectRoutes.route,
-      createSessionRoutes({
-        store,
-        lifecycle,
-        snapshot,
-        forks,
-        worktrees,
-        messages: createSessionMessageRoutes({ store, createRun, queue }),
-        attachments: createAttachmentRoutes({ directory: store.directory, files, attachments }),
-      }),
-      createRunRoutes(store, runControls),
-      createToolOutputRoutes(store, files),
-      createPermissionRoutes(store, permissions),
-      createArtifactRoutes(store, files),
-    ],
+    routes: buildRuntimeRoutes({
+      store,
+      projects,
+      projectRoute: projectRoutes.route,
+      gateway,
+      csrfToken,
+      streams,
+      terminals,
+      skills,
+      inheritance,
+      nativeExecution,
+      desktopPaired,
+      wakeQueue,
+      isShuttingDown,
+      rtkSettings,
+      rtkBinary: options.rtkBinary,
+      agents,
+      extensions,
+      mcpSessions,
+      publicSourceFetch: options.publicSourceFetch,
+      worktrees,
+      commitAnalyses,
+      lifecycle,
+      snapshot,
+      forks,
+      createRun,
+      queue,
+      files,
+      attachments,
+      schedules,
+      scheduleScheduler,
+      runControls,
+      permissions,
+    }),
   });
   const { server, stopListening, drainConnections } = createRuntimeHttpServer(handle, streams);
   const terminalTransport = registerTerminalTransport(server, terminals, {
@@ -277,6 +257,7 @@ export async function createApp(options: CreateAppOptions) {
           runner.shutdown(),
           gateway.dispose(),
           queueScheduler.waitForDrain(),
+          scheduleScheduler.stop(),
           terminals.shutdown().then((report) => {
             if (report.failed.length)
               throw new AppError(
@@ -296,5 +277,5 @@ export async function createApp(options: CreateAppOptions) {
         store.close();
       }
     })());
-  return { server, store, permissions, files, runner, close };
+  return { server, store, permissions, files, runner, schedules, scheduleScheduler, close };
 }
