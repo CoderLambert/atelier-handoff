@@ -1,10 +1,11 @@
 /**
- * @file 验证权威对话顺序和原消息操作。
- * @implementation 使用隔离 Chromium 快照夹具覆盖反序完成、工具焦点、重试、双语、计时和消息全文复制。
- * @updated 2026-11-26T01:10:00+08:00
+ * @file 验证权威对话顺序、运行状态和原消息操作。
+ * @implementation 使用顺序模型及加载真实样式的隔离 Chromium 夹具，覆盖历史重试过滤、停止优先、双语续接、反序完成、工具焦点和轮次间距。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { compile } from '@tailwindcss/node';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -136,7 +137,6 @@ test('transcript keeps native arrival order through reverse tool completion and 
       ['tool', 3],
       ['text', 4],
       ['tool', 5],
-      ['notice', 6],
       ['user', 7],
       ['text', 8],
     ],
@@ -198,16 +198,27 @@ test(
     const root = createRoot(document.getElementById('app')); const client = new QueryClient();
     window.actions = []; window.copies = [];
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => window.copies.push(text) } });
-    function render() { root.render(<QueryClientProvider client={client}><Conversation snapshot={snapshot} onRetry={()=>{}} onTrace={()=>{}} onForkMessage={id => window.actions.push(id)} submitting={false}/></QueryClientProvider>); }
+    let stopPendingRunId;
+    function render() { root.render(<QueryClientProvider client={client}><Conversation snapshot={snapshot} stopPendingRunId={stopPendingRunId} onRetry={()=>{}} onTrace={()=>{}} onForkMessage={id => window.actions.push(id)} submitting={false}/></QueryClientProvider>); }
     window.fixture = {
       waiting: () => { snapshot = {...snapshot, events: [...snapshot.events, {id:2,runId:'run',sessionId:'session',seq:2,type:'sdk.initialized',at:${JSON.stringify(at)},payload:{}}], runs:snapshot.runs.map(run => ({...run,status:'running',endedAt:null,transcript:{version:1,notices:[]}}))}; render(); },
+      retry: (status, pending = false) => { stopPendingRunId = pending ? 'run' : undefined; snapshot = {...snapshot, tools:[], events:[{id:3,runId:'run',sessionId:'session',seq:3,type:'sdk.api_retry',at:${JSON.stringify(at)},payload:{}}], runs:snapshot.runs.map(current => ({...${JSON.stringify(run)},status,endedAt:status === 'stopped' ? ${JSON.stringify(at)} : null}))}; render(); },
       finishFast: () => { snapshot = {...snapshot, tools: snapshot.tools.map(tool => tool.id === 'fast' ? {...tool, status:'succeeded', endedAt: new Date().toISOString(), output:'done'} : tool)}; render(); },
       finish: () => { snapshot = {...snapshot, runs: snapshot.runs.map(run => ({...run,status:'completed',endedAt:new Date().toISOString()})), tools: snapshot.tools.map(tool => ({...tool,status:'succeeded',endedAt:new Date().toISOString()}))}; render(); },
       locale: locale => uiI18n.changeLanguage(locale),
-      reads: (status, prefix = 'read') => { snapshot = {...snapshot, tools: [9,10].map((order,index) => ({...snapshot.tools[0], id:prefix+'-'+index, name:'Read', status, transcriptOrder:order}))}; render(); },
+      reads: (status, prefix = 'read') => { snapshot = {...snapshot, tools: [9,10].map((order,index) => ({...${JSON.stringify(tools[0])}, id:prefix+'-'+index, name:'Read', status, transcriptOrder:order}))}; render(); },
       restoreContext: () => { snapshot = {...snapshot, session: {...snapshot.session, fork: {sourceSessionId:'source', sourceMessageId:'anchor', sourceTitle:'Source'}}, events: [{id:1,runId:'run',sessionId:'session',seq:1,type:'sdk.context_restarted',at:${JSON.stringify(at)},payload:{}}]}; render(); },
       notice: kind => { const {transcriptOrder, ...hookOnly} = snapshot.tools[0]; snapshot = {...snapshot, tools:[{...hookOnly,id:'pending',name:'Bash',status:'running'}], runs:snapshot.runs.map(run => ({...run,status:'running',endedAt:null,transcript:{version:1,notices:[{kind,toolCallId:'pending',toolName:'Bash',order:11,at:${JSON.stringify(at)}}]}}))}; render(); },
       actualTool: () => { snapshot = {...snapshot, tools:snapshot.tools.map(tool => ({...tool,transcriptOrder:11})), runs:snapshot.runs.map(run => ({...run,transcript:{version:1,notices:[]}}))}; render(); },
+      spacing: (status, nextLegacy, hasText) => {
+        const previous = {...${JSON.stringify(run)}, status, endedAt:${JSON.stringify(at)}};
+        const next = {...previous, id:'next', prompt:'next message', status:'running', endedAt:null, transcript:nextLegacy ? undefined : {version:1, notices:[]}};
+        snapshot = {...snapshot, runs:[previous,next], tools:[], events:[], messages:[
+          {...${JSON.stringify(messages[0])}, id:'previous-user'},
+          ...(hasText ? [{...${JSON.stringify(messages[1])}, id:'previous-assistant'}] : []),
+          {...${JSON.stringify(messages[0])}, id:'next-user', runId:'next', text:'next message'}
+        ]}; render();
+      },
     }; render();
   `,
       },
@@ -224,13 +235,21 @@ test(
     });
     const bundle = compiled.outputFiles[0]?.text;
     assert.ok(bundle);
+    const utilities = await compile(
+      [
+        readFileSync(`${root}/src/styles.css`, 'utf8'),
+        readFileSync(`${root}/src/features/chat/chat.css`, 'utf8'),
+      ].join('\n'),
+      { base: `${root}/src`, onDependency() {} },
+    );
+    const styles = utilities.build([]);
     const server = createServer((request, response) => {
       if (request.url === '/bundle.js') {
         response.setHeader('Content-Type', 'text/javascript');
         response.end(bundle);
       } else
         response.end(
-          '<!doctype html><html><body><div id="app"></div><script type="module" src="/bundle.js"></script></body></html>',
+          `<!doctype html><html><head><style>${styles}</style></head><body><div id="app"></div><script type="module" src="/bundle.js"></script></body></html>`,
         );
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -262,7 +281,6 @@ test(
           ['tool', 3],
           ['text', 4],
           ['tool', 5],
-          ['notice', 6],
           ['user', 7],
           ['text', 8],
         ],
@@ -300,7 +318,7 @@ test(
       await page.waitForTimeout(1200);
       assert.notEqual(await page.locator('[data-run-elapsed]').textContent(), elapsed);
       await page.evaluate('window.fixture.locale("en")');
-      await page.getByText('Model retry (1 / 3)', { exact: true }).waitFor();
+      assert.equal(await page.locator('[data-transcript-notice-kind="api_retry"]').count(), 0);
       assert.match(await page.locator('[data-run-live-status]').innerText(), /Calling Bash/);
       await page.evaluate('window.fixture.finish()');
       await page.locator('[data-transcript-kind="summary"]').waitFor();
@@ -314,7 +332,21 @@ test(
       assert.equal(await page.locator('[data-run-live-status]').count(), 1);
       await page.evaluate('window.fixture.locale("zh-CN")');
       await liveStatus.getByText('正在等待模型回复', { exact: true }).waitFor();
+      await page.evaluate('window.fixture.retry("running")');
+      await liveStatus.getByText('等待模型重试结果', { exact: true }).waitFor();
+      await page.evaluate('window.fixture.retry("running", true)');
+      await page.locator('[data-run-live-status][data-status="stopping"]').waitFor();
+      assert.equal(await liveStatus.getByText('等待模型重试结果', { exact: true }).count(), 0);
+      await page.evaluate('window.fixture.retry("running")');
+      await liveStatus.getByText('等待模型重试结果', { exact: true }).waitFor();
+      await page.evaluate('window.fixture.retry("stopping")');
+      await page.locator('[data-run-live-status][data-status="stopping"]').waitFor();
+      await page.evaluate('window.fixture.retry("stopped")');
+      await page.getByRole('button', { name: '只读续接', exact: true }).waitFor();
+      assert.equal(await page.locator('[data-run-live-status], [data-transcript-notice-kind="api_retry"]').count(), 0);
       await page.evaluate('window.fixture.locale("en")');
+      await page.getByRole('button', { name: 'Resume read-only', exact: true }).waitFor();
+      await page.evaluate('window.fixture.waiting()');
       await page.evaluate('window.fixture.reads("running")');
       const firstRead = page.locator('[data-tool-id="read-0"] > summary');
       await firstRead.focus();
@@ -360,6 +392,7 @@ test(
       assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
       await toggle.press('Enter');
       assert.equal(await keyboardRead.isVisible(), true);
+      await page.evaluate('window.fixture.restoreContext()');
       await page
         .getByText('Context for this turn was restored from this branch’s message history.', {
           exact: true,

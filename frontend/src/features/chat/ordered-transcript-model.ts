@@ -1,10 +1,12 @@
 /**
  * @file 将新运行的权威顺序投影为对话行。
- * @implementation 保留原消息身份及 UTF-16 文本区间，只合并相邻的只读工具展示组。
- * @updated 2026-11-26T01:10:00+08:00
+ * @implementation 保留原消息身份及 UTF-16 文本区间，过滤历史 SDK 重试通知，只合并相邻的只读工具展示组。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import type { Message, Run, ToolCall } from '@shared/types';
 import type { TranscriptNotice } from '@shared/ordered-transcript';
+
+type VisibleNotice = Exclude<TranscriptNotice, { kind: 'api_retry' }>;
 
 export type TranscriptRow =
   | {
@@ -17,7 +19,7 @@ export type TranscriptRow =
       footer: boolean;
     }
   | { kind: 'tool'; key: string; order: number; tools: ToolCall[] }
-  | { kind: 'notice'; key: string; order: number; notice: TranscriptNotice };
+  | { kind: 'notice'; key: string; order: number; notice: VisibleNotice };
 
 export function isReadOnlyTranscriptTool(tool: ToolCall): boolean {
   return ['Read', 'Grep', 'Glob', 'read_file', 'list_files', 'search_files'].includes(
@@ -69,6 +71,7 @@ export function orderedTranscriptRows(
     }
   }
   for (const notice of run.transcript?.notices ?? []) {
+    if (notice.kind === 'api_retry') continue;
     rows.push({
       kind: 'notice',
       key: 'toolCallId' in notice ? `tool:${notice.toolCallId}` : `notice:${notice.order}`,

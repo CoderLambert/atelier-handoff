@@ -789,7 +789,7 @@ test(
         errorsBeforeQueueing,
       );
       await page.evaluate('window.fixture.patch({ active: false })');
-      const progress = page.getByRole('button', { name: '检查任务进度', exact: true });
+      const progress = page.getByRole('button', { name: '只读续接', exact: true });
       await progress.click();
       assert.ok(
         ((await page.evaluate('window.events')) as unknown[][]).some(
@@ -797,7 +797,7 @@ test(
         ),
       );
       assert.equal(
-        await page.getByText('助手会读取现有结果，检查已完成的工作。', { exact: true }).count(),
+        await page.getByText('只读续接会发起新一轮模型请求，基于现有结果继续，不会重放写入或命令。', { exact: true }).count(),
         1,
       );
       // Rewind keeps a separate affordance and confirmation; cancellation preserves the draft.

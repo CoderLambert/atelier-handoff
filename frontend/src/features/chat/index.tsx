@@ -1,7 +1,7 @@
 /**
  * @file 组合会话消息、待处理队列、任务清单和输入界面。
- * @implementation 为对话提供稳定回调并按需读取当前草稿，协调任务清单与输入焦点，在实际输入框完成外部聚焦后回执。
- * @updated 2026-11-27T01:26:00+08:00
+ * @implementation 为对话提供稳定回调并按需读取草稿，协调任务清单、输入焦点及焦点回执，将当前运行的停止请求状态传给对话和输入区。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -10,6 +10,7 @@ import { composerTextLimit, formatMessageText, messageQuoteLimit } from '@shared
 import type { Draft, Message, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { permissionKeys } from '@/use-query/permissions/keys';
+import { useRunStopPending } from '@/use-query/runs/use-stop-run';
 import { sessionKeys } from '@/use-query/sessions/keys';
 import type { ChatLinkOpener } from './chat-web-link-dialog';
 import { Composer, type DraftChange } from './composer';
@@ -57,7 +58,9 @@ function SessionChat(props: ChatProps) {
     props;
   const sessionId = snapshot.session.id;
   const { onRewindMessage } = props;
-  const currentRun = snapshot.runs.find(isActive) ?? snapshot.runs.at(-1);
+  const activeRun = snapshot.runs.find(isActive);
+  const stopPendingRunId = useRunStopPending(activeRun) ? activeRun?.id : undefined;
+  const currentRun = activeRun ?? snapshot.runs.at(-1);
   const composerPlan = currentRun?.plan.length ? currentRun : undefined;
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [replacement, setReplacement] = useState<{
@@ -229,6 +232,7 @@ function SessionChat(props: ChatProps) {
         key={`conversation:${snapshot.session.id}`}
         snapshot={snapshot}
         composerPlanRunId={composerPlan?.id}
+        stopPendingRunId={stopPendingRunId}
         onRetry={onRetry}
         onTrace={onTrace}
         onOpenLink={onOpenLink}
@@ -280,6 +284,7 @@ function SessionChat(props: ChatProps) {
         onDraftChange={props.onDraftChange}
         onSend={props.onSend}
         onStop={props.onStop}
+        stopPendingRunId={stopPendingRunId}
         submitting={submitting}
       />
       {rewind ? (

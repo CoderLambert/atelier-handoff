@@ -1,11 +1,10 @@
 /**
- * @file 按运行时到达顺序展示正文、工具和重试通知。
- * @implementation 工具沿用稳定标识原位更新，审批与子任务随所属工具显示，相邻成功只读调用可折叠。
- * @updated 2026-11-26T01:10:00+08:00
+ * @file 按运行时到达顺序展示正文、工具和可见通知。
+ * @implementation 使用有序对话投影展示消息和通知；工具按稳定标识原位更新，审批与子任务随工具显示，相邻成功只读调用可折叠。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import type { Message, Permission, Run, ToolCall } from '@shared/types';
-import type { TranscriptNotice } from '@shared/ordered-transcript';
 import type { Snapshot } from '@/api/types';
 import { useUiTranslation } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,7 @@ import { toolDisplayStatus, toolOutputView } from '@/features/inspector/tool-det
 import { SubagentProgress, groupRunWork } from '@/features/inspector';
 import { orderedTranscriptRows, type TranscriptRow } from './ordered-transcript-model';
 
-function TranscriptNoticeRow({ notice }: { notice: TranscriptNotice }) {
+function TranscriptNoticeRow({ notice }: Pick<Extract<TranscriptRow, { kind: 'notice' }>, 'notice'>) {
   const { t } = useUiTranslation('chat');
   return (
     <p
@@ -24,15 +23,13 @@ function TranscriptNoticeRow({ notice }: { notice: TranscriptNotice }) {
       data-transcript-order={notice.order}
       data-transcript-notice-kind={notice.kind}
     >
-      {notice.kind === 'api_retry'
-        ? t('transcript.retry', { attempt: notice.attempt, maxRetries: notice.maxRetries })
-        : notice.kind === 'api_error'
-          ? t('transcript.apiError', { code: notice.code })
-          : notice.kind === 'tool_preparing'
-            ? t('transcript.toolPreparing', { name: notice.toolName })
-            : notice.kind === 'tool_interrupted'
-              ? t('transcript.toolInterrupted', { name: notice.toolName })
-              : t('transcript.toolBlocked', { name: notice.toolName })}
+      {notice.kind === 'api_error'
+        ? t('transcript.apiError', { code: notice.code })
+        : notice.kind === 'tool_preparing'
+          ? t('transcript.toolPreparing', { name: notice.toolName })
+          : notice.kind === 'tool_interrupted'
+            ? t('transcript.toolInterrupted', { name: notice.toolName })
+            : t('transcript.toolBlocked', { name: notice.toolName })}
     </p>
   );
 }

@@ -1,7 +1,7 @@
 /**
- * @file 提供任务输入、引用和附件编辑。
- * @implementation 按会话管理草稿、附件、上下文和发送。输入框优先使用浏览器原生自动高度，并兼容旧浏览器。
- * @updated 2026-11-27T00:33:30+08:00
+ * @file 提供任务输入、引用、附件编辑和运行停止操作。
+ * @implementation 按会话管理草稿、附件、上下文和发送；停止请求待处理或运行正在停止时禁用重复操作，输入框使用原生自动高度及兼容回退。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
@@ -64,6 +64,7 @@ export function Composer({
   onDraftChange,
   onSend,
   onStop,
+  stopPendingRunId,
   submitting,
 }: {
   snapshot: Snapshot;
@@ -81,6 +82,7 @@ export function Composer({
   onDraftChange: DraftChange;
   onSend: (insertIntoRunId?: string) => Promise<void>;
   onStop: (runId: string) => void;
+  stopPendingRunId?: string;
   submitting: boolean;
 }) {
   const { t } = useUiTranslation('chat');
@@ -122,6 +124,7 @@ export function Composer({
     onDraftChange,
   });
   const run = snapshot.runs.find(isActive);
+  const stopping = run !== undefined && (run.status === 'stopping' || run.id === stopPendingRunId);
   const hasQueuedMessages = Boolean(snapshot.messageQueue?.items.length);
   const queueing = Boolean(run || hasQueuedMessages || snapshot.messageQueue?.paused);
   const sendLabel = queueing ? t('composer.queue') : t('composer.sendTask');
@@ -547,7 +550,7 @@ export function Composer({
             />
           </div>
           <div className="composer-toolbar-right">
-            <span className="composer-run-status" data-status={run?.status} role="status">
+            <span className="composer-run-status" data-status={stopping ? 'stopping' : run?.status} role="status">
               {dragging ? (
                 dropAllowed ? (
                   t('composer.dropToAdd')
@@ -558,6 +561,8 @@ export function Composer({
                 t('composer.sending')
               ) : busy ? (
                 t('composer.processingAttachments')
+              ) : stopping ? (
+                t('composer.stoppingStatus')
               ) : run ? (
                 run.status === 'running' ? (
                   <span className="sr-only">{t('composer.running')}</span>
@@ -566,7 +571,6 @@ export function Composer({
                     {
                       queued: t('composer.queued'),
                       awaiting_permission: t('composer.awaitingPermission'),
-                      stopping: t('composer.stoppingStatus'),
                     } as Record<string, string>
                   )[run.status]
                 )
@@ -580,8 +584,8 @@ export function Composer({
                 variant="outline"
                 size="sm"
                 className="composer-stop-button"
-                data-status={run.status}
-                disabled={run.status === 'stopping'}
+                data-status={stopping ? 'stopping' : run.status}
+                disabled={stopping}
                 onClick={() => onStop(run.id)}
               >
                 <span
@@ -595,7 +599,7 @@ export function Composer({
                   </svg>
                   <span className="composer-stop-square" />
                 </span>
-                {run.status === 'stopping'
+                {stopping
                   ? t('composer.stopping')
                   : hasQueuedMessages
                     ? t('composer.stopTurn')

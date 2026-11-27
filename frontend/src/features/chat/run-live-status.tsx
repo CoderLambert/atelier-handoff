@@ -1,7 +1,7 @@
 /**
  * @file 在当前对话轮次末尾展示运行状态与耗时。
- * @implementation 根据运行状态、工具、事件和子任务选择阶段，显示整轮耗时，并在等待模型时显示距最近活动的时间。
- * @updated 2026-11-27T03:03:08+08:00
+ * @implementation 依据运行状态、停止请求、工具、事件和子任务选择阶段；停止优先于等待重试，并显示整轮耗时和模型等待时长。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Shield } from 'lucide-react';
@@ -15,11 +15,13 @@ export function RunLiveStatus({
   tools,
   events,
   subagents,
+  stopPending,
 }: {
   run: Run;
   tools: ToolCall[];
   events: RunEvent[];
   subagents: Snapshot['subagents'];
+  stopPending?: boolean;
 }) {
   const { t, locale } = useUiTranslation('chat');
   const [now, setNow] = useState(Date.now);
@@ -50,9 +52,9 @@ export function RunLiveStatus({
   );
   const preparing = run.transcript?.notices.findLast((notice) => notice.kind === 'tool_preparing');
   let stage: string = t('progress.waitingModel');
-  if (run.status === 'queued') stage = t('progress.queued');
+  if (stopPending || run.status === 'stopping') stage = t('progress.stopping');
+  else if (run.status === 'queued') stage = t('progress.queued');
   else if (run.status === 'awaiting_permission') stage = t('progress.awaitingApproval');
-  else if (run.status === 'stopping') stage = t('progress.stopping');
   else if (ongoing?.bashExecution?.phase === 'stopping') stage = t('progress.stoppingBash');
   else if (ongoing)
     stage = t('progress.callingTool', { name: ongoing.name.replace(/^mcp__atelier__/, '') });
@@ -79,11 +81,11 @@ export function RunLiveStatus({
       className="run-live-status"
       data-run-live-status
       data-run-id={run.id}
-      data-status={run.status}
+      data-status={stopPending ? 'stopping' : run.status}
       aria-label={t('progress.label')}
       title={t('progress.lastActivity', { time: formatDate(lastActivityAt, locale) })}
     >
-      {run.status === 'awaiting_permission' ? (
+      {run.status === 'awaiting_permission' && !stopPending ? (
         <Shield aria-hidden="true" />
       ) : (
         <LoaderCircle className="motion-safe:animate-spin" aria-hidden="true" />

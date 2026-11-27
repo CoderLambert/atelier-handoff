@@ -1,7 +1,7 @@
 /**
- * @file 展示会话消息、运行进度与历史，以及审批和异常入口。
- * @implementation 按运行选择有序对话或旧历史展示，复用 props 相同时的渲染结果以跳过草稿更新引起的历史渲染。
- * @updated 2026-11-27T00:29:54+08:00
+ * @file 展示会话消息、运行进度与历史，以及审批和恢复入口。
+ * @implementation 按运行选择有序对话或旧历史，优先显示停止反馈，为未完成结果提供只读续接入口，并复用相同 props 的渲染结果。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import { useUiTranslation, getTranslator } from '@/i18n';
 import {
@@ -259,7 +259,10 @@ function RunProgress({
   );
   const hasDetails = work.tools.length > 0 || work.subagents.length > 0 || showPlan;
   const isPureModelWaiting =
-    !hasDetails && run.status !== 'awaiting_permission' && run.status !== 'stopping';
+    !hasDetails &&
+    run.status !== 'awaiting_permission' &&
+    run.status !== 'stopping' &&
+    activity?.type !== 'sdk.api_retry';
   if (active && isPureModelWaiting) {
     if (hasText) return null;
     return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
@@ -388,6 +391,7 @@ function RunResult({
   const { t } = useUiTranslation('chat');
   if (isActive(run)) return null;
   const canRetry = recoverable(run);
+  const detail = run.status === 'stopped' ? t('conversation.stoppedReason') : run.error || run.reason;
   if (!canRetry && !run.error && !run.reason) return null;
   const title = canRetry
     ? hasText
@@ -415,12 +419,12 @@ function RunResult({
               onClick={() => onRetry(run.id)}
             >
               <RotateCcw data-icon="inline-start" aria-hidden="true" />
-              {t('conversation.checkProgress')}
+              {t('conversation.resumeReadOnly')}
             </Button>
           ) : null}
         </div>
       </div>
-      {run.error || run.reason ? <p>{run.error || run.reason}</p> : null}
+      {detail ? <p>{detail}</p> : null}
       {canRetry ? <p>{t('conversation.retryHelp')}</p> : null}
     </section>
   );
@@ -547,6 +551,7 @@ function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: 
 export const Conversation = memo(function Conversation({
   snapshot,
   composerPlanRunId,
+  stopPendingRunId,
   onRetry,
   onTrace,
   onOpenLink,
@@ -561,6 +566,7 @@ export const Conversation = memo(function Conversation({
 }: {
   snapshot: Snapshot;
   composerPlanRunId?: string;
+  stopPendingRunId?: string;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
   onOpenLink?: ChatLinkOpener;
@@ -878,6 +884,7 @@ export const Conversation = memo(function Conversation({
                           tools={tools}
                           events={indexes.events.get(run.id) || EMPTY_EVENTS}
                           subagents={snapshot.subagents}
+                          stopPending={stopPendingRunId === run.id}
                         />
                       ) : null}
                     </div>
@@ -903,7 +910,7 @@ export const Conversation = memo(function Conversation({
                 <div className="message-body">
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunProgress
-                      run={run}
+                      run={stopPendingRunId === run.id && isActive(run) ? { ...run, status: 'stopping' } : run}
                       tools={tools}
                       events={events}
                       hasText={hasText}
