@@ -1,7 +1,7 @@
 /**
  * @file 检查项目架构规则和源码边界。
  * @implementation 验证规则引用、路径范围与源码扩展名，并检查导入边界、宿主模块循环和数据库访问边界。
- * @updated 2026-11-21T00:51:43+08:00
+ * @updated 2026-11-27T22:50:00+08:00
  */
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
@@ -33,10 +33,17 @@ const rules = {
     'server/db/migrations/0001.sql',
   ],
   api: ['server/app.ts', 'shared/types.ts', 'frontend/src/api/client.ts'],
-  state: ['frontend/src/app/drafts.ts', 'frontend/src/app/store.ts', 'server/store.ts'],
+  state: [
+    'frontend/src/app/drafts.ts',
+    'frontend/src/app/store.ts',
+    'frontend/src/use-query/agents/use-agents.ts',
+    'server/store.ts',
+    'server/modules/runs/live-turn-coordinator.ts',
+  ],
   features: [
     'frontend/src/features/extensions/editor.tsx',
     'server/artifacts.ts',
+    'server/modules/git/worktree-lease-manager.ts',
     'packages/markdown/src/index.tsx',
   ],
 };

@@ -19,9 +19,10 @@ paths:
 
 - 页面或组件只调用具名领域 hook，读取数据和 pending/error 状态，绑定语义化动作，负责展示与局部交互。组件内不得 `fetch`、调用 `api()`、组装 API 路径、声明 `queryFn` / `mutationFn`，也不得以 `useEffect` 实现请求。不要用 `useApi(url, method)` 或 `useResource<T>(path)` 把接口定义重新推给组件。
 - 多 API 编排、保存草稿/重试、取消、联动选择、跨会话切换等逻辑放到 `features/<领域>/hooks/use-<用例>.ts`；由用例 hook 组合上面的 API hooks。纯转换或校验写成可独立测试的函数。单个输入焦点、展开开关等简单视图状态由组件持有。
-- 功能改动碰到已登记的旧式请求时随该用例迁移，新增或迁出的 API 均执行新规则。回归门禁检查新出现的请求与 TanStack 配置点。评审时给出操作文件、所有消费者和实际失效范围。
+- `scripts/query-legacy.json` 已清零，不得新增豁免条目；所有前端服务端读写均通过 `use-query/<领域>/` 完成，由 `npm run check:query` 门禁强制检查。评审时给出操作文件、所有消费者和实际失效范围。
 
 ## 服务端与验证
 
 - 路由解析并校验外部输入，领域服务核对项目/会话归属、运行模式和有效版本，执行端在副作用发生前复核授权。采用共享 schema/DTO、结构化错误、可取消的 I/O 和明确的幂等或冲突行为。
+- 共享契约在 `shared/` 按业务域分文件（如 `models.ts`、`extensions.ts`、`git-multi-commit.ts`），`shared/types.ts` 仅作聚合入口；模块共享类型独立放入 `types.ts`，禁止子模块反向从同目录 `index.ts` 桶文件导入类型。`npm run check:architecture` 强制校验 `desktop/host`、`shared`、`server/modules` 无循环依赖及热点文件行数棘轮上限。
 - 查询验证成功、空数据、失败与取消；mutation 验证重复点击、失败保留编辑和成功后的相关缓存。使用隔离项目覆盖跨项目拒绝、旧版本与权限撤销。凭据、文件内容和模型上下文的披露遵循 `AGENTS.md`。
