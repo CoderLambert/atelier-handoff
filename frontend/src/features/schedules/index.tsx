@@ -181,7 +181,7 @@ export default function SchedulesPage({
                           </Badge>
                         </div>
                         <p className="schedules-task-summary">
-                          {formatScheduleSummary(task, locale)}
+                          {formatScheduleSummary(task, (key) => t(key as never))}
                         </p>
                         <div className="schedules-task-row-meta">
                           <span className="schedules-task-project">
