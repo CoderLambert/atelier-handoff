@@ -1,12 +1,14 @@
 /**
  * @file 定义多提交分析、对话修改、审查、预览和执行的共享契约。
  * @implementation 以服务端变更单元 ID 关联分组，定义分析恢复、对话上下文和凭据位置。确认请求携带计划、摘要及操作 ID。
- * @updated 2026-11-25T01:22:11+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { z } from 'zod';
 import { gitCommitMessage, gitDiffLayer, gitPath, gitOid } from './git-workbench.js';
 import { uiLocaleSchema } from './i18n/locale.js';
-import { gatewayModelSchema, reasoningEfforts } from './types.js';
+import { gatewayModelSchema, reasoningEfforts } from './models.js';
+
+export const MAX_MULTI_COMMIT_GROUPS = 120;
 
 export const gitMultiCommitPreferences = z.strictObject({
   model: gatewayModelSchema.shape.id.nullable(),
@@ -54,7 +56,7 @@ const editableCommitGroup = multiCommitGroup.extend({
   unitIds: z.array(unitId).max(4096),
 });
 const editableCommitPlan = z.strictObject({
-  groups: z.array(editableCommitGroup).max(120),
+  groups: z.array(editableCommitGroup).max(MAX_MULTI_COMMIT_GROUPS),
   excludedUnitIds: z.array(unitId).max(4096),
 });
 export const multiCommitRevisionRequest = editableCommitPlan.extend({
@@ -119,7 +121,7 @@ export const multiCommitDraft = z.strictObject({
   version,
   branch: z.string().nullable(),
   units: z.array(multiCommitUnit).max(4096),
-  groups: z.array(multiCommitGroup).max(120),
+  groups: z.array(multiCommitGroup).max(MAX_MULTI_COMMIT_GROUPS),
   modelCandidateIds: z.array(unitId).max(4096),
   unassignedUnitIds: z.array(unitId).max(4096),
   suggestionStatus: z.enum(['ready', 'partial', 'manual']),
@@ -135,7 +137,7 @@ export const multiCommitDraft = z.strictObject({
 });
 export const multiCommitValidate = z.strictObject({
   version,
-  groups: z.array(multiCommitGroup).min(1).max(120),
+  groups: z.array(multiCommitGroup).min(1).max(MAX_MULTI_COMMIT_GROUPS),
   excludedUnitIds: z.array(unitId).max(4096),
 });
 export const multiCommitPreview = z.strictObject({
@@ -147,7 +149,7 @@ export const multiCommitPreview = z.strictObject({
         files: z.array(z.strictObject({ path: gitPath, text: z.string(), binary: z.boolean() })),
       }),
     )
-    .max(120),
+    .max(MAX_MULTI_COMMIT_GROUPS),
 });
 export const multiCommitSubmit = multiCommitValidate.extend({
   operationId: z.uuid(),
@@ -155,7 +157,7 @@ export const multiCommitSubmit = multiCommitValidate.extend({
 });
 export const multiCommitReceipt = z.strictObject({
   operationId: z.uuid(),
-  commits: z.array(gitOid).min(1).max(120),
+  commits: z.array(gitOid).min(1).max(MAX_MULTI_COMMIT_GROUPS),
 });
 export const multiCommitPending = z.strictObject({
   items: z
@@ -163,7 +165,7 @@ export const multiCommitPending = z.strictObject({
       z.strictObject({
         operationId: z.uuid(),
         state: z.enum(['prepared', 'ref_updated', 'aborting', 'recovery_required']),
-        commits: z.array(gitOid).max(120),
+        commits: z.array(gitOid).max(MAX_MULTI_COMMIT_GROUPS),
       }),
     )
     .max(200),

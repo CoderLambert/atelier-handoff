@@ -1,7 +1,7 @@
 /**
  * @file 绑定开发会话与实际 Git 工作目录。
- * @implementation 验证归属、目录身份与分支，以操作回执协调 SQLite 和系统 Git；为终端独立预留目录，阻止占用期间回收而不长期持有 Git 写租约。
- * @updated 2026-11-26T04:17:21+08:00
+ * @implementation 验证归属、目录身份与分支，以操作回执和共享幂等骨架协调 SQLite 与系统 Git，将写租约与终端预留委托给 WorktreeLeaseManager。
+ * @updated 2026-11-27T21:42:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir } from 'node:fs/promises';
@@ -15,22 +15,17 @@ import type {
   GitRestoreRequest,
   GitRetentionReason,
 } from '../../../shared/git-workbench.js';
-import {
-  AppError,
-  emptyDraft,
-  now,
-  type Project,
-  type Run,
-  type Session,
-} from '../../../shared/types.js';
+import { emptyDraft, type Project, type Run, type Session } from '../../../shared/types.js';
+import { AppError, now } from '../../../shared/errors.js';
 import { fingerprint, inside, resolveProjectPath } from '../../files.js';
 import type { Store } from '../../store.js';
 import { fileIdentity, gitError, LocalGit } from './git-cli.js';
 import { listGitWorktrees, readGitOverview, readGitStatus } from './git-reader.js';
 import { captureCheckout, WorktreeSnapshots } from './worktree-snapshots.js';
+import { directoriesOverlap, WorktreeLeaseManager } from './worktree-lease-manager.js';
 import type { WorktreeOperation, WorktreeRecord } from './worktree-repository.js';
 
-export const directoriesOverlap = (a: string, b: string) => inside(a, b) || inside(b, a);
+export { directoriesOverlap };
 
 export async function pathExists(path: string) {
   try {
@@ -77,8 +72,7 @@ export interface TerminalWorkspaceReservation {
 export class DevelopmentWorktrees {
   readonly managed: string;
   private readonly snapshots: WorktreeSnapshots;
-  private readonly leases = new Map<string, string>();
-  private readonly terminalReservations = new Map<symbol, string>();
+  private readonly leaseManager = new WorktreeLeaseManager();
 
   constructor(
     private readonly store: Store,
@@ -112,16 +106,11 @@ export class DevelopmentWorktrees {
     if (workspaceId !== expectedWorkspaceId)
       throw gitError('WORKTREE_CHANGED', '会话工作目录已变化，请重新打开终端。');
     const path = this.directory(session);
-    this.assertUnlocked(path);
-    const token = Symbol('terminal');
-    this.terminalReservations.set(token, path);
-    const release = () => {
-      this.terminalReservations.delete(token);
-    };
+    const reservation = this.leaseManager.reserveTerminal(path);
     const assertSpawnAllowed = () => {
       const current = this.store.get('sessions', session.id);
       if (
-        !this.terminalReservations.has(token) ||
+        !reservation.isActive() ||
         current.projectId !== session.projectId ||
         (this.records.forSession(session.id)?.id ?? null) !== workspaceId ||
         this.directory(current) !== path
@@ -135,7 +124,7 @@ export class DevelopmentWorktrees {
       workspaceId,
       path,
       assertSpawnAllowed,
-      release,
+      release: reservation.release,
       resolve: async () => {
         try {
           assertSpawnAllowed();
@@ -144,33 +133,51 @@ export class DevelopmentWorktrees {
           if (resolved !== path) throw gitError('WORKTREE_CHANGED', '终端的工作目录已变化。');
           return resolved;
         } catch (error) {
-          release();
+          reservation.release();
           throw error;
         }
       },
     };
   }
 
-  private terminalRetains(path: string): boolean {
-    return [...this.terminalReservations.values()].some((other) => directoriesOverlap(path, other));
-  }
-
   assertUnlocked(path: string) {
-    if ([...this.leases.values()].some((other) => directoriesOverlap(path, other)))
-      throw gitError('DIRECTORY_BUSY', '工作目录正在处理 Git 操作。');
+    this.leaseManager.assertUnlocked(path);
   }
 
   private async exclusive<T>(git: LocalGit, path: string, work: () => Promise<T>) {
-    this.assertUnlocked(path);
-    if (this.leases.has(git.repositoryId))
-      throw gitError('DIRECTORY_BUSY', '同一仓库的另一项 Git 操作正在进行。');
-    this.leases.set(git.repositoryId, path);
-    try {
-      return await work();
-    } finally {
-      this.leases.delete(git.repositoryId);
-      this.dependencies.released();
-    }
+    return this.leaseManager.runExclusive(git.repositoryId, path, work, () =>
+      this.dependencies.released(),
+    );
+  }
+
+  private async runIdempotentWorktreeOp<T>(options: {
+    requestId: string;
+    requestHash: string;
+    allowFailedReplay?: boolean;
+    onReplay: (prior: WorktreeOperation) => Promise<T> | T;
+    prepareTarget: () => Promise<{ git: LocalGit; path: string }>;
+    execute: (target: { git: LocalGit; path: string }) => Promise<T>;
+  }): Promise<T> {
+    const checkReplay = () => {
+      const prior = this.records.operation(options.requestId);
+      if (!prior) return undefined;
+      if (
+        !options.allowFailedReplay ||
+        prior.requestHash !== options.requestHash ||
+        prior.state === 'pending'
+      ) {
+        this.result(prior, options.requestHash);
+      }
+      return prior;
+    };
+    const initial = checkReplay();
+    if (initial) return options.onReplay(initial);
+    const target = await options.prepareTarget();
+    return this.exclusive(target.git, target.path, async () => {
+      const repeated = checkReplay();
+      if (repeated) return options.onReplay(repeated);
+      return options.execute(target);
+    });
   }
 
   private async checkManaged(path: string) {
@@ -218,8 +225,7 @@ export class DevelopmentWorktrees {
       mode: row.mode,
       ...(row.retained ? { retained: row.retained } : {}),
     };
-    if ([...this.leases.values()].some((other) => directoriesOverlap(path, other)))
-      return { ...common, state: 'busy' };
+    if (this.leaseManager.isPathBusy(path)) return { ...common, state: 'busy' };
     if (row.retained === 'relocated' && row.snapshotId) {
       const retainedPath = this.scratch('reclaim', row.snapshotId);
       if (await pathExists(retainedPath)) return { ...common, state: 'changed', retainedPath };
@@ -290,7 +296,7 @@ export class DevelopmentWorktrees {
           state.state === 'ready' &&
           !listed?.locked &&
           this.allArchived(row) &&
-          !this.terminalRetains(state.path),
+          !this.leaseManager.hasTerminalReservation(state.path),
       });
       if (listed)
         for (const branch of overview.branches)
@@ -416,68 +422,73 @@ export class DevelopmentWorktrees {
 
   async create(project: Project, input: DevelopmentCreate) {
     const requestHash = fingerprint(JSON.stringify([project.id, 'create', input]));
-    const previous = () => this.result(this.records.operation(input.requestId), requestHash);
-    const replay = previous();
-    if (replay?.sessionId) return this.store.get('sessions', replay.sessionId);
-    const git = await LocalGit.open(project.path);
-    const path = input.mode === 'linked' ? join(this.managed, input.requestId) : project.path;
-    return this.exclusive(git, path, async () => {
-      const replay = previous();
-      if (replay?.sessionId) return this.store.get('sessions', replay.sessionId);
-      const preview = await this.previewFor(project, git, input);
-      if (preview.oid !== input.expectedOid)
-        throw gitError('BASE_CHANGED', '基线已变化，请重新预览后创建。');
-      const row: WorktreeRecord = {
-        id: input.requestId,
-        projectId: project.id,
-        repositoryId: git.repositoryId,
-        mode: input.mode,
-        branch: input.branch,
-        directoryIdentity: null,
-        adminIdentity: null,
-        snapshotId: null,
-        snapshotDigest: null,
-        retained: null,
-        rebuildable: [],
-      };
-      const operation: WorktreeOperation = {
-        id: row.id,
-        worktreeId: row.id,
-        requestHash,
-        kind: 'create',
-        state: 'pending',
-        sessionId: randomUUID(),
-        branch: row.branch,
-        oid: preview.oid,
-        createdAt: now(),
-        finishedAt: null,
-        scratchIdentity: null,
-        error: null,
-      };
-      this.store.transaction(() => {
-        this.records.saveWorktree(row);
-        this.records.saveOperation(operation);
-      });
-      try {
-        if (input.mode === 'linked')
-          await git.run(['worktree', 'add', '-b', input.branch, '--', preview.path, preview.oid]);
-        else {
-          await this.dependencies.closeDirectory(preview.path);
-          await git.run([
-            'switch',
-            '--no-guess',
-            '--no-overwrite-ignore',
-            '-c',
-            input.branch,
-            preview.oid,
-          ]);
+    return this.runIdempotentWorktreeOp({
+      requestId: input.requestId,
+      requestHash,
+      onReplay: (replay) => {
+        if (!replay.sessionId) throw gitError('OPERATION_FAILED', '开发会话记录缺少编号。');
+        return this.store.get('sessions', replay.sessionId);
+      },
+      prepareTarget: async () => ({
+        git: await LocalGit.open(project.path),
+        path: input.mode === 'linked' ? join(this.managed, input.requestId) : project.path,
+      }),
+      execute: async ({ git }) => {
+        const preview = await this.previewFor(project, git, input);
+        if (preview.oid !== input.expectedOid)
+          throw gitError('BASE_CHANGED', '基线已变化，请重新预览后创建。');
+        const row: WorktreeRecord = {
+          id: input.requestId,
+          projectId: project.id,
+          repositoryId: git.repositoryId,
+          mode: input.mode,
+          branch: input.branch,
+          directoryIdentity: null,
+          adminIdentity: null,
+          snapshotId: null,
+          snapshotDigest: null,
+          retained: null,
+          rebuildable: [],
+        };
+        const operation: WorktreeOperation = {
+          id: row.id,
+          worktreeId: row.id,
+          requestHash,
+          kind: 'create',
+          state: 'pending',
+          sessionId: randomUUID(),
+          branch: row.branch,
+          oid: preview.oid,
+          createdAt: now(),
+          finishedAt: null,
+          scratchIdentity: null,
+          error: null,
+        };
+        this.store.transaction(() => {
+          this.records.saveWorktree(row);
+          this.records.saveOperation(operation);
+        });
+        try {
+          if (input.mode === 'linked')
+            await git.run(['worktree', 'add', '-b', input.branch, '--', preview.path, preview.oid]);
+          else {
+            await this.dependencies.closeDirectory(preview.path);
+            await git.run([
+              'switch',
+              '--no-guess',
+              '--no-overwrite-ignore',
+              '-c',
+              input.branch,
+              preview.oid,
+            ]);
+          }
+          return await this.completeCreate(project, row, operation);
+        } catch (error) {
+          // Git may already have created part of the checkout. Keep its files and branch.
+          this.fail(row, operation, error);
+          throw error;
         }
-        return await this.completeCreate(project, row, operation);
-      } catch (error) {
-        // Git may already have created part of the checkout. Keep its files and branch.
-        this.fail(row, operation, error);
-        throw error;
-      }
+      },
     });
   }
 
@@ -593,114 +604,111 @@ export class DevelopmentWorktrees {
   async reclaim(project: Project, id: string, requestId: string) {
     const existing = this.owned(project, id);
     const requestHash = fingerprint(JSON.stringify([project.id, 'reclaim', id]));
-    const replay = this.records.operation(requestId);
-    if (replay) {
-      if (replay.requestHash !== requestHash || replay.state === 'pending')
-        this.result(replay, requestHash);
-      return this.state(project, existing);
-    }
-    const source = await this.repository(project, existing);
-    const path = this.path(project, existing);
-    await this.exclusive(source, path, async () => {
-      const repeated = this.records.operation(requestId);
-      if (repeated) {
-        if (repeated.requestHash !== requestHash || repeated.state === 'pending')
-          this.result(repeated, requestHash);
-        return;
-      }
-      if (this.terminalRetains(path))
-        throw gitError('DIRECTORY_BUSY', '工作目录仍有未结束的终端。');
-      let row = this.owned(project, id);
-      if (row.retained === 'relocated' || !row.directoryIdentity || !this.allArchived(row))
-        throw gitError('DIRECTORY_BUSY', '所有关联会话均归档后才能回收工作树。');
-      await this.checkManaged(path);
-      const { git, entry } = await this.checkCheckout(project, row);
-      if (!entry.head) throw gitError('BASE_MISSING', '工作树没有可保存的基线提交。');
-      let operation: WorktreeOperation = {
-        id: requestId,
-        worktreeId: id,
-        requestHash,
-        kind: 'reclaim',
-        state: 'pending',
-        sessionId: null,
-        branch: row.branch,
-        oid: entry.head,
-        createdAt: now(),
-        finishedAt: null,
-        scratchIdentity: null,
-        error: null,
-      };
-      this.records.saveOperation(operation);
-      const verifyPath = this.scratch('verify', operation.id);
-      const quarantine = this.scratch('reclaim', operation.id);
-      let moved = false;
-      try {
-        if (entry.locked || this.dependencies.inUse(path))
-          throw gitError('DIRECTORY_BUSY', '工作树已锁定或有待处理的任务。');
-        await assertIdleGit(git);
-        await this.dependencies.closeDirectory(path);
-        const capture = await captureCheckout(git, row.branch, row.rebuildable);
-        if (capture.manifest.oid !== operation.oid)
-          throw gitError('WORKTREE_CHANGED', '工作树基线在保存期间变化。');
-        const snapshotDigest = await this.snapshots.save(operation.id, capture);
-        const manifest = await this.snapshots.manifest(operation.id, snapshotDigest);
-        const verification = await this.scratchCheckout(source, verifyPath, operation.oid);
-        operation = { ...operation, scratchIdentity: await fileIdentity(verifyPath) };
+    await this.runIdempotentWorktreeOp({
+      requestId,
+      requestHash,
+      allowFailedReplay: true,
+      onReplay: () => undefined,
+      prepareTarget: async () => ({
+        git: await this.repository(project, existing),
+        path: this.path(project, existing),
+      }),
+      execute: async ({ git: source, path }) => {
+        if (this.leaseManager.hasTerminalReservation(path))
+          throw gitError('DIRECTORY_BUSY', '工作目录仍有未结束的终端。');
+        let row = this.owned(project, id);
+        if (row.retained === 'relocated' || !row.directoryIdentity || !this.allArchived(row))
+          throw gitError('DIRECTORY_BUSY', '所有关联会话均归档后才能回收工作树。');
+        await this.checkManaged(path);
+        const { git, entry } = await this.checkCheckout(project, row);
+        if (!entry.head) throw gitError('BASE_MISSING', '工作树没有可保存的基线提交。');
+        let operation: WorktreeOperation = {
+          id: requestId,
+          worktreeId: id,
+          requestHash,
+          kind: 'reclaim',
+          state: 'pending',
+          sessionId: null,
+          branch: row.branch,
+          oid: entry.head,
+          createdAt: now(),
+          finishedAt: null,
+          scratchIdentity: null,
+          error: null,
+        };
         this.records.saveOperation(operation);
+        const verifyPath = this.scratch('verify', operation.id);
+        const quarantine = this.scratch('reclaim', operation.id);
+        let moved = false;
         try {
-          await this.snapshots.apply(operation.id, verification, manifest);
-          await this.snapshots.verify(verification, manifest);
-        } finally {
-          await this.discardScratch(source, verifyPath, operation.scratchIdentity);
-        }
-        // Keep the base reachable even if the original branch is later reset or deleted.
-        await source.run(['update-ref', 'refs/atelier/snapshots/' + operation.id, operation.oid]);
-        await this.snapshots.verify(
-          (await this.checkCheckout(project, row)).git,
-          manifest,
-          row.rebuildable,
-        );
-        if (await pathExists(quarantine))
-          throw gitError('DESTINATION_EXISTS', '回收暂存目录已存在。');
-        row = { ...row, snapshotId: operation.id, snapshotDigest };
-        this.records.saveWorktree(row);
-        await source.run(['worktree', 'move', '--', path, quarantine]);
-        moved = true;
-        const parked = await this.checkCheckout(project, row, undefined, quarantine);
-        await this.snapshots.verify(parked.git, manifest, row.rebuildable);
-        await assertIdleGit((await this.checkCheckout(project, row, undefined, quarantine)).git);
-        // Destructive removal only targets the private, verified directory.
-        await source.run(['worktree', 'remove', '--force', '--', quarantine]);
-        this.store.transaction(() =>
-          this.finish(
-            { ...row, directoryIdentity: null, adminIdentity: null, retained: null },
-            operation,
-          ),
-        );
-      } catch (error) {
-        const parked = moved || (row.snapshotId === operation.id && (await pathExists(quarantine)));
-        let reason = this.retentionReason(error);
-        if (parked) {
-          if (
-            !(await pathExists(quarantine)) &&
-            !(await pathExists(path)) &&
-            row.snapshotId === operation.id
-          ) {
-            this.store.transaction(() =>
-              this.finish(
-                { ...row, directoryIdentity: null, adminIdentity: null, retained: null },
-                operation,
-              ),
-            );
-            return;
+          if (entry.locked || this.dependencies.inUse(path))
+            throw gitError('DIRECTORY_BUSY', '工作树已锁定或有待处理的任务。');
+          await assertIdleGit(git);
+          await this.dependencies.closeDirectory(path);
+          const capture = await captureCheckout(git, row.branch, row.rebuildable);
+          if (capture.manifest.oid !== operation.oid)
+            throw gitError('WORKTREE_CHANGED', '工作树基线在保存期间变化。');
+          const snapshotDigest = await this.snapshots.save(operation.id, capture);
+          const manifest = await this.snapshots.manifest(operation.id, snapshotDigest);
+          const verification = await this.scratchCheckout(source, verifyPath, operation.oid);
+          operation = { ...operation, scratchIdentity: await fileIdentity(verifyPath) };
+          this.records.saveOperation(operation);
+          try {
+            await this.snapshots.apply(operation.id, verification, manifest);
+            await this.snapshots.verify(verification, manifest);
+          } finally {
+            await this.discardScratch(source, verifyPath, operation.scratchIdentity);
           }
-          const recovered = await this.returnParked(project, source, row, quarantine);
-          if (!recovered) reason = 'relocated';
+          // Keep the base reachable even if the original branch is later reset or deleted.
+          await source.run(['update-ref', 'refs/atelier/snapshots/' + operation.id, operation.oid]);
+          await this.snapshots.verify(
+            (await this.checkCheckout(project, row)).git,
+            manifest,
+            row.rebuildable,
+          );
+          if (await pathExists(quarantine))
+            throw gitError('DESTINATION_EXISTS', '回收暂存目录已存在。');
+          row = { ...row, snapshotId: operation.id, snapshotDigest };
+          this.records.saveWorktree(row);
+          await source.run(['worktree', 'move', '--', path, quarantine]);
+          moved = true;
+          const parked = await this.checkCheckout(project, row, undefined, quarantine);
+          await this.snapshots.verify(parked.git, manifest, row.rebuildable);
+          await assertIdleGit((await this.checkCheckout(project, row, undefined, quarantine)).git);
+          // Destructive removal only targets the private, verified directory.
+          await source.run(['worktree', 'remove', '--force', '--', quarantine]);
+          this.store.transaction(() =>
+            this.finish(
+              { ...row, directoryIdentity: null, adminIdentity: null, retained: null },
+              operation,
+            ),
+          );
+        } catch (error) {
+          const parked =
+            moved || (row.snapshotId === operation.id && (await pathExists(quarantine)));
+          let reason = this.retentionReason(error);
+          if (parked) {
+            if (
+              !(await pathExists(quarantine)) &&
+              !(await pathExists(path)) &&
+              row.snapshotId === operation.id
+            ) {
+              this.store.transaction(() =>
+                this.finish(
+                  { ...row, directoryIdentity: null, adminIdentity: null, retained: null },
+                  operation,
+                ),
+              );
+              return;
+            }
+            const recovered = await this.returnParked(project, source, row, quarantine);
+            if (!recovered) reason = 'relocated';
+          }
+          const retained =
+            reason === 'relocated' ? row : { ...row, snapshotId: null, snapshotDigest: null };
+          this.fail(retained, operation, error, reason);
         }
-        const retained =
-          reason === 'relocated' ? row : { ...row, snapshotId: null, snapshotDigest: null };
-        this.fail(retained, operation, error, reason);
-      }
+      },
     });
     return this.state(project, this.owned(project, id));
   }
@@ -752,71 +760,75 @@ export class DevelopmentWorktrees {
     const requestHash = fingerprint(
       JSON.stringify([project.id, 'restore', session.id, input.branch]),
     );
-    const previous = () => this.result(this.records.operation(input.requestId), requestHash);
-    if (previous()) return this.store.get('sessions', session.id);
-    const source = await this.repository(project, row);
-    const path = this.path(project, row);
-    return this.exclusive(source, path, async () => {
-      if (previous()) return this.store.get('sessions', session.id);
-      const current = this.owned(project, row.id);
-      if (
-        !current.snapshotId ||
-        !current.snapshotDigest ||
-        current.retained === 'relocated' ||
-        (await pathExists(path))
-      )
-        throw gitError('RESTORE_UNAVAILABLE', '原目录已存在或没有可用的工作树快照。');
-      await this.checkManaged(path);
-      const manifest = await this.snapshots.manifest(current.snapshotId, current.snapshotDigest);
-      const pin = await source.oid('refs/atelier/snapshots/' + current.snapshotId);
-      if (pin !== manifest.oid) throw gitError('SNAPSHOT_CORRUPT', '快照基线不可用或校验失败。');
-      if (
-        (!input.branch || input.branch === manifest.branch) &&
-        (await this.needsBranch(source, manifest.branch, manifest.oid))
-      )
-        throw gitError('RESTORE_BRANCH_REQUIRED', '原分支已移动或被占用，请确认一个新分支名。');
-      const branch = input.branch ?? manifest.branch;
-      if (branch !== manifest.branch) await source.checkNewBranch(branch);
-      let operation: WorktreeOperation = {
-        id: input.requestId,
-        worktreeId: row.id,
-        requestHash,
-        kind: 'restore',
-        state: 'pending',
-        sessionId: session.id,
-        branch,
-        oid: manifest.oid,
-        createdAt: now(),
-        finishedAt: null,
-        scratchIdentity: null,
-        error: null,
-      };
-      this.records.saveOperation(operation);
-      const staging = this.scratch('restore', operation.id);
-      try {
-        const scratch = await this.scratchCheckout(source, staging, manifest.oid);
-        operation = { ...operation, scratchIdentity: await fileIdentity(staging) };
+    return this.runIdempotentWorktreeOp({
+      requestId: input.requestId,
+      requestHash,
+      onReplay: () => this.store.get('sessions', session.id),
+      prepareTarget: async () => ({
+        git: await this.repository(project, row),
+        path: this.path(project, row),
+      }),
+      execute: async ({ git: source, path }) => {
+        const current = this.owned(project, row.id);
+        if (
+          !current.snapshotId ||
+          !current.snapshotDigest ||
+          current.retained === 'relocated' ||
+          (await pathExists(path))
+        )
+          throw gitError('RESTORE_UNAVAILABLE', '原目录已存在或没有可用的工作树快照。');
+        await this.checkManaged(path);
+        const manifest = await this.snapshots.manifest(current.snapshotId, current.snapshotDigest);
+        const pin = await source.oid('refs/atelier/snapshots/' + current.snapshotId);
+        if (pin !== manifest.oid) throw gitError('SNAPSHOT_CORRUPT', '快照基线不可用或校验失败。');
+        if (
+          (!input.branch || input.branch === manifest.branch) &&
+          (await this.needsBranch(source, manifest.branch, manifest.oid))
+        )
+          throw gitError('RESTORE_BRANCH_REQUIRED', '原分支已移动或被占用，请确认一个新分支名。');
+        const branch = input.branch ?? manifest.branch;
+        if (branch !== manifest.branch) await source.checkNewBranch(branch);
+        let operation: WorktreeOperation = {
+          id: input.requestId,
+          worktreeId: row.id,
+          requestHash,
+          kind: 'restore',
+          state: 'pending',
+          sessionId: session.id,
+          branch,
+          oid: manifest.oid,
+          createdAt: now(),
+          finishedAt: null,
+          scratchIdentity: null,
+          error: null,
+        };
         this.records.saveOperation(operation);
-        await this.snapshots.apply(current.snapshotId, scratch, manifest);
-        await scratch.run([
-          'switch',
-          '--no-guess',
-          '--no-overwrite-ignore',
-          ...(branch === manifest.branch ? [branch] : ['-c', branch]),
-        ]);
-        await this.snapshots.verify(scratch, manifest);
-        if (await pathExists(path)) throw gitError('DESTINATION_EXISTS', '原工作目录已被占用。');
-        await source.run(['worktree', 'move', '--', staging, path]);
-        return await this.completeRestore(project, current, operation);
-      } catch (error) {
+        const staging = this.scratch('restore', operation.id);
         try {
-          await this.discardScratch(source, staging, operation.scratchIdentity);
-        } catch {
-          // Keep a private checkout that cannot be removed by Git.
+          const scratch = await this.scratchCheckout(source, staging, manifest.oid);
+          operation = { ...operation, scratchIdentity: await fileIdentity(staging) };
+          this.records.saveOperation(operation);
+          await this.snapshots.apply(current.snapshotId, scratch, manifest);
+          await scratch.run([
+            'switch',
+            '--no-guess',
+            '--no-overwrite-ignore',
+            ...(branch === manifest.branch ? [branch] : ['-c', branch]),
+          ]);
+          await this.snapshots.verify(scratch, manifest);
+          if (await pathExists(path)) throw gitError('DESTINATION_EXISTS', '原工作目录已被占用。');
+          await source.run(['worktree', 'move', '--', staging, path]);
+          return await this.completeRestore(project, current, operation);
+        } catch (error) {
+          try {
+            await this.discardScratch(source, staging, operation.scratchIdentity);
+          } catch {
+            // Keep a private checkout that cannot be removed by Git.
+          }
+          this.fail(current, operation, error, 'snapshotFailed');
+          throw error;
         }
-        this.fail(current, operation, error, 'snapshotFailed');
-        throw error;
-      }
+      },
     });
   }
 

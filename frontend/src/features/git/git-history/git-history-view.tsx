@@ -1,7 +1,7 @@
 /**
  * @file 组合 Git 分支侧栏、提交筛选工具栏、提交历史列表与差异详情。
  * @implementation 协调分支选择、提交列表右键菜单、新建分支与 Reset/Revert/Cherry-pick 对话框。
- * @updated 2026-11-25T12:57:00+08:00
+ * @updated 2026-11-27T21:55:00+08:00
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, GitBranch as BranchIcon, RotateCcw } from 'lucide-react';
@@ -11,29 +11,34 @@ import type { GitBranch, GitCommit, GitOverview, GitWorktree } from '@shared/git
 import type { GitRepoStatus } from '@shared/desktop-git';
 import { GitContextMenu, type GitContextMenuItem } from '../git-context-menu';
 import { GitCreateBranchModal } from '../git-branch-dialogs';
-import {
-  GitCherryPickModal,
-  GitResetModal,
-  GitRevertModal,
-} from '../git-commit-dialogs';
+import { GitCherryPickModal, GitResetModal, GitRevertModal } from '../git-commit-dialogs';
 import { GitBranchSidebar } from './git-branch-sidebar';
 import { GitCommitList } from './git-commit-list';
 import { GitCommitToolbar } from './git-commit-toolbar';
 import { GitCommitDetailPane } from './git-commit-detail-pane';
 import { useGitCommitFilters } from './use-git-commit-filters';
 import type { GitOpenFile } from '../git-open-file';
+import { GitQueryFeedback } from '../git-views';
 
 export interface GitHistoryViewProps {
   projectId: string;
   overview: GitOverview;
   tree: GitWorktree;
   onOpenFile: (file: GitOpenFile) => void;
-  diffRenderer?: (commitOid: string, commitInfo?: GitCommit, onClose?: () => void) => React.ReactNode;
-  feedbackRenderer: (error?: unknown, retry?: () => void) => React.ReactNode;
+  diffRenderer?: (
+    commitOid: string,
+    commitInfo?: GitCommit,
+    onClose?: () => void,
+  ) => React.ReactNode;
+  feedbackRenderer?: (error?: unknown, retry?: () => void) => React.ReactNode;
   onRefreshAll?: () => void;
   showToast?: (message: string, type?: 'success' | 'error', stderr?: string) => void;
   repoStatus?: GitRepoStatus | null;
 }
+
+const defaultFeedbackRenderer = (error?: unknown, retry?: () => void) => (
+  <GitQueryFeedback error={error} retry={retry ?? (() => {})} />
+);
 
 export function GitHistoryView({
   projectId,
@@ -41,7 +46,7 @@ export function GitHistoryView({
   tree,
   onOpenFile,
   diffRenderer,
-  feedbackRenderer,
+  feedbackRenderer = defaultFeedbackRenderer,
   onRefreshAll,
   showToast,
   repoStatus,
@@ -143,10 +148,9 @@ export function GitHistoryView({
     return Array.from(set).sort();
   }, [history.data]);
 
-  const totalCount =
-    hasActiveFilters
-      ? (history.data?.pages[0]?.totalCount ?? visibleCommits.length)
-      : (history.data?.pages[0]?.totalCount ?? allCommits.length);
+  const totalCount = hasActiveFilters
+    ? (history.data?.pages[0]?.totalCount ?? visibleCommits.length)
+    : (history.data?.pages[0]?.totalCount ?? allCommits.length);
 
   const handleSelectHead = useCallback(() => {
     selectRef(undefined);
@@ -162,7 +166,8 @@ export function GitHistoryView({
     (oid: string) => {
       const item = visibleCommits.find((entry) => entry.oid === oid);
       if (!item) return;
-      detailTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      detailTrigger.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       selectCommit(item);
     },
     [visibleCommits],
@@ -288,11 +293,7 @@ export function GitHistoryView({
           {commit && (
             <div ref={detailPane} className="git-history-detail-pane" tabIndex={-1}>
               {diffRenderer ? (
-                diffRenderer(
-                  commit,
-                  selection,
-                  handleCloseDetail,
-                )
+                diffRenderer(commit, selection, handleCloseDetail)
               ) : (
                 <GitCommitDetailPane
                   key={commit}

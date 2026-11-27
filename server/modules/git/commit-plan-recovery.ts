@@ -1,15 +1,15 @@
 /**
  * @file 按持久证据恢复已推进引用的多提交操作，或安全放弃尚未推进引用的操作。
  * @implementation 在外层授权与检出租约内对账日志、权威状态、目录、HEAD、索引和锁身份；恢复时仅发布经确认的自有索引，放弃时仅移除经确认的自有锁，证据不一致时保留现场。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
-import { constants, type BigIntStats } from 'node:fs';
 import { lstat, open, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { AppError } from '../../../shared/errors.js';
 import {
   hashCommitJournalIndex,
+  isLegalJournalAdvance,
   MAX_COMMIT_JOURNAL_INDEX_BYTES,
   type CommitJournal,
   type CommitJournalObservation,
@@ -19,6 +19,14 @@ import {
 import type { CommitPlanExecutionCoordinator } from './commit-plan-execution.js';
 import { assertIdleGit } from './development-worktrees.js';
 import { fileIdentity, gitError, LocalGit } from './git-cli.js';
+import {
+  errnoIs as errorIs,
+  OPEN_DIRECTORY_FLAGS,
+  readHeadTarget,
+  readRegularFileSafely,
+  statIdentity as identity,
+  verifyCheckoutDirectories,
+} from './git-safe-io.js';
 
 export interface CommitPlanRecoveryAhead {
   operation: CommitJournalRecord;
@@ -85,9 +93,6 @@ export type CommitPlanAbandonResult =
   | { state: 'aborted'; operationId: string; lockRemoved: boolean; replayed: boolean }
   | Extract<CommitPlanRecoveryResult, { state: 'recovery_required' }>;
 
-const identity = (info: BigIntStats) => info.dev + ':' + info.ino;
-const errorIs = (error: unknown, code: string) =>
-  error instanceof Error && 'code' in error && error.code === code;
 const blocked = (code: string): never => {
   throw gitError('PLAN_RECOVERY_' + code, '提交恢复证据不一致，请保留现场并核对。');
 };
@@ -144,45 +149,16 @@ interface Image {
   identity: string;
 }
 async function image(path: string): Promise<Image | null> {
-  let handle: FileHandle;
-  try {
-    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  } catch (error) {
-    if (errorIs(error, 'ENOENT')) return null;
-    return blocked('UNSAFE_FILE');
-  }
-  try {
-    const before = await handle.stat({ bigint: true });
-    if (
-      !before.isFile() ||
-      before.nlink !== 1n ||
-      before.size > BigInt(MAX_COMMIT_JOURNAL_INDEX_BYTES)
-    )
-      return blocked('UNSAFE_FILE');
-    const bytes = Buffer.alloc(Number(before.size) + 1);
-    let offset = 0;
-    while (offset < bytes.length) {
-      const read = await handle.read(bytes, offset, bytes.length - offset, offset);
-      if (!read.bytesRead) break;
-      offset += read.bytesRead;
-    }
-    const after = await handle.stat({ bigint: true });
-    const named = await lstat(path, { bigint: true });
-    if (
-      identity(before) !== identity(after) ||
-      identity(after) !== identity(named) ||
-      before.size !== after.size ||
-      before.mtimeNs !== after.mtimeNs ||
-      before.ctimeNs !== after.ctimeNs ||
-      BigInt(offset) !== before.size
-    )
-      return blocked('FILE_CHANGED');
-    const hash = hashCommitJournalIndex(bytes.subarray(0, offset));
-    if (!hash) return blocked('UNSAFE_FILE');
-    return { hash, identity: identity(after) };
-  } finally {
-    await handle.close();
-  }
+  const result = await readRegularFileSafely(path, {
+    maxBytes: MAX_COMMIT_JOURNAL_INDEX_BYTES,
+  });
+  if (result.status === 'missing') return null;
+  if (result.status === 'changed' || (result.status === 'unsafe' && result.reason === 'replaced'))
+    return blocked('FILE_CHANGED');
+  if (result.status === 'unsafe') return blocked('UNSAFE_FILE');
+  const hash = hashCommitJournalIndex(result.bytes);
+  if (!hash) return blocked('UNSAFE_FILE');
+  return { hash, identity: identity(result.stat) };
 }
 
 /** Requires explicit recovery authorization and an already held worktrees.writeCheckout lease.
@@ -256,15 +232,9 @@ async function settleCommitPlan(
       (candidate.authority.state !== journal.state ||
         candidate.authority.revision !== journal.revision)
     ) {
-      const legalEdge =
-        (candidate.authority.state === 'prepared' &&
-          ['ref_updated', 'aborting'].includes(journal.state)) ||
-        (candidate.authority.state === 'ref_updated' && journal.state === 'completed') ||
-        (candidate.authority.state === 'aborting' && journal.state === 'aborted');
       if (
         !options.coordinator.reconcileAhead ||
-        !legalEdge ||
-        candidate.authority.revision + 1 !== journal.revision
+        !isLegalJournalAdvance(candidate.authority, journal)
       )
         return blocked('STATE_MISMATCH');
       pendingAhead = candidate;
@@ -318,36 +288,34 @@ async function settleCommitPlan(
     record = await readAgreed();
     const originalRecord = record;
     const replayed = record.state === (action === 'abandon' ? 'aborted' : 'completed');
-    admin = await open(
-      git.admin,
-      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-    );
+    admin = await open(git.admin, OPEN_DIRECTORY_FLAGS);
     const adminInfo = await admin.stat({ bigint: true });
     const directory = '/proc/self/fd/' + admin.fd;
     const indexPath = join(directory, 'index');
     const lockPath = join(directory, 'index.lock');
     const checkDirectories = async () => {
-      const current = await LocalGit.open(git.root, options.signal);
-      if (
-        current.repositoryId !== originalRecord.repositoryId ||
-        current.admin !== git.admin ||
-        current.common !== git.common ||
-        (await fileIdentity(git.root)) !== originalRecord.worktreeIdentity ||
-        (await fileIdentity(git.admin)) !== originalRecord.adminIdentity ||
-        identity(await lstat(git.admin, { bigint: true })) !== identity(adminInfo)
-      )
-        return blocked('CHECKOUT_CHANGED');
+      const current = await verifyCheckoutDirectories(
+        git,
+        {
+          repositoryId: originalRecord.repositoryId,
+          rootIdentity: originalRecord.worktreeIdentity,
+          adminIdentity: originalRecord.adminIdentity,
+          adminInfo,
+          expectedCommon: git.common,
+        },
+        options.signal,
+      );
+      if (!current) return blocked('CHECKOUT_CHANGED');
       return current;
     };
     const observe = async (): Promise<CommitJournalObservation> => {
       const current = await checkDirectories();
-      const [reference, head, index] = await Promise.all([
-        current.text(['symbolic-ref', '--quiet', 'HEAD'], { allowExit: [1] }),
-        current.oid('HEAD'),
+      const [{ ref: headRef, head }, index] = await Promise.all([
+        readHeadTarget(current, options.signal),
         image(indexPath),
       ]);
-      evidence.ref = reference.trim() || 'HEAD';
-      evidence.head = head ?? null;
+      evidence.ref = headRef;
+      evidence.head = head;
       evidence.indexHash = index?.hash ?? null;
       evidence.indexIdentity = index?.identity ?? null;
       const namedLock = await lstat(lockPath, { bigint: true }).catch((error: unknown) => {

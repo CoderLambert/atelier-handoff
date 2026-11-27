@@ -1,7 +1,7 @@
 /**
  * @file 展示 Git 文件、提交、差异及操作入口。
  * @implementation 按工作树和变更层展示文件与差异，提供布局切换、完整内容预览、本机定位及文件层级操作。
- * @updated 2026-11-25T16:53:09+08:00
+ * @updated 2026-11-27T21:55:00+08:00
  */
 import { useRef, useState } from 'react';
 import {
@@ -47,7 +47,6 @@ import { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
 import { usePendingMultiCommits } from '@/use-query/git/use-pending-multi-commits';
 import { useRecoverMultiCommit } from '@/use-query/git/use-recover-multi-commit';
 import { useAbandonMultiCommit } from '@/use-query/git/use-abandon-multi-commit';
-import { GitHistoryView as GitHistoryViewInternal } from './git-history/git-history-view';
 import { GitCommitArea } from './git-commit-area';
 import { GitStashPanel } from './git-stash-panel';
 
@@ -200,11 +199,19 @@ export function GitFilesView({
         file.path === current.path && layerFiles(file, 'staged') && layerFiles(file, 'unstaged'),
     );
   const comparing = hasBothLayers && current?.path === comparisonPath;
-  const activeFile = current && status.data?.files.find((file) =>
-    file.path === current.path && layerFiles(file, current.layer),
-  );
-  const fullSource = current?.layer === 'staged' ? activeFile?.index === 'D' ? 'head' : 'index'
-    : activeFile?.worktree === 'D' ? 'index' : 'worktree';
+  const activeFile =
+    current &&
+    status.data?.files.find(
+      (file) => file.path === current.path && layerFiles(file, current.layer),
+    );
+  const fullSource =
+    current?.layer === 'staged'
+      ? activeFile?.index === 'D'
+        ? 'head'
+        : 'index'
+      : activeFile?.worktree === 'D'
+        ? 'index'
+        : 'worktree';
   const discarding = discard.isPending;
   const discardDescription = (layer: GitFileDiscardRequest['targets'][number]['layer']) =>
     t(layer === 'staged' && !tree.head ? 'files.discardFirstStaged' : `files.discardMode.${layer}`);
@@ -390,7 +397,10 @@ export function GitFilesView({
             ) : null}
             {/* 1. 冲突文件置顶 */}
             {conflictFiles.length > 0 && (
-              <section className="git-list-group border-b border-destructive/20 pb-2 mb-2" key="conflicts-pinned">
+              <section
+                className="git-list-group border-b border-destructive/20 pb-2 mb-2"
+                key="conflicts-pinned"
+              >
                 <h3 className="text-destructive font-semibold flex items-center justify-between">
                   <span>{t('files.conflicted')}</span>
                   <Badge variant="destructive">{number.format(conflictFiles.length)}</Badge>
@@ -450,7 +460,9 @@ export function GitFilesView({
                                 className="git-list-button git-file-row justify-start flex-1 min-w-0"
                                 variant="ghost"
                                 size="sm"
-                                aria-pressed={current?.path === file.path && current.layer === layer}
+                                aria-pressed={
+                                  current?.path === file.path && current.layer === layer
+                                }
                                 title={
                                   file.previousPath
                                     ? file.previousPath + ' → ' + file.path
@@ -479,7 +491,8 @@ export function GitFilesView({
                                     fileList.current?.focus({ preventScroll: true });
                                     choose({ path: file.path, layer });
                                     onBusy(true);
-                                    void fileIndex.mutateAsync({ path: file.path, layer })
+                                    void fileIndex
+                                      .mutateAsync({ path: file.path, layer })
                                       .catch(() => {})
                                       .finally(() => onBusy(false));
                                   }}
@@ -588,11 +601,24 @@ export function GitFilesView({
                 <div className="git-file-actions ms-auto">
                   <GitDiffLayoutButton split={split} onToggle={() => setSplit(!split)} />
                   {activeFile && !current.path.endsWith('/') && (
-                    <GitFileActions key={current.path + ':' + fullSource} projectId={projectId}
+                    <GitFileActions
+                      key={current.path + ':' + fullSource}
+                      projectId={projectId}
                       worktreeId={tree.id}
-                      target={{ kind: 'worktree', worktreeId: tree.id, source: fullSource, path: current.path }}
-                      revealPath={activeFile.worktree === 'D' || activeFile.index === 'D' ? undefined : current.path}
-                      onRevealFailed={showToast} onOpenFile={onOpenFile} />
+                      target={{
+                        kind: 'worktree',
+                        worktreeId: tree.id,
+                        source: fullSource,
+                        path: current.path,
+                      }}
+                      revealPath={
+                        activeFile.worktree === 'D' || activeFile.index === 'D'
+                          ? undefined
+                          : current.path
+                      }
+                      onRevealFailed={showToast}
+                      onOpenFile={onOpenFile}
+                    />
                   )}
                 </div>
               </div>
@@ -704,38 +730,5 @@ export function GitFilesView({
         </Dialog>
       )}
     </div>
-  );
-}
-
-export function GitHistoryView({
-  projectId,
-  overview,
-  tree,
-  onOpenFile,
-  onRefreshAll,
-  showToast,
-  repoStatus,
-}: {
-  projectId: string;
-  overview: GitOverview;
-  tree: GitWorktree;
-  onOpenFile: (file: GitOpenFile) => void;
-  onRefreshAll?: () => void;
-  showToast?: (message: string, type?: 'success' | 'error', stderr?: string) => void;
-  repoStatus?: GitRepoStatus | null;
-}) {
-  return (
-    <GitHistoryViewInternal
-      projectId={projectId}
-      overview={overview}
-      tree={tree}
-      onOpenFile={onOpenFile}
-      onRefreshAll={onRefreshAll}
-      showToast={showToast}
-      repoStatus={repoStatus}
-      feedbackRenderer={(error, retry) => (
-        <GitQueryFeedback error={error} retry={retry ?? (() => {})} />
-      )}
-    />
   );
 }

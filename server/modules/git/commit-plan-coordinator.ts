@@ -1,16 +1,16 @@
 /**
  * @file 协调多提交任务状态与私有索引恢复证据。
  * @implementation SQLite 持有项目范围的操作状态，文件日志持有校验过的索引备份；两者不一致时停止并要求恢复。
- * @updated 2026-11-24T14:41:22+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import type { Store } from '../../store.js';
 import {
   CommitJournal,
-  type CommitJournalObservation,
+  isLegalJournalAdvance,
   type CommitJournalRecord,
-  type CommitJournalState,
 } from './commit-journal.js';
 import type { CommitPlanExecutionCoordinator } from './commit-plan-execution.js';
+import type { CommitPlanRecoveryCoordinator } from './commit-plan-recovery.js';
 import {
   hashCommitRepositoryIdentity,
   type CommitOperationRecord,
@@ -22,24 +22,11 @@ const recovery = () =>
   gitError('PLAN_RECOVERY_REQUIRED', '提交状态或索引恢复证据不一致，请先核对。');
 const conflict = () => gitError('PLAN_REQUEST_CONFLICT', '操作编号已属于另一份提交计划。');
 
-export interface CommitPlanRecoveryCoordinator extends CommitPlanExecutionCoordinator {
+export interface CommitPlanCoordinator
+  extends CommitPlanExecutionCoordinator, CommitPlanRecoveryCoordinator {
   adoptOrphan(operationId: string): Promise<CommitJournalRecord>;
-  readAllowAhead(operationId: string): Promise<
-    | {
-        operation: CommitJournalRecord;
-        authority: { state: CommitJournalState; revision: number };
-      }
-    | undefined
-  >;
-  reconcileAhead(input: {
-    operationId: string;
-    requestHash: string;
-    expectedState: CommitJournalState;
-    expectedRevision: number;
-    journalRevision: number;
-    observation: CommitJournalObservation;
-    indexIdentity: string | null;
-  }): Promise<CommitJournalRecord>;
+  readAllowAhead: NonNullable<CommitPlanRecoveryCoordinator['readAllowAhead']>;
+  reconcileAhead: NonNullable<CommitPlanRecoveryCoordinator['reconcileAhead']>;
 }
 
 /** One coordinator is scoped to an already authorized checkout and one user-confirmed digest. */
@@ -51,7 +38,7 @@ export function commitPlanCoordinator(
   worktreeIdentity: string,
   adminIdentity: string,
   requestDigest: string,
-): CommitPlanRecoveryCoordinator {
+): CommitPlanCoordinator {
   const scope: CommitOperationScope = {
     projectId,
     repositoryId: hashCommitRepositoryIdentity(repositoryId),
@@ -81,10 +68,7 @@ export function commitPlanCoordinator(
     record.state === evidence.state &&
     record.revision === evidence.revision;
   const ahead = (record: CommitOperationRecord, evidence: CommitJournalRecord) =>
-    evidence.revision === record.revision + 1 &&
-    ((record.state === 'prepared' && ['ref_updated', 'aborting'].includes(evidence.state)) ||
-      (record.state === 'ref_updated' && evidence.state === 'completed') ||
-      (record.state === 'aborting' && evidence.state === 'aborted'));
+    isLegalJournalAdvance(record, evidence);
   return {
     async adoptOrphan(operationId) {
       const existing = store.gitCommitOperations.get(scope, operationId);

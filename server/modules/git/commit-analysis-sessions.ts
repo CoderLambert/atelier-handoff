@@ -1,15 +1,16 @@
 /**
  * @file 保存短期 AI 多提交分析批次并提供实时进度。
  * @implementation 将快照、模型、补充要求和披露策略绑定到分析会话，保存经验证的批次，并按项目、工作树与快照返回进度。
- * @updated 2026-11-25T01:22:11+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { gatewayToken } from '../../gateway-search.js';
-import type {
-  MultiCommitAnalysis,
-  MultiCommitGroup,
-  MultiCommitProgress,
-  MultiCommitUnit,
+import {
+  MAX_MULTI_COMMIT_GROUPS,
+  type MultiCommitAnalysis,
+  type MultiCommitGroup,
+  type MultiCommitProgress,
+  type MultiCommitUnit,
 } from '../../../shared/git-multi-commit.js';
 import type { UiLocale } from '../../../shared/i18n/locale.js';
 import { AppError, type AppConfig } from '../../../shared/types.js';
@@ -26,7 +27,7 @@ export const commitAnalysisLimits = Object.freeze({
   ttlMs: 15 * 60_000,
   // At most 16 bounded batch responses and one final response, plus small ID metadata.
   maxSessionBytes: 8 * 1024 * 1024,
-  maxVisibleGroups: 120,
+  maxVisibleGroups: MAX_MULTI_COMMIT_GROUPS,
 });
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 

@@ -1,7 +1,7 @@
 /**
  * @file 展示手动及 AI 多提交的分析、对话审查和详细计划编辑。
  * @implementation 按入口和分析阶段组合模型选择、补充要求与实时进度，在对话摘要和逐组差异编辑之间切换。
- * @updated 2026-11-25T01:22:11+08:00
+ * @updated 2026-11-27T21:55:00+08:00
  */
 import { useState } from 'react';
 import { GitCommitHorizontal, LoaderCircle, Sparkles } from 'lucide-react';
@@ -20,7 +20,7 @@ import { commitCredentialBlocksLocal } from '@shared/git-multi-commit';
 import { GitPatch } from './git-diff';
 import { GitMultiCommitModelPicker } from './git-multi-commit-model-picker';
 import { GitMultiCommitConversation } from './git-multi-commit-conversation';
-import { GitMultiCommitEditor, type GitMultiCommitEditorMessages } from './git-multi-commit-editor';
+import { GitMultiCommitEditor } from './git-multi-commit-editor';
 import type { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
 
 export function GitMultiCommitDialog({
@@ -95,136 +95,6 @@ export function GitMultiCommitDialog({
       default:
         return t('multi.manual');
     }
-  };
-  const messages: GitMultiCommitEditorMessages = {
-    inventory: {
-      views: t('multi.views'),
-      group: t('multi.view.group'),
-      pending: t('multi.view.pending'),
-      unanalyzed: t('multi.view.unanalyzed'),
-      all: t('multi.view.all'),
-      retained: t('multi.view.retained'),
-      noRetained: t('multi.noRetained'),
-      retainCategory: t('multi.retainCategory'),
-      retainCategoryLabel: (category, count) => t('multi.retainCategoryLabel', { category, count }),
-      assignedTo: (group) => t('multi.assignedTo', { group }),
-      categories: {
-        protected: {
-          title: t('multi.category.protected'),
-          reason: t('multi.category.protectedReason'),
-        },
-        credentials: {
-          title: t('multi.category.credentials'),
-          reason: t('multi.category.credentialsReason'),
-        },
-        localOnly: {
-          title: t('multi.category.localOnly'),
-          reason: t('multi.category.localOnlyReason'),
-        },
-        dependency: {
-          title: t('multi.category.dependency'),
-          reason: t('multi.category.dependencyReason'),
-        },
-        unanalyzed: {
-          title: t('multi.view.unanalyzed'),
-          reason: t('multi.category.unanalyzedReason'),
-        },
-        modelUnassigned: {
-          title: t('multi.category.modelUnassigned'),
-          reason: t('multi.category.modelUnassignedReason'),
-        },
-        assigned: { title: t('multi.view.group'), reason: '' },
-        conflict: {
-          title: t('multi.category.conflict'),
-          reason: t('multi.category.conflictReason'),
-        },
-        rename: {
-          title: t('multi.category.rename'),
-          reason: t('multi.category.renameReason'),
-        },
-        limits: {
-          title: t('multi.category.limits'),
-          reason: t('multi.category.limitsReason'),
-        },
-        index: {
-          title: t('multi.category.index'),
-          reason: t('multi.category.indexReason'),
-        },
-        other: {
-          title: t('multi.category.other'),
-          reason: t('multi.category.otherReason'),
-        },
-        unassigned: {
-          title: t('multi.category.unassigned'),
-          reason: t('multi.category.unassignedReason'),
-        },
-      },
-    },
-    batch: {
-      all: t('multi.batch.all'),
-      destination: t('multi.batch.destination'),
-      apply: t('multi.batch.apply'),
-      clear: t('multi.batch.clear'),
-      blocked: t('multi.batch.blocked'),
-      selected: (count) => t('multi.batch.selected', { count }),
-      category: (category) => t('multi.batch.category', { category }),
-      file: (path) => t('multi.batch.file', { path }),
-      unit: (unit) =>
-        t('multi.batch.unit', {
-          path: unit.path,
-          layer: t(`layer.${unit.layer}`),
-          change: unit.description,
-        }),
-    },
-    contentLabel: t('multi.groups'),
-    groups: t('multi.groups'),
-    activeGroup: t('multi.activeGroup'),
-    addGroup: t('multi.addGroup'),
-    removeGroup: t('multi.removeGroup'),
-    moveGroupUp: t('multi.moveUp'),
-    moveGroupDown: t('multi.moveDown'),
-    mergeWithPrevious: t('multi.mergePrevious'),
-    mergeWithNext: t('multi.mergeNext'),
-    mergeHint: t('multi.mergeHint'),
-    title: t('commit.title'),
-    body: t('commit.body'),
-    titlePlaceholder: t('commit.titlePlaceholder'),
-    bodyPlaceholder: t('commit.bodyPlaceholder'),
-    noGroups: t('multi.noGroups'),
-    noUnits: t('multi.noUnits'),
-    units: t('multi.units'),
-    assignment: t('multi.assignment'),
-    unassigned: t('multi.unassigned'),
-    excluded: t('multi.excluded'),
-    noUnassigned: t('multi.noUnassigned'),
-    cannotPreview: t('multi.cannotPreview'),
-    cannotConfirm: t('multi.cannotConfirm'),
-    unavailable: t('multi.unavailable'),
-    moreIssues: t('multi.moreIssues'),
-    blocked: t('multi.blocked'),
-    layers: {
-      staged: t('layer.staged'),
-      unstaged: t('layer.unstaged'),
-      untracked: t('layer.untracked'),
-      conflict: t('layer.conflict'),
-    },
-    removalHint: t('multi.removalHint'),
-    invalidPlan: t('multi.invalidPlan'),
-    titleRequired: t('multi.titleRequired'),
-    emptyGroup: t('multi.emptyGroup'),
-    loading: t('multi.loading'),
-    submitting: t('multi.submitting'),
-    preview: t('multi.preview'),
-    previewing: t('multi.previewing'),
-    previewHeading: t('multi.previewHeading'),
-    confirm: t('multi.confirm'),
-    commitNotice: t('multi.localCommitNotice'),
-    cancel: t('commit.cancel'),
-    groupLabel: (number, title) => t('multi.groupLabel', { number, title }),
-    unitCount: (count) => t('multi.unitCount', { count }),
-    unassignedAction: (count) => t('multi.unassignedAction', { count }),
-    unanalyzedAction: (count) => t('multi.unanalyzedAction', { count }),
-    groupIssue: (group, issue) => t('multi.groupIssue', { group, issue }),
   };
   const blockedReasons: Readonly<Record<string, string>> = {
     restrictedPath: t('multi.restricted'),
@@ -567,7 +437,6 @@ export function GitMultiCommitDialog({
             groups={review.groups}
             excludedUnitIds={review.excludedUnitIds}
             activeGroupId={active}
-            messages={messages}
             status={
               review.committing
                 ? 'submitting'
@@ -607,7 +476,7 @@ export function GitMultiCommitDialog({
             onGroupsChange={(groups, excluded) =>
               review.update(
                 groups.map((group) => ({ ...group, unitIds: [...group.unitIds] })),
-                excluded,
+                [...excluded],
               )
             }
             onActiveGroupChange={setActive}

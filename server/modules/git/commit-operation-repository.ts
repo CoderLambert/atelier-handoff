@@ -1,10 +1,11 @@
 /**
  * @file 定义多提交操作的权威状态、恢复引用与作用域仓储接口。
  * @implementation 校验冻结证据和状态转换；仅保存私有文件引用及校验值，授权与 Git/文件执行由用例负责。
- * @updated 2026-11-24T14:57:15+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { MAX_MULTI_COMMIT_GROUPS } from '../../../shared/git-multi-commit.js';
 
 const uuid = z.uuid().refine((value) => value === value.toLowerCase());
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -88,7 +89,7 @@ const frozenFields = {
   ref,
   oldHead: oid.nullable(),
   newHead: oid,
-  commits: z.array(oid).min(1).max(120),
+  commits: z.array(oid).min(1).max(MAX_MULTI_COMMIT_GROUPS),
   originalIndex: commitIndexReference.nullable(),
   targetIndex: commitIndexReference,
 };

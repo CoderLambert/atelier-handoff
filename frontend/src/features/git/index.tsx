@@ -1,7 +1,7 @@
 /**
  * @file 组织 Git 侧栏、全窗口和文件阅读标签。
  * @implementation 管理工作树、视图、文件标签和滚动位置，协调同步反馈，并接入共享布局按钮和忙碌保护。
- * @updated 2026-11-27T02:41:56+08:00
+ * @updated 2026-11-27T21:55:00+08:00
  */
 import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -45,7 +45,8 @@ import { useGitWorkspaceSync } from '@/use-query/git/use-git-workspace-sync';
 import type { PanelLayoutActions } from '@/panel-sdk';
 import type { Project } from '@shared/types';
 import { CreateDevelopmentSession } from './create-development-session';
-import { GitFilesView, GitHistoryView, GitQueryFeedback } from './git-views';
+import { GitFilesView, GitQueryFeedback } from './git-views';
+import { GitHistoryView } from './git-history/git-history-view';
 import { GitWorktreesView } from './git-worktrees';
 import { GitSyncButton } from './git-sync-button';
 import { GitStateBanner } from './git-state-banner';

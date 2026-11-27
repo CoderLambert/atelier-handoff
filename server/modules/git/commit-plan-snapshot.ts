@@ -1,11 +1,10 @@
 /**
  * @file 冻结 AI 多提交规划的 HEAD、索引、工作区及完整候选单元。
  * @implementation 只读 Git 和受保护的本机文件，内存计算索引树；双次采集拒绝竞态，导出可校验的三态和依赖契约。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { applyPatch, structuredPatch } from 'diff';
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import { isAbsolute, join, sep } from 'node:path';
 import { z } from 'zod';
@@ -14,6 +13,7 @@ import { AppError } from '../../../shared/errors.js';
 import { fingerprint, MAX_TEXT, resolveProjectPath } from '../../files.js';
 import { fileIdentity, gitError, gitText, type LocalGit } from './git-cli.js';
 import { readGitStatus } from './git-reader.js';
+import { OPEN_REGULAR_READ_FLAGS, readHeadTarget, readRegularFileSafely } from './git-safe-io.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const mode = z.string().regex(/^[0-7]{6}$/u);
@@ -234,46 +234,27 @@ function parseIndex(text: string): GitCommitPlanIndexEntry[] {
 }
 
 async function target(git: LocalGit, signal?: AbortSignal) {
-  const [reference, head] = await Promise.all([
-    git.text(['symbolic-ref', '--quiet', 'HEAD'], { signal, allowExit: [1] }),
-    git.oid('HEAD', signal),
-  ]);
-  const ref = reference.trim() || 'HEAD';
+  const { ref, head } = await readHeadTarget(git, signal);
   if ((!ref.startsWith('refs/heads/') && ref !== 'HEAD') || (ref === 'HEAD' && !head))
     throw gitError('WORKTREE_CHANGED', '无法确认当前 Git 提交目标。');
   const tree = head
     ? gitOid.parse((await git.text(['rev-parse', head + '^{tree}'], { signal })).trim())
     : null;
-  return { ref, head: head ?? null, tree };
+  return { ref, head, tree };
 }
 
 async function indexFingerprint(git: LocalGit) {
-  try {
-    const handle = await open(
-      join(git.admin, 'index'),
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    );
-    try {
-      const before = await handle.stat({ bigint: true });
-      if (!before.isFile() || before.nlink !== 1n || before.size > BigInt(maxMetadata))
-        throw gitError('PLAN_INDEX_UNSUPPORTED', '当前 Git 索引无法安全读取。');
-      const bytes = Buffer.alloc(Number(before.size));
-      let offset = 0;
-      while (offset < bytes.length) {
-        const read = await handle.read(bytes, offset, bytes.length - offset, offset);
-        if (!read.bytesRead) throw changed();
-        offset += read.bytesRead;
-      }
-      const after = await handle.stat({ bigint: true });
-      if (before.ctimeNs !== after.ctimeNs || before.size !== after.size) throw changed();
-      return fingerprint(bytes);
-    } finally {
-      await handle.close();
-    }
-  } catch (error) {
-    if (isMissing(error)) return null;
-    throw error;
+  const result = await readRegularFileSafely(join(git.admin, 'index'), {
+    maxBytes: maxMetadata,
+    verifyPathInode: false,
+  });
+  if (result.status === 'missing') return null;
+  if (result.status === 'unsafe') {
+    if (result.reason === 'open' && !isMissing(result.cause)) throw result.cause;
+    throw gitError('PLAN_INDEX_UNSUPPORTED', '当前 Git 索引无法安全读取。');
   }
+  if (result.status === 'changed') throw changed();
+  return fingerprint(result.bytes);
 }
 
 function unavailable(
@@ -454,10 +435,7 @@ async function capture(git: LocalGit, signal?: AbortSignal) {
         worktree = unavailable(info.size > BigInt(MAX_TEXT) ? 'tooLarge' : 'budget', observation);
       else {
         const safePath = await resolveProjectPath(git.root, path);
-        const handle = await open(
-          safePath,
-          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-        );
+        const handle = await open(safePath, OPEN_REGULAR_READ_FLAGS);
         try {
           const opened = await handle.stat({ bigint: true });
           if (

@@ -1,12 +1,13 @@
 /**
  * @file 根据自然语言调整当前 AI 提交草稿。
  * @implementation 向模型提供可披露的草稿摘要与近期对话，校验结构化增量并应用于当前计划。
- * @updated 2026-11-25T01:22:11+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   commitCredentialBlocksLocal,
+  MAX_MULTI_COMMIT_GROUPS,
   multiCommitRevisionResponse,
   type MultiCommitRevisionRequest,
   type MultiCommitUnit,
@@ -39,10 +40,14 @@ const edits = z.strictObject({
         z.strictObject({ kind: z.literal('move'), groupId, unitIds: ids }),
         z.strictObject({ kind: z.literal('new'), ...gitCommitMessage.shape, unitIds: ids }),
         z.strictObject({ kind: z.literal('keep'), unitIds: ids }),
-        z.strictObject({ kind: z.literal('place'), groupId, position: z.int().min(1).max(120) }),
+        z.strictObject({
+          kind: z.literal('place'),
+          groupId,
+          position: z.int().min(1).max(MAX_MULTI_COMMIT_GROUPS),
+        }),
       ]),
     )
-    .max(120),
+    .max(MAX_MULTI_COMMIT_GROUPS),
 });
 
 const invalid = () => new AppError('GIT_PLAN_REVISION_INVALID', '无法应用 AI 草稿修改。', 409);

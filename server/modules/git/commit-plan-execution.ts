@@ -1,10 +1,10 @@
 /**
  * @file 在已授权的检出租约内执行冻结的多提交计划。
  * @implementation 临时索引构造提交链和目标索引；注入的权威状态协调器先保存恢复证据，再以 Git 协作锁、引用 CAS 和原子重命名发布。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { createHash } from 'node:crypto';
-import { constants, type BigIntStats } from 'node:fs';
+import type { BigIntStats } from 'node:fs';
 import {
   lstat,
   mkdtemp,
@@ -18,6 +18,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { MAX_MULTI_COMMIT_GROUPS } from '../../../shared/git-multi-commit.js';
 import { gitOid } from '../../../shared/git-workbench.js';
 import { AppError } from '../../../shared/errors.js';
 import { fingerprint, resolveProjectPath } from '../../files.js';
@@ -41,6 +42,15 @@ import {
 } from './commit-plan-snapshot.js';
 import { assertIdleGit } from './development-worktrees.js';
 import { fileIdentity, gitError, LocalGit } from './git-cli.js';
+import {
+  errnoIs as errorIs,
+  OPEN_DIRECTORY_FLAGS,
+  readHeadTarget,
+  readRegularFileSafely,
+  sameInode,
+  statIdentity as inode,
+  verifyCheckoutDirectories,
+} from './git-safe-io.js';
 
 /** The host must coordinate its authoritative operation repository AND durable index journal.
  * Methods resolve only after both agree durably. A file journal alone is not business authority.
@@ -93,10 +103,6 @@ export type CommitPlanExecutionResult =
       operation: CommitJournalRecord | null;
     };
 
-const errorIs = (error: unknown, code: string) =>
-  error instanceof Error && 'code' in error && error.code === code;
-const sameInode = (a: BigIntStats, b: BigIntStats) => a.dev === b.dev && a.ino === b.ino;
-const inode = (info: BigIntStats) => info.dev + ':' + info.ino;
 const stale = () => gitError('PLAN_STALE', '提交计划对应的分支、索引或工作区已变化，请重新核对。');
 const durableGitFlags = ['-c', 'core.fsync=all', '-c', 'core.fsyncMethod=fsync'];
 const safeIndexFlags = [
@@ -108,52 +114,19 @@ const safeIndexFlags = [
 ];
 
 async function readIndex(path: string): Promise<Buffer | null> {
-  let handle: FileHandle;
-  try {
-    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  } catch (error) {
-    if (errorIs(error, 'ENOENT')) return null;
+  const result = await readRegularFileSafely(path, {
+    maxBytes: MAX_COMMIT_JOURNAL_INDEX_BYTES,
+  });
+  if (result.status === 'ok') return result.bytes;
+  if (result.status === 'missing') return null;
+  if (result.status === 'changed' || result.reason === 'replaced') throw stale();
+  if (result.reason === 'open')
     throw gitError('PLAN_INDEX_UNSAFE', 'Git 索引不是可安全读取的普通文件。');
-  }
-  try {
-    const before = await handle.stat({ bigint: true });
-    if (
-      !before.isFile() ||
-      before.nlink !== 1n ||
-      before.size > BigInt(MAX_COMMIT_JOURNAL_INDEX_BYTES)
-    )
-      throw gitError('PLAN_INDEX_UNSAFE', 'Git 索引不是受支持的普通文件。');
-    // Bound allocation and reads even if a noncooperating writer grows the file after stat.
-    const buffer = Buffer.alloc(Number(before.size) + 1);
-    let length = 0;
-    while (length < buffer.length) {
-      const read = await handle.read(buffer, length, buffer.length - length, length);
-      if (!read.bytesRead) break;
-      length += read.bytesRead;
-    }
-    const bytes = buffer.subarray(0, length);
-    const after = await handle.stat({ bigint: true });
-    const named = await lstat(path, { bigint: true });
-    if (
-      !sameInode(after, named) ||
-      before.size !== after.size ||
-      before.ctimeNs !== after.ctimeNs ||
-      before.mtimeNs !== after.mtimeNs ||
-      BigInt(bytes.length) !== before.size
-    )
-      throw stale();
-    return bytes;
-  } finally {
-    await handle.close();
-  }
+  throw gitError('PLAN_INDEX_UNSAFE', 'Git 索引不是受支持的普通文件。');
 }
 
 async function target(git: LocalGit) {
-  const [reference, head] = await Promise.all([
-    git.text(['symbolic-ref', '--quiet', 'HEAD'], { allowExit: [1] }),
-    git.oid('HEAD'),
-  ]);
-  return { ref: reference.trim() || 'HEAD', head: head ?? null };
+  return readHeadTarget(git);
 }
 
 async function commitSettings(git: LocalGit) {
@@ -262,7 +235,7 @@ export async function executeCommitPlan(
   const compilation = compileCommitPlan(snapshot, plan);
   if (JSON.stringify(compilation) !== JSON.stringify(suppliedCompilation))
     throw gitError('PLAN_INVALID', '编译结果与冻结快照和分组不一致。');
-  if (compilation.commits.length > 120)
+  if (compilation.commits.length > MAX_MULTI_COMMIT_GROUPS)
     throw gitError('PLAN_LIMIT', '单次多提交数量超过恢复日志上限。');
   const requestHash = hashCommitJournalRequest({ snapshotVersion: snapshot.version, plan });
   const coordinator = options.coordinator;
@@ -312,10 +285,7 @@ export async function executeCommitPlan(
   )
     throw stale();
 
-  const admin = await open(
-    git.admin,
-    constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-  );
+  const admin = await open(git.admin, OPEN_DIRECTORY_FLAGS);
   let lock: FileHandle | undefined;
   let lockInfo: BigIntStats | undefined;
   let scratch: string | undefined;
@@ -332,16 +302,14 @@ export async function executeCommitPlan(
     throw error;
   });
   const checkDirectories = async () => {
-    const checkout = await LocalGit.open(git.root);
-    if (
-      checkout.admin !== git.admin ||
-      checkout.repositoryId !== git.repositoryId ||
-      checkout.common !== git.common ||
-      !sameInode(adminInfo, await lstat(git.admin, { bigint: true })) ||
-      (await fileIdentity(git.admin)) !== snapshot.adminIdentity ||
-      (await fileIdentity(git.root)) !== snapshot.rootIdentity
-    )
-      throw stale();
+    const checkout = await verifyCheckoutDirectories(git, {
+      repositoryId: git.repositoryId,
+      rootIdentity: snapshot.rootIdentity,
+      adminIdentity: snapshot.adminIdentity,
+      adminInfo,
+      expectedCommon: git.common,
+    });
+    if (!checkout) throw stale();
     return checkout;
   };
   const checkLock = async () => {

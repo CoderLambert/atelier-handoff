@@ -1,7 +1,7 @@
 /**
  * @file 保存多提交操作的恢复证据与版本化状态。
  * @implementation 原子发布私有日志及独立索引备份，保存锁设备与 inode 身份，仅对账执行器提供的 Git 状态，绝不修改引用或索引。
- * @updated 2026-11-24T15:55:24+08:00
+ * @updated 2026-11-27T21:40:00+08:00
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, type BigIntStats } from 'node:fs';
@@ -17,6 +17,13 @@ import {
 } from 'node:fs/promises';
 import { isAbsolute, normalize } from 'node:path';
 import { z } from 'zod';
+import { MAX_MULTI_COMMIT_GROUPS } from '../../../shared/git-multi-commit.js';
+import {
+  errnoIs as errorIs,
+  OPEN_DIRECTORY_FLAGS,
+  readRegularFileSafely,
+  sameInode,
+} from './git-safe-io.js';
 
 export const MAX_COMMIT_JOURNAL_INDEX_BYTES = 16 * 1024 * 1024;
 const maxRecordBytes = 2 * Math.ceil(MAX_COMMIT_JOURNAL_INDEX_BYTES / 3) * 4 + 64 * 1024;
@@ -90,8 +97,6 @@ export class CommitJournalError extends Error {
 const failure = (code: CommitJournalErrorCode, message: string): never => {
   throw new CommitJournalError(code, message);
 };
-const errorIs = (error: unknown, code: string) =>
-  error instanceof Error && 'code' in error && error.code === code;
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 /** Hashes exact index bytes; null represents a missing index, distinct from an empty file. */
@@ -203,7 +208,7 @@ const requestFields = {
   commits: z
     .array(oid)
     .min(1)
-    .max(120)
+    .max(MAX_MULTI_COMMIT_GROUPS)
     .refine((values) => new Set(values).size === values.length),
 };
 const validHeads = (value: {
@@ -334,9 +339,20 @@ function validTransition(previous: CommitJournalState, next: CommitJournalState)
   );
 }
 
+/** True when `next` is one legal non-recovery journal revision ahead of `previous`. */
+export function isLegalJournalAdvance(
+  previous: { state: CommitJournalState; revision: number },
+  next: { state: CommitJournalState; revision: number },
+): boolean {
+  return (
+    next.revision === previous.revision + 1 &&
+    next.state !== 'recovery_required' &&
+    validTransition(previous.state, next.state)
+  );
+}
+
 const descriptorPath = (handle: FileHandle, name: string) => `/proc/self/fd/${handle.fd}/${name}`;
-const sameInode = (a: BigIntStats, b: BigIntStats) => a.dev === b.dev && a.ino === b.ino;
-const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+const directoryFlags = OPEN_DIRECTORY_FLAGS;
 function owned(info: BigIntStats, directory: boolean): void {
   if (
     !process.geteuid ||
@@ -466,42 +482,19 @@ export class CommitJournal {
   }
 
   private async readBytes(folder: FileHandle, name: string, limit: number): Promise<Buffer> {
-    const path = descriptorPath(folder, name);
-    const named = await lstat(path, { bigint: true }).catch((error: unknown) => {
-      if (errorIs(error, 'ENOENT')) return failure('CORRUPT', 'Journal evidence file is missing.');
-      throw error;
+    const result = await readRegularFileSafely(descriptorPath(folder, name), {
+      maxBytes: limit,
+      preStat: true,
+      validateStat: (info) => owned(info, false),
     });
-    owned(named, false);
-    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    try {
-      const before = await file.stat({ bigint: true });
-      owned(before, false);
-      if (!sameInode(named, before) || before.size > BigInt(limit))
-        return failure('CORRUPT', 'Journal evidence is changed or oversized.');
-      const bytes = Buffer.alloc(Number(before.size) + 1);
-      let offset = 0;
-      while (offset < bytes.length) {
-        const { bytesRead } = await file.read(bytes, offset, bytes.length - offset, null);
-        if (!bytesRead) break;
-        offset += bytesRead;
-      }
-      const after = await file.stat({ bigint: true });
-      owned(after, false);
-      if (
-        BigInt(offset) !== before.size ||
-        before.size !== after.size ||
-        before.mtimeNs !== after.mtimeNs ||
-        before.ctimeNs !== after.ctimeNs
-      )
-        return failure('CORRUPT', 'Journal evidence changed during reading.');
-      const current = await lstat(path, { bigint: true });
-      owned(current, false);
-      if (!sameInode(after, current))
-        return failure('UNSAFE_PATH', 'Journal evidence was replaced.');
-      return bytes.subarray(0, offset);
-    } finally {
-      await file.close();
-    }
+    if (result.status === 'ok') return result.bytes;
+    if (result.status === 'missing') return failure('CORRUPT', 'Journal evidence file is missing.');
+    if (result.status === 'changed')
+      return failure('CORRUPT', 'Journal evidence changed during reading.');
+    if (result.reason === 'replaced')
+      return failure('UNSAFE_PATH', 'Journal evidence was replaced.');
+    if (result.reason === 'open') throw result.cause;
+    return failure('CORRUPT', 'Journal evidence is changed or oversized.');
   }
 
   private async load(
