@@ -1,6 +1,8 @@
 name: Dependency checks
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -36,14 +38,12 @@ jobs:
             [[ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" == "1" ]]; then
             sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
           fi
-          # The command sandbox maps /lib64 to /usr/lib on Arch.
-          if [[ ! -e /usr/lib/ld-linux-x86-64.so.2 ]]; then
-            test -f /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
-            sudo ln -s /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 /usr/lib/ld-linux-x86-64.so.2
-          fi
 
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Check types and source boundaries
         run: npm run check
