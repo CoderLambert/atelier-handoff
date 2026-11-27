@@ -54,7 +54,7 @@ const isStopping = () => Boolean(stopping);
 const host = { getWindow, getOrigin: () => connection?.origin, isStopping };
 const shortcuts = createDesktopShortcuts(host);
 const browser = createBrowserController({ ...host, onShortcutInput: shortcuts.handleGuestInput });
-const files = createNativeFileActions(getWindow, getConnection);
+const files = createNativeFileActions(getWindow, getConnection, isStopping);
 const uiLanguage = new DesktopUiLanguagePreferences(profile, (locale) =>
   desktopI18n.changeLanguage(locale),
 );

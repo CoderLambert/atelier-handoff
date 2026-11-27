@@ -1,7 +1,7 @@
 /**
  * @file 验证浏览器与终端面板的工作区交互。
- * @implementation 用隔离 Chromium 和原生桥替身检查共享宽度、全屏、收起后的路由与焦点，以及原生网页槽位和弹窗遮挡。
- * @updated 2026-11-27T02:41:56+08:00
+ * @implementation 用隔离 Chromium 和原生桥替身检查共享宽度、全屏、收起后的路由与焦点，以及原生槽位的坐标去重、无关变化过滤和弹窗遮挡。
+ * @updated 2026-11-27T17:02:57+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -376,6 +376,72 @@ test(
         () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 0,
       );
       assert.equal(await changes.evaluate((element) => element === document.activeElement), true);
+      const idleLayout = await page.evaluate(async () => {
+        const slot = document.querySelector('.desktop-browser-slot');
+        const panel = document.querySelector('.workspace-browser-panel');
+        if (!slot || !panel) throw new Error('missing browser slot');
+        const layouts: unknown[] = Reflect.get(window, 'nativeLayouts');
+        for (let frame = 0; frame < 3; frame++)
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const start = layouts.length;
+        let reads = 0;
+        const bounds = slot.getBoundingClientRect;
+        slot.getBoundingClientRect = () => {
+          reads++;
+          return bounds.call(slot);
+        };
+        const chat = document.createElement('div');
+        chat.hidden = true;
+        try {
+          document.body.append(chat);
+          for (let index = 0; index < 4; index++) {
+            chat.append('Stream chunk', document.createElement('span'));
+            chat.dispatchEvent(new Event('scroll'));
+            for (let frame = 0; frame < 3; frame++)
+              await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          }
+          const unrelatedReads = reads;
+          const unrelatedLayouts = layouts.length - start;
+          window.dispatchEvent(new Event('atelier-workspace-layout'));
+          panel.dispatchEvent(new Event('scroll'));
+          for (let frame = 0; frame < 3; frame++)
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          return {
+            unrelatedReads,
+            unrelatedLayouts,
+            relatedReads: reads - unrelatedReads,
+            layouts: layouts.length - start,
+          };
+        } finally {
+          slot.getBoundingClientRect = bounds;
+          chat.remove();
+        }
+      });
+      assert.deepEqual(idleLayout, {
+        unrelatedReads: 0,
+        unrelatedLayouts: 0,
+        relatedReads: 1,
+        layouts: 0,
+      });
+      await page.evaluate(() => {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'fixture-dialog-wrapper';
+        const dialog = document.createElement('div');
+        dialog.setAttribute('role', 'dialog');
+        dialog.hidden = true;
+        wrapper.append(dialog);
+        document.body.append(wrapper);
+      });
+      const fixtureDialog = page.locator('#fixture-dialog-wrapper > div');
+      await fixtureDialog.evaluate((element) => element.removeAttribute('hidden'));
+      await page.waitForFunction(
+        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds === null,
+      );
+      await fixtureDialog.evaluate((element) => element.setAttribute('hidden', ''));
+      await page.waitForFunction(
+        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 0,
+      );
+      await fixtureDialog.evaluate((element) => element.parentElement?.remove());
       for (const viewport of [
         { width: 1000, height: 800 },
         { width: 900, height: 800 },

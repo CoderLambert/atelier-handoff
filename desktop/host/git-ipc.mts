@@ -1,9 +1,9 @@
 /**
  * @file 绑定桌面端 Git 操作的 IPC 通道。
- * @implementation 校验可信窗口与主 frame 来源，按共享契约解析合并请求并调用 Git 服务。
- * @updated 2026-11-27T01:02:41+08:00
+ * @implementation 通过共享来源守卫校验窗口、连接和关停状态，解析请求并调用 Git 服务。
+ * @updated 2026-11-27T16:55:43+08:00
  */
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { ipcMain, type BrowserWindow } from 'electron';
 import {
   desktopGitChannels,
   gitMergeRequestSchema,
@@ -36,6 +36,7 @@ import {
   gitStashPop,
   gitStashPush,
 } from './git-service.mjs';
+import { createTrustedIpcGuard } from './trusted-ipc.mjs';
 
 type Connection = { origin: string };
 
@@ -53,26 +54,15 @@ export function bindDesktopGit(
   getConnection: () => Connection | undefined,
   isStopping: () => boolean,
 ): () => void {
-  function trusted(event: IpcMainInvokeEvent): Connection {
-    const owner = getWindow();
-    const connection = getConnection();
-    if (
-      isStopping() ||
-      !owner ||
-      owner.isDestroyed() ||
-      !connection ||
-      owner.webContents.isDestroyed() ||
-      event.sender !== owner.webContents ||
-      event.senderFrame !== owner.webContents.mainFrame ||
-      event.senderFrame?.origin !== connection.origin
-    ) {
-      throw new Error('Untrusted Git IPC request.');
-    }
-    return connection;
-  }
+  const assertTrustedIpc = createTrustedIpcGuard(
+    getWindow,
+    getConnection,
+    isStopping,
+    () => 'Untrusted Git IPC request.',
+  );
 
   ipcMain.handle(desktopGitChannels.status, async (event, input: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     return getGitRepoStatus(cwd);
   });
@@ -80,7 +70,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.commitStats,
     async (event, input: unknown, hashArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let hash: string;
       if (typeof input === 'object' && input !== null && 'cwd' in input && 'hash' in input) {
@@ -96,7 +86,7 @@ export function bindDesktopGit(
   );
 
   ipcMain.handle(desktopGitChannels.fetch, async (event, input: unknown, optsArg?: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     const options =
       typeof input === 'object' && input !== null && !('remote' in input) && optsArg
@@ -106,7 +96,7 @@ export function bindDesktopGit(
   });
 
   ipcMain.handle(desktopGitChannels.pull, async (event, input: unknown, optsArg?: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     const options =
       typeof input === 'object' && input !== null && !('rebase' in input) && optsArg
@@ -116,7 +106,7 @@ export function bindDesktopGit(
   });
 
   ipcMain.handle(desktopGitChannels.push, async (event, input: unknown, optsArg?: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     const options =
       typeof input === 'object' && input !== null && !('forceWithLease' in input) && optsArg
@@ -128,7 +118,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.createBranch,
     async (event, input: unknown, nameArg?: unknown, startPointArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let name: string;
       let startPoint: string | undefined;
@@ -152,7 +142,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.checkoutBranch,
     async (event, input: unknown, nameArg?: unknown, autoStashArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let name: string;
       let autoStash: boolean | undefined;
@@ -173,16 +163,11 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.renameBranch,
     async (event, input: unknown, oldNameArg?: unknown, newNameArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let oldName: string;
       let newName: string;
-      if (
-        typeof input === 'object' &&
-        input !== null &&
-        'oldName' in input &&
-        'newName' in input
-      ) {
+      if (typeof input === 'object' && input !== null && 'oldName' in input && 'newName' in input) {
         cwd = parseCwd(input);
         oldName = String((input as { oldName: unknown }).oldName);
         newName = String((input as { newName: unknown }).newName);
@@ -199,7 +184,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.deleteBranch,
     async (event, input: unknown, nameArg?: unknown, forceArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let name: string;
       let force: boolean | undefined;
@@ -218,14 +203,14 @@ export function bindDesktopGit(
   );
 
   ipcMain.handle(desktopGitChannels.mergeBranch, async (event, input: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     return gitMergeBranch(gitMergeRequestSchema.parse(input));
   });
 
   ipcMain.handle(
     desktopGitChannels.reset,
     async (event, input: unknown, hashArg?: unknown, modeArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let hash: string;
       let mode: GitResetMode;
@@ -244,7 +229,7 @@ export function bindDesktopGit(
   );
 
   ipcMain.handle(desktopGitChannels.revert, async (event, input: unknown, hashArg?: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     let cwd: string;
     let hash: string;
     if (typeof input === 'object' && input !== null && 'hash' in input) {
@@ -258,25 +243,28 @@ export function bindDesktopGit(
     return gitRevert(cwd, hash);
   });
 
-  ipcMain.handle(desktopGitChannels.cherryPick, async (event, input: unknown, hashArg?: unknown) => {
-    trusted(event);
-    let cwd: string;
-    let hash: string;
-    if (typeof input === 'object' && input !== null && 'hash' in input) {
-      cwd = parseCwd(input);
-      hash = String((input as { hash: unknown }).hash);
-    } else {
-      cwd = parseCwd(input);
-      hash = typeof hashArg === 'string' ? hashArg : '';
-    }
-    if (!hash) throw new Error('Missing hash parameter.');
-    return gitCherryPick(cwd, hash);
-  });
+  ipcMain.handle(
+    desktopGitChannels.cherryPick,
+    async (event, input: unknown, hashArg?: unknown) => {
+      assertTrustedIpc(event);
+      let cwd: string;
+      let hash: string;
+      if (typeof input === 'object' && input !== null && 'hash' in input) {
+        cwd = parseCwd(input);
+        hash = String((input as { hash: unknown }).hash);
+      } else {
+        cwd = parseCwd(input);
+        hash = typeof hashArg === 'string' ? hashArg : '';
+      }
+      if (!hash) throw new Error('Missing hash parameter.');
+      return gitCherryPick(cwd, hash);
+    },
+  );
 
   ipcMain.handle(
     desktopGitChannels.commit,
     async (event, input: unknown, messageArg?: unknown, stageAllArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let message: string;
       let stageAll = false;
@@ -297,7 +285,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.amendCommit,
     async (event, input: unknown, messageArg?: unknown, stageAllArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let message: string;
       let stageAll = false;
@@ -316,7 +304,7 @@ export function bindDesktopGit(
   );
 
   ipcMain.handle(desktopGitChannels.stashList, async (event, input: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     return gitStashList(cwd);
   });
@@ -324,7 +312,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.stashPush,
     async (event, input: unknown, messageArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let message: string | undefined;
       if (typeof input === 'object' && input !== null && 'message' in input) {
@@ -342,7 +330,7 @@ export function bindDesktopGit(
   );
 
   ipcMain.handle(desktopGitChannels.stashPop, async (event, input: unknown, indexArg?: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     let cwd: string;
     let index: number | undefined;
     if (typeof input === 'object' && input !== null && 'index' in input) {
@@ -361,7 +349,7 @@ export function bindDesktopGit(
   ipcMain.handle(
     desktopGitChannels.stashApply,
     async (event, input: unknown, indexArg?: unknown) => {
-      trusted(event);
+      assertTrustedIpc(event);
       let cwd: string;
       let index: number | undefined;
       if (typeof input === 'object' && input !== null && 'index' in input) {
@@ -378,31 +366,34 @@ export function bindDesktopGit(
     },
   );
 
-  ipcMain.handle(desktopGitChannels.stashDrop, async (event, input: unknown, indexArg?: unknown) => {
-    trusted(event);
-    let cwd: string;
-    let index: number | undefined;
-    if (typeof input === 'object' && input !== null && 'index' in input) {
-      cwd = parseCwd(input);
-      index =
-        typeof (input as { index?: unknown }).index === 'number'
-          ? Number((input as { index?: unknown }).index)
-          : undefined;
-    } else {
-      cwd = parseCwd(input);
-      index = typeof indexArg === 'number' ? indexArg : undefined;
-    }
-    return gitStashDrop(cwd, index);
-  });
+  ipcMain.handle(
+    desktopGitChannels.stashDrop,
+    async (event, input: unknown, indexArg?: unknown) => {
+      assertTrustedIpc(event);
+      let cwd: string;
+      let index: number | undefined;
+      if (typeof input === 'object' && input !== null && 'index' in input) {
+        cwd = parseCwd(input);
+        index =
+          typeof (input as { index?: unknown }).index === 'number'
+            ? Number((input as { index?: unknown }).index)
+            : undefined;
+      } else {
+        cwd = parseCwd(input);
+        index = typeof indexArg === 'number' ? indexArg : undefined;
+      }
+      return gitStashDrop(cwd, index);
+    },
+  );
 
   ipcMain.handle(desktopGitChannels.continueOp, async (event, input: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     return gitContinueOp(cwd);
   });
 
   ipcMain.handle(desktopGitChannels.abortOp, async (event, input: unknown) => {
-    trusted(event);
+    assertTrustedIpc(event);
     const cwd = parseCwd(input);
     return gitAbortOp(cwd);
   });

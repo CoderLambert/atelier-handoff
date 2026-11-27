@@ -1,13 +1,13 @@
 /**
  * @file 管理可信工作台窗口的原生文件操作与诊断导出。
- * @implementation 校验 IPC 来源，通过系统对话框处理目录和保存操作；从配对运行时读取交付物或 Git 文件位置，定位本机文件并导出诊断信息。
- * @updated 2026-11-25T16:53:09+08:00
+ * @implementation 通过共享来源守卫复核关停与连接状态，处理原生文件对话框、交付物保存、本机定位和诊断导出。
+ * @updated 2026-11-27T16:55:43+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { access, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { release } from 'node:os';
-import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
 import {
   desktopArtifactIdSchema,
   desktopArtifactSaveSchema,
@@ -17,44 +17,34 @@ import {
 } from '../../shared/desktop-files.js';
 import { desktopPairingHeader } from '../../shared/desktop-host.js';
 import { desktopT } from './i18n.mjs';
+import { createTrustedIpcGuard } from './trusted-ipc.mjs';
 
 type Connection = { origin: string; pairing: string };
 export function createNativeFileActions(
   window: () => BrowserWindow | undefined,
   currentConnection: () => Connection | undefined,
+  isStopping: () => boolean,
 ) {
   const copies = new Map<string, string>();
-  function trusted(event: IpcMainInvokeEvent) {
-    const owner = window();
-    const runtime = currentConnection();
-    if (
-      !owner ||
-      owner.isDestroyed() ||
-      !runtime ||
-      owner.webContents.isDestroyed() ||
-      event.sender !== owner.webContents ||
-      event.senderFrame !== owner.webContents.mainFrame ||
-      event.senderFrame.origin !== runtime.origin
-    )
-      throw new Error(desktopT('host.files.invalidSource'));
-    return { owner, runtime };
-  }
+  const assertTrustedIpc = createTrustedIpcGuard(window, currentConnection, isStopping, () =>
+    desktopT('host.files.invalidSource'),
+  );
 
   ipcMain.handle(desktopFilesChannels.pickDirectory, async (event): Promise<string | null> => {
-    const { owner } = trusted(event);
+    const { owner } = assertTrustedIpc(event);
     const result = await dialog.showOpenDialog(owner, {
       title: desktopT('host.files.chooseDirectory'),
       buttonLabel: desktopT('host.files.chooseButton'),
       properties: ['openDirectory'],
     });
-    trusted(event);
+    assertTrustedIpc(event);
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
   ipcMain.handle(
     desktopFilesChannels.saveArtifact,
     async (event, input: unknown): Promise<boolean> => {
-      const { owner, runtime } = trusted(event);
+      const { owner, connection: runtime } = assertTrustedIpc(event);
       const { id, name } = desktopArtifactSaveSchema.parse(input);
       const result = await dialog.showSaveDialog(owner, {
         title: desktopT('host.files.saveArtifact'),
@@ -63,7 +53,7 @@ export function createNativeFileActions(
         properties: ['showOverwriteConfirmation', 'createDirectory'],
       });
       if (result.canceled || !result.filePath) return false;
-      if (trusted(event).runtime !== runtime)
+      if (assertTrustedIpc(event).connection !== runtime)
         throw new Error(desktopT('host.files.connectionChanged'));
       const response = await fetch(new URL(`/api/artifacts/${id}/download`, runtime.origin), {
         headers: { [desktopPairingHeader]: runtime.pairing },
@@ -78,7 +68,7 @@ export function createNativeFileActions(
       const staged = join(dirname(path), `.atelier-save-${randomUUID()}`);
       try {
         await writeFile(staged, bytes, { flag: 'wx', mode: 0o600 });
-        if (trusted(event).runtime !== runtime)
+        if (assertTrustedIpc(event).connection !== runtime)
           throw new Error(desktopT('host.files.connectionChanged'));
         await rename(staged, path);
         copies.set(id, path);
@@ -95,7 +85,7 @@ export function createNativeFileActions(
   ipcMain.handle(
     desktopFilesChannels.revealArtifact,
     async (event, input: unknown): Promise<boolean> => {
-      trusted(event);
+      assertTrustedIpc(event);
       const id = desktopArtifactIdSchema.parse(input);
       const path = copies.get(id);
       if (!path) return false;
@@ -105,30 +95,36 @@ export function createNativeFileActions(
         copies.delete(id);
         return false;
       }
-      trusted(event);
+      assertTrustedIpc(event);
       shell.showItemInFolder(path);
       return true;
     },
   );
-  ipcMain.handle(desktopFilesChannels.revealGitFile, async (event, input: unknown): Promise<boolean> => {
-    const { runtime } = trusted(event);
-    const { projectId, worktreeId, path } = desktopGitFileSchema.parse(input);
-    const url = new URL(`/api/projects/${projectId}/git/worktrees/${worktreeId}/file-location`, runtime.origin);
-    url.searchParams.set('path', path);
-    const response = await fetch(url, {
-      headers: { [desktopPairingHeader]: runtime.pairing },
-      signal: AbortSignal.timeout(10_000),
-      redirect: 'error',
-    });
-    if (!response.ok || trusted(event).runtime !== runtime) return false;
-    const value: unknown = await response.json();
-    const { location } = desktopGitFileLocationSchema.parse(value);
-    if (!isAbsolute(location) || trusted(event).runtime !== runtime) return false;
-    shell.showItemInFolder(location);
-    return true;
-  });
+  ipcMain.handle(
+    desktopFilesChannels.revealGitFile,
+    async (event, input: unknown): Promise<boolean> => {
+      const { connection: runtime } = assertTrustedIpc(event);
+      const { projectId, worktreeId, path } = desktopGitFileSchema.parse(input);
+      const url = new URL(
+        `/api/projects/${projectId}/git/worktrees/${worktreeId}/file-location`,
+        runtime.origin,
+      );
+      url.searchParams.set('path', path);
+      const response = await fetch(url, {
+        headers: { [desktopPairingHeader]: runtime.pairing },
+        signal: AbortSignal.timeout(10_000),
+        redirect: 'error',
+      });
+      if (!response.ok || assertTrustedIpc(event).connection !== runtime) return false;
+      const value: unknown = await response.json();
+      const { location } = desktopGitFileLocationSchema.parse(value);
+      if (!isAbsolute(location) || assertTrustedIpc(event).connection !== runtime) return false;
+      shell.showItemInFolder(location);
+      return true;
+    },
+  );
   ipcMain.handle(desktopFilesChannels.exportDiagnostics, async (event): Promise<boolean> => {
-    const { owner } = trusted(event);
+    const { owner } = assertTrustedIpc(event);
     const result = await dialog.showSaveDialog(owner, {
       title: desktopT('host.files.exportDiagnostics'),
       buttonLabel: desktopT('host.files.exportButton'),
@@ -136,7 +132,7 @@ export function createNativeFileActions(
       properties: ['showOverwriteConfirmation', 'createDirectory'],
     });
     if (result.canceled || !result.filePath) return false;
-    trusted(event);
+    assertTrustedIpc(event);
     const info = {
       formatVersion: 1,
       applicationVersion: app.getVersion(),

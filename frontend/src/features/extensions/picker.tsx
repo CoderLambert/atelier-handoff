@@ -1,7 +1,7 @@
 /**
  * @file 提供输入区扩展和文件补全。
- * @implementation 跟随光标和输入法状态查询当前会话的工作目录，处理候选选择和键盘发送。
- * @updated 2026-11-24T03:39:03+08:00
+ * @implementation 跟踪光标和输入法以查询补全候选，同步无障碍选中项，并在选用候选后统一恢复输入焦点与光标。
+ * @updated 2026-11-27T17:00:34+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import {
@@ -153,17 +153,17 @@ export function ExtensionPicker({
   );
   const isSlash = trigger?.symbol === '/';
   const preview = useSkillInheritance(skillScope, active && isSlash);
-  const skillItems = isSlash && preview.isSuccess && !preview.isFetching
-    ? completionSkills(preview.data.items)
-    : [];
-  const rows = !trigger || trigger.symbol === '@'
-    ? []
-    : choices(
-        isSlash ? [...items.filter(({ kind }) => kind === 'command'), ...skillItems] : items,
-        trigger,
-        cursor.text,
-        draft.mode,
-      );
+  const skillItems =
+    isSlash && preview.isSuccess && !preview.isFetching ? completionSkills(preview.data.items) : [];
+  const rows =
+    !trigger || trigger.symbol === '@'
+      ? []
+      : choices(
+          isSlash ? [...items.filter(({ kind }) => kind === 'command'), ...skillItems] : items,
+          trigger,
+          cursor.text,
+          draft.mode,
+        );
 
   const fileSearch = useSearchProjectFiles(
     projectId,
@@ -276,41 +276,14 @@ export function ExtensionPicker({
       sync();
       return;
     }
-    if (token.symbol === '@') {
-      const fileRow = state.fileRows[choiceIndex];
-      if (!fileRow) {
-        sync();
-        return;
-      }
-      if (fileRow.isDirectory) {
-        const result = chooseDirectory(state.draft, token, fileRow);
-        const scope = state.projectId;
-        input.value = result.draft.text;
-        input.setSelectionRange(result.caret, result.caret);
-        setIndex(0);
-        state.onChange(result.draft);
-        sync();
-        if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
-        selectionFrame.current = requestAnimationFrame(() => {
-          if (
-            current.current.projectId !== scope ||
-            inputRef.current !== input ||
-            !input.isConnected ||
-            current.current.draft.text !== result.draft.text
-          )
-            return;
-          input.focus({ preventScroll: true });
-          input.setSelectionRange(result.caret, result.caret);
-          sync();
-        });
-        return;
-      }
-      const result = chooseFile(state.draft, token, fileRow);
+    const applyChoice = ({ draft, caret }: { draft: Draft; caret: number }, directory = false) => {
       const scope = state.projectId;
-      input.value = result.draft.text;
-      input.setSelectionRange(result.caret, result.caret);
-      setDismissed(JSON.stringify([scope, result.draft.text, result.caret, result.caret]));
-      state.onChange(result.draft);
+      // Preserve the caret for the controlled host input before React applies the draft.
+      input.value = draft.text;
+      input.setSelectionRange(caret, caret);
+      if (directory) setIndex(0);
+      else setDismissed(JSON.stringify([scope, draft.text, caret, caret]));
+      state.onChange(draft);
       sync();
       if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
       selectionFrame.current = requestAnimationFrame(() => {
@@ -318,13 +291,22 @@ export function ExtensionPicker({
           current.current.projectId !== scope ||
           inputRef.current !== input ||
           !input.isConnected ||
-          current.current.draft.text !== result.draft.text
+          current.current.draft.text !== draft.text
         )
           return;
         input.focus({ preventScroll: true });
-        input.setSelectionRange(result.caret, result.caret);
+        input.setSelectionRange(caret, caret);
         sync();
       });
+    };
+    if (token.symbol === '@') {
+      const fileRow = state.fileRows[choiceIndex];
+      if (!fileRow) {
+        sync();
+        return;
+      }
+      if (fileRow.isDirectory) applyChoice(chooseDirectory(state.draft, token, fileRow), true);
+      else applyChoice(chooseFile(state.draft, token, fileRow));
       return;
     }
     const row = state.rows[choiceIndex];
@@ -360,30 +342,9 @@ export function ExtensionPicker({
         return;
       }
     }
-    const result = chooseExtension({ ...state.draft, text: input.value }, token, {
-      ...row,
-      item: latest,
-    });
-    const scope = state.projectId;
-    // Updating the textarea now also preserves the caret for a controlled host input.
-    input.value = result.draft.text;
-    input.setSelectionRange(result.caret, result.caret);
-    setDismissed(JSON.stringify([scope, result.draft.text, result.caret, result.caret]));
-    state.onChange(result.draft);
-    sync();
-    if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
-    selectionFrame.current = requestAnimationFrame(() => {
-      if (
-        current.current.projectId !== scope ||
-        inputRef.current !== input ||
-        !input.isConnected ||
-        current.current.draft.text !== result.draft.text
-      )
-        return;
-      input.focus({ preventScroll: true });
-      input.setSelectionRange(result.caret, result.caret);
-      sync();
-    });
+    applyChoice(
+      chooseExtension({ ...state.draft, text: input.value }, token, { ...row, item: latest }),
+    );
   }
   function keydown(event: KeyboardEvent) {
     if (
@@ -411,14 +372,12 @@ export function ExtensionPicker({
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    const activeLength =
-      state.trigger?.symbol === '@' ? state.fileRows.length : state.rows.length;
+    const activeLength = state.trigger?.symbol === '@' ? state.fileRows.length : state.rows.length;
     if (state.open && activeLength && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       setIndex(
-        (state.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + activeLength) %
-          activeLength,
+        (state.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + activeLength) % activeLength,
       );
     } else if (state.open && activeLength && ['Enter', 'Tab'].includes(event.key)) {
       event.preventDefault();
@@ -532,13 +491,13 @@ export function ExtensionPicker({
     input.setAttribute('aria-expanded', String(open));
     if (open) input.setAttribute('aria-controls', `${id}-list`);
     else input.removeAttribute('aria-controls');
-    if (open && rows.length)
+    if (open && activeCount)
       input.setAttribute('aria-activedescendant', `${id}-option-${selectedIndex}`);
     else input.removeAttribute('aria-activedescendant');
     menuRef.current
       ?.querySelector<HTMLElement>(`[data-option-index="${selectedIndex}"]`)
       ?.scrollIntoView({ block: 'nearest' });
-  }, [inputRef, id, open, rows.length, selectedIndex]);
+  }, [inputRef, id, open, activeCount, selectedIndex]);
   useLayoutEffect(() => {
     if (!open) return;
     function positionMenu() {
@@ -676,7 +635,9 @@ export function ExtensionPicker({
                     fileRows.map((file, rowIndex) => {
                       const queryLastSlash = trigger.query.lastIndexOf('/');
                       const nameQuery =
-                        queryLastSlash >= 0 ? trigger.query.slice(queryLastSlash + 1) : trigger.query;
+                        queryLastSlash >= 0
+                          ? trigger.query.slice(queryLastSlash + 1)
+                          : trigger.query;
                       return (
                         <button
                           key={`${file.isDirectory ? 'dir' : 'file'}:${file.path}`}
@@ -712,7 +673,10 @@ export function ExtensionPicker({
                           </span>
                           <span className="ext-option-kind">
                             {file.isDirectory ? (
-                              <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                              <ChevronRight
+                                className="size-3.5 text-muted-foreground"
+                                aria-hidden="true"
+                              />
                             ) : file.size > 0 ? (
                               <span className="ext-file-size">{formatBytes(file.size)}</span>
                             ) : null}

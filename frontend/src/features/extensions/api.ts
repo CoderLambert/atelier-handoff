@@ -1,7 +1,7 @@
 /**
  * @file 提供扩展界面的显示辅助方法和数据访问入口。
- * @implementation 重导出扩展目录的查询层接口，保留技能工具绑定的遗留操作与本地化辅助方法。
- * @updated 2026-11-27T00:00:00+08:00
+ * @implementation 重导出扩展目录的查询层接口，保留技能工具绑定的遗留操作，并按扩展详情或 GitHub 预览场景本地化诊断。
+ * @updated 2026-11-27T17:02:57+08:00
  */
 import { getTranslator, translateError } from '@/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -104,7 +104,7 @@ export function messageOf(error: unknown) {
   }
   return translateError(error, t('common.operationFailed'));
 }
-const extensionMessages = new Map([
+const extensionDiagnostics = [
   ['Markdown frontmatter 格式无效。', 'extensionDetail.invalidFrontmatter'],
   ['Markdown frontmatter 缺少结束标记。', 'extensionDetail.unclosedFrontmatter'],
   ['请填写扩展说明正文。', 'extensionDetail.emptyBody'],
@@ -118,7 +118,6 @@ const extensionMessages = new Map([
   ],
   ['SKILL.md 必须使用 UTF-8 编码。', 'publicImport.manifestEncoding'],
   ['SKILL.md 超过读取上限。', 'publicImport.manifestTooLarge'],
-  ['此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。', 'publicImport.githubCompatibility'],
   ['MCP 服务要求有效的凭据。', 'extensionDetail.authRequired'],
   ['MCP 连接或调用失败。请检查地址、进程参数和服务端日志。', 'extensionDetail.connectionFailed'],
   ['已打开 8 个常驻 MCP。停用不再使用的服务后重试。', 'extensionDetail.processLimit'],
@@ -126,15 +125,22 @@ const extensionMessages = new Map([
   ['MCP 会话已关闭。', 'extensionDetail.sessionClosed'],
   ['请使用桌面内置浏览器工具。', 'extensionDetail.nativeBrowser'],
   ['MCP 工具描述包含配置中的凭据，请修改服务端工具定义。', 'extensionDetail.secretMetadata'],
-] as const);
+] as const;
+const extensionMessages = new Map<string, (typeof extensionDiagnostics)[number][1]>(
+  extensionDiagnostics,
+);
 
 /** Translate known application diagnostics; leave upstream text and identifiers intact. */
-export function extensionDetail(message: string | undefined): string {
+export function extensionDetail(
+  message: string | undefined,
+  context: 'detail' | 'github-preview' = 'detail',
+): string {
   if (!message) return '';
   const t = getTranslator('extensions');
-  for (const [source, key] of extensionMessages) {
-    if (message === source) return t(key);
-  }
+  const key = extensionMessages.get(message);
+  if (key === 'extensionDetail.unsupportedPackage' && context === 'github-preview')
+    return t('publicImport.githubCompatibility');
+  if (key) return t(key);
   const discovered = /^已发现 (\d+) 项工具。$/.exec(message);
   if (discovered) return t('extensionDetail.discovered', { count: Number(discovered[1]) });
   const environment = /^请在本机服务环境中设置 ([A-Za-z_][A-Za-z0-9_]*)。$/.exec(message);

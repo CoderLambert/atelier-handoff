@@ -1,10 +1,11 @@
 /**
- * @file 观察同一运行内各执行者的工具进展，并投影安全的恢复检查点。
- * @implementation 按执行者跟踪工具进展和反馈投递，通过前台 Bash 回执识别重复输出，并从持久记录投影恢复检查点。
- * @updated 2026-11-22T17:41:05+08:00
+ * @file 观察同一运行内各执行者的工具进展，并提供恢复上下文所需的证据与脱敏辅助方法。
+ * @implementation 按执行者跟踪工具进展和反馈投递，通过前台 Bash 回执识别重复输出，并为会话恢复投影脱敏的证据和摘要。
+ * @updated 2026-11-27T16:58:55+08:00
  */
 import { createHash } from 'node:crypto';
-import type { Message, Run, ToolCall } from '../shared/types.js';
+import type { Run, ToolCall } from '../shared/types.js';
+import { redactSecrets } from './secret-redaction.js';
 
 export type ProgressOperation = 'read' | 'search' | 'write' | 'wait' | 'unknown';
 export type ProgressOutcome =
@@ -117,37 +118,8 @@ function bounded(value: number | undefined, fallback: number, min: number, max: 
     : fallback;
 }
 
-function redact(value: string): string {
-  return value
-    .replace(
-      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g,
-      '[redacted key]',
-    )
-    .replace(/\b(?:sk-|sk_ant_|sk-ant-)[A-Za-z0-9_-]{8,}/g, '[redacted token]')
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[redacted token]')
-    .replace(/\bAKIA[A-Z0-9]{16}\b/g, '[redacted key]')
-    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=-]+/gi, '$1 [redacted]')
-    .replace(
-      /((?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|secret|authorization)\s*["']?\s*[:=]\s*)["']?[^\s,"';<>]+["']?/gi,
-      '$1[redacted]',
-    )
-    .replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
-      try {
-        const url = new URL(raw);
-        url.username = '';
-        url.password = '';
-        url.search = '';
-        url.hash = '';
-        return url.href;
-      } catch {
-        return '[redacted URL]';
-      }
-    })
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
-}
-
 export function checkpointUserExcerpt(value: string, maxChars = 768): string {
-  const safe = redact(value);
+  const safe = redactSecrets(value, 'checkpoint');
   if (safe.length <= maxChars) return safe;
   const marker = '\n[…节选…]\n';
   const room = maxChars - marker.length;
@@ -156,7 +128,7 @@ export function checkpointUserExcerpt(value: string, maxChars = 768): string {
 }
 
 export function checkpointReference(value: string): string {
-  return /^[\w][\w.:/-]{0,127}$/.test(value) && redact(value) === value
+  return /^[\w][\w.:/-]{0,127}$/.test(value) && redactSecrets(value, 'checkpoint') === value
     ? value
     : `ref:${digest(value).slice(0, 24)}`;
 }
@@ -258,7 +230,7 @@ function sourceOf(value: string): ProgressSource | undefined {
     url.password = '';
     url.search = '';
     url.hash = '';
-    return { url: redact(url.href).slice(0, 512), fingerprint };
+    return { url: redactSecrets(url.href, 'checkpoint').slice(0, 512), fingerprint };
   } catch {
     return undefined;
   }
@@ -768,181 +740,4 @@ export class HarnessProgress {
     this.#bashEpoch = 0;
     this.#version = 0;
   }
-}
-
-export interface HarnessCheckpointOptions {
-  /** Serialized JSON character limit, clamped to 2,048–32,768. */
-  maxChars?: number;
-  maxItems?: number;
-  maxTextChars?: number;
-  /** Host can remove additional local secrets before the built-in scrubber runs. */
-  redactText?: (text: string) => string;
-}
-
-export interface HarnessCheckpoint {
-  schemaVersion: 1;
-  run: { id: string; sessionId: string; status: Run['status']; retryOf: string | null };
-  goal: { text: string; messageId: string | null; updatedAt: string | null };
-  plan: { content: string; status: Run['plan'][number]['status'] }[];
-  /** Confirms tool completion only; result content must be retrieved and verified by evidence ID. */
-  facts: { evidence: ProgressEvidence; needsRevalidation: boolean }[];
-  discoveredSources: {
-    source: ProgressSource;
-    toolCallId: string;
-    actorId: string;
-    status: 'discovered_only';
-    needsRevalidation: true;
-  }[];
-  sideEffects: { evidence: ProgressEvidence; state: 'confirmed' | 'unverified' }[];
-  unresolved: ProgressEvidence[];
-  omitted: {
-    facts: number;
-    discoveredSources: number;
-    sideEffects: number;
-    unresolved: number;
-    plan: number;
-  };
-  truncated: boolean;
-}
-
-/**
- * Pure projection of persisted records, without DB/network access or assistant/output injection.
- * Latest user message supersedes the original goal. Prior facts are marked for revalidation.
- * Active writes/unknown tools remain unverified, including after interruption or retry.
- */
-export function buildHarnessCheckpoint(
-  run: Pick<Run, 'id' | 'sessionId' | 'status' | 'retryOf' | 'prompt' | 'createdAt' | 'plan'>,
-  messages: readonly Message[],
-  tools: readonly ToolCall[],
-  options: HarnessCheckpointOptions = {},
-): HarnessCheckpoint {
-  const maxChars = bounded(options.maxChars, 12_000, 2_048, 32_768);
-  const maxItems = bounded(options.maxItems, 16, 1, 64);
-  const maxTextChars = bounded(options.maxTextChars, 1_200, 64, 4_096);
-  let truncated = false;
-  const text = (raw: string) => {
-    // Scrub before truncation so a cut cannot expose part of a recognized credential.
-    const cleaned = redact(options.redactText?.(raw) ?? raw);
-    if (cleaned.length > maxTextChars) truncated = true;
-    return cleaned.slice(0, maxTextChars);
-  };
-  let latest: Message | undefined;
-  for (const message of messages) {
-    if (message.runId !== run.id || message.sessionId !== run.sessionId || message.role !== 'user')
-      continue;
-    if (!latest || (Date.parse(message.createdAt) || 0) >= (Date.parse(latest.createdAt) || 0))
-      latest = message;
-  }
-  const goalAt = timestamp(latest?.createdAt ?? run.createdAt);
-  const checkpoint: HarnessCheckpoint = {
-    schemaVersion: 1,
-    run: {
-      id: checkpointReference(run.id),
-      sessionId: checkpointReference(run.sessionId),
-      status: run.status,
-      retryOf: run.retryOf ? checkpointReference(run.retryOf) : null,
-    },
-    goal: {
-      text: text(latest?.text ?? run.prompt),
-      messageId: latest ? checkpointReference(latest.id) : null,
-      updatedAt: goalAt,
-    },
-    plan: [],
-    facts: [],
-    discoveredSources: [],
-    sideEffects: [],
-    unresolved: [],
-    omitted: { facts: 0, discoveredSources: 0, sideEffects: 0, unresolved: 0, plan: 0 },
-    truncated: false,
-  };
-  for (const step of run.plan) {
-    if (checkpoint.plan.length < maxItems)
-      checkpoint.plan.push({ content: text(step.content), status: step.status });
-    else checkpoint.omitted.plan++;
-  }
-  const retain = <T>(
-    items: T[],
-    item: T,
-    kind: keyof HarnessCheckpoint['omitted'],
-    at: (entry: T) => string | null,
-  ) => {
-    // Keep the most recent items with bounded auxiliary memory regardless of input ordering.
-    const time = Date.parse(at(item) ?? '') || 0;
-    const index = items.findIndex((entry) => (Date.parse(at(entry) ?? '') || 0) > time);
-    items.splice(index < 0 ? items.length : index, 0, item);
-    if (items.length > maxItems) {
-      items.shift();
-      checkpoint.omitted[kind]++;
-    }
-  };
-  for (const tool of tools) {
-    if (tool.runId !== run.id || tool.sessionId !== run.sessionId) continue;
-    const observation = checkpointToolRecord(tool);
-    const evidence = observation.evidence;
-    // Keep first-discovered distinct sources: later empty searches must not erase an early URL.
-    for (const source of observation.discoveredSources) {
-      if (checkpoint.discoveredSources.some((entry) => entry.source.url === source.url)) continue;
-      if (checkpoint.discoveredSources.length < maxItems)
-        checkpoint.discoveredSources.push({
-          source,
-          toolCallId: evidence.toolCallId,
-          actorId: evidence.actorId,
-          status: 'discovered_only',
-          needsRevalidation: true,
-        });
-      else checkpoint.omitted.discoveredSources++;
-    }
-    if (observation.sideEffect !== 'none')
-      retain(
-        checkpoint.sideEffects,
-        { evidence, state: observation.sideEffect },
-        'sideEffects',
-        (entry) => entry.evidence.startedAt,
-      );
-    if (evidence.outcome === 'completed' && observation.sideEffect === 'none')
-      retain(
-        checkpoint.facts,
-        {
-          evidence,
-          needsRevalidation:
-            goalAt !== null && (Date.parse(evidence.startedAt ?? '') || 0) < Date.parse(goalAt),
-        },
-        'facts',
-        (entry) => entry.evidence.startedAt,
-      );
-    if (evidence.outcome !== 'completed')
-      retain(checkpoint.unresolved, evidence, 'unresolved', (entry) => entry.startedAt);
-  }
-  checkpoint.truncated = truncated || Object.values(checkpoint.omitted).some((count) => count > 0);
-  // Preserve unknown side effects longest when fitting the final context budget.
-  while (JSON.stringify(checkpoint).length > maxChars) {
-    checkpoint.truncated = true;
-    if (checkpoint.facts.length) {
-      checkpoint.facts.shift();
-      checkpoint.omitted.facts++;
-    } else if (checkpoint.plan.length) {
-      checkpoint.plan.pop();
-      checkpoint.omitted.plan++;
-    } else if (checkpoint.unresolved.length) {
-      checkpoint.unresolved.shift();
-      checkpoint.omitted.unresolved++;
-    } else if (checkpoint.discoveredSources.length) {
-      checkpoint.discoveredSources.pop();
-      checkpoint.omitted.discoveredSources++;
-    } else if (checkpoint.sideEffects.length) {
-      checkpoint.sideEffects.shift();
-      checkpoint.omitted.sideEffects++;
-    } else {
-      checkpoint.goal.text = checkpoint.goal.text.slice(
-        0,
-        Math.floor(checkpoint.goal.text.length / 2),
-      );
-    }
-  }
-  return checkpoint;
-}
-
-/** Pass as context data, not as a system instruction or authority to repeat side effects. */
-export function renderHarnessCheckpoint(checkpoint: HarnessCheckpoint): string {
-  return `恢复检查点（历史资料；以最新用户目标为准。工具成功只证明调用完成，按证据 ID 取回必要结果。先核对未确认副作用，勿自动重放；较早事实需重新验证。）\n${JSON.stringify(checkpoint)}`;
 }

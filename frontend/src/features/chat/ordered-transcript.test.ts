@@ -329,6 +329,7 @@ test(
         '#conversation-content .ordered-run > .transcript-run-end:last-child > [data-run-live-status]:last-child',
       );
       await liveStatus.getByText('Waiting for the model to reply', { exact: true }).waitFor();
+      await liveStatus.locator('[data-run-since-activity]').waitFor();
       assert.equal(await page.locator('[data-run-live-status]').count(), 1);
       await page.evaluate('window.fixture.locale("zh-CN")');
       await liveStatus.getByText('正在等待模型回复', { exact: true }).waitFor();
@@ -337,17 +338,24 @@ test(
       await page.evaluate('window.fixture.retry("running", true)');
       await page.locator('[data-run-live-status][data-status="stopping"]').waitFor();
       assert.equal(await liveStatus.getByText('等待模型重试结果', { exact: true }).count(), 0);
+      assert.equal(await liveStatus.locator('[data-run-since-activity]').count(), 0);
       await page.evaluate('window.fixture.retry("running")');
       await liveStatus.getByText('等待模型重试结果', { exact: true }).waitFor();
       await page.evaluate('window.fixture.retry("stopping")');
       await page.locator('[data-run-live-status][data-status="stopping"]').waitFor();
       await page.evaluate('window.fixture.retry("stopped")');
       await page.getByRole('button', { name: '只读续接', exact: true }).waitFor();
-      assert.equal(await page.locator('[data-run-live-status], [data-transcript-notice-kind="api_retry"]').count(), 0);
+      assert.equal(
+        await page
+          .locator('[data-run-live-status], [data-transcript-notice-kind="api_retry"]')
+          .count(),
+        0,
+      );
       await page.evaluate('window.fixture.locale("en")');
       await page.getByRole('button', { name: 'Resume read-only', exact: true }).waitFor();
       await page.evaluate('window.fixture.waiting()');
       await page.evaluate('window.fixture.reads("running")');
+      await liveStatus.getByText('Calling Read file', { exact: true }).waitFor();
       const firstRead = page.locator('[data-tool-id="read-0"] > summary');
       await firstRead.focus();
       await page.evaluate('window.fixture.reads("succeeded")');

@@ -64,16 +64,17 @@ const dataDir = process.env.ATELIER_DATA_DIR
 let origin: string | undefined;
 let window: BrowserWindow | undefined;
 let runtimeConnection: Awaited<ReturnType<RuntimeSupervisor['start']>> | undefined;
-const nativeFiles = createNativeFileActions(
-  () => window,
-  () => runtimeConnection,
-);
 let stopping = false;
 const windowHost = {
   getWindow: () => window,
   getOrigin: () => origin,
   isStopping: () => stopping,
 };
+const nativeFiles = createNativeFileActions(
+  windowHost.getWindow,
+  () => runtimeConnection,
+  windowHost.isStopping,
+);
 const desktopShortcuts = createDesktopShortcuts(windowHost);
 const browser = createBrowserController({
   ...windowHost,

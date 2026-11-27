@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具调用与取消。
- * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，并标注停止后收到的通知。
- * @updated 2026-11-27T14:21:24+08:00
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，停止后的通知附带标记，诊断文本统一脱敏。
+ * @updated 2026-11-27T17:05:30+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -66,6 +66,7 @@ import {
   projectInstructionContext,
 } from './native-harness.js';
 import { HarnessProgress, type ProgressSignal } from './harness-progress.js';
+import { redactSecrets } from './secret-redaction.js';
 import { recentConversationContext, sessionRecoveryContext } from './session-checkpoint.js';
 import { prepareSdkResume } from './sdk-resume.js';
 import { RequestTiming } from './request-timing.js';
@@ -289,22 +290,9 @@ export class AgentRunner implements Runner {
     await this.mcpSessions.shutdown();
   }
   private clean(error: unknown, maxChars = 2000): string {
-    let text =
+    const text =
       error instanceof Error ? error.message : typeof error === 'string' ? error : '执行失败。';
-    for (const key of [
-      'ATELIER_GATEWAY_TOKEN',
-      'ATELIER_MAGPIE_TOKEN',
-      'ATELIER_MANAGED_GATEWAY_TOKEN',
-      'ANTHROPIC_AUTH_TOKEN',
-      'ANTHROPIC_API_KEY',
-    ])
-      if (process.env[key]) text = text.split(process.env[key]!).join('[已隐藏]');
-    return text
-      .replace(/\bBearer\s+[^\s"',;]+/gi, 'Bearer [已隐藏]')
-      .replace(/\b(?:sk-[\w-]{12,}|eyJ[\w-]+\.[\w-]+\.[\w-]+)\b/g, '[已隐藏]')
-      .replace(/(https?:\/\/)[^\s/@]+@/gi, '$1[已隐藏]@')
-      .replace(/([?&](?:token|key|api_key|access_token)=)[^&\s]+/gi, '$1[已隐藏]')
-      .slice(0, maxChars);
+    return redactSecrets(text, 'diagnostic').slice(0, maxChars);
   }
   private async execute(
     run: Run,
@@ -355,14 +343,19 @@ export class AgentRunner implements Runner {
             isProjectMarkdownSkill(skill))),
     );
     const selectedSkills = (run.extensions ?? []).filter(({ kind }) => kind === 'skill');
-    const installedSelections = selectedSkills.filter(({ source }) => !source || source === 'atelier');
+    const installedSelections = selectedSkills.filter(
+      ({ source }) => !source || source === 'atelier',
+    );
     const skillBindings = installedSelections.flatMap((skill) =>
       readSkillToolBindings(this.store, project.id, skill.id).map((binding) => ({
         skill,
         binding,
       })),
     );
-    const weatherEnabled = [...automaticSkills.filter(({ local }) => !local), ...installedSelections].some(
+    const weatherEnabled = [
+      ...automaticSkills.filter(({ local }) => !local),
+      ...installedSelections,
+    ].some(
       (skill) =>
         skill.name === 'weather' && !hasSkillToolBindingConfig(this.store, project.id, skill.id),
     );
@@ -861,7 +854,12 @@ export class AgentRunner implements Runner {
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
       if (skill && status === 'succeeded') {
         const { id: extensionId, name, version, source } = skill;
-        this.store.event(run.id, run.sessionId, 'skill.invoked', { extensionId, name, version, ...(source ? { source } : {}) });
+        this.store.event(run.id, run.sessionId, 'skill.invoked', {
+          extensionId,
+          name,
+          version,
+          ...(source ? { source } : {}),
+        });
       }
       return finished;
     };
@@ -2061,7 +2059,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
         'NODE_EXTRA_CA_CERTS',
       ])
         if (process.env[key]) env[key] = process.env[key];
-      if (native && sdkTemp && this.rtk && await builtinRtkAvailable(this.rtk.binary)) {
+      if (native && sdkTemp && this.rtk && (await builtinRtkAvailable(this.rtk.binary))) {
         const launcher = builtinRtkLauncher(this.rtk.binary);
         try {
           const rtkHome = join(this.store.directory, 'rtk');
@@ -2282,7 +2280,11 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     if (event.hook_event_name === 'PostToolUseFailure') {
                       const id = appToolId(event.tool_use_id, event.agent_id);
                       const error = this.clean(event.error, Infinity);
-                      if (event.tool_name === 'Bash' && event.session_id === sdkSessionId && /^Exit code [1-9]\d*\b/u.test(error))
+                      if (
+                        event.tool_name === 'Bash' &&
+                        event.session_id === sdkSessionId &&
+                        /^Exit code [1-9]\d*\b/u.test(error)
+                      )
                         recordRtkReceipt(id, event.tool_input);
                       if (event.tool_name === 'Bash' && bash?.deferFailureDuringStop(id, error))
                         return {};
@@ -2394,7 +2396,9 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       const nativePackagePaths = native
         ? skills.flatMap((skill) => {
             if (!skill.nativePackage || !skill.package) return [];
-            const base = skill.manual ? manualPackageDirectory : pluginDirectory && join(pluginDirectory, 'skills');
+            const base = skill.manual
+              ? manualPackageDirectory
+              : pluginDirectory && join(pluginDirectory, 'skills');
             return base ? [{ name: skill.name, directory: join(base, skill.name) }] : [];
           })
         : [];

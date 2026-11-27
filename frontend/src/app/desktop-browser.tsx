@@ -1,7 +1,7 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 以两行组织标签、下载、布局与导航操作；结合项目授权、人工控制及弹窗遮挡同步原生网页视图。
- * @updated 2026-11-27T02:41:56+08:00
+ * @implementation 以两行组织标签、下载、布局与导航操作；结合项目授权和人工控制同步原生网页视图，只在相关布局变化后测量并去重槽位坐标。
+ * @updated 2026-11-27T16:57:10+08:00
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,115 @@ import { workspaceLayoutEvent } from './workspace-panels';
 
 import type {
   DesktopBrowserAction as BrowserAction,
-  DesktopBrowserBridge,
+  DesktopBrowserLayout,
   DesktopBrowserState as DesktopState,
 } from '@shared/desktop-browser';
+
+const dialogSelector = '[role="dialog"]';
+type BrowserBounds = DesktopBrowserLayout['bounds'];
+
+function observeNativeBrowserSlot(
+  slot: HTMLDivElement,
+  send: (bounds: BrowserBounds) => void,
+): () => void {
+  let lastBounds: BrowserBounds | undefined;
+  let frame: number | undefined;
+  let dialogs = new Set<Element>();
+
+  function publish(bounds: BrowserBounds) {
+    const previous = lastBounds;
+    if (
+      previous === bounds ||
+      (previous &&
+        bounds &&
+        previous.x === bounds.x &&
+        previous.y === bounds.y &&
+        previous.width === bounds.width &&
+        previous.height === bounds.height)
+    )
+      return;
+    lastBounds = bounds;
+    send(bounds);
+  }
+  function schedule() {
+    if (frame !== undefined) return;
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      if (
+        document.hidden ||
+        [...dialogs].some((dialog) => dialog.getBoundingClientRect().width > 0)
+      ) {
+        publish(null);
+        return;
+      }
+      const { x, y, width, height } = slot.getBoundingClientRect();
+      publish(width > 0 && height > 0 ? { x, y, width, height } : null);
+    });
+  }
+
+  const sizes = new ResizeObserver(schedule);
+  sizes.observe(slot);
+  if (slot.parentElement) sizes.observe(slot.parentElement);
+  function updateDialogs() {
+    const next = new Set(
+      [...document.querySelectorAll(dialogSelector)].filter((dialog) => !dialog.contains(slot)),
+    );
+    for (const dialog of dialogs) if (!next.has(dialog)) sizes.unobserve(dialog);
+    for (const dialog of next) if (!dialogs.has(dialog)) sizes.observe(dialog);
+    dialogs = next;
+    schedule();
+  }
+  function containsDialog(node: Node) {
+    return (
+      node instanceof Element &&
+      (node.matches(dialogSelector) || node.querySelector(dialogSelector))
+    );
+  }
+  const mutations = new MutationObserver((records) => {
+    if (
+      records.some((record) =>
+        record.type === 'childList'
+          ? [...record.addedNodes, ...record.removedNodes].some(containsDialog)
+          : record.target instanceof Element &&
+            (record.target.matches(dialogSelector) ||
+              (record.attributeName === 'role' && record.oldValue === 'dialog')),
+      )
+    )
+      updateDialogs();
+  });
+  mutations.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['role', 'data-state'],
+    attributeOldValue: true,
+  });
+  function onScroll(event: Event) {
+    const target = event.target;
+    if (target === window || (target instanceof Node && target.contains(slot))) schedule();
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) publish(null);
+    else schedule();
+  }
+
+  window.addEventListener(workspaceLayoutEvent, schedule);
+  window.addEventListener('resize', schedule);
+  window.addEventListener('scroll', onScroll, true);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  updateDialogs();
+  return () => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    sizes.disconnect();
+    mutations.disconnect();
+    window.removeEventListener(workspaceLayoutEvent, schedule);
+    window.removeEventListener('resize', schedule);
+    window.removeEventListener('scroll', onScroll, true);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    if (lastBounds) publish(null);
+  };
+}
 
 export function useDesktopBrowser(projectId: string | undefined) {
   const [state, setState] = useState<DesktopState>();
@@ -58,7 +164,7 @@ export function DesktopBrowser({
   const [addresses, setAddresses] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ cause: unknown } | null>(null);
   const [pending, setPending] = useState<BrowserAction | null>(null);
-  const bridge = window.atelierDesktop!;
+  const bridge = window.atelierDesktop;
   const access = useDesktopBrowserAccess(projectId);
   const updateAccess = useUpdateDesktopBrowserAccess();
   const accessDescriptionId = useId();
@@ -127,49 +233,12 @@ export function DesktopBrowser({
 
   useEffect(() => {
     const element = slot.current;
-    if (!element) return;
-    let pendingFrame = 0;
-    const send = () => {
-      cancelAnimationFrame(pendingFrame);
-      pendingFrame = requestAnimationFrame(() => {
-        const { x, y, width, height } = element.getBoundingClientRect();
-        const covered = [...document.querySelectorAll('[role="dialog"]')].some(
-          (dialog) => !dialog.contains(element) && dialog.getBoundingClientRect().width > 0,
-        );
-        bridge.layout(
-          projectId,
-          width > 0 && height > 0 && !covered && !document.hidden ? { x, y, width, height } : null,
-        );
-      });
-    };
-    const observer = new ResizeObserver(send);
-    observer.observe(element);
-    const dialogs = new MutationObserver(send);
-    dialogs.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['data-state'],
-    });
-    window.addEventListener(workspaceLayoutEvent, send);
-    window.addEventListener('resize', send);
-    window.addEventListener('scroll', send, true);
-    document.addEventListener('visibilitychange', send);
-    send();
-    return () => {
-      cancelAnimationFrame(pendingFrame);
-      observer.disconnect();
-      dialogs.disconnect();
-      window.removeEventListener(workspaceLayoutEvent, send);
-      window.removeEventListener('resize', send);
-      window.removeEventListener('scroll', send, true);
-      document.removeEventListener('visibilitychange', send);
-      bridge.layout(projectId, null);
-    };
+    if (!bridge || !element) return;
+    return observeNativeBrowserSlot(element, (bounds) => bridge.layout(projectId, bounds));
   }, [bridge, projectId]);
 
   async function command(action: BrowserAction, value?: string) {
-    if (disabled) return;
+    if (!bridge || disabled) return;
     const tabId = activeTab?.id;
     setError(null);
     setPending(action);
@@ -258,7 +327,9 @@ export function DesktopBrowser({
         >
           <Plus data-icon="inline-start" aria-hidden="true" />
         </Button>
-        <BrowserDownloads key={projectId} projectId={projectId} state={state} bridge={bridge} />
+        {bridge ? (
+          <BrowserDownloads key={projectId} projectId={projectId} state={state} bridge={bridge} />
+        ) : null}
         <Dialog>
           <DialogTrigger asChild>
             <Button

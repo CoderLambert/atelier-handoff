@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · 架构体检第 0 批 Quick Wins（已验证）
+
+- 修复并收敛 6 项现存缺陷与漂移：① `frontend/src/features/extensions/api.ts` 消除重复中文 Map 键覆盖，在 `public-import.tsx` 按 `'github-preview'` 场景保留停用提示；② 提取 `desktop/host/trusted-ipc.mts` 统一 5 个宿主 IPC 的来源守卫，并为 `desktop/host/files.mts` 补齐 `isStopping()` 检查；③ `frontend/src/app/desktop-browser.tsx` 抽出 `observeNativeBrowserSlot`，过滤无关 DOM/滚动变动并去重坐标 IPC，移除 `window.atelierDesktop!` 非空断言；④ 提取 `frontend/src/features/chat/run-stage.ts` 统一 `RunProgress` 与 `RunLiveStatus` 的阶段优先级和 `toolLabel` 本地化；⑤ 修复 `frontend/src/features/extensions/picker.tsx` 按 `activeCount` 设置 `aria-activedescendant` 并去重三条选择路径的光标恢复；⑥ 提取 `server/secret-redaction.ts` 统一 `agent.ts` 与 `harness-progress.ts` 凭据脱敏，删除零生产调用的 v1 `buildHarnessCheckpoint`/`renderHarnessCheckpoint` 死代码。无数据库迁移与外部契约破坏，回退可直接撤销本提交。
+- `npm run check`、`npm run check:headers`（17 份变更/新增源文件）、`npm run build`、`npm run build:desktop` 及 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 全部通过（运行时 820 通过、6 跳过；前端 155 通过、1 跳过，含真实 Claude Agent SDK 0.3.332 回环测试与系统 Chromium 夹具）。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-right-tool-panels.mts`（中英文终端/Git/原生浏览器 450–1440 px、窄窗、全屏、收起恢复）与 `node --import tsx scripts/smoke-ordered-conversation.mts`（锁定 SDK、回环模型、中英文 1280/1440/1920、停止与重试、新旧对话混排）全部通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：先通过 Codex（`gpt-6.2-sol` + `high`）在 `workspace-write` 沙箱完成 6 项小范围定向修复，再由主会话在完整环境运行 Chromium 夹具与真实 Electron 烟测，第一时间拦截了沙箱内测不到的 SSR 无桥空渲染与 `page.evaluate` `__name` 注入问题；后续委派前端浏览器改动时，在 brief 中明确提醒避免在 `page.evaluate` 内声明嵌套命名函数、且保留无桥 SSR 渲染路径。
+
 ## 2026-11-27 · 停止反馈与 SDK 重试通知（界面已验证，待重启桌面）
 
 - 停止请求在界面立即反馈，服务端确认前不假报停止，失败后刷新快照；部分正文与已发生结果保留。「只读续接」说明会开启新一轮。重试只在运行中显示一条状态，原始通知留在执行轨迹并区分停止前后；旧对话无需迁移。[决策、证据与回退](../../../docs/decisions/2026-11-27-stop-retry-feedback.md)

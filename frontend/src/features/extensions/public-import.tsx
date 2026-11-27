@@ -1,7 +1,7 @@
 /**
  * @file 提供公开来源扩展的查询、预览、导入和更新界面。
- * @implementation 查询 GitHub 候选及固定提交详情，管理选用、安装和更新确认；安装后可在对话中使用 Skill。
- * @updated 2026-11-26T16:11:06+08:00
+ * @implementation 查询 GitHub 候选及固定提交详情，翻译安装兼容性提示并管理安装、更新及对话选用。
+ * @updated 2026-11-27T17:05:30+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useState, type FormEvent } from 'react';
@@ -469,7 +469,9 @@ function GithubSkillPreview({ entry, current }: { entry: PublicEntry; current: b
       </header>
       {entry.description ? <p>{entry.description}</p> : null}
       {entry.compatibility || entry.issue ? (
-        <p className="ext-compatibility">{extensionDetail(entry.issue ?? entry.compatibility)}</p>
+        <p className="ext-compatibility">
+          {extensionDetail(entry.issue ?? entry.compatibility, 'github-preview')}
+        </p>
       ) : null}
       {current ? <p className="ext-help">{t('publicImport.upToDate')}</p> : null}
       {manifest ? (

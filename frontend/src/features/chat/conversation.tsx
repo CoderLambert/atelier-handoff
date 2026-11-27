@@ -1,9 +1,9 @@
 /**
  * @file 展示会话消息、运行进度与历史，以及审批和恢复入口。
- * @implementation 按运行选择有序对话或旧历史，优先显示停止反馈，为未完成结果提供只读续接入口，并复用相同 props 的渲染结果。
- * @updated 2026-11-27T14:21:24+08:00
+ * @implementation 按运行选择有序对话或旧历史，通过共用阶段模型优先显示停止反馈，为未完成结果提供只读续接入口，并复用相同 props 的渲染结果。
+ * @updated 2026-11-27T16:59:48+08:00
  */
-import { useUiTranslation, getTranslator } from '@/i18n';
+import { useUiTranslation } from '@/i18n';
 import {
   lazy,
   memo,
@@ -46,6 +46,7 @@ import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from '.
 import { RunToolActivity } from './run-tool-activity';
 import { OrderedRun } from './ordered-run';
 import { RunLiveStatus } from './run-live-status';
+import { deriveRunStage, receivingWindowMs, toolLabel } from './run-stage';
 import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
 import { TaskPlan } from './task-plan';
 const ToolOutputDialog = lazy(() => import('@/features/inspector/tool-output-dialog'));
@@ -54,62 +55,10 @@ const PermissionDialog = lazy(() => import('@/features/inspector/permission-dial
 
 export const isActive = (run: Run) => activeStatuses.includes(run.status);
 const recoverable = (run: Run) => ['failed', 'stopped', 'interrupted'].includes(run.status);
-const toolLabels: Readonly<
-  Record<
-    string,
-    | 'tool.read'
-    | 'tool.skill'
-    | 'tool.list'
-    | 'tool.search'
-    | 'tool.edit'
-    | 'tool.write'
-    | 'tool.delete'
-    | 'tool.command'
-    | 'tool.weather'
-    | 'tool.plan'
-    | 'tool.publish'
-    | 'tool.navigate'
-    | 'tool.snapshot'
-    | 'tool.screenshot'
-    | 'tool.click'
-    | 'tool.type'
-  >
-> = {
-  Read: 'tool.read',
-  Skill: 'tool.skill',
-  list_files: 'tool.list',
-  search_files: 'tool.search',
-  edit_file: 'tool.edit',
-  write_file: 'tool.write',
-  delete_file: 'tool.delete',
-  run_command: 'tool.command',
-  weather_lookup: 'tool.weather',
-  update_plan: 'tool.plan',
-  publish_artifact: 'tool.publish',
-  browser_navigate: 'tool.navigate',
-  browser_snapshot: 'tool.snapshot',
-  browser_take_screenshot: 'tool.screenshot',
-  browser_click: 'tool.click',
-  browser_type: 'tool.type',
-};
-const modelEvents = new Set([
-  'sdk.initialized',
-  'sdk.api_retry',
-  'tool.started',
-  'tool.finished',
-  'subagent.started',
-  'subagent.finished',
-  'message.delta',
-]);
 const EMPTY_TOOLS: ToolCall[] = [];
 const EMPTY_EVENTS: RunEvent[] = [];
 const EMPTY_ARTIFACTS: Artifact[] = [];
 
-function toolLabel(name: string) {
-  const short = name.replace(/^mcp__atelier__/, '');
-  const key = toolLabels[short];
-  return key ? getTranslator('chat')(key) : short;
-}
 function date(value: string, timeFormat: Intl.DateTimeFormat) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : timeFormat.format(parsed);
@@ -211,6 +160,7 @@ function RunProgress({
   onPermission,
   onOutput,
   onTrace,
+  stopPending,
 }: {
   run: Run;
   tools: ToolCall[];
@@ -221,6 +171,7 @@ function RunProgress({
   onPermission: (permission: Permission) => void;
   onOutput: (tool: ToolCall) => void;
   onTrace: () => void;
+  stopPending?: boolean;
 }) {
   const { t, locale } = useUiTranslation('chat');
   const historyId = useId();
@@ -230,26 +181,31 @@ function RunProgress({
     [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
   );
   const active = isActive(run);
-  const runningSubagents = work.subagents.filter(({ subagent }) => subagent?.status === 'running');
-  const ongoing = tools.find(
-    (tool) => tool.status === 'running' && tool.bashExecution?.phase !== 'background',
+  const now = Date.now();
+  const {
+    key,
+    label: stage,
+    status,
+    activity,
+  } = deriveRunStage(
+    {
+      run,
+      tools,
+      events,
+      notices: run.transcript?.notices,
+      subagents: snapshot.subagents,
+      stopPending,
+      now,
+    },
+    t,
   );
-  const backgroundBash = tools.some(
-    (tool) => tool.status === 'running' && tool.bashExecution?.phase === 'background',
-  );
-  const activity = events.findLast((event) => modelEvents.has(event.type));
-  let stage: string = t('progress.waitingModel');
-  if (run.status === 'queued') stage = t('progress.queued');
-  else if (run.status === 'awaiting_permission') stage = t('progress.awaitingApproval');
-  else if (run.status === 'stopping') stage = t('progress.stopping');
-  else if (ongoing?.bashExecution?.phase === 'stopping') stage = t('progress.stoppingBash');
-  else if (ongoing) stage = t('progress.callingTool', { name: toolLabel(ongoing.name) });
-  else if (runningSubagents.length)
-    stage = t('progress.runningSubtasks', { count: runningSubagents.length });
-  else if (activity?.type === 'sdk.api_retry') stage = t('progress.retryingModel');
-  else if (backgroundBash) stage = t('progress.backgroundBash');
-  else if (activity?.type === 'message.delta' && hasText) stage = t('progress.receiving');
-  else if (!activity && !tools.length && !hasText) stage = t('progress.starting');
+  const [, refreshStage] = useState(0);
+  useEffect(() => {
+    if (!active || key !== 'progress.receiving' || !activity) return;
+    const delay = Math.max(0, Date.parse(activity.at) + receivingWindowMs - Date.now());
+    const timer = window.setTimeout(() => refreshStage((value) => value + 1), delay);
+    return () => window.clearTimeout(timer);
+  }, [active, key, activity]);
   const approved = useMemo(
     () =>
       new Set(
@@ -260,9 +216,9 @@ function RunProgress({
   const hasDetails = work.tools.length > 0 || work.subagents.length > 0 || showPlan;
   const isPureModelWaiting =
     !hasDetails &&
-    run.status !== 'awaiting_permission' &&
-    run.status !== 'stopping' &&
-    activity?.type !== 'sdk.api_retry';
+    (key === 'progress.waitingModel' ||
+      key === 'progress.starting' ||
+      key === 'progress.receiving');
   if (active && isPureModelWaiting) {
     if (hasText) return null;
     return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
@@ -275,7 +231,7 @@ function RunProgress({
       className="run-progress-head"
       title={t('progress.lastActivity', { time: formatDate(lastActivityAt, locale) })}
     >
-      {stage === t('progress.waitingModel') ? (
+      {key === 'progress.waitingModel' ? (
         <div className="run-progress-loading-inline" role="status" aria-label={stage}>
           <span className="model-loading-dot" />
           <span className="model-loading-dot" />
@@ -290,7 +246,7 @@ function RunProgress({
   return (
     <section
       className="run-progress"
-      data-status={run.status}
+      data-status={status}
       data-active={active}
       aria-label={active ? t('progress.label') : t('progress.history')}
     >
@@ -335,7 +291,7 @@ function RunProgress({
           ) : null}
           <SubagentProgress
             groups={work.subagents}
-            run={run}
+            run={status === run.status ? run : { ...run, status }}
             onPermission={onPermission}
             onToolOutput={onOutput}
             onTrace={onTrace}
@@ -361,7 +317,7 @@ function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () 
       aria-label={t('conversation.browserIssue')}
     >
       <div role="status">
-        <strong>{t('conversation.toolFailed', { name: toolLabel(last.name) })}</strong>
+        <strong>{t('conversation.toolFailed', { name: toolLabel(last.name, t) })}</strong>
         <p className="break-words">{last.output.slice(0, 550) || t('conversation.traceHelp')}</p>
         {continued ? <p>{t('conversation.browserContinued')}</p> : null}
       </div>
@@ -391,7 +347,8 @@ function RunResult({
   const { t } = useUiTranslation('chat');
   if (isActive(run)) return null;
   const canRetry = recoverable(run);
-  const detail = run.status === 'stopped' ? t('conversation.stoppedReason') : run.error || run.reason;
+  const detail =
+    run.status === 'stopped' ? t('conversation.stoppedReason') : run.error || run.reason;
   if (!canRetry && !run.error && !run.reason) return null;
   const title = canRetry
     ? hasText
@@ -910,7 +867,8 @@ export const Conversation = memo(function Conversation({
                 <div className="message-body">
                   {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
                     <RunProgress
-                      run={stopPendingRunId === run.id && isActive(run) ? { ...run, status: 'stopping' } : run}
+                      run={run}
+                      stopPending={stopPendingRunId === run.id && isActive(run)}
                       tools={tools}
                       events={events}
                       hasText={hasText}
