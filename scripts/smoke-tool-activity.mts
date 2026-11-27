@@ -135,11 +135,10 @@ try {
     .filter({ hasText: 'printf' });
   await finish.locator(':scope > summary').click();
   await finish.getByText('branch=fixture', { exact: true }).waitFor();
-  const traceHash = new URL(page.url()).hash;
   await page.getByRole('button', { name: '浏览器', exact: true }).click();
   await page.getByRole('region', { name: '浏览器面板' }).waitFor();
-  await page.getByRole('button', { name: '关闭浏览器' }).click();
-  await page.waitForURL((url) => url.hash === traceHash);
+  await page.getByRole('button', { name: '收起浏览器面板' }).click();
+  await page.getByRole('region', { name: '浏览器面板' }).waitFor({ state: 'hidden' });
   await page.getByRole('region', { name: '运行执行轨迹' }).waitFor();
   assert.equal(await page.locator('#resize-inspector').count(), 0);
   await page.getByRole('tab', { name: '会话', exact: true }).click();

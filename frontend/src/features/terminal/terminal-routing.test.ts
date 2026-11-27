@@ -37,35 +37,7 @@ test('tool routes retain their background conversation location and reject anoth
   assert.equal(
     panelLocation(`/sessions/${sessionId}/terminal`, sessionId, {
       workspacePanelReturn: `/sessions/${sessionId}/browser`,
-    }).returnPath,
-    undefined,
-  );
-});
-
-test('closing a tool uses back only when its immediately preceding entry is the saved background', () => {
-  const sessionId = '11111111-1111-4111-8111-111111111111';
-  const trace = `/sessions/${sessionId}/trace`;
-  assert.equal(
-    panelLocation(`/sessions/${sessionId}/browser`, sessionId, {
-      workspacePanelReturn: trace,
-      workspacePanelReturnIndex: 2,
-      __TSR_index: 3,
-    }).canReturnBack,
-    true,
-  );
-  assert.equal(
-    panelLocation(`/sessions/${sessionId}/browser`, sessionId, {
-      workspacePanelReturn: trace,
-      workspacePanelReturnIndex: 2,
-      __TSR_index: 4,
-    }).canReturnBack,
-    false,
-  );
-  assert.equal(
-    panelLocation(`/sessions/${sessionId}/browser`, sessionId, {
-      workspaceBrowserReturn: trace,
-    }).canReturnBack,
-    false,
-    'legacy entries still return explicitly to their validated background',
+    }).contentPath,
+    `/sessions/${sessionId}`,
   );
 });

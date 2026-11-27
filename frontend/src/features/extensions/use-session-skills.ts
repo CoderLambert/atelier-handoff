@@ -5,27 +5,23 @@
  */
 import { useState } from 'react';
 import type { Draft, ExtensionSelection } from '@shared/types';
+import type { SessionSkillScope } from '@/use-query/skill-inheritance/keys';
 import { useSkillInheritance } from '@/use-query/skill-inheritance/use-skill-inheritance';
 import { useUpdateSkillInheritance } from '@/use-query/skill-inheritance/use-update-skill-inheritance';
 import { addDraftSkill, removeDraftSkill } from './inheritance-model';
 
 export function useSessionSkills({
-  projectId,
-  sessionId,
-  native,
+  scope,
   selections,
   disabled,
   onDraftChange,
 }: {
-  projectId: string;
-  sessionId: string;
-  native: boolean;
+  scope: SessionSkillScope;
   selections?: ExtensionSelection[];
   disabled: boolean;
   onDraftChange: (change: (draft: Draft) => Draft) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const scope = { type: 'session', projectId, sessionId, native } as const;
   const query = useSkillInheritance(scope, open || Boolean(selections?.length));
   const update = useUpdateSkillInheritance(scope);
   const items = query.data?.items ?? [];
@@ -35,7 +31,7 @@ export function useSessionSkills({
   const missing = query.isSuccess
     ? selections?.filter(({ id, tools }) => !tools && !byId.has(id)) ?? []
     : [];
-  const dialogSelectionIds = new Set(draftSkills.map(({ id }) => id));
+  const draftSkillIds = new Set(draftSkills.map(({ id }) => id));
 
   return {
     open,
@@ -46,7 +42,7 @@ export function useSessionSkills({
     byId,
     draftSkills,
     missing,
-    dialogSelectionIds,
+    draftSkillIds,
     add: (id: string) => {
       const item = byId.get(id);
       if (item && !disabled && !update.saving && query.isSuccess && !query.isFetching) {

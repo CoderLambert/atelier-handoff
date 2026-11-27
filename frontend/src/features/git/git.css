@@ -14,11 +14,6 @@
     container-type: inline-size;
     outline: none;
   }
-  .git-board[data-expanded] {
-    position: fixed;
-    inset: 0;
-    z-index: 45;
-  }
   .git-board-heading {
     min-height: 48px;
     display: flex;

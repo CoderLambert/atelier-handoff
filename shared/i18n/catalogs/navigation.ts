@@ -82,7 +82,7 @@ export const navigation = {
   'sessionMenu.archive': ['归档会话', 'Archive session'],
   'sessionMenu.delete': ['删除会话', 'Delete session'],
   'panels.resizeNavigation': ['调整导航栏宽度', 'Resize navigation pane'],
-  'panels.resizeBrowser': ['调整浏览器宽度', 'Resize browser pane'],
+  'panels.resizeRight': ['调整右侧工具宽度', 'Resize right tool panel'],
   'projects.title': ['绑定项目目录', 'Bind a project directory'],
   'projects.description': [
     '选择本机目录作为会话工作区。',

@@ -1,7 +1,7 @@
 /**
- * @file 验证真实 SDK 会话顺序、流式文本身份和重开后的完整历史。
- * @implementation 使用隔离 HTTP 工作台与回环模型检查混合文本工具、反向完成、重试及错误。
- * @updated 2026-11-26T10:30:00+08:00
+ * @file 验证真实 SDK 会话顺序、流式文本和模型请求计时。
+ * @implementation 使用隔离 HTTP 工作台与回环模型检查混合文本工具、历史恢复、重试及错误，并核对请求与流的计时和脱敏诊断。
+ * @updated 2026-11-27T03:14:40+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -27,7 +27,7 @@ type Block =
   | { text: string }
   | { id: string; command: string }
   | { id: string; name: string; input: Record<string, unknown> };
-function reply(response: ServerResponse, model: string, blocks: Block[]) {
+async function reply(response: ServerResponse, model: string, blocks: Block[], staged = false) {
   response.writeHead(200, { 'content-type': 'text/event-stream', 'request-id': randomUUID() });
   const usage = {
     input_tokens: 12,
@@ -49,6 +49,7 @@ function reply(response: ServerResponse, model: string, blocks: Block[]) {
       usage: { ...usage, output_tokens: 0 },
     },
   });
+  if (staged) await delay(140);
   blocks.forEach((block, index) => {
     if ('text' in block) {
       send('content_block_start', { index, content_block: { type: 'text', text: '' } });
@@ -91,6 +92,7 @@ function reply(response: ServerResponse, model: string, blocks: Block[]) {
     },
     usage,
   });
+  if (staged) await delay(140);
   send('message_stop');
   response.end();
 }
@@ -202,7 +204,8 @@ test(
           },
         ]);
       }
-      reply(
+      if (lane === 'ORDER_FIXTURE') await delay(140);
+      await reply(
         response,
         model,
         lane === 'ORDER_FIXTURE'
@@ -210,6 +213,7 @@ test(
               text: `TRANSCRIPT_FINAL_${String(index).padStart(3, '0')}`,
             }))
           : [{ text: 'TRANSCRIPT_RECOVERED' }],
+        lane === 'ORDER_FIXTURE',
       );
     });
     let app: Awaited<ReturnType<typeof createApp>> | undefined;
@@ -378,6 +382,28 @@ test(
           second.transcriptOrder < final.order,
       );
       const ended = await trace(ordered.run);
+      const timing = ended.run.requestTiming;
+      assert.ok(timing);
+      const streams = timing.records.flatMap(({ stream }) => (stream ? [stream] : []));
+      assert.equal(streams.length, 2, JSON.stringify(timing));
+      const followup = streams[1];
+      assert.ok(followup?.lastToolFinishedAt);
+      assert.equal(timing.records.length, 2, JSON.stringify(timing));
+      const span = timing.records.find(({ stream }) => stream === followup)?.request;
+      assert.ok(span, JSON.stringify(timing));
+      assert.ok(span.startedAt >= followup.lastToolFinishedAt);
+      assert.ok((span.ttftMs ?? 0) >= 125);
+      assert.ok((span.firstContentMs ?? 0) >= 245);
+      assert.ok(span.durationMs >= 375);
+      assert.equal(followup.outcome, 'complete');
+      assert.ok(followup.firstEventAt - followup.lastToolFinishedAt >= 125);
+      assert.ok((followup.firstContentAfterEventMs ?? 0) >= 120);
+      assert.ok(followup.durationMs >= 250);
+      const diagnostics = await request<{ requestTiming: typeof timing }>(
+        '/api/runs/' + ordered.run + '/diagnostics.json',
+      );
+      assert.deepEqual(diagnostics.requestTiming, timing);
+      assert.doesNotMatch(JSON.stringify(timing), /TRANSCRIPT_FINAL|toolu_order|msg_/);
       assert.equal(
         ended.tools.find((tool) => tool.id === first.id)?.transcriptOrder,
         first.transcriptOrder,
@@ -392,9 +418,9 @@ test(
         async () => ((await trace(retried.run)).run.status === 'completed' ? true : undefined),
         'retry recovery',
       );
-      const retry = (await trace(retried.run)).run.transcript?.notices.find(
-        (notice) => notice.kind === 'api_retry',
-      );
+      const retriedRun = (await trace(retried.run)).run;
+      const retry = retriedRun.transcript?.notices.find((notice) => notice.kind === 'api_retry');
+      assert.ok(retriedRun.requestTiming?.records.some(({ request }) => (request?.attempts ?? 0) > 1));
       assert.ok(retry?.kind === 'api_retry');
       assert.ok(retry.attempt >= 1 && retry.maxRetries >= retry.attempt);
       const recoveredSnapshot = await snapshot(retried.session);
@@ -415,10 +441,10 @@ test(
         async () => ((await trace(errored.run)).run.status === 'failed' ? true : undefined),
         'terminal API error',
       );
-      const failure = (await trace(errored.run)).run.transcript?.notices.find(
-        (notice) => notice.kind === 'api_error',
-      );
+      const erroredRun = (await trace(errored.run)).run;
+      const failure = erroredRun.transcript?.notices.find((notice) => notice.kind === 'api_error');
       assert.ok(failure?.kind === 'api_error' && failure.code.length > 0);
+      assert.ok(erroredRun.requestTiming?.records.some(({ request, stream }) => request?.failed && !stream));
 
       const approval = await start('APPROVAL_FIXTURE', 'project-v1');
       const awaiting = await wait(async () => {
@@ -505,6 +531,11 @@ test(
       assert.equal(interrupted.order, preparing.notice.order);
       assert.equal(interrupted.at, preparing.notice.at);
       assert.equal(interruptedDetail.tools.length, 0);
+      assert.ok(
+        interruptedDetail.run.requestTiming?.records.some(
+          ({ stream }) => stream?.outcome === 'interrupted',
+        ),
+      );
 
       const canceled = await start('CANCEL_FIXTURE');
       const pending = await wait(async () => {

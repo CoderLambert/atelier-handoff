@@ -1,7 +1,7 @@
 /**
  * @file 接收消息并创建会话运行。
- * @implementation 冻结已授权的执行范围，保留幂等回执和排队顺序，在短事务提交后启动 runner。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 保存排队时的授权指纹与 Skill 范围。自动续跑比较范围，显式复核时校验待处理消息，并在短事务提交前再次复核范围后启动 runner。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { randomUUID } from 'node:crypto';
 import {
@@ -21,7 +21,12 @@ import type { ProjectExtensions } from '../../extensions.js';
 import { fingerprint } from '../../files.js';
 import { gatewayModelId } from '../../gateway-models.js';
 import { magpieModel } from '../../magpie-models.js';
-import type { MessageQueue, PendingSessionMessage } from '../../message-queue.js';
+import {
+  hasQueueScopeError,
+  queueScopeChanged,
+  type MessageQueue,
+  type PendingSessionMessage,
+} from '../../message-queue.js';
 import type { SkillInheritance } from '../../skill-inheritance.js';
 import type { Store } from '../../store.js';
 import type { GatewayService } from '../gateway/service.js';
@@ -54,7 +59,7 @@ interface CreateRunOptions {
     GatewayService,
     'effectiveConfig' | 'connection' | 'magpie' | 'requireMagpieEnabled'
   >;
-  messageQueue: Pick<MessageQueue, 'receipt' | 'enqueue' | 'hasPending' | 'pending' | 'consume'>;
+  messageQueue: Pick<MessageQueue, 'receipt' | 'enqueue' | 'hasPending' | 'pending' | 'consume' | 'resume'>;
   nativeExecution: boolean;
   probeGateway: boolean;
   isShuttingDown(): boolean;
@@ -94,6 +99,7 @@ export function createRunStarter({
     raw: unknown,
     retryOf: string | null = null,
     pending?: PendingSessionMessage,
+    { reviewScope = false }: { reviewScope?: boolean } = {},
   ): Promise<SendSessionMessageResult> {
     if (isShuttingDown()) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
     if (isSessionDeleting(sessionId)) throw new AppError('SESSION_DELETING', '会话正在删除。', 409);
@@ -124,6 +130,12 @@ export function createRunStarter({
     };
     const receipt = existingReceipt();
     if (receipt) return receipt;
+    const validateReview = () => {
+      const latest = pending && messageQueue.pending(sessionId, pending.id);
+      if (!latest || latest.delivery || !hasQueueScopeError(latest.error))
+        throw new AppError('QUEUE_CHANGED', '待复核的队列消息已变化。', 409);
+    };
+    if (reviewScope) validateReview();
     // Missing fields in persisted queue intents retain the original project executor.
     const executor = intent
       ? (intent.executor ?? 'project-v1')
@@ -155,6 +167,7 @@ export function createRunStarter({
         retryOf,
         workspacePath,
         binding,
+        allowedSkillIds: !reviewScope && intent?.skillIds ? new Set(intent.skillIds) : undefined,
       });
     const defaults = effectiveConfig();
     const priorConfig = retryOf ? store.get('runs', retryOf).config : undefined;
@@ -202,7 +215,14 @@ export function createRunStarter({
         key,
         bodyHash,
         { text: request.text, ...(bundle?.used.length ? { extensions: bundle.used } : {}) },
-        { request, model, scope: planned.scope, executor, skillScope: bundle?.skillScope },
+        {
+          request,
+          model,
+          scope: planned.scope,
+          executor,
+          skillScope: bundle?.skillScope,
+          skillIds: planned.skills.map(({ id }) => id),
+        },
       );
       accepted(latest);
       const active = store
@@ -223,10 +243,10 @@ export function createRunStarter({
       wakeQueue();
       return result;
     }
-    if (intent && planned.scope !== intent.scope)
+    if (intent && !reviewScope && planned.scope !== intent.scope)
       throw new AppError(
-        'QUEUE_SCOPE_CHANGED',
-        '排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。',
+        queueScopeChanged,
+        '排队时的授权范围已变化，请复核后继续。',
         409,
       );
     if (probeGateway && !(await connection(selectedConfig, usingMagpie)).available)
@@ -285,13 +305,19 @@ export function createRunStarter({
       const currentScope = recheckScope();
       if (currentScope.scope !== planned.scope)
         throw new AppError(
-          'QUEUE_SCOPE_CHANGED',
+          queueScopeChanged,
           '智能体、扩展或浏览器授权已变化。请重新发送。',
           409,
         );
       if (shouldQueue()) return sendToQueue(latest);
       assertExecutionSlot(sessionId, workspacePath);
-      if (pending) messageQueue.consume(pending);
+      if (pending) {
+        if (reviewScope) {
+          validateReview();
+          messageQueue.resume(sessionId);
+        }
+        messageQueue.consume(pending);
+      }
       for (const id of run.attachmentIds) {
         const a = store.get('attachments', id);
         if (a.sessionId !== sessionId || a.removed)

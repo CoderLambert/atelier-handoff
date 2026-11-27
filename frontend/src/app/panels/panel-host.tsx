@@ -31,13 +31,13 @@ export function PanelHost<Props extends PanelViewProps>({
   const [attempt, retry] = useState(0);
   const View = useMemo(() => lazy(definition.load), [definition, attempt]);
   const fallback = (
-    <div className={view.expanded ? 'fixed inset-0 z-40 bg-card p-4' : 'px-4 py-3'} role="alert">
+    <div className={'px-4 py-3'} role="alert">
       <p>{t('panelFailed')}</p>
       <Button size="sm" variant="outline" onClick={() => retry((value) => value + 1)}>
         {t('retry')}
       </Button>
       <Button size="sm" variant="ghost" onClick={view.onRequestHide}>
-        {t('panelClose')}
+        {t('hideRightTool')}
       </Button>
     </div>
   );
@@ -46,12 +46,7 @@ export function PanelHost<Props extends PanelViewProps>({
     <PanelErrorBoundary key={`${view.instance.instanceId}:${attempt}`} fallback={fallback}>
       <Suspense
         fallback={
-          <p
-            className={
-              view.expanded ? 'fixed inset-0 z-40 bg-card px-5 py-4' : 'empty-text px-5 py-4'
-            }
-            role="status"
-          >
+          <p className="empty-text px-5 py-4" role="status">
             {t('panelLoading')}
           </p>
         }

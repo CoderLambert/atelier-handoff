@@ -1,11 +1,12 @@
 /**
  * @file 提供会话内的人工终端面板。
- * @implementation 显式创建多个 PTY，通过标签结束指定终端；隐藏仅释放视图，错误通过双语提示呈现。
- * @updated 2026-11-26T01:00:00+08:00
+ * @implementation 显式创建多个 PTY，通过标签结束指定终端；共享布局按钮仅改变可见性和停靠方式。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 import { useMemo } from 'react';
-import { Maximize2, Minimize2, PanelRightClose, Plus, TerminalSquare, X } from 'lucide-react';
+import { Plus, TerminalSquare, X } from 'lucide-react';
 import type { TerminalRecord } from '@shared/terminal';
+import { PanelLayoutButtons } from '@/components/panel-layout-buttons';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
 import type { PanelInstance, PanelViewProps, SessionPanelTarget } from '@/panel-sdk';
@@ -132,25 +133,12 @@ export default function TerminalPanel(props: TerminalPanelProps) {
               client={client}
             />
           )}
-          {props.expandable && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t(props.expanded ? 'dock' : 'expand')}
-              onClick={props.onRequestExpand}
-            >
-              {props.expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-            </Button>
-          )}
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t('hide')}
-            title={t('hide')}
-            onClick={props.onRequestHide}
-          >
-            <PanelRightClose aria-hidden="true" />
-          </Button>
+          <PanelLayoutButtons
+            layout={props}
+            expandLabel={t('expand')}
+            dockLabel={t('dock')}
+            collapseLabel={t('hide')}
+          />
         </div>
       </header>
       {workspace.runtimeChanged && (

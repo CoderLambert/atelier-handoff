@@ -146,7 +146,7 @@ try {
   assert.ok(replyToTool);
   const screenshot = process.env.ATELIER_GIT_LIVE_SCREENSHOT;
   if (screenshot) await page.screenshot({ path: screenshot });
-  await board.getByRole('button', { name: '关闭 Git 面板', exact: true }).click();
+  await board.getByRole('button', { name: '收起 Git 面板', exact: true }).click();
   sendModelReply(replyToTool, model, reply);
   await page.getByText(reply, { exact: true }).waitFor();
   console.log('external edits refreshed the diff twice with the same file status');

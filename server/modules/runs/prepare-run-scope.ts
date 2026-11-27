@@ -1,7 +1,7 @@
 /**
  * @file 解析运行的智能体、Skill、MCP 和浏览器授权范围。
- * @implementation 冻结首次解析结果并提供再次计算指纹的闭包，供落库前复核同一执行范围。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 按可选 Skill ID 范围解析扩展并生成授权指纹，冻结首次解析结果，提供重新计算的闭包供落库前复核。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { AppError, type Session } from '../../../shared/types.js';
 import type { AgentProfiles } from '../../agent-profiles.js';
@@ -32,6 +32,7 @@ export function prepareRunScope({
   retryOf,
   workspacePath,
   binding,
+  allowedSkillIds,
 }: {
   agents: Pick<AgentProfiles, 'requireReady'>;
   extensions: Pick<ProjectExtensions, 'get' | 'resolve'>;
@@ -45,6 +46,7 @@ export function prepareRunScope({
   retryOf: string | null;
   workspacePath: string;
   binding: Pick<WorktreeRecord, 'id' | 'branch'> | undefined;
+  allowedSkillIds?: ReadonlySet<string>;
 }) {
   const revision = session.agentRevisionId
     ? agents.requireReady(projectId, session.agentRevisionId)
@@ -61,7 +63,13 @@ export function prepareRunScope({
   )
     throw new AppError('AGENT_CAPABILITY_DENIED', '此智能体未启用所选上下文或附件能力。', 403);
   const skillInputs = () =>
-    skills.context(projectId, session, executor === 'native-v1', workspacePath);
+    skills.context(
+      projectId,
+      session,
+      executor === 'native-v1',
+      workspacePath,
+      executor === 'project-v1' && request.mode === 'edit' && request.approvalMode === 'automatic',
+    );
   const resolveExtensions = () => {
     if (retryOf) return null;
     const context = skillInputs();
@@ -76,6 +84,7 @@ export function prepareRunScope({
       context.installed,
       selections.local,
       request.text,
+      allowedSkillIds,
     );
     return { ...bundle, ...scoped, skillScope: skills.automatic(context, snapshot) };
   };

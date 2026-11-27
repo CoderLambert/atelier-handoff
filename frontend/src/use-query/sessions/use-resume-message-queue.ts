@@ -1,7 +1,7 @@
 /**
  * @file 提供继续会话消息队列的操作。
- * @implementation 向指定会话提交空的继续请求，并在成功或失败后重新同步该会话快照，不携带草稿或单次搜索授权。
- * @updated 2026-11-20T23:09:03+08:00
+ * @implementation 向指定会话提交可选的待复核消息 ID，并在成功或失败后重新同步该会话快照，不携带草稿或单次搜索授权。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import {
   mutationOptions,
@@ -15,15 +15,16 @@ import { sessionKeys } from './keys';
 
 export interface ResumeMessageQueueInput {
   sessionId: string;
+  reviewItemId?: string;
 }
 const resultSchema = z.object({ ok: z.literal(true) });
 export type ResumeMessageQueueResult = z.infer<typeof resultSchema>;
 
-export async function resumeMessageQueue({ sessionId }: ResumeMessageQueueInput) {
+export async function resumeMessageQueue({ sessionId, reviewItemId }: ResumeMessageQueueInput) {
   return resultSchema.parse(
     await api<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue/resume`, {
       method: 'POST',
-      body: {},
+      body: { reviewItemId },
     }),
   );
 }
@@ -31,7 +32,7 @@ export async function resumeMessageQueue({ sessionId }: ResumeMessageQueueInput)
 export function resumeMessageQueueOptions(client: QueryClient, sessionId: string) {
   return mutationOptions({
     mutationKey: sessionKeys.resumeQueue(sessionId),
-    mutationFn: () => resumeMessageQueue({ sessionId }),
+    mutationFn: (reviewItemId?: string) => resumeMessageQueue({ sessionId, reviewItemId }),
     retry: false,
     onSettled: () =>
       client.invalidateQueries({ queryKey: sessionKeys.snapshot(sessionId), exact: true }),

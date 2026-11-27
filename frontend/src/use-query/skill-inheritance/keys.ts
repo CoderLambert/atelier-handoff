@@ -5,10 +5,17 @@
  */
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 
+export type SessionSkillScope = {
+  type: 'session';
+  projectId: string;
+  sessionId: string;
+  mode: 'controlled' | 'native' | 'automatic';
+};
+
 export type SkillInheritanceScope =
   | { type: 'global' }
   | { type: 'project'; projectId: string }
-  | { type: 'session'; projectId: string; sessionId: string; native: boolean };
+  | SessionSkillScope;
 
 export const skillInheritanceKeys = {
   all: ['skill-inheritance'] as const,
@@ -21,7 +28,7 @@ export function skillInheritanceEndpoint(scope: SkillInheritanceScope) {
   if (scope.type === 'project') params.set('projectId', scope.projectId);
   if (scope.type === 'session') {
     params.set('sessionId', scope.sessionId);
-    if (scope.native) params.set('native', '1');
+    if (scope.mode !== 'controlled') params.set(scope.mode, '1');
   }
   const query = params.toString();
   return `/api/skill-inheritance${query ? `?${query}` : ''}`;

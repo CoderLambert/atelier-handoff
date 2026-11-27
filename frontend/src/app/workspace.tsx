@@ -3,15 +3,7 @@
  * @implementation 协调路由与 Git、浏览器、终端面板，向快捷宿主提供语义动作和可用性，并按目标会话交接输入焦点请求。
  * @updated 2026-11-26T21:58:23+08:00
  */
-import {
-  Activity as ViewActivity,
-  lazy,
-  Suspense,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare, X } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
@@ -131,8 +123,6 @@ const sessionActions = {
 
 export default function Workspace() {
   const { t, locale } = useUiTranslation('workbench');
-  const { t: git } = useUiTranslation('git');
-  const { t: terminal } = useUiTranslation('terminal');
   const sessionContentId = useId();
   const numberFormat = new Intl.NumberFormat(locale);
   const loading = (
@@ -192,23 +182,13 @@ export default function Workspace() {
   const shortcutLabels = useShortcutCommandLabels();
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
-  const {
-    gitBoard,
-    gitBusy,
-    gitWidth,
-    setGitWidth,
-    gitFullWindow,
-    canDockGit,
-    gitTrigger,
-    expandGit,
-    openGit,
-    closeGit,
-    browserActive,
-    browserTrigger,
-    openBrowser,
-    closeBrowser,
-  } = panel;
-  const browser = useBrowserPreview(desktop || !browserActive ? undefined : previewProject, true);
+  const { gitBoard, gitBusy, gitTrigger, openGit, browserTrigger, openBrowser } = panel;
+  const browserActive = panel.activePanel === 'browser';
+  const terminalActive = panel.activePanel === 'terminal';
+  const browser = useBrowserPreview(
+    desktop || !browserActive || panel.rightCollapsed ? undefined : previewProject,
+    true,
+  );
   const layoutQuery = useWorkspaceLayout();
   const updateLayout = useUpdateWorkspaceLayout();
   const [localLayout, setLocalLayout] = useState<WorkspaceLayout>();
@@ -225,8 +205,8 @@ export default function Workspace() {
     const result = appendFileQuote(snapshot.session.id, snapshot.session.draft, file, text);
     if (result === 'added' || result === 'duplicate') {
       if (tab !== 'conversation') selectTab('conversation');
-      if (canDockGit && gitFullWindow) expandGit(false);
-      if (canDockGit && tab === 'conversation')
+      if (panel.canDock && panel.fullWindow) panel.dockRight();
+      if (panel.canDock && tab === 'conversation')
         requestAnimationFrame(() => {
           if (router.state.location.pathname === pathname)
             document.getElementById('prompt-input')?.focus({ preventScroll: true });
@@ -234,8 +214,6 @@ export default function Workspace() {
     }
     return result;
   };
-  const showBrowserRight =
-    view === 'chat' && browserActive && (width > 1120 || (width >= 900 && desktop));
   const inputTarget = sessionId
     ? snapshot && snapshot.session.id === sessionId
       ? snapshot.session
@@ -277,8 +255,7 @@ export default function Workspace() {
     const targetId = inputTarget.id;
     const request = ++focusSequence.current;
     dispatch(actions.setDrawer(undefined));
-    if (gitFullWindow || panel.terminalFullWindow || (browserActive && !showBrowserRight))
-      panel.collapseRight(false);
+    if (panel.fullWindow) panel.collapseRight(false);
     if (targetId !== sessionId || tab !== 'conversation' || messageId || view !== 'chat') {
       await navigate({ to: '/sessions/$sessionId', params: { sessionId: targetId } });
     }
@@ -371,7 +348,7 @@ export default function Workspace() {
     if (gitBusy) return;
     focusSequence.current++;
     setInputFocus(undefined);
-    if (gitFullWindow) panel.collapseRight(false);
+    if (panel.fullWindow) panel.collapseRight(false);
     openSession(id);
   }
   function openView(next: View) {
@@ -553,6 +530,12 @@ export default function Workspace() {
   const changesLabel = pendingPermissions
     ? t('changes.pending', { count: pendingPermissions })
     : t('changes.title');
+  const panelActions = {
+    expanded: panel.fullWindow,
+    expandable: panel.canDock,
+    onRequestExpand: panel.toggleExpanded,
+    onRequestHide: () => panel.collapseRight(),
+  };
   const browserPanel = previewProject ? (
     <PanelHost
       definition={panels.browser}
@@ -563,10 +546,7 @@ export default function Workspace() {
           target: { scope: 'project', projectId: previewProject },
         },
         visible: browserActive,
-        expanded: false,
-        expandable: false,
-        onRequestExpand: () => {},
-        onRequestHide: closeBrowser,
+        ...panelActions,
         desktop,
         state: nativeBrowser,
         preview: { frame: browser.data?.frame, error: browser.isError },
@@ -583,11 +563,8 @@ export default function Workspace() {
             panelId: 'atelier.terminal',
             target: { scope: 'session', projectId: project.id, sessionId },
           },
-          visible: panel.terminalActive,
-          expanded: panel.terminalFullWindow,
-          expandable: canDockGit,
-          onRequestExpand: () => panel.expandTerminal((current) => !current),
-          onRequestHide: panel.closeTerminal,
+          visible: terminalActive,
+          ...panelActions,
           expectedWorkspaceId: panel.expectedWorkspaceId,
           canCreate: panel.terminalCanCreate,
           archived: snapshot?.session.status === 'archived',
@@ -616,7 +593,7 @@ export default function Workspace() {
     },
     {
       id: 'layout.toggleRight',
-      available: panel.hasRightPanel && !gitBusy,
+      available: Boolean(panel.activePanel) && !gitBusy,
       run: panel.toggleRight,
     },
     { id: 'sessions.switch', available: !gitBusy, run: () => setSwitcherOpen(true) },
@@ -665,7 +642,7 @@ export default function Workspace() {
       id: 'shortcuts.settings',
       available: !gitBusy,
       run: () => {
-        if (gitFullWindow || panel.terminalFullWindow) panel.collapseRight(false);
+        if (panel.fullWindow) panel.collapseRight(false);
         void navigate({ to: settingsPaths.shortcuts });
       },
     },
@@ -675,13 +652,7 @@ export default function Workspace() {
     return label ? [{ ...label, ...action }] : [];
   });
   return (
-    <div
-      className={cn(
-        'app react-workspace',
-        desktop && 'desktop-workspace',
-        browserActive && !panel.rightCollapsed && 'browser-preview-open',
-      )}
-    >
+    <div className={cn('app react-workspace', desktop && 'desktop-workspace')}>
       <ShortcutHost
         commands={shortcutCommands}
         contextKey={`${pathname}:${project?.id ?? ''}:${gitBoard?.instance.instanceId ?? routePanel ?? ''}:${panel.rightCollapsed}`}
@@ -703,28 +674,9 @@ export default function Workspace() {
         layout={layout}
         width={width}
         showLeft={showLeft}
-        showRight={Boolean(gitBoard) || panel.terminalActive || showBrowserRight}
+        showRight={Boolean(panel.activePanel)}
         rightCollapsed={panel.rightCollapsed}
-        focusRight={!panel.rightCollapsed && (gitFullWindow || panel.terminalFullWindow)}
-        rightPane={
-          gitBoard
-            ? {
-                width: gitWidth ?? Math.min(1030, Math.max(550, Math.round(width * 0.46))),
-                minWidth: 450,
-                maxWidth: 1440,
-                resizeLabel: git('board.resize'),
-                onResize: setGitWidth,
-              }
-            : panel.terminalActive
-              ? {
-                  width: panel.terminalWidth,
-                  minWidth: panels.terminal.manifest.layout.minWidth,
-                  maxWidth: panels.terminal.manifest.layout.maxWidth,
-                  resizeLabel: terminal('resize'),
-                  onResize: panel.setTerminalWidth,
-                }
-              : undefined
-        }
+        focusRight={!panel.rightCollapsed && panel.fullWindow}
         onChange={changeLayout}
         left={
           <Sidebar
@@ -740,10 +692,7 @@ export default function Workspace() {
               view={{
                 instance: gitBoard.instance,
                 visible: true,
-                expanded: gitFullWindow,
-                expandable: canDockGit,
-                onRequestExpand: () => expandGit((current) => !current),
-                onRequestHide: () => closeGit(),
+                ...panelActions,
                 board: {
                   project: gitBoard.project,
                   initialTree: gitBoard.tree,
@@ -752,7 +701,7 @@ export default function Workspace() {
                   onBusy: (busy) => panel.reportGitBusy(gitBoard.instance.instanceId, busy),
                   onQuoteCode: canQuoteGit ? quoteGitCode : undefined,
                   onCreated: (id) => {
-                    closeGit(false, true);
+                    panel.clearGit();
                     openSession(id);
                     void client.invalidateQueries({ queryKey: keys.bootstrap });
                     void client.invalidateQueries({ queryKey: keys.sessions });
@@ -760,12 +709,10 @@ export default function Workspace() {
                 },
               }}
             />
-          ) : panel.terminalActive ? (
+          ) : terminalActive ? (
             terminalPanel
           ) : (
-            <aside className="react-side" aria-label={t('browser.title')}>
-              {showBrowserRight ? browserPanel : null}
-            </aside>
+            browserPanel
           )
         }
         center={
@@ -775,9 +722,7 @@ export default function Workspace() {
               projectPath={project?.path}
               onOpenProjects={sideProps.onProjects}
               sessionNavigation={
-                view === 'chat' &&
-                sessionId &&
-                (!browserActive || showBrowserRight || panel.rightCollapsed) ? (
+                view === 'chat' && sessionId ? (
                   <div
                     role="tablist"
                     className="session-tabs workspace-session-tabs"
@@ -846,8 +791,8 @@ export default function Workspace() {
                       busy: gitBusy,
                       trigger: gitTrigger,
                       onToggle: () =>
-                        gitBoard?.project.id === project.id && !panel.rightCollapsed
-                          ? closeGit()
+                        gitBoard?.project.id === project.id
+                          ? panel.toggleRight()
                           : openGit(project),
                     }
                   : undefined
@@ -861,7 +806,7 @@ export default function Workspace() {
                       browserOpen: browserActive && !panel.rightCollapsed,
                       browserTrigger,
                       onToggleBrowser: panel.toggleBrowser,
-                      terminalOpen: panel.terminalActive && !panel.rightCollapsed,
+                      terminalOpen: terminalActive && !panel.rightCollapsed,
                       terminalTrigger: panel.terminalTrigger,
                       terminalDisabled: gitBusy || panel.terminalLoading,
                       onToggleTerminal: panel.toggleTerminal,
@@ -870,316 +815,298 @@ export default function Workspace() {
               }
             />
             <div className="react-center">
-              {browserActive && !showBrowserRight ? (
-                <ViewActivity mode={panel.rightCollapsed ? 'hidden' : 'visible'}>
-                  {browserPanel}
-                </ViewActivity>
+              {ready.isError ? (
+                <div className="px-5 py-4" role="alert">
+                  <p>{translateError(ready.error, t('connection.failed'))}</p>
+                  <Button variant="secondary" onClick={() => void ready.refetch()}>
+                    {t('retry')}
+                  </Button>
+                </div>
               ) : null}
-              {(!browserActive || showBrowserRight || panel.rightCollapsed) && (
-                <>
-                  {ready.isError ? (
-                    <div className="px-5 py-4" role="alert">
-                      <p>{translateError(ready.error, t('connection.failed'))}</p>
-                      <Button variant="secondary" onClick={() => void ready.refetch()}>
-                        {t('retry')}
-                      </Button>
-                    </div>
-                  ) : null}
-                  <Suspense fallback={loading}>
-                    {view === 'settings' && (
-                      <Settings
-                        section={section}
-                        onSectionChange={(next: SettingsSection) =>
-                          void navigate({ to: settingsPaths[next] })
-                        }
-                        onBack={() => openView('chat')}
-                        layout={{
-                          layout,
-                          pending: updateLayout.isPending,
-                          error: updateLayout.error?.message,
-                          onApply: changeLayout,
-                        }}
-                      />
+              <Suspense fallback={loading}>
+                {view === 'settings' && (
+                  <Settings
+                    section={section}
+                    onSectionChange={(next: SettingsSection) =>
+                      void navigate({ to: settingsPaths[next] })
+                    }
+                    onBack={() => openView('chat')}
+                    layout={{
+                      layout,
+                      pending: updateLayout.isPending,
+                      error: updateLayout.error?.message,
+                      onApply: changeLayout,
+                    }}
+                  />
+                )}
+                {view === 'agents' ? (
+                  <div className="react-collections">
+                    <AgentsPage
+                      projects={ready.data?.projects ?? []}
+                      projectId={project?.id}
+                      onOpenSession={(id) => openSession(id)}
+                    />
+                  </div>
+                ) : null}
+                {view === 'extensions' ? (
+                  <div className="react-collections">
+                    <ExtensionsPage
+                      projects={ready.data?.projects ?? []}
+                      projectId={project?.id}
+                      onStartSkill={async (projectId, selection, editable) => {
+                        const { session } = await createSession.mutateAsync(projectId);
+                        await updateSessionDraft({
+                          sessionId: session.id,
+                          draft: {
+                            ...session.draft,
+                            extensionSelections: [selection],
+                            mode: editable ? 'edit' : 'readonly',
+                            executionPreference: 'project-v1',
+                            approvalMode: undefined,
+                          },
+                        });
+                        openSession(session.id);
+                        void revalidate(session.id);
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {view === 'runs' || view === 'artifacts' ? (
+                  <div className="react-collections">
+                    <Collections
+                      view={view}
+                      projects={ready.data?.projects ?? []}
+                      onOpenRun={(run) => openSession(run.sessionId, run.id)}
+                    />
+                  </div>
+                ) : null}
+                {view === 'chat' ? (
+                  <section
+                    className="conversation-screen"
+                    aria-label={t('session.workspace')}
+                    data-has-session={Boolean(sessionId)}
+                    data-has-context={Boolean(
+                      snapshot?.agent || snapshot?.workspace || snapshot?.session.fork,
                     )}
-                    {view === 'agents' ? (
-                      <div className="react-collections">
-                        <AgentsPage
-                          projects={ready.data?.projects ?? []}
-                          projectId={project?.id}
-                          onOpenSession={(id) => openSession(id)}
-                        />
-                      </div>
-                    ) : null}
-                    {view === 'extensions' ? (
-                      <div className="react-collections">
-                        <ExtensionsPage
-                          projects={ready.data?.projects ?? []}
-                          projectId={project?.id}
-                          onStartSkill={async (projectId, selection, editable) => {
-                            const { session } = await createSession.mutateAsync(projectId);
-                            await updateSessionDraft({
-                              sessionId: session.id,
-                              draft: {
-                                ...session.draft,
-                                extensionSelections: [selection],
-                                mode: editable ? 'edit' : 'readonly',
-                                executionPreference: 'project-v1',
-                                approvalMode: undefined,
-                              },
-                            });
-                            openSession(session.id);
-                            void revalidate(session.id);
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    {view === 'runs' || view === 'artifacts' ? (
-                      <div className="react-collections">
-                        <Collections
-                          view={view}
-                          projects={ready.data?.projects ?? []}
-                          onOpenRun={(run) => openSession(run.sessionId, run.id)}
-                        />
-                      </div>
-                    ) : null}
-                    {view === 'chat' ? (
-                      <section
-                        className="conversation-screen"
-                        aria-label={t('session.workspace')}
-                        data-has-session={Boolean(sessionId)}
-                        data-has-context={Boolean(
-                          snapshot?.agent || snapshot?.workspace || snapshot?.session.fork,
-                        )}
-                      >
-                        {sessionId &&
-                        (snapshot?.agent || snapshot?.workspace || snapshot?.session.fork) ? (
-                          <header className="session-header">
-                            <div className="session-title-row">
-                              {snapshot?.agent?.canUpgrade ? (
+                  >
+                    {sessionId &&
+                    (snapshot?.agent || snapshot?.workspace || snapshot?.session.fork) ? (
+                      <header className="session-header">
+                        <div className="session-title-row">
+                          {snapshot?.agent?.canUpgrade ? (
+                            <Button
+                              size="sm"
+                              disabled={upgradeAgent.isPending}
+                              onClick={() =>
+                                upgradeAgent.mutate(
+                                  {
+                                    sessionId: snapshot.session.id,
+                                    revisionId: snapshot.agent!.revisionId,
+                                  },
+                                  {
+                                    onSuccess: () => revalidate(snapshot.session.id),
+                                    onError: showSessionError,
+                                  },
+                                )
+                              }
+                            >
+                              {t('session.useNewVersion')}
+                            </Button>
+                          ) : null}
+                          {snapshot?.agent ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openView('agents')}
+                              title={t('session.manageAgent')}
+                            >
+                              {t('session.agentVersion', {
+                                name: snapshot.agent.name,
+                                version: snapshot.agent.version,
+                              })}
+                            </Button>
+                          ) : null}
+                        </div>
+                        {snapshot?.workspace ? (
+                          <SessionWorktree
+                            session={snapshot.session}
+                            workspace={snapshot.workspace}
+                            onShowTree={() => openGit(snapshot.project, 'worktrees')}
+                            onRefresh={async () => {
+                              await revalidate(snapshot.session.id);
+                              void client.invalidateQueries({ queryKey: keys.bootstrap });
+                            }}
+                          />
+                        ) : null}
+                        {snapshot?.session.fork
+                          ? (() => {
+                              const origin = snapshot.session.fork;
+                              const label =
+                                origin.kind === 'rewind'
+                                  ? t('session.beforeRewind')
+                                  : t('session.source');
+                              const exists = ready.data?.sessions.some(
+                                (item) => item.id === origin.sourceSessionId,
+                              );
+                              return exists ? (
                                 <Button
+                                  type="button"
                                   size="sm"
-                                  disabled={upgradeAgent.isPending}
+                                  variant="ghost"
                                   onClick={() =>
-                                    upgradeAgent.mutate(
-                                      {
-                                        sessionId: snapshot.session.id,
-                                        revisionId: snapshot.agent!.revisionId,
+                                    void navigate({
+                                      to: '/sessions/$sessionId/messages/$messageId',
+                                      params: {
+                                        sessionId: origin.sourceSessionId,
+                                        messageId: origin.sourceMessageId,
                                       },
-                                      {
-                                        onSuccess: () => revalidate(snapshot.session.id),
-                                        onError: showSessionError,
-                                      },
-                                    )
+                                    })
                                   }
                                 >
-                                  {t('session.useNewVersion')}
+                                  {label} · {origin.sourceTitle}
                                 </Button>
-                              ) : null}
-                              {snapshot?.agent ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openView('agents')}
-                                  title={t('session.manageAgent')}
-                                >
-                                  {t('session.agentVersion', {
-                                    name: snapshot.agent.name,
-                                    version: snapshot.agent.version,
+                              ) : (
+                                <p className="session-meta">
+                                  {t('session.sourceUnavailable', {
+                                    label,
+                                    title: origin.sourceTitle,
                                   })}
-                                </Button>
-                              ) : null}
-                            </div>
-                            {snapshot?.workspace ? (
-                              <SessionWorktree
-                                session={snapshot.session}
-                                workspace={snapshot.workspace}
-                                onShowTree={() => openGit(snapshot.project, 'worktrees')}
-                                onRefresh={async () => {
-                                  await revalidate(snapshot.session.id);
-                                  void client.invalidateQueries({ queryKey: keys.bootstrap });
-                                }}
-                              />
-                            ) : null}
-                            {snapshot?.session.fork
-                              ? (() => {
-                                  const origin = snapshot.session.fork;
-                                  const label =
-                                    origin.kind === 'rewind'
-                                      ? t('session.beforeRewind')
-                                      : t('session.source');
-                                  const exists = ready.data?.sessions.some(
-                                    (item) => item.id === origin.sourceSessionId,
-                                  );
-                                  return exists ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        void navigate({
-                                          to: '/sessions/$sessionId/messages/$messageId',
-                                          params: {
-                                            sessionId: origin.sourceSessionId,
-                                            messageId: origin.sourceMessageId,
-                                          },
-                                        })
-                                      }
-                                    >
-                                      {label} · {origin.sourceTitle}
-                                    </Button>
-                                  ) : (
-                                    <p className="session-meta">
-                                      {t('session.sourceUnavailable', {
-                                        label,
-                                        title: origin.sourceTitle,
-                                      })}
-                                    </p>
-                                  );
-                                })()
-                              : null}
-                          </header>
+                                </p>
+                              );
+                            })()
+                          : null}
+                      </header>
+                    ) : null}
+                    <div
+                      className="react-conversation-body"
+                      id={sessionId ? `${sessionContentId}-panel` : undefined}
+                      role={sessionId ? 'tabpanel' : undefined}
+                      aria-labelledby={sessionId ? `${sessionContentId}-${tab}` : undefined}
+                    >
+                      {sessionId && tab === 'trace' ? (
+                        <div className="flex shrink-0 items-center py-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="session-changes-button"
+                            data-pending={pendingPermissions > 0 || undefined}
+                            aria-label={t('changes.title')}
+                            aria-description={pendingPermissions ? changesLabel : undefined}
+                            aria-haspopup="dialog"
+                            onClick={() => openDrawer('details')}
+                          >
+                            <FileDiff data-icon="inline-start" aria-hidden="true" />
+                            {changesLabel}
+                          </Button>
+                        </div>
+                      ) : null}
+                      <Suspense fallback={loading}>
+                        {snapshot && tab === 'conversation' ? (
+                          <SessionChat
+                            key={snapshot.session.id}
+                            snapshot={snapshot}
+                            defaultModel={ready.data?.config.model ?? ''}
+                            nativeExecution={ready.data?.capabilities.nativeExecution === true}
+                            onOpenLink={
+                              desktop
+                                ? async (url, destination) => {
+                                    const bridge = window.atelierDesktop;
+                                    if (!bridge) throw new Error(t('browser.disabled'));
+                                    if (destination === 'internal') openBrowser();
+                                    await bridge.command(
+                                      snapshot.project.id,
+                                      destination === 'internal' ? 'open-tab' : 'open-external',
+                                      url,
+                                    );
+                                  }
+                                : undefined
+                            }
+                            onForkMessage={(messageId) => {
+                              void continueFromMessage(snapshot.session.id, messageId).catch(
+                                (error: unknown) => {
+                                  setNotice(translateError(error, t('session.createBranchFailed')));
+                                },
+                              );
+                            }}
+                            onRewindMessage={(messageId, expectedHeadId) =>
+                              continueFromMessage(snapshot.session.id, messageId, expectedHeadId)
+                            }
+                            forkingMessageId={
+                              forkSession.isPending &&
+                              !forkSession.variables?.rewindFromHead &&
+                              forkSession.variables?.sessionId === snapshot.session.id
+                                ? forkSession.variables.messageId
+                                : undefined
+                            }
+                            focusMessageId={messageId}
+                            inputFocusRequest={
+                              inputFocus?.sessionId === snapshot.session.id
+                                ? inputFocus.request
+                                : undefined
+                            }
+                            onInputFocused={(request) =>
+                              setInputFocus((current) =>
+                                current?.request === request ? undefined : current,
+                              )
+                            }
+                            onSent={revalidate}
+                            onError={setNotice}
+                            onStop={(id) =>
+                              void stopRun
+                                .mutateAsync({ id, sessionId: snapshot.session.id })
+                                .catch(showSessionError)
+                            }
+                            onRetry={(id) => retrySessionRun(id, snapshot.session.id)}
+                            onTrace={openTrace}
+                          />
                         ) : null}
-                        <div
-                          className="react-conversation-body"
-                          id={sessionId ? `${sessionContentId}-panel` : undefined}
-                          role={sessionId ? 'tabpanel' : undefined}
-                          aria-labelledby={sessionId ? `${sessionContentId}-${tab}` : undefined}
-                        >
-                          {sessionId && tab === 'trace' ? (
-                            <div className="flex shrink-0 items-center py-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="session-changes-button"
-                                data-pending={pendingPermissions > 0 || undefined}
-                                aria-label={t('changes.title')}
-                                aria-description={pendingPermissions ? changesLabel : undefined}
-                                aria-haspopup="dialog"
-                                onClick={() => openDrawer('details')}
-                              >
-                                <FileDiff data-icon="inline-start" aria-hidden="true" />
-                                {changesLabel}
+                        {snapshot && tab === 'trace' ? (
+                          <div className="react-scroll-view">
+                            <RunTrace
+                              snapshot={snapshot}
+                              runId={selectedRun?.id}
+                              onSelect={openTrace}
+                            />
+                          </div>
+                        ) : null}
+                        {snapshot && tab === 'artifacts' ? (
+                          <div className="react-scroll-view">
+                            <Collections
+                              view="artifacts"
+                              projects={[snapshot.project]}
+                              sessionId={snapshot.session.id}
+                              onOpenRun={(run: Run) => openSession(run.sessionId, run.id)}
+                            />
+                          </div>
+                        ) : null}
+                        {!snapshot ? (
+                          session.isError ? (
+                            <div role="alert" className="empty-text">
+                              <p>{translateError(session.error, t('session.loadFailed'))}</p>
+                              <Button variant="secondary" onClick={() => void session.refetch()}>
+                                {t('retry')}
                               </Button>
                             </div>
-                          ) : null}
-                          <Suspense fallback={loading}>
-                            {snapshot && tab === 'conversation' ? (
-                              <SessionChat
-                                key={snapshot.session.id}
-                                snapshot={snapshot}
-                                defaultModel={ready.data?.config.model ?? ''}
-                                nativeExecution={ready.data?.capabilities.nativeExecution === true}
-                                onOpenLink={
-                                  desktop
-                                    ? async (url, destination) => {
-                                        const bridge = window.atelierDesktop;
-                                        if (!bridge) throw new Error(t('browser.disabled'));
-                                        if (destination === 'internal') openBrowser();
-                                        await bridge.command(
-                                          snapshot.project.id,
-                                          destination === 'internal' ? 'open-tab' : 'open-external',
-                                          url,
-                                        );
-                                      }
-                                    : undefined
-                                }
-                                onForkMessage={(messageId) => {
-                                  void continueFromMessage(snapshot.session.id, messageId).catch(
-                                    (error: unknown) => {
-                                      setNotice(
-                                        translateError(error, t('session.createBranchFailed')),
-                                      );
-                                    },
-                                  );
-                                }}
-                                onRewindMessage={(messageId, expectedHeadId) =>
-                                  continueFromMessage(
-                                    snapshot.session.id,
-                                    messageId,
-                                    expectedHeadId,
-                                  )
-                                }
-                                forkingMessageId={
-                                  forkSession.isPending &&
-                                  !forkSession.variables?.rewindFromHead &&
-                                  forkSession.variables?.sessionId === snapshot.session.id
-                                    ? forkSession.variables.messageId
-                                    : undefined
-                                }
-                                focusMessageId={messageId}
-                                inputFocusRequest={
-                                  inputFocus?.sessionId === snapshot.session.id
-                                    ? inputFocus.request
-                                    : undefined
-                                }
-                                onInputFocused={(request) =>
-                                  setInputFocus((current) =>
-                                    current?.request === request ? undefined : current,
-                                  )
-                                }
-                                onSent={revalidate}
-                                onError={setNotice}
-                                onStop={(id) =>
-                                  void stopRun
-                                    .mutateAsync({ id, sessionId: snapshot.session.id })
-                                    .catch(showSessionError)
-                                }
-                                onRetry={(id) => retrySessionRun(id, snapshot.session.id)}
-                                onTrace={openTrace}
-                              />
-                            ) : null}
-                            {snapshot && tab === 'trace' ? (
-                              <div className="react-scroll-view">
-                                <RunTrace
-                                  snapshot={snapshot}
-                                  runId={selectedRun?.id}
-                                  onSelect={openTrace}
-                                />
-                              </div>
-                            ) : null}
-                            {snapshot && tab === 'artifacts' ? (
-                              <div className="react-scroll-view">
-                                <Collections
-                                  view="artifacts"
-                                  projects={[snapshot.project]}
-                                  sessionId={snapshot.session.id}
-                                  onOpenRun={(run: Run) => openSession(run.sessionId, run.id)}
-                                />
-                              </div>
-                            ) : null}
-                            {!snapshot ? (
-                              session.isError ? (
-                                <div role="alert" className="empty-text">
-                                  <p>{translateError(session.error, t('session.loadFailed'))}</p>
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => void session.refetch()}
-                                  >
-                                    {t('retry')}
-                                  </Button>
-                                </div>
-                              ) : sessionId || ready.isPending ? (
-                                loading
-                              ) : (
-                                <div className="workspace-welcome">
-                                  <span className="workspace-welcome-icon" aria-hidden="true">
-                                    <FolderOpen />
-                                  </span>
-                                  <h1>{t('home.title')}</h1>
-                                  <p>{t('home.description')}</p>
-                                  <Button onClick={sideProps.onProjects}>
-                                    {t('home.bindProject')}
-                                  </Button>
-                                </div>
-                              )
-                            ) : null}
-                          </Suspense>
-                        </div>
-                      </section>
-                    ) : null}
-                  </Suspense>
-                </>
-              )}
+                          ) : sessionId || ready.isPending ? (
+                            loading
+                          ) : (
+                            <div className="workspace-welcome">
+                              <span className="workspace-welcome-icon" aria-hidden="true">
+                                <FolderOpen />
+                              </span>
+                              <h1>{t('home.title')}</h1>
+                              <p>{t('home.description')}</p>
+                              <Button onClick={sideProps.onProjects}>
+                                {t('home.bindProject')}
+                              </Button>
+                            </div>
+                          )
+                        ) : null}
+                      </Suspense>
+                    </div>
+                  </section>
+                ) : null}
+              </Suspense>
             </div>
           </main>
         }

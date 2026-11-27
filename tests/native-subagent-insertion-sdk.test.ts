@@ -1,7 +1,7 @@
 /**
- * @file 回归本机信任会话的子代理派发与插话。
- * @implementation 使用真实 Claude SDK 和回环模型验证前后台派发、输入回执、单分支停止及汇总期间插话。
- * @updated 2026-11-26T23:08:48+08:00
+ * @file 回归本机信任会话的子代理派发、插话与请求跨度采集。
+ * @implementation 使用真实 SDK 和回环模型验证前后台派发、输入回执、单分支停止及汇总期间插话，并检查父任务及已完成子任务的请求跨度。
+ * @updated 2026-11-27T03:13:05+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -301,10 +301,15 @@ for (const [scenario, title] of scenarios)
           assert.equal((await assistantReply(fixture.collectionAcknowledgement)).runId, run.id);
         }
         if (!toStop) assert.equal((await assistantReply(fixture.collected)).runId, run.id);
-        await waitFor(async () => {
+        const completed = await waitFor(async () => {
           const { run: current } = await trace();
           if (current.endedAt) return current;
-        }, 'run cleanup').then(({ status }) => assert.equal(status, 'completed'));
+        }, 'run cleanup');
+        assert.equal(completed.status, 'completed');
+        const spans = completed.requestTiming?.records.filter(({ request }) => request) ?? [];
+        // Each completed child makes a Read request and a final response request. At least
+        // one parent request is observed independently even when child streams aren't exposed.
+        assert.ok(spans.length >= 2 * (fixture.children.length - Number(Boolean(toStop))) + 1);
         assert.equal((await snapshot()).messageQueue.items.length, 0);
         assert.ok(
           fixture.parentInputs.some((text) =>

@@ -1,7 +1,7 @@
 /**
  * @file 验证浏览器与终端面板的工作区交互。
- * @implementation 使用合成快照、隔离 Chromium 和原生桥替身检查面板布局、路由返回、尺寸隔离、焦点及弹窗遮挡，不启动 Electron 或读取用户数据。
- * @updated 2026-11-26T04:17:21+08:00
+ * @implementation 用隔离 Chromium 和原生桥替身检查共享宽度、全屏、收起后的路由与焦点，以及原生网页槽位和弹窗遮挡。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -12,6 +12,7 @@ import { compile } from '@tailwindcss/node';
 import { build } from 'esbuild';
 import { chromium } from 'playwright-core';
 import type { Bootstrap, Snapshot } from '@/api/types';
+import { defaultShortcutPreferences } from '@shared/shortcuts';
 import { initialWorkspaceLayout, type WorkspaceLayout } from '@shared/workspace-layout';
 
 const browserPath = [
@@ -86,7 +87,7 @@ const ready: Bootstrap = {
 };
 
 test(
-  'workspace reserves the right pane for an explicitly opened browser and preserves routes, sizes and native slots',
+  'right tools share collapse, expansion and dock width while preserving the browser slot',
   { skip: !browserPath, timeout: 60000 },
   async (context) => {
     const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -208,6 +209,8 @@ test(
           return void res.end(JSON.stringify(layout));
         }
         if (path === '/api/settings/workspace-location') return void res.end('{}');
+        if (path === '/api/settings/shortcuts' && req.method === 'GET')
+          return void res.end(JSON.stringify(defaultShortcutPreferences));
         unexpected.push(`${req.method} ${path}`);
         res.statusCode = 404;
         return void res.end(JSON.stringify({ error: { message: `Unexpected fixture ${path}` } }));
@@ -236,27 +239,29 @@ test(
       await page.goto(`http://127.0.0.1:${address.port}/#${tracePath}`);
       await page.getByRole('region', { name: '运行执行轨迹', exact: true }).waitFor();
       const browserButton = page.getByRole('button', { name: '浏览器', exact: true });
-      const splitter = page.getByRole('separator', { name: '调整浏览器宽度', exact: true });
-      const panel = page.getByRole('region', { name: '浏览器面板', exact: true });
+      const splitter = page.getByRole('separator', { name: '调整右侧工具宽度', exact: true });
+      const panel = page.locator('.workspace-browser-panel');
+      const collapse = panel.getByRole('button', { name: '收起浏览器面板', exact: true });
       async function fullCenter() {
         await splitter.waitFor({ state: 'detached' });
-        await panel.waitFor({ state: 'detached' });
+        await panel.waitFor({ state: 'hidden' });
         assert.equal(await splitter.count(), 0);
-        assert.equal(await panel.count(), 0);
         // Read both rectangles in one frame: a resize may restore saved pixels
         // between separate browser calls.
         const geometry = await page.locator('.main').evaluate((element) => {
           const navigation = document.querySelector('nav[aria-label="工作空间导航"]');
-          if (!navigation) return undefined;
           return {
-            navigation: navigation.getBoundingClientRect().width,
+            navigation: navigation?.getBoundingClientRect().width ?? 0,
             center: element.getBoundingClientRect().width,
             viewport: innerWidth,
           };
         });
         assert.ok(geometry);
         assert.ok(
-          Math.abs(geometry.center - (geometry.viewport - geometry.navigation - 8)) < 2,
+          Math.abs(
+            geometry.center -
+              (geometry.viewport - geometry.navigation - (geometry.navigation ? 8 : 0)),
+          ) < 2,
           JSON.stringify(geometry),
         );
       }
@@ -283,7 +288,7 @@ test(
         () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 0,
       );
       const before = await panel.boundingBox();
-      assert.ok(before && Math.abs(before.width - 320) < 2);
+      assert.ok(before && Math.abs(before.width - 640) < 2);
       const topbar = await page.locator('.topbar').boundingBox();
       const tabs = await panel.locator('.desktop-browser-tabbar').boundingBox();
       assert.ok(topbar && tabs);
@@ -299,9 +304,9 @@ test(
       await splitter.press('ArrowLeft');
       await resized;
       await page.waitForFunction(
-        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 325,
+        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 645,
       );
-      assert.ok(layout.recent.right > 320);
+      assert.ok(layout.recent.right > 640);
       const savedRight = layout.recent.right;
       const writesAfterResize = layoutWrites.length;
       await page.locator('.topbar').getByRole('button', { name: '终端', exact: true }).click();
@@ -311,23 +316,37 @@ test(
       );
       await browserButton.click();
       await panel.waitFor();
-      await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
-      await page.waitForURL((url) => url.hash === `#${tracePath}`);
+      await collapse.click();
+      await fullCenter();
+      assert.equal(new URL(page.url()).hash, `#${sessionPath}/browser`);
       assert.equal(
         await browserButton.evaluate((element) => element === document.activeElement),
         true,
       );
-      await fullCenter();
-      await page.getByRole('button', { name: '更多导航操作', exact: true }).click();
-      await page.getByRole('menuitem', { name: '工作台前进', exact: true }).click();
+      await page.waitForFunction(
+        () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds === null,
+      );
+      await browserButton.press('Enter');
       await splitter.waitFor();
       await page.waitForFunction(
         (width) =>
           Math.abs(
-            (document.querySelector('.react-side')?.getBoundingClientRect().width ?? 0) - width,
+            (document.querySelector('.workspace-right-tool')?.getBoundingClientRect().width ?? 0) -
+              width,
           ) < 2,
         savedRight,
       );
+      await panel.getByRole('button', { name: '全屏查看浏览器', exact: true }).click();
+      await splitter.waitFor({ state: 'detached' });
+      await page.waitForFunction(() => {
+        const bounds = Reflect.get(window, 'nativeLayouts').at(-1)?.bounds;
+        return bounds?.x === 0 && Math.abs(bounds.width - innerWidth) < 2;
+      });
+      await collapse.click();
+      await fullCenter();
+      await browserButton.click();
+      await panel.getByRole('button', { name: '恢复浏览器侧栏', exact: true }).click();
+      await splitter.waitFor();
       assert.equal(layoutWrites.length, writesAfterResize);
       const changeButton = { name: '变更记录', exact: true };
       assert.equal(await page.locator('.topbar').getByRole('button', changeButton).count(), 0);
@@ -364,7 +383,7 @@ test(
         { width: 700, height: 800 },
       ]) {
         await page.setViewportSize(viewport);
-        await splitter.waitFor({ state: viewport.width < 900 ? 'detached' : 'visible' });
+        await splitter.waitFor({ state: viewport.width < 1120 ? 'detached' : 'visible' });
         await panel.waitFor({ state: 'visible' });
         await page.waitForFunction(() => {
           const sent = Reflect.get(window, 'nativeLayouts').at(-1)?.bounds;
@@ -378,15 +397,9 @@ test(
           );
         });
         assert.equal(await panel.count(), 1);
-        assert.equal(await page.getByRole('dialog').count(), 0);
-        if (viewport.width < 900) {
-          const geometry = await panel.evaluate((element) => ({
-            panel: element.getBoundingClientRect().width,
-            center: document.querySelector('.main')?.getBoundingClientRect().width,
-          }));
-          assert.ok(geometry.center);
-          assert.ok(Math.abs(geometry.panel - geometry.center) < 2);
-        }
+        assert.equal(await panel.getAttribute('aria-modal'), 'true');
+        const expanded = await panel.boundingBox();
+        assert.ok(expanded && Math.abs(expanded.width - viewport.width) < 2);
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           true,
@@ -398,19 +411,10 @@ test(
           true,
         );
       }
-      await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
-      await page.waitForURL((url) => url.hash === `#${tracePath}`);
-      await page.getByRole('tab', { name: '会话', exact: true }).click();
-      await browserButton.click();
-      await panel.waitFor();
-      await page.reload();
-      await panel.waitFor();
-      await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
-      await page.waitForURL((url) => url.hash === `#${sessionPath}`);
-      await page.goto(`http://127.0.0.1:${address.port}/#${sessionPath}/browser`);
-      await panel.waitFor();
-      await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
-      await page.waitForURL((url) => url.hash === `#${sessionPath}`);
+      await collapse.click();
+      await fullCenter();
+      assert.equal(new URL(page.url()).hash, `#${sessionPath}/browser`);
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`http://127.0.0.1:${address.port}/?web#${sessionPath}`);
       await browserButton.waitFor();
       assert.equal(previewRequests, 0);
@@ -421,28 +425,30 @@ test(
       await previewResponse;
       await page.getByRole('region', { name: '浏览器实时预览', exact: true }).waitFor();
       assert.ok(previewRequests > 0);
-      const previewCount = previewRequests;
-      await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+      await collapse.click();
       await page
         .getByRole('region', { name: '浏览器实时预览', exact: true })
         .waitFor({ state: 'hidden' });
-      assert.equal(previewRequests, previewCount);
-      await page.setViewportSize({ width: 1440, height: 900 });
       const terminalButton = page
         .locator('.topbar')
         .getByRole('button', { name: '终端', exact: true });
       await terminalButton.click();
       await page.waitForURL((url) => url.hash === `#${sessionPath}/terminal`);
-      await page.getByText('终端仅在已配对的桌面应用中可用。', { exact: true }).waitFor();
-      assert.equal(
-        layout.recent.right,
+      const terminal = page.locator('.terminal-panel');
+      await terminal.getByText('终端仅在已配对的桌面应用中可用。', { exact: true }).waitFor();
+      await page.waitForFunction(
+        (width) =>
+          Math.abs(
+            (document.querySelector('.terminal-panel')?.getBoundingClientRect().width ?? 0) - width,
+          ) < 2,
         savedRight,
-        'Terminal must not overwrite the Browser width',
       );
+      assert.equal(layout.recent.right, savedRight);
       await page.reload();
-      await page.getByText('终端仅在已配对的桌面应用中可用。', { exact: true }).waitFor();
-      await page.getByRole('button', { name: '收起终端面板', exact: true }).click();
-      await page.waitForURL((url) => url.hash === `#${sessionPath}`);
+      await terminal.waitFor();
+      await terminal.getByRole('button', { name: '收起终端面板', exact: true }).click();
+      await terminal.waitFor({ state: 'hidden' });
+      assert.equal(new URL(page.url()).hash, `#${sessionPath}/terminal`);
       assert.equal(
         await terminalButton.evaluate((element) => element === document.activeElement),
         true,

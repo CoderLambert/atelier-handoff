@@ -16,7 +16,7 @@ import { useWithdrawQueuedMessage } from '@/use-query/sessions/use-withdraw-queu
 
 type QueueAction =
   | { type: 'withdraw'; itemId: string }
-  | { type: 'resume' }
+  | { type: 'resume'; reviewItemId?: string }
   | { type: 'insert'; variables: InsertQueuedMessageVariables };
 
 export function useSessionMessageQueue(sessionId: string) {
@@ -35,7 +35,7 @@ export function useSessionMessageQueue(sessionId: string) {
     setFailure(undefined);
     try {
       if (action.type === 'withdraw') await withdraw.mutateAsync(action.itemId);
-      else if (action.type === 'resume') await resume.mutateAsync();
+      else if (action.type === 'resume') await resume.mutateAsync(action.reviewItemId);
       else await insert.mutateAsync(action.variables);
     } catch (failure) {
       setFailure({ action, cause: failure });
@@ -64,7 +64,7 @@ export function useSessionMessageQueue(sessionId: string) {
     insertingId: insert.isPending ? insert.variables?.itemId : undefined,
     resuming: resume.isPending,
     onWithdraw: (itemId: string) => void act({ type: 'withdraw', itemId }),
-    onResume: () => void act({ type: 'resume' }),
+    onResume: (reviewItemId?: string) => void act({ type: 'resume', reviewItemId }),
     onInsert: (variables: InsertQueuedMessageVariables) => void act({ type: 'insert', variables }),
   };
 }

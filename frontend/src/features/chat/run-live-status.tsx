@@ -1,7 +1,7 @@
 /**
  * @file 在当前对话轮次末尾展示运行状态与耗时。
- * @implementation 根据运行状态、工具、事件和运行中的子任务选择阶段，标示整轮耗时与最近实际活动。
- * @updated 2026-11-26T23:08:48+08:00
+ * @implementation 根据运行状态、工具、事件和子任务选择阶段，显示整轮耗时，并在等待模型时显示距最近活动的时间。
+ * @updated 2026-11-27T03:03:08+08:00
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Shield } from 'lucide-react';
@@ -94,6 +94,14 @@ export function RunLiveStatus({
           <span aria-hidden="true">· </span>
           {t('progress.elapsed', { duration: formatDuration(elapsed, locale) })}
         </span>
+        {stage === t('progress.waitingModel') && (
+          <span className="run-live-status-elapsed" data-run-since-activity>
+            <span aria-hidden="true">· </span>
+            {t('progress.sinceActivity', {
+              duration: formatDuration(Math.max(0, now - Date.parse(lastActivityAt)), locale),
+            })}
+          </span>
+        )}
       </div>
     </section>
   );

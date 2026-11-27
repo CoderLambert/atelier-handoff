@@ -219,8 +219,8 @@ test(
         true,
       );
       await navigation.fill('300');
-      const browserWidth = page.getByRole('spinbutton', { name: '浏览器宽度', exact: true });
-      await browserWidth.fill('420');
+      const rightToolWidth = page.getByRole('spinbutton', { name: '右侧工具宽度', exact: true });
+      await rightToolWidth.fill('720');
       await page.getByRole('button', { name: '模型与网关', exact: true }).click();
       assert.equal(await manual.inputValue(), 'custom-manual');
       await page.getByRole('combobox', { name: '网关来源', exact: true }).click();
@@ -261,15 +261,15 @@ test(
 
       await page.getByRole('button', { name: '工作区布局', exact: true }).click();
       assert.equal(await navigation.inputValue(), '300');
-      assert.equal(await browserWidth.inputValue(), '420');
+      assert.equal(await rightToolWidth.inputValue(), '720');
       await page.getByRole('button', { name: '保存并应用', exact: true }).click();
       assert.equal(await page.evaluate('window.fixture.layout.defaults.left'), 300);
-      assert.equal(await page.evaluate('window.fixture.layout.recent.right'), 420);
+      assert.equal(await page.evaluate('window.fixture.layout.recent.right'), 720);
       await page.getByRole('button', { name: '恢复默认布局', exact: true }).click();
       assert.equal(await navigation.inputValue(), '232');
-      assert.equal(await browserWidth.inputValue(), '320');
+      assert.equal(await rightToolWidth.inputValue(), '640');
       assert.equal(await page.evaluate('window.fixture.layout.defaults.left'), 232);
-      assert.equal(await page.evaluate('window.fixture.layout.recent.right'), 320);
+      assert.equal(await page.evaluate('window.fixture.layout.recent.right'), 640);
       await page.getByRole('button', { name: '诊断', exact: true }).click();
       assert.equal(
         await page.getByRole('button', { name: '保存设置', exact: true }).isVisible(),

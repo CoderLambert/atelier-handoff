@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
+import type { SkillInheritanceItem } from '@shared/skill-inheritance';
 import type { Draft, Extension } from '@shared/types';
 import { uiI18n } from '@/i18n';
 import { capabilityLabels, initialConfig } from '@/features/agents/api';
@@ -9,6 +10,7 @@ import {
   chooseDirectory,
   chooseExtension,
   chooseFile,
+  completionSkills,
   inCode,
   selectionReason,
   triggerAt,
@@ -95,27 +97,35 @@ test('fenced and inline code remain literal and closing fences restore completio
   assert.equal(inCode('````\n````\n'), false);
 });
 
-test('commands appear only at the start while manual skills can be selected inline', () => {
+test('slash options use authorized preview items while keeping commands at the start only', () => {
+  const installed: SkillInheritanceItem = {
+    id: skill.id, name: skill.name, description: skill.description, version: 2,
+    source: 'atelier', manual: true, auto: false, mode: 'manual', effective: 'manual', override: 'follow',
+  };
+  const preview = completionSkills([
+    installed,
+    { ...installed, id: 'workspace', source: 'workspace', mode: 'auto', effective: 'auto' },
+    { ...installed, id: 'host', source: 'host', effective: 'off', reason: 'disabled' },
+    { ...installed, id: 'auto-only', effective: 'auto', manual: false },
+  ]);
+  const items = [skill, command, ...preview];
   const text = 'please /rev';
   const token = atEnd(text)!;
-  assert.deepEqual(
-    choices([skill, command], token, text, 'readonly').map((row) => row.item.id),
-    ['skill'],
-  );
-  assert.equal(choices([skill, command], atEnd('/rev')!, '/rev', 'readonly').length, 2);
-  assert.deepEqual(
-    choices(
-      [
-        { ...skill, enabled: false },
-        { ...skill, supported: false },
-        { ...skill, userInvocable: false },
-      ],
-      atEnd('/')!,
-      '/',
-      'readonly',
-    ),
-    [],
-  );
+  const rows = choices(items, token, text, 'readonly');
+  assert.deepEqual(rows.map((row) => [row.item.id, row.skillSource]), [
+    ['skill', 'atelier'], ['workspace', 'workspace'],
+  ]);
+  assert.equal(choices(items, atEnd('/rev')!, '/rev', 'readonly').length, 3);
+  assert.deepEqual(choices([skill], token, text, 'readonly'), []);
+  const row = rows[0];
+  assert.ok(row);
+  const selected = chooseExtension({ ...draft, text, extensionSelections: [
+    { id: skill.id, version: 1 }, { id: 'workspace', version: 1 },
+  ] }, token, row);
+  assert.equal(selected.draft.text, 'please ');
+  assert.deepEqual(selected.draft.extensionSelections, [
+    { id: skill.id, version: 2 }, { id: 'workspace', version: 1 },
+  ]);
 });
 
 test('MCP completion requires a passing test, discovery, permission and draft-mode access', () => {

@@ -391,6 +391,10 @@ export const extensions = {
   'inheritance.reasonGlobalOff': ['全局继承已关闭。', 'Global inheritance is off.'],
   'inheritance.reasonProjectBlocked': ['项目已阻止本机继承。', 'This project blocks local inheritance.'],
   'inheritance.reasonNotNative': ['仅在本机信任模式下可用。', 'Available only in Native trust mode.'],
+  'inheritance.reasonWorkspaceMode': [
+    '当前模式不可用。请切换到全工具自动化或本机信任。',
+    'Unavailable in this mode. Switch to Full tool automation or Native trust.',
+  ],
   'inheritance.reasonDisabled': ['已在上层设置中停用。', 'Disabled by the parent policy.'],
   'inheritance.reasonSessionOff': ['已在本会话停用。', 'Disabled for this session.'],
   'inheritance.loading': ['正在读取 Skill 可用范围…', 'Loading Skill availability…'],

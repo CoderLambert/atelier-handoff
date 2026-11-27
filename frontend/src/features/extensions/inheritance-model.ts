@@ -44,15 +44,3 @@ export function recordedOnRun(item: SkillInheritanceItem, extensions?: UsedExten
     ({ id, version, kind }) => kind === 'skill' && id === item.id && version === item.version,
   );
 }
-
-// The slash picker edits its own selections. Keep any dialog-owned selections it didn't replace.
-export function mergePickerSelections(
-  previous: ExtensionSelection[] | undefined,
-  next: ExtensionSelection[] | undefined,
-  dialogIds: ReadonlySet<string>,
-) {
-  const preserved = previous?.filter(
-    ({ id }) => dialogIds.has(id) && !next?.some((selection) => selection.id === id),
-  );
-  return preserved?.length ? [...(next ?? []), ...preserved] : next;
-}

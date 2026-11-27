@@ -11,8 +11,6 @@ export function panelLocation(
   state: {
     workspacePanelReturn?: string;
     workspaceBrowserReturn?: string;
-    workspacePanelReturnIndex?: number;
-    __TSR_index?: number;
   },
 ) {
   const routePanel: RoutePanel | undefined = pathname.endsWith('/browser')
@@ -29,18 +27,8 @@ export function panelLocation(
     !candidate.endsWith('/terminal')
       ? candidate
       : undefined;
-  const previousIndex = state.workspacePanelReturnIndex;
-  const canReturnBack = Boolean(
-    returnPath &&
-    previousIndex !== undefined &&
-    previousIndex >= 0 &&
-    Number.isSafeInteger(previousIndex) &&
-    state.__TSR_index === previousIndex + 1,
-  );
   return {
     routePanel,
-    returnPath,
-    canReturnBack,
     contentPath: routePanel ? (returnPath ?? `/sessions/${sessionId}`) : pathname,
   };
 }

@@ -131,6 +131,7 @@ export function createMessageRuntime({
     runner,
     liveInsertion,
     worktrees,
+    createRun,
     queueChanged,
     wakeQueue,
   });

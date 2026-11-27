@@ -62,17 +62,21 @@ export function createLiveInsertion({
       !/^\s*[/!]/u.test(request.text);
     if (!compatible || runner.canInsertNow?.(run.id) === false) return 'priority';
     const session = store.get('sessions', run.sessionId);
+    const workspaceAutomatic =
+      executor === 'project-v1' &&
+      request.mode === 'edit' &&
+      request.approvalMode === 'automatic' &&
+      !session.agentRevisionId;
     if (!skillScope) {
-      // Older project intents had no local Skill catalog. Preserve their ordinary live behavior
-      // unless a new session restriction could make their frozen scope obsolete.
+      // Legacy intents cannot be inserted into a scope that now admits project directory Skills.
       const restricted = [...store.skillInheritance.sessionModes(session.id).values()].some(
         (mode) => mode !== 'follow',
       );
-      return executor === 'project-v1' && !restricted ? 'live' : 'priority';
+      return executor === 'project-v1' && !workspaceAutomatic && !restricted ? 'live' : 'priority';
     }
     return skillScope ===
       skills.automatic(
-        skills.context(run.projectId, session, executor === 'native-v1', run.workspacePath),
+        skills.context(run.projectId, session, executor === 'native-v1', run.workspacePath, workspaceAutomatic),
       )
       ? 'live'
       : 'priority';

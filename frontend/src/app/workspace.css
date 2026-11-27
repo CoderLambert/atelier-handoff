@@ -1,7 +1,7 @@
 /**
  * @file 定义工作台结构、导航工具栏与面板。
- * @implementation 管理窗口约束、分隔条、响应式布局及当前会话标题。
- * @updated 2026-11-23T04:49:37+08:00
+ * @implementation 管理分隔条、工具栏、响应式布局及右侧工具的全屏定位和共享按钮区。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 @layer components {
   .react-workspace .main {
@@ -28,13 +28,6 @@
     overflow: auto;
     min-height: 0;
   }
-  .react-workspace .react-side {
-    min-width: 0;
-    min-height: 0;
-    overflow: auto;
-    border-inline-start: 1px solid var(--ui-border-subtle);
-    background: var(--ui-card);
-  }
   .react-workspace .react-collections {
     flex: 1;
     min-height: 0;
@@ -54,9 +47,6 @@
   @media (max-width: 1120px) {
     .react-workspace.app {
       grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-    }
-    .react-workspace .react-side {
-      display: none;
     }
   }
   @media (max-width: 767px) {
@@ -99,11 +89,27 @@
   height: 100%;
 }
 
-.react-workspace .workspace-pane > .react-side {
+.workspace-right-tool {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100%;
   min-width: 0;
+  min-height: 0;
+  background: var(--ui-card);
+}
+
+.workspace-right-tool[data-expanded] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.workspace-tool-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
 }
 
 .workspace-separator {
@@ -335,7 +341,7 @@
   }
 }
 
-.react-workspace :is(.history-wrap, .react-side, .react-scroll-view, .react-collections) {
+.react-workspace :is(.history-wrap, .react-scroll-view, .react-collections) {
   position: relative;
   overscroll-behavior: contain;
 }

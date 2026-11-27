@@ -1,19 +1,20 @@
 /**
  * @file 定义工作区布局的默认值、边界和持久化契约。
- * @implementation 同时保存设置的默认宽度和最近使用的实际宽度。
- * @updated 2026-11-22T00:00:00+08:00
+ * @implementation 定义导航栏与共享右侧工具的尺寸偏好，校验时兼容旧版较窄的浏览器栏宽度。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 import { z } from 'zod';
 
 export const minNavigationWidth = 190;
 export const maxNavigationWidth = 440;
-export const minInspectorWidth = 240;
-export const maxInspectorWidth = 760;
+export const minInspectorWidth = 450;
+export const maxInspectorWidth = 1440;
 export const collapsedNavigationWidth = 48;
-export const initialPaneWidths = { left: 232, right: 320 } as const;
+export const initialPaneWidths = { left: 232, right: 640 } as const;
 export const paneWidthsSchema = z.strictObject({
   left: z.number().int().min(minNavigationWidth).max(maxNavigationWidth),
-  right: z.number().int().min(minInspectorWidth).max(maxInspectorWidth),
+  // Existing preferences from the former browser-only column remain readable.
+  right: z.number().int().min(240).max(maxInspectorWidth),
 });
 export const workspaceLayoutSchema = z.strictObject({
   defaults: paneWidthsSchema,

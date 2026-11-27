@@ -1,7 +1,7 @@
 /**
  * @file 验证本机 Skill 继承通过 API 传递至运行时 SDK。
- * @implementation 使用临时目录、配对 API 和回环模型替身，检查不同运行和会话中的 Skill 策略与内容。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 使用临时目录、配对 API 和回环模型替身，检查不同运行与会话的 Skill 策略，以及排队消息授权变化后的复核恢复。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -327,8 +327,16 @@ test(
       await delay(25);
     }
     assert.equal(blocked?.text, queuedText);
-    assert.match(blocked?.error ?? '', /重新发送/u);
+    assert.match(blocked?.error ?? '', /复核/u);
     assert.ok(capture.every((body) => !body.includes(queuedText)));
+    await api(`sessions/${b.id}/message-queue/resume`, 'POST', { reviewItemId: queuedMessage.id });
+    for (let retry = 0; retry < 160 && !capture.some((body) => body.includes(queuedText)); retry++) {
+      await delay(25);
+    }
+    const resumed = capture.find((body) => body.includes(queuedText));
+    assert.ok(resumed, 'The SDK should receive the reviewed message');
+    const { tools } = z.object({ tools: z.unknown() }).parse(JSON.parse(resumed));
+    assert.ok(!JSON.stringify(tools).includes('HOST_INHERITANCE_DESCRIPTION'));
     const fresh = await createSession();
     await run(fresh.id, 'spawn-local-scope-branch');
     assert.equal(childCapture.length, 1, 'SDK executed a real child query');

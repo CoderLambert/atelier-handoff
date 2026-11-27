@@ -23,12 +23,17 @@ import { Button } from '@/components/ui/button';
 import { ExtensionKindIcon } from './components';
 import { extensionKeys, messageOf, useExtensions } from './api';
 import { useSearchProjectFiles } from '@/use-query/projects/use-search-project-files';
+import { skillInheritanceKeys, type SessionSkillScope } from '@/use-query/skill-inheritance/keys';
+import { useSkillInheritance } from '@/use-query/skill-inheritance/use-skill-inheritance';
+import type { SkillInheritanceView } from '@shared/skill-inheritance';
+import { skillSources } from './inheritance-controls';
 import {
   allowedTools,
   choices,
   chooseDirectory,
   chooseExtension,
   chooseFile,
+  completionSkills,
   selectionReason,
   triggerAt,
 } from './picker-model';
@@ -37,6 +42,8 @@ import './extensions.css';
 export interface ExtensionPickerProps {
   projectId?: string;
   sessionId?: string;
+  skillScope: SessionSkillScope;
+  sessionSkillIds: ReadonlySet<string>;
   agent?: AgentSessionInfo;
   contextAllowed?: boolean;
   draft: Draft;
@@ -97,6 +104,8 @@ function scopeExtensions(items: Extension[], agent?: AgentSessionInfo): Extensio
 export function ExtensionPicker({
   projectId,
   sessionId,
+  skillScope,
+  sessionSkillIds,
   agent,
   contextAllowed = true,
   draft,
@@ -125,13 +134,28 @@ export function ExtensionPicker({
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
   const completionKey = JSON.stringify([
     projectId,
-    sessionId,
+    skillScope.sessionId,
+    skillScope.mode,
     cursor.text,
     cursor.start,
     cursor.end,
   ]);
-  const rows =
-    trigger && trigger.symbol !== '@' ? choices(items, trigger, cursor.text, draft.mode) : [];
+  const active = Boolean(
+    projectId && cursor.focused && !cursor.disabled && !composing && dismissed !== completionKey,
+  );
+  const isSlash = trigger?.symbol === '/';
+  const preview = useSkillInheritance(skillScope, active && isSlash);
+  const skillItems = isSlash && preview.isSuccess && !preview.isFetching
+    ? completionSkills(preview.data.items)
+    : [];
+  const rows = !trigger || trigger.symbol === '@'
+    ? []
+    : choices(
+        isSlash ? [...items.filter(({ kind }) => kind === 'command'), ...skillItems] : items,
+        trigger,
+        cursor.text,
+        draft.mode,
+      );
 
   const fileSearch = useSearchProjectFiles(
     projectId,
@@ -159,20 +183,18 @@ export function ExtensionPicker({
   const isFile = trigger?.symbol === '@';
   const activeCount = isFile ? fileRows.length : rows.length;
   const selectedIndex = Math.min(index, Math.max(0, activeCount - 1));
+  const previewError = isSlash && preview.isError;
+  const previewLoading = isSlash && (preview.isPending || preview.isFetching);
   const open = Boolean(
-    projectId &&
-    cursor.focused &&
-    !cursor.disabled &&
-    !composing &&
-    trigger &&
-    dismissed !== completionKey &&
+    active && trigger &&
     (isFile
       ? contextAllowed &&
         (fileRows.length || !trigger.query || fileSearch.isPending || fileSearch.isError)
-      : rows.length || !trigger.query || query.isPending || query.isError),
+      : rows.length || !trigger.query || query.isPending || query.isError || previewError || previewLoading),
   );
   const current = useRef({
     projectId,
+    skillScope,
     agent,
     draft,
     onChange,
@@ -187,6 +209,7 @@ export function ExtensionPicker({
   });
   current.current = {
     projectId,
+    skillScope,
     agent,
     draft,
     onChange,
@@ -292,16 +315,24 @@ export function ExtensionPicker({
     }
     const row = state.rows[choiceIndex];
     if (!row) return;
-    const latest = scopeExtensions(
-      client.getQueryData<Extension[]>(extensionKeys.list(state.projectId)) ?? [],
-      state.agent,
-    ).find((item) => item.id === row.item.id);
+    const latest = 'effective' in row.item
+      ? (() => {
+          const cached = client.getQueryState<SkillInheritanceView>(
+            skillInheritanceKeys.view(state.skillScope),
+          );
+          if (cached?.status !== 'success' || cached.fetchStatus !== 'idle' || cached.isInvalidated)
+            return;
+          return completionSkills(cached.data?.items ?? []).find(({ id }) => id === row.item.id);
+        })()
+      : scopeExtensions(
+          client.getQueryData<Extension[]>(extensionKeys.list(state.projectId)) ?? [],
+          state.agent,
+        ).find((item) => item.id === row.item.id);
     if (
       !latest ||
-      !latest.enabled ||
       latest.version !== row.item.version ||
-      (latest.kind !== 'mcp' && !latest.supported) ||
-      (latest.kind === 'skill' && latest.userInvocable === false)
+      (!('effective' in latest) &&
+        (!latest.enabled || (latest.kind !== 'mcp' && !latest.supported)))
     ) {
       sync();
       return;
@@ -533,13 +564,18 @@ export function ExtensionPicker({
     };
   }, [open, inputRef]);
   const byId = new Map(items.map((item) => [item.id, item]));
+  const pickerSelections = draft.extensionSelections?.filter(({ id }) => !sessionSkillIds.has(id));
   return (
     <>
-      {(draft.extensionSelections?.length ?? 0) > 0 ? (
+      {pickerSelections?.length ? (
         <div className="ext-chips" aria-label={t('picker.selectedLabel')}>
-          {draft.extensionSelections?.map((selection) => {
+          {pickerSelections.map((selection) => {
             const item = byId.get(selection.id);
-            const reason = selectionReason(item, selection, draft.mode, query.data !== undefined);
+            const reason = selection.tools || item?.kind === 'mcp'
+              ? selectionReason(item, selection, draft.mode, query.isSuccess)
+              : preview.isSuccess && !preview.isFetching
+                ? t('picker.unavailable')
+                : '';
             return (
               <span
                 key={selection.id}
@@ -686,7 +722,7 @@ export function ExtensionPicker({
                 ) : rows.length ? (
                   rows.map((row, rowIndex) => (
                     <button
-                      key={`${row.item.id}:${row.label}`}
+                      key={`${row.skillSource ?? row.item.kind}:${row.item.id}:${row.label}`}
                       type="button"
                       role="option"
                       tabIndex={-1}
@@ -705,12 +741,31 @@ export function ExtensionPicker({
                       </span>
                       <span className="ext-option-copy">
                         <strong>{row.label}</strong>
-                        <small>{row.description || row.kind}</small>
+                        <small>
+                          {row.skillSource ? t(skillSources[row.skillSource]) : null}
+                          {row.skillSource && row.description ? ' · ' : null}
+                          {row.description || (!row.skillSource && row.kind)}
+                        </small>
                       </span>
-                      <span className="ext-option-kind">{row.kind}</span>
+                      {row.skillSource ? null : <span className="ext-option-kind">{row.kind}</span>}
                     </button>
                   ))
-                ) : (
+                ) : null}
+                {!isFile && (previewError || (isSlash && query.isError)) ? (
+                  <div className="ext-completion-empty" role="status">
+                    {previewError ? t('inheritance.loadFailed') : messageOf(query.error)}{' '}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (previewError) void preview.refetch();
+                        if (query.isError) void query.refetch();
+                      }}
+                    >
+                      {t('common.reload')}
+                    </Button>
+                  </div>
+                ) : !isFile && !rows.length ? (
                   <div className="ext-completion-empty" role="status">
                     {query.isError ? (
                       <>
@@ -719,7 +774,7 @@ export function ExtensionPicker({
                           {t('common.reload')}
                         </Button>
                       </>
-                    ) : query.isPending ? (
+                    ) : previewLoading || query.isPending ? (
                       t('extensions.loading')
                     ) : trigger?.symbol === '#' ? (
                       t('picker.noTools')
@@ -727,7 +782,7 @@ export function ExtensionPicker({
                       t('picker.noCommands')
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
               <div className="ext-completion-footer">
                 <span>{t('picker.selectHint')}</span>

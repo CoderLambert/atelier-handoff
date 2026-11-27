@@ -58,12 +58,16 @@ export function SkillIdentity({ item }: { item: SkillInheritanceItem }) {
 
 export function SkillAvailability({ item }: { item: SkillInheritanceItem }) {
   const { t } = useUiTranslation('extensions');
+  const reason =
+    item.reason === 'not-native' && item.source === 'workspace'
+      ? 'inheritance.reasonWorkspaceMode'
+      : item.reason && reasonLabels[item.reason];
   return (
     <div className="flex flex-col items-start gap-1.5">
       <Badge variant={item.effective === 'off' ? 'secondary' : item.effective === 'auto' ? 'success' : 'outline'}>
         {t(statusLabels[item.effective])}
       </Badge>
-      {item.reason ? <p className="text-xs text-muted-foreground">{t(reasonLabels[item.reason])}</p> : null}
+      {reason ? <p className="text-xs text-muted-foreground">{t(reason)}</p> : null}
       {!item.manual && item.effective !== 'off' ? (
         <p className="text-xs text-muted-foreground">{t('extensions.manualUnsupported')}</p>
       ) : null}

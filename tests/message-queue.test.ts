@@ -1,7 +1,7 @@
 /**
  * @file 验证会话队列、实时投递状态和重启恢复。
- * @implementation 用隔离 SQLite、真实 HTTP 和可控运行器检查消息顺序、幂等、撤回、草稿与附件保留，以及投递中断后继续发送。
- * @updated 2026-11-21T00:28:46+08:00
+ * @implementation 用隔离 SQLite、真实 HTTP 和可控运行器检查消息顺序、幂等、撤回、草稿与附件保留，以及投递中断恢复、授权变化后的阻塞和显式复核恢复。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +14,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../server/app.js';
 import { MessageQueue } from '../server/message-queue.js';
+import { ProjectExtensions } from '../server/extensions.js';
 import {
   emptyDraft,
   now,
@@ -25,9 +26,9 @@ import {
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-async function waitFor(check: () => boolean) {
+async function waitFor(check: () => boolean | Promise<boolean>) {
   const end = Date.now() + 3000;
-  while (!check()) {
+  while (!(await check())) {
     assert.ok(Date.now() < end, 'Expected the next queued turn to start');
     await delay(10);
   }
@@ -180,6 +181,13 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     await running.request(`/api/runs/${a.id}/stop`, 'POST', {});
     assert.equal(starts.length, 1);
     await writeFile(file, 'effect of the first turn');
+    const registry = new ProjectExtensions(running.app.store);
+    const newlyAvailable = registry.save(p.project.id, {
+      kind: 'skill',
+      name: 'queue-added',
+      body: '---\ndescription: A fixture skill added while the queue waits.\n---\nNew Skill.',
+      enabled: true,
+    });
     complete.get(a.id)?.('stopped');
     await waitFor(() => starts.length === 2);
     const second = starts[1];
@@ -258,7 +266,39 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
       (await state()).messageQueue.items.map((row) => row.delivery),
       ['unknown'],
     );
-    complete.get(starts[3]?.run.id ?? '')?.();
+    const last = starts[3];
+    assert.ok(last);
+    const reviewedBody = { ...send('reviewed message'), attachmentIds: [attachment.attachment.id] };
+    const toReview = (await sendBody(reviewedBody)).queuedMessage;
+    assert.ok(toReview);
+    new ProjectExtensions(running.app.store).save(
+      p.project.id,
+      { version: newlyAvailable.version, body: '---\ndescription: Changed existing skill.\n---\nUpdated instructions.' },
+      newlyAvailable.id,
+    );
+    complete.get(last.run.id)?.();
+    await waitFor(async () => (await state()).messageQueue.items.some((item) => item.scopeChanged));
+    assert.equal(starts.length, 4);
+    assert.ok((await state()).messageQueue.items.find((item) => item.id === toReview.id)?.scopeChanged);
+    await running.request(path + '/message-queue/resume', 'POST', {}, 409);
+    await running.request(path + '/message-queue/resume', 'POST', { reviewItemId: queuedWhileRunning.id }, 409);
+    assert.equal(starts.length, 4);
+
+    // Recognize the scope error already persisted by older desktop builds.
+    running.app.store.db.prepare('UPDATE pending_messages SET error=? WHERE id=?').run(
+      '排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。', toReview.id,
+    );
+    await running.request(path + '/message-queue/resume', 'POST', { reviewItemId: toReview.id });
+    const reviewed = starts[4];
+    assert.equal(starts.length, 5);
+    assert.ok(reviewed);
+    assert.equal(reviewed.run.prompt, reviewedBody.text);
+    assert.match(reviewed.input, /queued attachment/u);
+    assert.equal((await sendBody(reviewedBody)).run?.id, reviewed.run.id);
+    const afterReview = await state();
+    assert.equal(afterReview.session.draft.text, 'keep editing');
+    assert.deepEqual(afterReview.messageQueue.items.map((item) => item.delivery), ['unknown']);
+    complete.get(reviewed.run.id)?.();
   } finally {
     await running?.app.close();
     await rm(temp, { recursive: true, force: true });

@@ -20,7 +20,6 @@ export interface PanelManifest {
   titleKey: PanelTitleKey;
   scope: PanelTarget['scope'];
   slot: 'right';
-  layout: { defaultWidth: number; minWidth: number; maxWidth: number };
 }
 export interface PanelInstance<
   Id extends string = string,
@@ -30,13 +29,17 @@ export interface PanelInstance<
   panelId: Id;
   target: Target;
 }
-export interface PanelViewProps<Instance extends PanelInstance = PanelInstance> {
-  instance: Instance;
-  visible: boolean;
+export interface PanelLayoutActions {
   expanded: boolean;
   expandable: boolean;
   onRequestHide(): void;
   onRequestExpand(): void;
+}
+export interface PanelViewProps<
+  Instance extends PanelInstance = PanelInstance,
+> extends PanelLayoutActions {
+  instance: Instance;
+  visible: boolean;
 }
 export interface PanelDefinition<Props extends PanelViewProps> {
   manifest: PanelManifest & {

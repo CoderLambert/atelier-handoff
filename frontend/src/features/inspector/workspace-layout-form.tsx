@@ -1,7 +1,7 @@
 /**
  * @file 编辑桌面工作区的主题皮肤与默认面板宽度。
- * @implementation 提供带有微型预览的主题弹出列表，并校验保存导航栏与浏览器面板的默认宽度。
- * @updated 2026-11-23T13:15:00+08:00
+ * @implementation 提供主题预览，校验并保存导航栏和共享右侧工具的默认宽度，同时更新当前尺寸。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useState } from 'react';
@@ -31,7 +31,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
   const { theme, setTheme } = useUiTheme();
   const id = useId();
   const [left, setLeft] = useState(String(layout.defaults.left));
-  const [right, setRight] = useState(String(layout.defaults.right));
+  const [right, setRight] = useState(String(Math.max(minInspectorWidth, layout.defaults.right)));
   const widths = paneWidthsSchema.safeParse({ left: Number(left), right: Number(right) });
   const invalidLeft =
     !Number.isInteger(Number(left)) ||
@@ -46,7 +46,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
       className="settings-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!pending && widths.success)
+        if (!pending && widths.success && !invalidRight)
           onApply({ defaults: widths.data, recent: widths.data, collapsed: false });
       }}
     >
@@ -87,9 +87,9 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
         </div>
         <div className="settings-field-row" data-invalid={invalidRight}>
           <div className="settings-field-copy">
-            <label htmlFor={`${id}-inspector`}>{t('layout.browserWidth')}</label>
+            <label htmlFor={`${id}-inspector`}>{t('layout.rightToolWidth')}</label>
             <p id={`${id}-inspector-help`}>
-              {t('layout.browserRange', { min: minInspectorWidth, max: maxInspectorWidth })}
+              {t('layout.rightToolRange', { min: minInspectorWidth, max: maxInspectorWidth })}
             </p>
           </div>
           <input
@@ -115,7 +115,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
             <p role="alert" className="settings-error">
               {error}
             </p>
-          ) : !widths.success ? (
+          ) : !widths.success || invalidRight ? (
             <p role="alert" className="settings-error">
               {t('layout.invalidWidth')}
             </p>
@@ -141,7 +141,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
             <RotateCcw data-icon="inline-start" aria-hidden="true" />
             {t('layout.reset')}
           </Button>
-          <Button type="submit" disabled={pending || !widths.success}>
+          <Button type="submit" disabled={pending || !widths.success || invalidRight}>
             {pending ? t('layout.saving') : t('layout.save')}
           </Button>
         </div>

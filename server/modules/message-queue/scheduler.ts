@@ -1,11 +1,11 @@
 /**
  * @file 调度待处理消息的下一步执行。
- * @implementation 合并唤醒，在活动运行允许时插入，否则通过执行槽创建下一轮；关停时可等待在途 drain。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 合并唤醒，在活动运行允许时插入，否则通过执行槽创建下一轮。启动失败时阻塞消息并保留授权变化错误码，关停时等待在途 drain。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { AppError, activeStatuses, type RunEvent, type Session } from '../../../shared/types.js';
 import type { Runner } from '../../agent.js';
-import type { MessageQueue } from '../../message-queue.js';
+import { queueScopeChanged, type MessageQueue } from '../../message-queue.js';
 import type { Store } from '../../store.js';
 import type { StartRun } from '../runs/create-run.js';
 import type { LiveInsertion } from './live-insertion.js';
@@ -75,8 +75,9 @@ export function createQueueScheduler({
                 ].includes(error.code)
               )
                 continue;
-              const reason =
-                error instanceof AppError ? error.message : '无法启动这条消息，请检查运行设置。';
+              const reason = error instanceof AppError
+                ? (error.code === queueScopeChanged ? queueScopeChanged : error.message)
+                : '无法启动这条消息，请检查运行设置。';
               if (messageQueue.block(item, reason)) queueChanged(item.session_id);
             }
           }

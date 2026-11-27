@@ -1,13 +1,14 @@
 /**
  * @file 执行会话待处理消息的插入、撤回与恢复。
- * @implementation 查询目标运行和已投递回执，复核插入模式；状态修改后发事件并请求调度。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 复核运行和投递状态。恢复时校验待复核消息仍是授权变化的队首，确认后启动该消息，否则普通恢复并请求调度。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { AppError, type Session } from '../../../shared/types.js';
 import type { Runner } from '../../agent.js';
-import type { MessageQueue } from '../../message-queue.js';
+import { queueScopeChanged, type MessageQueue } from '../../message-queue.js';
 import type { Store } from '../../store.js';
 import type { DevelopmentWorktrees } from '../git/development-worktrees.js';
+import type { StartRun } from '../runs/create-run.js';
 import type { LiveInsertion } from './live-insertion.js';
 
 export function createQueueActions({
@@ -16,14 +17,16 @@ export function createQueueActions({
   runner,
   liveInsertion,
   worktrees,
+  createRun,
   queueChanged,
   wakeQueue,
 }: {
   store: Pick<Store, 'get' | 'list' | 'gitWorktrees'>;
-  messageQueue: Pick<MessageQueue, 'pending' | 'prioritize' | 'withdraw' | 'resume'>;
+  messageQueue: Pick<MessageQueue, 'pending' | 'prioritize' | 'withdraw' | 'resume' | 'snapshot'>;
   runner: Pick<Runner, 'stop'>;
   liveInsertion: Pick<LiveInsertion, 'insertionAction' | 'insertLive'>;
   worktrees: Pick<DevelopmentWorktrees, 'resolveSession'>;
+  createRun: StartRun;
   queueChanged(id: string): void;
   wakeQueue(): void;
 }) {
@@ -67,12 +70,22 @@ export function createQueueActions({
       messageQueue.withdraw(id, itemId);
       notify(id);
     },
-    async resume(session: Session) {
+    async resume(session: Session, reviewItemId?: string) {
       const { id } = session;
       if (session.status !== 'active')
         throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
       if (store.gitWorktrees.forSession(id)) await worktrees.resolveSession(session);
-      messageQueue.resume(id);
+      const head = messageQueue.snapshot(id).items.find((item) => !item.delivery);
+      if (reviewItemId) {
+        const item = messageQueue.pending(id, reviewItemId);
+        if (!item || head?.id !== reviewItemId || !head.scopeChanged)
+          throw new AppError('QUEUE_CHANGED', '待复核的队列消息已变化。', 409);
+        await createRun(id, undefined, null, item, { reviewScope: true });
+      } else {
+        if (head?.scopeChanged)
+          throw new AppError(queueScopeChanged, '请复核当前授权后继续这条消息。', 409);
+        messageQueue.resume(id);
+      }
       notify(id);
     },
   };

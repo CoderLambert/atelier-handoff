@@ -2,6 +2,39 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · 真实网关请求计时配对（已验证并切换）
+
+- `gpt-6.2-sol` 实机探针确认 Shunt 0.64.0 的 Responses 早启流没有 `request-id`，SDK Assistant 和 OTLP 请求跨度因此缺少共同标识。运行时为受信托管连接补齐成功响应的本机标识。已有标识、外部网关和会话兼容键沿用原行为。缺少有效匹配的过去记录和非流式结果仍独立展示。[决策与回退](../../../docs/decisions/2026-11-27-sdk-resume-request-timing.md#2026-11-27--真实网关的请求配对)
+- 真实模型隔离复验得到一次请求、一条含跨度及流的诊断记录，导出无原始 ID。真实 Electron 和锁定 Shunt 以无响应 ID 的回环夹具验证两个请求分别配对、诊断下载和换端口后的续接。外部网关夹具通过中英文验收。并发乱序、保留原标识、429、压缩和取消用例通过。`npm run check`、`npm test`、前端和桌面构建通过，运行时 817 项、前端 146 项通过，7 项跳过。证据在 `.local/sdk-request-timing/correlation-live.json`、`correlation-managed/` 和 `correlation-external/`。
+- 旧日用窗口空闲并正常退出后沿用原 `.data` 与浏览器 profile 启动新版。Wayland 窗口已显示，网关健康正常，SQLite 完整性及项目、会话、消息、设置、附件、队列哈希一致。启动和回退路径记录在 `.local/sdk-request-timing/correlation-release`。
+- **开发过程 review**。先用真实请求确定缺失发生在响应头，再把同一条件加进既有桌面烟测。复用 SDK 的精确匹配，避免用时间戳猜配，也避免为修复更换已锁定的 Shunt 二进制。单批 `gpt-6.1-terra` / `xhigh` 核对六份源码哈希，集中更新四处文件头，六份均通过 `npm run check:headers -- --files …`。复核路径记录在 `.local/sdk-request-timing/correlation-headers`。
+
+- **真实长任务计时**。在真实 Electron、内置 Shunt 和 `gpt-6.2-sol` 中档运行隔离队列审计及修复，原始 8 项测试有 6 项失败，完成后独立复跑 15 项全过。整轮 180.823 秒；16 次请求全部配对，SDK 请求区间合计 180.387 秒，其中首内容前 151.572 秒、首内容后 28.815 秒。26 次工具的去重区间为 0.452 秒，均与请求区间重叠；两者以外合计 0.436 秒。无 SDK API 重试。首个流事件中位数 44 毫秒，首个内容事件中位数 5.015 秒、最慢 30.425 秒，二者反映不同边界。脚本与报告保存在 `.local/sdk-request-timing/long-task-benchmark.mts` 和 `.local/sdk-request-timing/long-task-cYuunF/`。
+
+## 2026-11-27 · 托管网关续接与模型请求计时（已验证并重开桌面）
+
+- 基线 `34f9d34`。截图对应运行累计 572 秒时，工具区间并集约 55 秒。26 个同会话托管端口变化的对照样本全部重建 SDK 上下文。现由运行时用受信内置 Shunt 的稳定身份续接，旧键通过已完成的 SDK 消息锚点和原始网关配置核验。另保留按完整地址区分外部连接和在证据不足时恢复应用历史的路径。[决策、依据和回退](../../../docs/decisions/2026-11-27-sdk-resume-request-timing.md)
+- 状态栏显示整轮耗时和距最近活动的时间。执行轨迹及脱敏下载展示上次工具结束、SDK 请求起点、首流、首内容、流结束和重试等观测值。用本机回环接收 SDK 跨度，按实际请求 ID 关联，运行收尾批量保存。SDK 侧的请求等待包含网关与上游，现有 Shunt 数据无法拆出两者各自耗时。
+- 真实 SDK 0.3.332 回归覆盖旧键、原会话和旧分叉、外部网关地址变化、并发子任务、重试、首流前失败、取消、认证与脱敏。`npm run check`、`npm run build`、`npm run build:desktop` 与 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 通过，运行时 816 项、前端 146 项通过，7 项跳过。初次全量中两项 Skill 断言失败，隔离对照、定向复跑和第二次全量均通过。日志保存在 `.local/sdk-request-timing-*.log`。
+- 用 `node --import tsx scripts/smoke-sdk-request-timing.mts` 在隔离 Electron 验收中英文等待提示、计时、导出和关闭重开。设置 `ATELIER_TIMING_MANAGED_SHUNT=1` 用真实 Shunt 0.64.0 启动，确认重启换端口后 SDK ID 和合成 Read 结果仍在。本轮模型响应均为回环替身。最终报告和截图在 `.local/sdk-request-timing/bilingual-evidence/` 及 `.local/sdk-request-timing/managed-evidence/`。
+- 日用实例空闲且原数据锁已释放后，沿用原数据根和 Chromium profile 启动经验证的开发构建。Wayland 窗口和托管网关健康正常，SQLite `quick_check` 返回 `ok`，4 个项目、22 个会话、179 条运行及消息、设置、附件和队列内容的前后哈希一致。部署及候选路径在 `.local/sdk-request-timing/latest-deployment`，可从同一数据根和 profile 重开上一个候选回退。
+- **开发过程 review**。先用已有事件量出工具与空档，再做一次本地 SDK span 探针，避免为计时改变模型传输。把故障、并发和历史兼容的验证加进现有真实 SDK 夹具，只用桌面烟测验证用户入口、双语和真实 Shunt 生命周期。单批 `gpt-6.1-terra` / `xhigh` 说明复核按输入哈希应用，复核期间有修改的桌面烟测文件留给后续维护。
+- **真实模型耗时对照**。用真实 Electron、内置 Shunt 和 `gpt-6.2-sol` 中档，从同一份旧会话快照重开对照。1 文件任务旧版 6.151 秒、新版 3.273 秒，减少 2.878 秒。3 文件任务旧版 9.458 秒、新版 5.706 秒，减少 3.752 秒。两组共减少 6.630 秒（42.5%），重复 Read 共减少 4 次，SDK 轮次从 6 降至 2，输出均正确。顺序为旧→新、新→旧。原右侧面板工单为跨模块实现与验收，历史整轮 941.64 秒，耗时不能用本次小样本直接外推。真实网关在这两条新版样本里的请求跨度和 SDK 流分别记录，未取得可靠的关联 ID。实验脚本和脱敏原始结果在 `.local/sdk-request-timing/live-ab.mts` 及 `.local/sdk-request-timing/live-ab-rXNCt0/result.json`。
+
+## 2026-11-27 · 统一右侧工具行为（已验证）
+
+- Git、浏览器和终端共用全屏／恢复停靠、收起按钮及分隔条。收起保留路由和实例，顶部入口或快捷导航恢复；单个标签关闭不变。三者使用 1120 px 停靠阈值、450–1440 px 范围和同一宽度偏好，停靠为会话保留 420 px。规则写入 `AGENTS.md` 和[面板接入](../../../docs/panel-development.md)，[决策及回退](../../../docs/decisions/2026-11-27-right-tool-panels.md)记录旧宽度兼容。无数据库迁移、无新 IPC。
+- `npm run check`、`npm test`（运行时 807 通过、6 跳过；前端 146 通过、1 跳过）、`npm run build`、`npm run build:desktop` 通过。`node --import tsx scripts/smoke-right-tool-panels.mts` 使用生产 Electron 入口、真实 Git/PTY/WebContentsView、隔离项目和 profile，分别在中英文用鼠标验证拖动极限、全屏、收起恢复与 1000 px 窄窗；确认 Git 草稿、同一 shell 和同一原生网页实例保留。另有 Chromium 原生桥替身验证对话框遮挡和坐标同步。无模型或安装件验收。日志和截图见 `.local/right-tool-panels/`。经进程链核对，日用 Electron 是本轮执行的父进程，未关闭或切换。
+- **开发过程 review**。用同一份三面板烟测比较实际拖动边界，不分别新增三套脚本。先用 Chromium 替身定位布局和焦点，再用 Electron 主进程核对原生网页 ID 和坐标；桌面语言复跑必须走 preload 的语言偏好，而不是 Web 的 localStorage。
+- 单批 `gpt-6.1-terra` / `xhigh` 文件说明复核完成；21 份源码快照的 SHA-256 均匹配，集中更新 10 份职责说明，`npm run check:headers -- --files …` 通过。回执保存在 `.local/right-tool-panels/headers-review.log`。
+
+## 2026-11-27 · 切换会话弹窗样式（已验证）
+
+- 在 `34f9d34` 的快捷交互上复用快捷导航的弹窗宽度、幽灵按钮和主题选中色；会话行加入同款图标，保留当前会话勾选，超长标题可截断并悬停查看。只滚动结果区，标题、搜索、关闭按钮和双语键盘提示保持可见。搜索、排序、导航和存储契约不变；回退只需撤销本轮渲染器、词条和测试改动。
+- `npm run check`、`npm test`（运行时 807 通过、6 跳过；前端 146 通过、1 跳过）、`npm run build` 和 `npm run build:desktop` 通过。真实 Electron 主入口与隔离 Node 运行时通过 12 项快捷键烟测：26 条会话下，在 1280×800 中文及 1920×1080 英文界面验证滚轮只移动列表、键盘选中项滚动入视野、空结果、Esc 焦点归还及 Enter 切换。复现：`ATELIER_SHORTCUT_EVIDENCE=.local/session-switcher-style node --import tsx scripts/smoke-shortcuts.mts`。无模型请求；截图和日志保存在 `.local/session-switcher-style/`。日用窗口承载本轮执行，未退出或切换。
+- 文件说明通过单批 `gpt-6.1-terra` / `xhigh` 只读复核。五份输入 SHA-256 均匹配，原说明仍准确，`npm run check:headers -- --files …` 通过。
+- **开发过程 review**。复用快捷键桌面烟测，在原本两会话草稿验证结束后再加入长列表，避免耦合两组测试的数据。几何断言比截图更直接证明滚动边界，首轮全量测试暴露的面板夹具缺少快捷键设置接口，补齐只读返回并保留未知请求断言。
+
 ## 2026-11-27 · 运行时 HTTP 模块拆分（已验证）
 
 - `server/app.ts` 从恢复时的 2,650 行降到 299 行，只装配用例、显式注册领域路由及协调关停。请求边界和 SSE 位于 `server/http/`，会话、运行、队列、Git 和扩展业务归对应模块；最长 HTTP 源文件 126 行。`check:architecture` 限制入口与 HTTP 文件行数，并禁止反向导入组合入口。[决策与回退](../../../docs/decisions/2026-11-26-runtime-http-modules.md)
@@ -869,3 +902,11 @@
 - 核心/HTTP/会话回归 10 项、原生桥接 2 项、快捷 renderer 7 项、原有消息与输入性能测试 5 项通过。实际 Electron 工作台 11 场景通过，新增验证 Git 隐藏期间和恢复后的实时更新，以及连续键入后快捷切会话保留草稿。四组类型与架构、Query、i18n、UI 检查及前端/桌面构建通过。
 - 全量诊断保留既有失败：运行时 742 项中 719 通过、1 项既有进程回收失败、2 项迁移取消、20 跳过；迁移不强制退出时独立 74 项通过。前端 15 项因 Chromium 缺失无法启动，本次关键消息回归以原断言在真实 Electron 通过。tsx CLI 的 Unix socket 受限，等价脚本使用 Node loader。没有声称全量测试全绿，详见[本轮验收](../../../docs/evidence/workbench-shortcuts/main-integration-2026-11-27.md)。
 - 独立源码审查没有阻塞项，7 份适配源码按哈希完成一次说明复核。**开发过程 review**：按真实冲突分工，只改领域路由和焦点接入；保留主干性能断言，以目标 Electron 引擎验证关键路径；对全量超时和环境失败做有界诊断，避免修改无关产品行为来适应测试环境。
+
+## 2026-11-27 · 队列续跑与授权复核
+
+- 上一轮收尾后按顺序派发待处理消息。仅新增自动 Skill 时，已经排队的消息沿用入队时的范围。授权范围有实际变化时，队首提供「复核并继续」，确认后保留原消息、附件和运行偏好。展开时只显示一次正文。[决策和回退](../../../docs/decisions/2026-11-27-queued-followup-scope.md)
+- 基于 `34f9d34`。只读复算了打开问题时数据库中的两份授权指纹，确认原有七项 Skill 一致，新增两个自动继承项触发了旧版拒绝。临时 SQLite 的失败用例验证了旧版停止派发。新版在真实 SDK 和回环模型的 Electron 中验证了自动新轮次、已有 Skill 变化停住、取消确认和保留附件的单次发送。中英文窗口展开消息各只显示一份正文。
+- 类型检查和前端、桌面构建通过。运行时 806 项通过、7 项跳过。基础分支的前端全量首次失败于工作台快捷设置测试替身缺少读取路由，结合工作区已存在的替身修正后复测为 147 项通过、1 项跳过。原始日志与截图位于 `.local/queue-followup/`。
+- 待旧桌面空闲后切换，当前会话切换样式随启动前的构建一起保留。确认窗口、网关、SQLite、浏览器 profile 和已保存队列哈希一致，原队首的三张图片仍在。文件说明按 18 个输入哈希做单批复核，集中更新 12 项并通过说明检查。
+- **开发过程 review**。先根据事件元数据复算原授权，定位具体变化，再复用同一个队列测试验证正反路径。部署前重建现有工作区的首页，验证原构建已包含的会话切换改动不会被覆盖。

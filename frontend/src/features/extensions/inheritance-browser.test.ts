@@ -31,6 +31,12 @@ const host: SkillInheritanceItem = {
   auto: true,
 };
 const missing = '90000000-0000-4000-8000-000000000002';
+const workspace: SkillInheritanceItem = {
+  ...host, id: '90000000-0000-4000-8000-000000000003', source: 'workspace', version: 3,
+};
+const installed: SkillInheritanceItem = {
+  ...host, id: '90000000-0000-4000-8000-000000000004', source: 'atelier', version: 4,
+};
 
 async function fixtureBundle() {
   const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -47,7 +53,7 @@ async function fixtureBundle() {
         import { Composer } from '@/features/chat/composer';
         import ExtensionsPage from '@/features/extensions';
         const project = {id:'alpha', name:'Fixture project', path:'/mock', available:true};
-        const snapshot = {project, session:{id:'session-alpha',status:'active'}, messages:[], attachments:[],
+        const snapshot = {project, session:{id:'session-alpha',projectId:project.id,status:'active'}, messages:[], attachments:[],
           runs:[{id:'active',status:'running',startedAt:'2026-11-25T00:00:00Z',config:{},extensions:[{id:${JSON.stringify(host.id)},name:'fixture-notes',kind:'skill',version:2}]}]};
         function App() {
           const [draft, setDraft] = useState({mode:'edit', text:'Keep original text', contextPaths:[], attachmentIds:[],
@@ -55,7 +61,8 @@ async function fixtureBundle() {
           const [sent, setSent] = useState(0);
           return <>
             <ExtensionsPage projects={[project]}/>
-            <button type="button" onClick={() => setDraft(d => ({...d, executionPreference:'project-v1'}))}>Controlled fixture mode</button>
+            <button type="button" onClick={() => setDraft(d => ({...d, approvalMode:'automatic', executionPreference:'project-v1'}))}>Automatic fixture mode</button>
+            <button type="button" onClick={() => setDraft(d => ({...d, approvalMode:undefined, executionPreference:'project-v1'}))}>Controlled fixture mode</button>
             <button type="button" onClick={() => void uiI18n.changeLanguage('zh-CN')}>中文</button>
             <Composer snapshot={snapshot} draft={draft} nativeExecution submitting={false}
               defaultModel="fixture" onDraftChange={setDraft} onRemoveQuote={() => {}} onModeChange={() => {}}
@@ -89,7 +96,9 @@ test(
     let mode: SkillInheritanceItem['mode'] = 'off';
     let projectMode: 'follow' | 'block' = 'follow';
     let override: SkillInheritanceItem['override'] = 'follow';
+    let workspaceOverride: SkillInheritanceItem['override'] = 'follow';
     let failOnce = true;
+    let failAutomaticPreview = true;
     const mutations: { scope: string; patch: SkillInheritancePatch }[] = [];
     const queries: string[] = [];
     const server = createServer(async (request, response) => {
@@ -116,20 +125,27 @@ test(
               json({ error: { code: 'CONFLICT' } }, 409);
               return;
             }
-            override = patch.mode;
+            if (patch.id === workspace.id) workspaceOverride = patch.mode;
+            else if (patch.id === host.id) override = patch.mode;
           }
         } else {
           queries.push(url.search);
         }
         const session = url.searchParams.has('sessionId');
+        const automatic = url.searchParams.has('automatic');
+        const native = url.searchParams.has('native');
+        if (automatic && native) return json({ error: { code: 'CONFLICT' } }, 400);
+        if (automatic && failAutomaticPreview && request.method === 'GET') {
+          return json({ error: { code: 'CONFLICT' } }, 503);
+        }
         const global = !session && !url.searchParams.has('projectId');
         const reason = !enabled
           ? 'global-off'
           : !global && projectMode === 'block'
             ? 'project-blocked'
-            : session && !url.searchParams.has('native')
+            : session && !native && !automatic
               ? 'not-native'
-              : mode === 'off'
+              : mode === 'off' || automatic
                 ? 'disabled'
                 : session && override === 'off'
                   ? 'session-off'
@@ -141,7 +157,13 @@ test(
           override: session ? override : 'follow',
           reason,
         };
-        json({ enabled, projectMode, items: [item] });
+        json({ enabled, projectMode, items: session ? [
+          item,
+          { ...workspace, mode: 'auto', override: workspaceOverride,
+            effective: workspaceOverride === 'off' || (!native && !automatic) ? 'off' : 'auto',
+            reason: workspaceOverride === 'off' ? 'session-off' : undefined },
+          { ...installed, mode: 'manual', effective: automatic ? 'off' : 'manual' },
+        ] : [item] });
       } else if (url.pathname === '/api/bootstrap') {
         json({ csrfToken: 'fixture-only', config: { gateway: 'http://localhost:1' } });
       } else if (url.pathname === '/api/config') {
@@ -202,6 +224,17 @@ test(
       const dialog = page.getByRole('dialog', { name: 'Session Skills' });
       await dialog.getByText('Recorded on active run').waitFor();
       await dialog.getByText('Draft Skills no longer listed').waitFor();
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+      const input = page.locator('#prompt-input');
+      const menu = page.getByRole('listbox', { name: 'Choose a command or Skill' });
+      const option = (source: string) => menu.getByRole('option').filter({ hasText: source });
+      await input.fill('please /fixture');
+      await option('Local user directory').waitFor();
+      await option('Workspace directory').waitFor();
+      await option('Atelier-installed').waitFor();
+      await input.fill('Keep original text');
+      await trigger.click();
       await dialog.getByRole('button', { name: `Remove ${missing} from draft` }).click();
       const add = dialog.getByRole('button', {
         name: 'Add fixture-notes (Local user directory) to draft',
@@ -214,7 +247,7 @@ test(
       assert.equal(await page.locator('#sent').textContent(), '0');
       assert.equal(await page.locator('#prompt-input').inputValue(), 'Keep original text');
       const restriction = dialog.getByRole('combobox', {
-        name: /Session restriction for fixture-notes/,
+        name: 'Session restriction for fixture-notes (Local user directory)',
       });
       await restriction.click();
       await page.getByRole('option', { name: 'Off', exact: true }).click();
@@ -233,6 +266,18 @@ test(
       await page.keyboard.press('Escape');
       await dialog.waitFor({ state: 'hidden' });
       assert.equal(await trigger.evaluate((element) => element === document.activeElement), true);
+      await input.fill('please /fixture');
+      await option('Workspace directory').waitFor();
+      await option('Atelier-installed').waitFor();
+      assert.equal(await option('Local user directory').count(), 0); // Restricted earlier in this session.
+      await input.fill('Keep original text');
+      await menu.waitFor({ state: 'hidden' });
+      await trigger.click();
+      await restriction.click();
+      await page.getByRole('option', { name: 'Follow parent policy' }).click();
+      await add.waitFor();
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
       await page.getByRole('button', { name: 'Controlled fixture mode' }).click();
       await trigger.click();
       await dialog.getByText('Available only in Native trust mode.').waitFor();
@@ -241,6 +286,45 @@ test(
       assert.ok(queries.includes('?sessionId=session-alpha&native=1'));
       assert.ok(queries.includes('?sessionId=session-alpha'));
       await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Session Skills');
+      await input.fill('please /fixture');
+      await option('Atelier-installed').waitFor();
+      assert.equal(await option('Workspace directory').count(), 0);
+      await option('Atelier-installed').click();
+      await page.getByRole('button', { name: 'Remove fixture-notes (Atelier-installed) from draft' }).waitFor();
+
+      await page.getByRole('button', { name: 'Automatic fixture mode' }).click();
+      await input.fill('please /fixture');
+      await menu.getByText('Couldn’t load Skill availability. Reload to try again.').waitFor();
+      assert.equal(await menu.getByRole('option').count(), 0);
+      failAutomaticPreview = false;
+      await menu.getByRole('button', { name: 'Reload' }).click();
+      await option('Workspace directory').waitFor();
+      assert.equal(await option('Local user directory').count(), 0);
+      assert.equal(await option('Atelier-installed').count(), 0);
+      await option('Workspace directory').click();
+      const workspaceChip = page.getByRole('button', { name: 'Remove fixture-notes (Workspace directory) from draft' });
+      await workspaceChip.waitFor();
+      assert.deepEqual(JSON.parse((await page.locator('#draft').textContent()) ?? '{}').extensionSelections, [
+        { id: installed.id, version: installed.version },
+        { id: workspace.id, version: workspace.version },
+      ]);
+      assert.equal(await input.inputValue(), 'please ');
+      assert.equal(await page.locator('#sent').textContent(), '0');
+      await trigger.click();
+      await dialog.getByRole('combobox', { name: 'Session restriction for fixture-notes (Workspace directory)' }).click();
+      await page.getByRole('option', { name: 'Off', exact: true }).click();
+      await dialog.getByText('Remove from draft', { exact: true }).first().waitFor();
+      await page.waitForFunction(() => !document.querySelector('[aria-label="Session restriction for fixture-notes (Workspace directory)"][disabled]'));
+      const automaticScope = '?sessionId=session-alpha&automatic=1';
+      assert.ok(queries.includes(automaticScope));
+      assert.deepEqual(mutations.at(-1), { scope: automaticScope, patch: { type: 'session', id: workspace.id, mode: 'off' } });
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+      await workspaceChip.click();
+      await page.getByRole('button', { name: 'Controlled fixture mode' }).click();
       await page.getByRole('button', { name: '中文', exact: true }).click();
       await page.getByRole('button', { name: '本会话 Skills' }).click();
       await page

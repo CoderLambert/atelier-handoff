@@ -1,7 +1,7 @@
 /**
  * @file 管理待处理消息与实时插入状态。
- * @implementation 使用 SQLite 保存顺序、优先级和提交回执，跟踪实时投递，并保留中断后结果待确认的消息。
- * @updated 2026-11-21T00:28:46+08:00
+ * @implementation 使用 SQLite 保存顺序、优先级和提交回执，跟踪实时投递及中断后的待确认消息，并将新旧授权范围错误统一映射为待复核状态。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -41,6 +41,16 @@ const summarySchema = z.object({
 
 type QueueRow = z.infer<typeof rowSchema>;
 export type PendingSessionMessage = QueueRow & { intent: unknown };
+export const queueScopeChanged = 'QUEUE_SCOPE_CHANGED';
+const legacyScopeError = '排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。';
+
+export function hasQueueScopeError(error: string | null) {
+  return (
+    error === queueScopeChanged ||
+    error === legacyScopeError ||
+    error === '智能体、扩展或浏览器授权已变化。请重新发送。'
+  );
+}
 
 export class MessageQueue {
   constructor(private readonly store: Store) {
@@ -62,10 +72,12 @@ export class MessageQueue {
   }
 
   private summary(row: QueueRow): QueuedSessionMessage {
+    const scopeChanged = hasQueueScopeError(row.error);
     return {
       id: row.id,
       ...summarySchema.parse(JSON.parse(row.data)),
-      error: row.error,
+      error: scopeChanged ? '排队时的授权范围已变化，请复核后继续。' : row.error,
+      ...(scopeChanged ? { scopeChanged: true as const } : {}),
       ...(row.delivery ? { delivery: row.delivery } : {}),
     };
   }

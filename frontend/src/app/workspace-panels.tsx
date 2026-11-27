@@ -37,13 +37,6 @@ interface WorkspacePanelsProps {
   center: ReactNode;
   right: ReactNode;
   focusRight?: boolean;
-  rightPane?: {
-    width: number;
-    minWidth: number;
-    maxWidth: number;
-    resizeLabel: string;
-    onResize: (width: number) => void;
-  };
   onChange: (layout: WorkspaceLayout) => void;
 }
 
@@ -57,27 +50,21 @@ export function WorkspacePanels({
   center,
   right,
   focusRight = false,
-  rightPane,
   onChange,
 }: WorkspacePanelsProps) {
   const { t } = useUiTranslation('navigation');
   const group = useGroupRef();
   const visibleRight = showRight && !rightCollapsed;
-  const usable = width - (Number(showLeft) + Number(visibleRight)) * separatorWidth;
+  const dockedRight = visibleRight && !focusRight;
+  const usable = width - (Number(showLeft) + Number(dockedRight)) * separatorWidth;
   const centerMin = width < 768 ? 0 : centerMinimum;
-  const rightMin = focusRight || rightCollapsed ? 0 : (rightPane?.minWidth ?? minInspectorWidth);
+  const rightMin = dockedRight ? minInspectorWidth : 0;
   const savedLeft = layout.collapsed ? collapsedNavigationWidth : layout.recent.left;
-  const leftWidth = showLeft
-    ? Math.min(savedLeft, usable - centerMin - (visibleRight ? rightMin : 0))
-    : 0;
+  const leftWidth = showLeft ? Math.min(savedLeft, usable - centerMin - rightMin) : 0;
   const rightSpace = usable - centerMin - leftWidth;
-  // At its limit the right divider can otherwise resize the navigation through the center.
-  const rightMax = rightCollapsed
-    ? 0
-    : rightPane
-      ? Math.min(rightPane.maxWidth, rightSpace)
-      : maxInspectorWidth;
-  const rightWidth = focusRight || rightCollapsed ? 0 : (rightPane?.width ?? layout.recent.right);
+  // Clamp the divider so it cannot resize navigation through the center.
+  const rightMax = dockedRight ? Math.min(maxInspectorWidth, rightSpace) : 0;
+  const rightWidth = dockedRight ? Math.min(rightMax, Math.max(rightMin, layout.recent.right)) : 0;
   const notifySlot = () => {
     window.dispatchEvent(new Event(workspaceLayoutEvent));
   };
@@ -94,17 +81,16 @@ export function WorkspacePanels({
         showRight !== 'inspector' in current
       )
         return;
-      const rightPixels = showRight ? Math.min(rightWidth, rightSpace) : 0;
       const percent = (pixels: number) => (100 * pixels) / usable;
       handle.setLayout({
         ...(showLeft ? { navigation: percent(leftWidth) } : {}),
-        conversation: percent(usable - leftWidth - rightPixels),
-        ...(showRight ? { inspector: percent(rightPixels) } : {}),
+        conversation: percent(usable - leftWidth - rightWidth),
+        ...(showRight ? { inspector: percent(rightWidth) } : {}),
       });
       notifySlot();
     });
     return () => cancelAnimationFrame(frame);
-  }, [group, showLeft, showRight, usable, leftWidth, rightWidth, rightSpace]);
+  }, [group, showLeft, showRight, usable, leftWidth, rightWidth]);
 
   return (
     <Group
@@ -119,24 +105,20 @@ export function WorkspacePanels({
           percent === undefined ? undefined : (percent * usable) / 100;
         const navigation = pixels(sizes.navigation);
         const leftPixels =
-          rightPane && navigation !== undefined && Math.abs(navigation - leftWidth) < 1
-            ? undefined
-            : navigation;
+          navigation !== undefined && Math.abs(navigation - leftWidth) < 1 ? undefined : navigation;
         const collapsed =
           leftPixels === undefined
             ? layout.collapsed
             : Math.round(leftPixels) === collapsedNavigationWidth;
         const leftSize = collapsed ? undefined : leftPixels;
         const rightSize = pixels(sizes.inspector);
-        if (rightPane && rightSize !== undefined && !rightCollapsed)
-          rightPane.onResize(Math.round(rightSize));
         const recent = {
           left:
             leftSize === undefined
               ? layout.recent.left
               : Math.max(minNavigationWidth, Math.min(maxNavigationWidth, Math.round(leftSize))),
           right:
-            rightCollapsed || rightPane || rightSize === undefined
+            !dockedRight || rightSize === undefined || Math.abs(rightSize - rightWidth) < 1
               ? layout.recent.right
               : Math.max(minInspectorWidth, Math.min(maxInspectorWidth, Math.round(rightSize))),
         };
@@ -174,12 +156,12 @@ export function WorkspacePanels({
       <Panel id="conversation" className="workspace-pane" minSize={centerMin} inert={focusRight}>
         {center}
       </Panel>
-      {visibleRight && (
+      {dockedRight && (
         <Separator
           id="resize-inspector"
           inert={focusRight}
           className="workspace-separator"
-          aria-label={rightPane?.resizeLabel ?? t('panels.resizeBrowser')}
+          aria-label={t('panels.resizeRight')}
         />
       )}
       {showRight && (
@@ -193,7 +175,11 @@ export function WorkspacePanels({
           maxSize={rightMax}
           groupResizeBehavior="preserve-pixel-size"
         >
-          <Activity mode={rightCollapsed ? 'hidden' : 'visible'}>{right}</Activity>
+          <Activity mode={rightCollapsed ? 'hidden' : 'visible'}>
+            <div className="workspace-right-tool" data-expanded={focusRight || undefined}>
+              {right}
+            </div>
+          </Activity>
         </Panel>
       )}
     </Group>

@@ -354,6 +354,7 @@
 }
 
 .chat-message-queue-item {
+  align-items: flex-start;
   min-height: 36px;
   padding-block: 4px;
 }
@@ -367,6 +368,7 @@
   min-width: 1.5em;
   color: var(--ui-muted-foreground);
   text-align: center;
+  line-height: 28px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -403,6 +405,22 @@
 .chat-message-queue-copy summary .truncate {
   flex: 1 1 0;
   min-width: 0;
+}
+
+.chat-message-queue-copy details[open] summary .truncate {
+  display: none;
+}
+
+.chat-message-queue-copy details[open] {
+  position: relative;
+  padding-inline-start: 24px;
+}
+
+.chat-message-queue-copy details[open] summary {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 24px;
 }
 
 .chat-message-queue-copy summary:focus-visible {

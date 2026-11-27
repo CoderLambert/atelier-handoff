@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { GithubSkillVersion } from './public-extensions.js';
 import type { MessageQuote } from './message-quotes.js';
 import type { ContextUsage } from './context-usage.js';
+import type { RunRequestTiming } from './request-timing.js';
 import type { BashExecution } from './bash-execution.js';
 import type { RtkTrace } from './rtk-trace.js';
 import type { RunTranscript, TranscriptPart } from './ordered-transcript.js';
@@ -270,6 +271,7 @@ export interface Run {
   plan: Step[];
   usage: Usage | null;
   contextUsage?: ContextUsage;
+  requestTiming?: RunRequestTiming;
   config: AppConfig;
   extensions?: UsedExtension[];
   agent?: AgentRunInfo;
@@ -279,6 +281,7 @@ export interface QueuedSessionMessage {
   text: string;
   createdAt: string;
   error: string | null;
+  scopeChanged?: true;
   extensions?: Run['extensions'];
   insertion?: 'live' | 'priority';
   delivery?: 'waiting' | 'sending' | 'unknown';

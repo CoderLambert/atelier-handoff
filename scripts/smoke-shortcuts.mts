@@ -294,6 +294,148 @@ try {
   await page.getByRole('dialog', { name: '快捷导航', exact: true }).waitFor();
   await page.screenshot({ path: join(evidence, 'quick-navigation.png') });
   await page.keyboard.press('Escape');
+
+  // Seed an overflowing list without running the model or altering the earlier adjacent-session fixture.
+  const bootstrap = z
+    .object({
+      csrfToken: z.string(),
+      sessions: z.array(z.object({ id: z.uuid(), projectId: z.uuid() })),
+    })
+    .parse(await page.evaluate(async () => (await fetch('/api/bootstrap')).json()));
+  const projectId = bootstrap.sessions.find((session) => session.id === firstId)?.projectId;
+  assert.ok(projectId);
+  async function mutate(
+    path: string,
+    method: 'POST' | 'PATCH',
+    body: Record<string, string>,
+  ): Promise<unknown> {
+    return page.evaluate(
+      async ({ path, method, body, token }) => {
+        const response = await fetch(path, {
+          method,
+          headers: { 'content-type': 'application/json', 'x-atelier-token': token },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`Fixture mutation ${method} ${path}: ${response.status}`);
+        return response.json();
+      },
+      { path, method, body, token: bootstrap.csrfToken },
+    );
+  }
+  const fixtureSession = z.object({ session: z.object({ id: z.uuid() }) });
+  for (let index = 0; index < 23; index++) await mutate('/api/sessions', 'POST', { projectId });
+  const longTitleId = fixtureSession.parse(await mutate('/api/sessions', 'POST', { projectId }))
+    .session.id;
+  await mutate(`/api/sessions/${longTitleId}`, 'PATCH', {
+    title: `长标题 / ${'long-conversation-title-'.repeat(6)}`,
+  });
+  await page.reload();
+
+  async function verifySwitcherLayout(locale: 'zh-CN' | 'en', width: number, height: number) {
+    const en = locale === 'en';
+    await app.evaluate(
+      ({ BrowserWindow }, [width, height]) => {
+        BrowserWindow.getAllWindows()[0]?.setContentSize(width, height);
+      },
+      [width, height] as const,
+    );
+    await page.locator('#prompt-input').focus();
+    await page.keyboard.press(`${modifier}+Semicolon`);
+    const dialog = page.getByRole('dialog', {
+      name: en ? 'Switch conversation' : '切换会话',
+      exact: true,
+    });
+    const search = dialog.getByRole('combobox', {
+      name: en ? 'Search conversations or projects…' : '搜索会话或项目…',
+    });
+    const close = dialog.getByRole('button', {
+      name: en ? 'Close dialog' : '关闭弹窗',
+      exact: true,
+    });
+    const list = dialog.getByRole('listbox');
+    const selected = list.getByRole('option', { selected: true });
+    await search.waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox');
+    assert.equal(await list.getByRole('option').count(), 26);
+    await dialog
+      .getByText(
+        en ? '↑ ↓ to select · Enter to switch · Esc to return' : '↑ ↓ 选择 · Enter 切换 · Esc 返回',
+        { exact: true },
+      )
+      .waitFor();
+    const initialSearch = await search.boundingBox();
+    const initialClose = await close.boundingBox();
+    const initialDialog = await dialog.boundingBox();
+    assert.ok(initialSearch && initialClose && initialDialog);
+    assert.equal(Math.round(initialDialog.width), 560);
+    const colors = await selected.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--ui-selected)';
+      probe.style.color = 'var(--ui-selected-foreground)';
+      element.append(probe);
+      const expected = getComputedStyle(probe);
+      const matches =
+        style.backgroundColor === expected.backgroundColor && style.color === expected.color;
+      probe.remove();
+      return matches;
+    });
+    assert.ok(colors, 'selected row uses the same theme colors as quick navigation');
+    await page.screenshot({ path: join(evidence, `session-switcher-${locale}.png`) });
+
+    const listBox = await list.boundingBox();
+    assert.ok(listBox);
+    await page.mouse.move(listBox.x + listBox.width - 4, listBox.y + listBox.height - 8);
+    await page.mouse.wheel(0, 900);
+    await page.waitForFunction(
+      () => (document.querySelector('[role=listbox]')?.scrollTop ?? 0) > 0,
+    );
+    assert.deepEqual(await search.boundingBox(), initialSearch);
+    assert.deepEqual(await close.boundingBox(), initialClose);
+    assert.deepEqual(await dialog.boundingBox(), initialDialog);
+    assert.equal(await dialog.evaluate((element) => element.scrollTop), 0);
+
+    await search.fill('no matching fixture');
+    await dialog
+      .getByRole('status')
+      .getByText(en ? 'No matching conversations.' : '没有匹配的会话。')
+      .waitFor();
+    await search.fill('project');
+    await page.keyboard.press('ArrowUp');
+    assert.equal(
+      await selected.getAttribute('id'),
+      await search.getAttribute('aria-activedescendant'),
+    );
+    const lastRow = await selected.boundingBox();
+    const scroller = await list.boundingBox();
+    assert.ok(
+      lastRow &&
+        scroller &&
+        lastRow.y >= scroller.y - 1 &&
+        lastRow.y + lastRow.height <= scroller.y + scroller.height + 1,
+    );
+    if (en) {
+      await search.fill('long-conversation-title');
+      assert.equal(await list.getByRole('option').count(), 1);
+      await page.keyboard.press('Enter');
+      await page.waitForURL(`${origin}/#/sessions/${longTitleId}`);
+    } else {
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.activeElement?.id === 'prompt-input');
+    }
+    await dialog.waitFor({ state: 'hidden' });
+  }
+
+  await verifySwitcherLayout('zh-CN', 1280, 800);
+  await page.goto(`${origin}/#/settings/models`);
+  await page.getByRole('combobox', { name: '界面语言', exact: true }).click();
+  await page.getByRole('option', { name: 'English', exact: true }).click();
+  await page.getByRole('heading', { name: 'Settings', exact: true }).waitFor();
+  await page.goto(conversation);
+  await verifySwitcherLayout('en', 1920, 1080);
+  checked.push(
+    'session picker keeps its header and search fixed, scrolls keyboard selection, and switches in both locales',
+  );
   assert.deepEqual(errors, []);
   assert.equal(modelRequests, 0);
   await writeFile(

@@ -97,6 +97,62 @@ async function appClient(app: Awaited<ReturnType<typeof createApp>>, pairing?: s
   return { request, boot, url, headers };
 }
 
+test('project directory Skills are shared by automatic approval and native trust, not ordinary edit', { skip: process.platform !== 'linux' }, async () =>
+  fixture(async (base, project) => {
+    const directory = join(project, '.claude', 'skills', 'fixture-notes');
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, 'SKILL.md'), '---\ndescription: Scope fixture\n---\nPROJECT_FIXTURE_INSTRUCTIONS');
+    const pairing = 'paired-project-skill-fixture';
+    const captured: { executor: Run['executor']; input: string; skillIds: string[] }[] = [];
+    const app = await createApp({
+      root: source,
+      data: join(base, 'data'),
+      nativeExecution: true,
+      desktopPairing: pairing,
+      runnerFactory: (store) => ({
+        start(run, input, _mcp, skills) {
+          captured.push({ executor: run.executor, input, skillIds: skills?.map(({ id }) => id) ?? [] });
+          store.update('runs', run.id, { status: 'completed', endedAt: now() });
+        },
+        stop() {},
+        async shutdown() {},
+      }),
+    });
+    try {
+      const { request } = await appClient(app, pairing);
+      const { project: bound } = await request<{ project: { id: string } }>('/api/projects', 'POST', { path: project }, 201);
+      const { session } = await request<{ session: Session }>('/api/sessions', 'POST', { projectId: bound.id }, 201);
+      const scope = `/api/skill-inheritance?sessionId=${session.id}`;
+      const read = async (suffix: string) => (await request<{ items: import('../shared/skill-inheritance.js').SkillInheritanceItem[] }>(scope + suffix)).items.find(({ source }) => source === 'workspace');
+      assert.equal((await read(''))?.effective, 'off');
+      const automatic = await read('&automatic=1');
+      const native = await read('&native=1');
+      assert.ok(automatic?.manual);
+      assert.equal(automatic.effective, 'auto');
+      assert.equal(native?.id, automatic.id);
+      assert.equal(native?.effective, 'auto');
+      await request(scope + '&automatic=1&native=1', 'GET', undefined, 400);
+      const requestMessage = (policy: object, status = 202) => request(`/api/sessions/${session.id}/messages`, 'POST', {
+        text: 'Use this Skill', mode: 'edit', idempotencyKey: randomUUID(),
+        extensionSelections: [{ id: automatic.id, version: automatic.version }], ...policy,
+      }, status);
+      await requestMessage({}, 409);
+      await requestMessage({ approvalMode: 'automatic' });
+      await requestMessage({ executionPreference: 'native-v1' });
+      assert.deepEqual(captured.map(({ executor }) => executor), ['project-v1', 'native-v1']);
+      assert.ok(captured.every(({ input }) => input.includes('PROJECT_FIXTURE_INSTRUCTIONS')));
+      assert.deepEqual(captured[0]?.skillIds, [], 'Do not mount the already selected text a second time');
+      await request(`/api/sessions/${session.id}/messages`, 'POST', {
+        text: 'Use available Skills if needed', mode: 'edit', approvalMode: 'automatic', idempotencyKey: randomUUID(),
+      }, 202);
+      assert.deepEqual(captured[2]?.skillIds, [automatic.id]);
+      await request(scope + '&automatic=1', 'PATCH', { type: 'session', id: automatic.id, mode: 'off' });
+      await requestMessage({ approvalMode: 'automatic' }, 409);
+    } finally {
+      await app.close();
+    }
+  }));
+
 for (const settings of [
   {
     nativeExecution: true,

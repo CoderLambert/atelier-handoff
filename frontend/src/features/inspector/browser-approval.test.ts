@@ -66,8 +66,7 @@ function renderBrowser(settings: DesktopBrowserAccessState | undefined, humanCon
         createElement(DesktopBrowser, {
           projectId,
           state,
-          onClose: () => {},
-          closeLabel: '关闭浏览器',
+          panelActions: null,
         }),
       ),
     );

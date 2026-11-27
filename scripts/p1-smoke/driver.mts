@@ -547,7 +547,7 @@ async function compactBrowserHeader(page: Page) {
 
 async function browserSettingsRestored(page: Page, native: Page) {
   const before = await compactBrowserHeader(page);
-  const splitter = page.getByRole('separator', { name: '调整浏览器宽度', exact: true });
+  const splitter = page.getByRole('separator', { name: '调整右侧工具宽度', exact: true });
   await splitter.press('ArrowLeft');
   await until(
     async () => {
@@ -1087,7 +1087,7 @@ async function nativeBrowserSdk(
     png: { bytes: png.length, ...pixels },
     ...browserEvidence,
   };
-  await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+  await page.getByRole('button', { name: '收起浏览器面板', exact: true }).click();
   await save();
 }
 
@@ -1507,7 +1507,7 @@ async function automaticToolsSdk(run: Launch, fixture: Fixtures, projectId: stri
   }, projectId);
   assert.equal(rejected, true);
   assert.equal(await readFile(externalLog, 'utf8'), external);
-  await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+  await page.getByRole('button', { name: '收起浏览器面板', exact: true }).click();
   await page.getByRole('textbox', { name: '网页地址', exact: true }).waitFor({ state: 'hidden' });
   evidence.checks.chatWebLinks = {
     explicitChoice: true,
@@ -1683,7 +1683,7 @@ async function functional(
       crossProjectPreviewRejected: true,
       savedBytes: Buffer.byteLength(browserDownloadBody),
     };
-    await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+    await page.getByRole('button', { name: '收起浏览器面板', exact: true }).click();
   }
   evidence.phase = 'packaged-sdk';
   await save();

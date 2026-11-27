@@ -59,11 +59,24 @@ export function sdkSkillName(skill: RunSkill) {
     : `${pluginName}:${skill.name}`;
 }
 
-export async function mountLocalRunSkills(sdkDirectory: string, skills: RunSkill[]) {
+export function isProjectMarkdownSkill({ local }: RunSkill) {
+  return local?.source === 'workspace' && local.projectMarkdown === true && local.auto;
+}
+
+export async function mountLocalRunSkills(
+  sdkDirectory: string,
+  skills: RunSkill[],
+  native: boolean,
+) {
   const directories: string[] = [];
   try {
     for (const source of ['host', 'workspace'] as const) {
-      const locals = skills.flatMap(({ local }) => (local?.source === source ? [local] : []));
+      const locals = skills.flatMap((skill) => {
+        const { local, manual } = skill;
+        return !manual && local?.source === source && (native || isProjectMarkdownSkill(skill))
+          ? [local]
+          : [];
+      });
       if (!locals.length) continue;
       const name = `${source}-skills`;
       const root = await mkdtemp(join(sdkDirectory, `${name}-`));
@@ -72,9 +85,16 @@ export async function mountLocalRunSkills(sdkDirectory: string, skills: RunSkill
       await mkdir(manifest, { mode: 0o700 });
       await writeFile(join(manifest, 'plugin.json'), JSON.stringify({ name }), { mode: 0o600 });
       for (const skill of locals) {
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(skill.slug))
+          throw new Error('Invalid local Skill directory name');
         const destination = join(root, 'skills', skill.slug);
         await mkdir(destination, { recursive: true, mode: 0o700 });
-        await writeFile(join(destination, 'SKILL.md'), skill.document, { mode: 0o600, flag: 'wx' });
+        // Only native mode may keep the original SDK metadata or access the source directory.
+        const document = native
+          ? skill.document
+          : `---\nname: ${skill.slug}\ndescription: ${JSON.stringify(skill.description)}\nuser-invocable: false\n---\n\n${skill.text}\n`;
+        await writeFile(join(destination, 'SKILL.md'), document, { mode: 0o600, flag: 'wx' });
+        if (!native) continue;
         const entries = await readdir(skill.directory, { withFileTypes: true });
         for (const entry of entries) {
           if (

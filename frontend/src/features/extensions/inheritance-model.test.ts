@@ -13,7 +13,6 @@ import {
   canRestrictSkill,
   draftSelectionLimit,
   isCurrentSkillSelection,
-  mergePickerSelections,
   recordedOnRun,
   removeDraftSkill,
 } from './inheritance-model';
@@ -62,7 +61,7 @@ test('only manual-capable and effectively enabled skills can be selected, withou
   assert.equal(addDraftSkill(full, host), full);
 });
 
-test('stale draft selections are not updated implicitly and picker changes preserve other selections', () => {
+test('stale draft selections are not updated implicitly by the session dialog', () => {
   const selection = { id: host.id, version: host.version };
   const selected = addDraftSkill(draft, host);
   assert.equal(isCurrentSkillSelection(selection, host), true);
@@ -70,9 +69,6 @@ test('stale draft selections are not updated implicitly and picker changes prese
   assert.equal(isCurrentSkillSelection(selection, { ...host, manual: false }), false);
   assert.equal(isCurrentSkillSelection(selection, { ...host, version: host.version + 1 }), false);
   assert.equal(addDraftSkill(selected, { ...host, version: host.version + 1 }), selected);
-  assert.deepEqual(mergePickerSelections(selected.extensionSelections, [], new Set([host.id])), [selection]);
-  const replacement = [{ id: host.id, version: host.version + 1 }];
-  assert.deepEqual(mergePickerSelections(selected.extensionSelections, replacement, new Set([host.id])), replacement);
 });
 
 test('a session can undo its own restriction, but cannot override a disabled parent', () => {
@@ -85,15 +81,18 @@ test('a session can undo its own restriction, but cannot override a disabled par
   assert.equal(recordedOnRun({ ...host, version: host.version + 1 }, [...receipt]), false);
 });
 
-test('GET and PATCH scope includes project, session identity and actual native mode', () => {
+test('GET and PATCH use distinct session preview modes, with automatic and native mutually exclusive', () => {
   const global = { type: 'global' } as const;
   const project = { type: 'project', projectId: 'project / one' } as const;
-  const controlled = { type: 'session', projectId: 'p', sessionId: 'session & one', native: false } as const;
-  const native = { ...controlled, native: true };
+  const controlled = { type: 'session', projectId: 'p', sessionId: 'session & one', mode: 'controlled' } as const;
+  const native = { ...controlled, mode: 'native' } as const;
+  const automatic = { ...controlled, mode: 'automatic' } as const;
   assert.equal(skillInheritanceEndpoint(global), '/api/skill-inheritance');
   assert.equal(skillInheritanceEndpoint(project), '/api/skill-inheritance?projectId=project+%2F+one');
   assert.equal(skillInheritanceEndpoint(controlled), '/api/skill-inheritance?sessionId=session+%26+one');
   assert.equal(skillInheritanceEndpoint(native), '/api/skill-inheritance?sessionId=session+%26+one&native=1');
-  assert.notDeepEqual(skillInheritanceKeys.view(native), skillInheritanceKeys.view(controlled));
+  assert.equal(skillInheritanceEndpoint(automatic), '/api/skill-inheritance?sessionId=session+%26+one&automatic=1');
+  const keys = [controlled, native, automatic].map((scope) => JSON.stringify(skillInheritanceKeys.view(scope)));
+  assert.equal(new Set(keys).size, 3);
   assert.notDeepEqual(skillInheritanceKeys.view({ ...native, sessionId: 'other' }), skillInheritanceKeys.view(native));
 });

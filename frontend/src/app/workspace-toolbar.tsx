@@ -149,7 +149,7 @@ export function WorkspaceToolbar({
               variant={sessionActions.browserOpen ? 'secondary' : 'ghost'}
               size="icon-sm"
               aria-label={t('browser.title')}
-              title={t(sessionActions.browserOpen ? 'browser.close' : 'browser.open')}
+              title={t(sessionActions.browserOpen ? 'browser.collapse' : 'browser.open')}
               aria-pressed={sessionActions.browserOpen}
               onClick={sessionActions.onToggleBrowser}
             >

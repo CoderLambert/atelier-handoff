@@ -218,7 +218,7 @@ const labels = {
     terminal: '终端',
     browser: '浏览器',
     closeTerminal: '收起终端面板',
-    closeBrowser: '关闭浏览器',
+    closeBrowser: '收起浏览器面板',
     context: '上下文',
     upload: '上传附件',
     currentConversation: '当前会话内容',
@@ -253,7 +253,7 @@ const labels = {
     terminal: 'Terminal',
     browser: 'Browser',
     closeTerminal: 'Hide terminal panel',
-    closeBrowser: 'Close browser',
+    closeBrowser: 'Hide browser panel',
     context: 'Context',
     upload: 'Upload attachment',
     currentConversation: 'Current conversation',
@@ -704,12 +704,12 @@ async function checkCase(
   await topbar.getByRole('button', { name: t.terminal, exact: true }).press('Enter');
   await page.waitForURL((url) => url.hash === `#/sessions/${firstId}/terminal`);
   await page.getByRole('button', { name: t.closeTerminal, exact: true }).click();
-  await page.waitForURL((url) => url.hash === `#/sessions/${firstId}`);
+  assert.equal(new URL(page.url()).hash, `#/sessions/${firstId}/terminal`);
   await focused(topbar.getByRole('button', { name: t.terminal, exact: true }));
   await topbar.getByRole('button', { name: t.browser, exact: true }).press('Enter');
   await page.waitForURL((url) => url.hash === `#/sessions/${firstId}/browser`);
   await page.getByRole('button', { name: t.closeBrowser, exact: true }).click();
-  await page.waitForURL((url) => url.hash === `#/sessions/${firstId}`);
+  assert.equal(new URL(page.url()).hash, `#/sessions/${firstId}/browser`);
   await focused(topbar.getByRole('button', { name: t.browser, exact: true }));
   result.checks.push(
     'Git/terminal/browser icons are named and keyboard reachable; panel closure restores focus',
@@ -723,15 +723,14 @@ async function checkCase(
     await page.waitForFunction(() => innerWidth === 800 && innerHeight === 800);
     await topbar.getByRole('button', { name: t.browser, exact: true }).click();
     await page.waitForURL((url) => url.hash === `#/sessions/${firstId}/browser`);
-    await topbar.getByRole('tablist').waitFor({ state: 'hidden' });
-    assert.equal(await topbar.getByRole('tablist').count(), 0);
+    assert.equal(await page.locator('#conversation').getAttribute('inert'), '');
     await page.getByRole('button', { name: t.closeBrowser, exact: true }).waitFor();
     await page
       .getByText(result.locale === 'en' ? 'Opening panel…' : '正在打开面板…', { exact: true })
       .waitFor({ state: 'hidden' });
     await screenshot(page, join(evidence, `${result.locale}-browser-800x800.png`));
     await page.getByRole('button', { name: t.closeBrowser, exact: true }).click();
-    await page.waitForURL((url) => url.hash === `#/sessions/${firstId}`);
+    assert.equal(new URL(page.url()).hash, `#/sessions/${firstId}/browser`);
     await conversation.waitFor();
     assert.equal(await topbar.getByRole('tab').count(), 3);
     await conversation.focus();
@@ -747,7 +746,7 @@ async function checkCase(
     });
     await page.waitForFunction(() => innerWidth === 1280 && innerHeight === 800);
     result.checks.push(
-      '800px browser replaces content tabs; closure restores tabs and keyboard switching',
+      '800px browser fills the workspace; collapse restores tabs and keyboard switching',
     );
   }
 }

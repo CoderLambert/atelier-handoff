@@ -4,7 +4,7 @@
  * @updated 2026-11-26T20:00:00+08:00
  */
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { Check, MessageSquare, Search } from 'lucide-react';
 import type { Project, Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -104,7 +104,6 @@ export function WorkspaceSessionSwitcher({
           <Search aria-hidden="true" />
           <input
             ref={input}
-            className="field"
             type="search"
             role="combobox"
             aria-label={t('switcherPlaceholder')}
@@ -148,16 +147,24 @@ export function WorkspaceSessionSwitcher({
             }}
           />
         </div>
-        {loading ? <p role="status">{t('switcherLoading')}</p> : null}
+        {loading ? (
+          <p className="workspace-switcher-status" role="status">
+            {t('switcherLoading')}
+          </p>
+        ) : null}
         {failed ? (
-          <div role="alert">
-            <p>{t('switcherFailed')}</p>
-            <Button variant="outline" onClick={onRetry}>
+          <div className="workspace-switcher-status">
+            <p role="alert">{t('switcherFailed')}</p>
+            <Button variant="outline" size="sm" onClick={onRetry}>
               {t('retry')}
             </Button>
           </div>
         ) : null}
-        {!loading && !failed && !items.length ? <p role="status">{t('switcherEmpty')}</p> : null}
+        {!loading && !failed && !items.length ? (
+          <p className="workspace-switcher-status" role="status">
+            {t('switcherEmpty')}
+          </p>
+        ) : null}
         <div
           id={`${id}-list`}
           role="listbox"
@@ -165,30 +172,35 @@ export function WorkspaceSessionSwitcher({
           className="workspace-switcher-list"
         >
           {items.map(({ session, projectName }, itemIndex) => (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               role="option"
               id={`${id}-${itemIndex}`}
               key={session.id}
               aria-selected={itemIndex === index}
               tabIndex={-1}
+              title={session.title}
               className="workspace-switcher-item"
               onPointerMove={() => setSelected(itemIndex)}
               onClick={() => select(session.id)}
             >
+              <MessageSquare data-icon="inline-start" aria-hidden="true" />
               <span className="workspace-switcher-copy">
-                <strong>{session.title}</strong>
-                <span>{projectName}</span>
+                <strong className="truncate">{session.title}</strong>
+                <span className="truncate" title={projectName}>
+                  {projectName}
+                </span>
               </span>
               {session.status === 'archived' ? (
-                <span className="text-xs text-muted-foreground">{t('archived')}</span>
+                <span className="workspace-switcher-meta">{t('archived')}</span>
               ) : null}
               {session.id === current ? (
-                <Check className="size-4 shrink-0" aria-label={t('current')} />
+                <Check data-icon="inline-end" aria-label={t('current')} />
               ) : null}
-            </button>
+            </Button>
           ))}
         </div>
+        <p className="workspace-switcher-footer">{t('switcherHint')}</p>
       </DialogContent>
     </Dialog>
   );

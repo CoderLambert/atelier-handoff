@@ -176,7 +176,7 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
       labels.open === 'Terminal' ? 'This session has no terminals yet.' : '当前会话还没有终端。';
     await panel.getByText(emptyLabel, { exact: true }).waitFor();
     await panel.getByRole('button', { name: labels.hide, exact: true }).click();
-    await panel.waitFor({ state: 'detached' });
+    await panel.waitFor({ state: 'hidden' });
     assert.equal(
       await page
         .getByText(emptyLabel, { exact: true })
@@ -188,11 +188,7 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
     const beforeOpen = new Set((await list()).terminals.map((item) => item.terminalId));
     await page.getByRole('button', { name: labels.open, exact: true }).click();
     await panel.getByRole('button', { name: labels.hide, exact: true }).click();
-    await until(
-      async () => ((await panel.count()) === 0 ? true : undefined),
-      5000,
-      'An immediately hidden Terminal panel removes its content',
-    );
+    await panel.waitFor({ state: 'hidden' });
     assert.equal(
       await page
         .getByText(emptyLabel, { exact: true })
@@ -281,12 +277,7 @@ export async function runTerminalSmoke(options: TerminalSmokeOptions) {
       );
       assert.ok(docked.x + docked.width <= 1441);
       await panel.getByRole('button', { name: labels.hide, exact: true }).click();
-      await panel.waitFor({ state: 'detached' });
-      assert.equal(
-        await page.locator('.terminal-client').count(),
-        0,
-        'Hidden Terminal leaves no visible content',
-      );
+      await panel.waitFor({ state: 'hidden' });
       await page.getByRole('button', { name: labels.open, exact: true }).click();
       await current(first).locator('.xterm-rows').waitFor();
     }

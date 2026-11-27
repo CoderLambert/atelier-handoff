@@ -17,6 +17,7 @@ const inheritanceScope = z.strictObject({
   projectId: z.string().uuid().optional(),
   sessionId: z.string().uuid().optional(),
   native: z.literal('1').optional(),
+  automatic: z.literal('1').optional(),
 });
 
 export function createSkillRoutes({
@@ -38,14 +39,24 @@ export function createSkillRoutes({
     const patch =
       method === 'PATCH' ? skillInheritancePatchSchema.parse(await body(req)) : undefined;
     const scope = inheritanceScope.parse(Object.fromEntries(url.searchParams));
-    if ((scope.sessionId && scope.projectId) || (scope.native && !scope.sessionId))
+    if (
+      (scope.sessionId && scope.projectId) ||
+      ((scope.native || scope.automatic) && !scope.sessionId) ||
+      (scope.native && scope.automatic)
+    )
       throw new AppError('EXTENSION_UNAVAILABLE', 'Skill 设置范围无效。', 400);
     const session = scope.sessionId ? store.get('sessions', scope.sessionId) : undefined;
     if (session && patch && session.status !== 'active')
       throw new AppError('SESSION_ARCHIVED', '请先恢复归档会话。', 409);
     const projectId = session?.projectId ?? scope.projectId;
     const context = projectId
-      ? skills.context(projectId, session, session ? scope.native === '1' : true)
+      ? skills.context(
+          projectId,
+          session,
+          session ? scope.native === '1' : true,
+          undefined,
+          scope.automatic === '1',
+        )
       : { native: nativeExecution };
     const view = patch ? inheritance.update(context, patch) : inheritance.snapshot(context).view;
     if (patch) wakeQueue();

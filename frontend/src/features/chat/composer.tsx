@@ -13,7 +13,7 @@ import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
 import { ExtensionPicker } from '@/features/extensions/picker';
-import { mergePickerSelections } from '@/features/extensions/inheritance-model';
+import type { SessionSkillScope } from '@/use-query/skill-inheritance/keys';
 import { DraftSessionSkills, SessionSkillsControl } from '@/features/extensions/session-skills';
 import { useSessionSkills } from '@/features/extensions/use-session-skills';
 import { AttachmentPreview } from './attachment-preview';
@@ -109,10 +109,14 @@ export function Composer({
   const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
   const archived = snapshot.session.status === 'archived';
   const skillsDisabled = archived || submitting;
-  const sessionSkills = useSessionSkills({
+  const skillScope: SessionSkillScope = {
+    type: 'session',
     projectId: snapshot.session.projectId,
     sessionId,
-    native: mode === 'native',
+    mode: mode === 'native' || mode === 'automatic' ? mode : 'controlled',
+  };
+  const sessionSkills = useSessionSkills({
+    scope: skillScope,
     selections: draft.extensionSelections,
     disabled: skillsDisabled,
     onDraftChange,
@@ -477,14 +481,10 @@ export function Composer({
             projectId={archived ? undefined : snapshot.project.id}
             agent={agent}
             sessionId={snapshot.workspace ? sessionId : undefined}
+            skillScope={skillScope}
+            sessionSkillIds={sessionSkills.draftSkillIds}
             contextAllowed={contextAllowed && directoryAvailable}
-            draft={{
-              ...draft,
-              mode: mode === 'readonly' ? 'readonly' : 'edit',
-              extensionSelections: draft.extensionSelections?.filter(
-                ({ id }) => !sessionSkills.dialogSelectionIds.has(id),
-              ),
-            }}
+            draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
             onChange={(next: Draft) => {
               if (!skillsDisabled)
                 onDraftChange((previous) => ({
@@ -492,11 +492,6 @@ export function Composer({
                   mode: previous.mode,
                   approvalMode: previous.approvalMode,
                   executionPreference: previous.executionPreference,
-                  extensionSelections: mergePickerSelections(
-                    previous.extensionSelections,
-                    next.extensionSelections,
-                    sessionSkills.dialogSelectionIds,
-                  ),
                 }));
             }}
             inputRef={inputRef}

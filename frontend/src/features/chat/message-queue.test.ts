@@ -1,7 +1,7 @@
 /**
- * @file 验证会话消息队列的前端契约、插入与恢复操作和展示。
- * @implementation 使用传输替身、独立 QueryClient 和静态渲染检查模式意图、结构化错误、投递状态、URL 编码和会话精准刷新，并保留全文展开与撤回选择器。
- * @updated 2026-11-21T00:15:48+08:00
+ * @file 验证会话消息队列的前端契约、操作和展示。
+ * @implementation 使用传输替身、独立 QueryClient 和静态渲染检查插入、恢复与复核请求、状态展示、正文展开及会话精准刷新。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -117,9 +117,10 @@ test('withdraw and resume encode identifiers and refresh only their originating 
     assert.equal(client.getQueryState(other)?.isInvalidated, false);
     client.setQueryData(origin, { messageQueue: queue });
     const resume = new MutationObserver(client, resumeMessageQueueOptions(client, id));
-    await resume.mutate();
+    await resume.mutate(undefined);
     assert.equal(client.getQueryState(origin)?.isInvalidated, true);
     assert.equal(client.getQueryState(other)?.isInvalidated, false);
+    await resume.mutate('item/1');
     assert.deepEqual(requests, [
       {
         path: '/api/sessions/session%2FA/message-queue/item%2F1',
@@ -127,6 +128,11 @@ test('withdraw and resume encode identifiers and refresh only their originating 
         body: undefined,
       },
       { path: '/api/sessions/session%2FA/message-queue/resume', method: 'POST', body: '{}' },
+      {
+        path: '/api/sessions/session%2FA/message-queue/resume',
+        method: 'POST',
+        body: JSON.stringify({ reviewItemId: 'item/1' }),
+      },
     ]);
     assert.deepEqual(store.getState().workspace.drafts[id], originalDraft);
     assert.equal(store.getState().workspace.searchChargeLimits[id], '25');
@@ -170,7 +176,7 @@ test('resume rejects malformed acknowledgments and keeps the queue for retry', a
   });
   try {
     const mutation = new MutationObserver(client, resumeMessageQueueOptions(client, 'origin'));
-    await assert.rejects(mutation.mutate());
+    await assert.rejects(mutation.mutate(undefined));
     assert.equal(client.getQueryState(origin)?.isInvalidated, true);
     assert.deepEqual(client.getQueryData(origin), { messageQueue: queue });
   } finally {
@@ -192,6 +198,16 @@ test('queue renders FIFO text, full-text disclosure, errors, withdraw and paused
   assert.doesNotMatch(renderQueue({ ...queue, paused: false }), /继续队列/);
   assert.match(renderQueue(queue, true), /disabled=""[^>]*>继续队列/);
   assert.match(renderQueue(queue, false, false), /disabled=""[^>]*>继续队列/);
+});
+
+test('authorization changes surface review in place of ordinary queue resume', () => {
+  const markup = renderQueue({
+    paused: true,
+    items: [{ id: 'scope-item', text: 'Pending task', createdAt: 'now', error: 'Legacy error', scopeChanged: true }],
+  });
+  assert.match(markup, /复核并继续/);
+  assert.match(markup, /排队时的授权范围已变化，请复核后继续/);
+  assert.doesNotMatch(markup, /Legacy error|>继续队列</);
 });
 
 test('insert posts encoded queue identifiers and exact live or priority intent, refreshing only its session', async (t) => {

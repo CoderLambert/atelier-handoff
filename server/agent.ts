@@ -1,7 +1,7 @@
 /**
- * @file 编排智能体运行、工具调用与取消。
- * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK。按输入 UUID 确认消息，原生运行空闲后收尾。
- * @updated 2026-11-26T23:08:48+08:00
+ * @file 编排智能体运行、SDK 会话续接、工具调用与取消。
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识，在运行收尾时关联并保存请求跨度及流计时。
+ * @updated 2026-11-27T12:27:05+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -67,6 +67,10 @@ import {
 } from './native-harness.js';
 import { HarnessProgress, type ProgressSignal } from './harness-progress.js';
 import { recentConversationContext, sessionRecoveryContext } from './session-checkpoint.js';
+import { prepareSdkResume } from './sdk-resume.js';
+import { RequestTiming } from './request-timing.js';
+import { openSdkRequestTraces } from './sdk-request-traces.js';
+import { openManagedShuntRequestIds } from './managed-shunt-request-ids.js';
 import {
   bashLogNotice,
   canReadToolOutput,
@@ -85,7 +89,14 @@ import type { EnabledMcp } from './extensions.js';
 import { desktopBrowserArgs, type DesktopBrowserToolName } from '../shared/desktop-browser.js';
 import { callDesktopBrowser } from './desktop-browser.js';
 import type { DesktopBrowserAccess } from './desktop-browser-access.js';
-import { mountLocalRunSkills, mountManualSkillPackages, mountRunSkills, sdkSkillName, type RunSkill } from './run-skills.js';
+import {
+  isProjectMarkdownSkill,
+  mountLocalRunSkills,
+  mountManualSkillPackages,
+  mountRunSkills,
+  sdkSkillName,
+  type RunSkill,
+} from './run-skills.js';
 import { executeSkillPackage, readSkillResource, supportsSearch } from './skill-package-runtime.js';
 import { lookupWeather, weatherLocation } from './weather.js';
 import {
@@ -331,7 +342,18 @@ export class AgentRunner implements Runner {
       if (run.workspacePath) await this.verifyWorkspace?.(run);
       verifyCurrent();
     };
-    const automaticSkills = skills.filter((skill) => !skill.manual);
+    const automaticSkills = skills.filter(
+      (skill) =>
+        !skill.manual &&
+        (!skill.local ||
+          native ||
+          (run.executor === 'project-v1' &&
+            run.mode === 'edit' &&
+            automaticApproval &&
+            !run.agent &&
+            !run.retryOf &&
+            isProjectMarkdownSkill(skill))),
+    );
     const selectedSkills = (run.extensions ?? []).filter(({ kind }) => kind === 'skill');
     const installedSelections = selectedSkills.filter(({ source }) => !source || source === 'atelier');
     const skillBindings = installedSelections.flatMap((skill) =>
@@ -344,11 +366,11 @@ export class AgentRunner implements Runner {
       (skill) =>
         skill.name === 'weather' && !hasSkillToolBindingConfig(this.store, project.id, skill.id),
     );
+    // Share one exact namespace allowlist between the SDK, the tool hook and discovery reporting.
     const candidates = new Map(automaticSkills.map((skill) => [sdkSkillName(skill), skill]));
     const packages = new Map(
-      skills.filter((skill) => skill.package).map((skill) => [skill.name, skill]),
+      skills.filter((skill) => !skill.local && skill.package).map((skill) => [skill.name, skill]),
     );
-    const skillRefs = automaticSkills.map(({ id, name, version, source }) => ({ id, name, version, source }));
     const skillCalls = new Map<string, RunSkill>();
     let pluginDirectory: string | undefined;
     let manualPackageDirectory: string | undefined;
@@ -365,21 +387,10 @@ export class AgentRunner implements Runner {
     const documentPaths = new Map<string, string>();
     let attachmentGuidance = '';
     const modelId = magpieModel(run.config.model) ?? run.config.model;
-    const configKey = fingerprint(
-      JSON.stringify({
-        // This key describes transcript compatibility, not the current tool configuration.
-        // Current permissions, tools and extensions are rebuilt for every query below.
-        recoveryIdentity: 1,
-        gateway: run.config.gateway,
-        executor: native ? 'native-v1' : 'project-v1',
-        ...(run.agent ? { agentRevisionId: run.agent.revisionId } : {}),
-      }),
-    );
-    const resumeExisting =
-      session.sdkSessionId && session.sdkMode === run.mode && session.sdkConfigKey === configKey;
-    const recovery = resumeExisting
-      ? undefined
-      : this.store.readTransaction(() => this.store.sessionSnapshots.readRecovery(session.id));
+    const { configKey, resumeExisting, recovery } = prepareSdkResume(this.store, session, run);
+    const requestTiming = new RequestTiming();
+    let requestTraces: Awaited<ReturnType<typeof openSdkRequestTraces>> | undefined;
+    let requestIds: Awaited<ReturnType<typeof openManagedShuntRequestIds>>;
     const inherited = session.inheritedMessages ?? [];
     const checkpoint = recovery ? sessionRecoveryContext(run, recovery, inherited) : '';
     const historyContext = recovery
@@ -845,6 +856,8 @@ export class AgentRunner implements Runner {
           });
         }
       }
+      if (!prior.subagentId && finished.endedAt && !closing)
+        requestTiming.finishedMainTool(Date.parse(finished.endedAt));
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
       if (skill && status === 'succeeded') {
         const { id: extensionId, name, version, source } = skill;
@@ -1808,7 +1821,13 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             .parse(args.todos);
         } else if (event.tool_name === 'Skill') {
           const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
-          if (!skill && (!native || (typeof args.skill === 'string' && /^(?:host-skills|workspace-skills|atelier-skills):/iu.test(args.skill))))
+          if (
+            event.agent_id ||
+            (!skill &&
+              (!native ||
+                (typeof args.skill === 'string' &&
+                  /^(?:host-skills|workspace-skills|atelier-skills):/iu.test(args.skill))))
+          )
             throw new Error('该 Skill 不在本轮自动调用名单中。');
           if (skill) skillCalls.set(id, skill);
         } else if (event.tool_name === 'TaskStop') {
@@ -2023,8 +2042,8 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
       if (nativeManualPackages.length)
         manualPackageDirectory = await mountManualSkillPackages(sdkDirectory, nativeManualPackages);
       signal.throwIfAborted();
-      if (native) localSkillPlugins = await mountLocalRunSkills(sdkDirectory, automaticSkills);
-      const env: NodeJS.ProcessEnv = native ? hostEnvironment(process.env) : {};
+      localSkillPlugins = await mountLocalRunSkills(sdkDirectory, automaticSkills, native);
+      const env: NodeJS.ProcessEnv = native ? hostEnvironment(process.env) : { HOME: sdkDirectory };
       for (const key of [
         'PATH',
         'LANG',
@@ -2049,9 +2068,23 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
           this.store.event(run.id, session.id, 'sdk.notice', { type: 'builtin_rtk_unavailable' });
         }
       }
-      Object.assign(env, {
-        ANTHROPIC_BASE_URL: run.config.gateway,
-        ANTHROPIC_AUTH_TOKEN: gatewayToken(run.config),
+      try {
+        requestTraces = await openSdkRequestTraces();
+      } catch {
+        this.store.event(run.id, session.id, 'sdk.notice', { type: 'request_traces_unavailable' });
+      }
+      const token = gatewayToken(run.config);
+      if (requestTraces) {
+        try {
+          requestIds = await openManagedShuntRequestIds(run.config, token, signal);
+        } catch {
+          this.store.event(run.id, session.id, 'sdk.notice', { type: 'request_ids_unavailable' });
+        }
+      }
+      signal.throwIfAborted();
+      Object.assign(env, requestTraces?.env, {
+        ANTHROPIC_BASE_URL: requestIds?.origin ?? run.config.gateway,
+        ANTHROPIC_AUTH_TOKEN: token,
         ANTHROPIC_API_KEY: '',
         ANTHROPIC_MODEL: modelId,
         ANTHROPIC_DEFAULT_OPUS_MODEL: modelId,
@@ -2123,6 +2156,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
             'WebSearch',
           ],
           settingSources: [],
+          ...(native ? {} : { settings: { disableSkillShellExecution: true } }),
           plugins: availablePlugins,
           strictMcpConfig: true,
           mcpServers: {
@@ -2491,12 +2525,12 @@ ${JSON.stringify(nativePackagePaths)}
             sdkConfigKey: configKey,
             ...(firstInit && !resumeExisting ? { sdkCostTotal: 0 } : {}),
           });
-          if (skillRefs.length) {
+          if (candidates.size) {
             const discovered = new Set(message.skills ?? []);
-            const items: typeof skillRefs = [];
-            const missing: typeof skillRefs = [];
-            for (const [index, key] of [...candidates.keys()].entries()) {
-              (discovered.has(key) ? items : missing).push(skillRefs[index]!);
+            const items: Pick<RunSkill, 'id' | 'name' | 'version' | 'source'>[] = [];
+            const missing: typeof items = [];
+            for (const [key, { id, name, version, source }] of candidates) {
+              (discovered.has(key) ? items : missing).push({ id, name, version, source });
             }
             this.store.event(run.id, session.id, 'skills.discovered', {
               items,
@@ -2534,6 +2568,7 @@ ${JSON.stringify(nativePackagePaths)}
             afterDeferredWork();
           }
         } else if (message.type === 'stream_event') {
+          requestTiming.observe(message, Date.now(), performance.now());
           if (message.parent_tool_use_id) continue;
           const event = message.event;
           acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
@@ -2605,6 +2640,7 @@ ${JSON.stringify(nativePackagePaths)}
             noResponse: message.no_response,
           });
         } else if (message.type === 'assistant') {
+          requestTiming.linkAssistant(message.request_id, message.message.id);
           if (message.parent_tool_use_id || message.agent_id) continue;
           if (!message.error)
             acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
@@ -2766,6 +2802,7 @@ ${JSON.stringify(nativePackagePaths)}
         });
       }
     } finally {
+      const streamEnded = performance.now();
       live.stopSubagent = undefined;
       live.insert = undefined;
       live.controlBash = undefined;
@@ -2813,6 +2850,9 @@ ${JSON.stringify(nativePackagePaths)}
         clearTimeout(deadline);
         if (!processExited) await childExit;
       }
+      await requestIds?.close();
+      const spans = await requestTraces?.close();
+      const timing = requestTiming.finish(streamEnded, spans?.requests, spans?.omitted);
       clearTimeout(cancelChildTimer);
       signal.removeEventListener('abort', boundSdkCancellation);
       await Promise.allSettled([...commands, ...toolWork.keys()]);
@@ -2886,6 +2926,7 @@ ${JSON.stringify(nativePackagePaths)}
           });
         this.store.update('runs', run.id, {
           transcript: finalizeRunTranscript(transcriptState()),
+          ...(timing.records.length > 0 && { requestTiming: timing }),
           status,
           endedAt: now(),
           reason,

@@ -1,9 +1,9 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 以两行组织标签、下载和浏览操作，结合项目授权、人工控制与 Dialog 遮挡同步原生网页视图。
- * @updated 2026-11-23T18:25:00+08:00
+ * @implementation 以两行组织标签、下载、布局与导航操作；结合项目授权、人工控制及弹窗遮挡同步原生网页视图。
+ * @updated 2026-11-27T02:41:56+08:00
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -44,13 +44,11 @@ export function useDesktopBrowser(projectId: string | undefined) {
 export function DesktopBrowser({
   projectId,
   state,
-  onClose,
-  closeLabel,
+  panelActions,
 }: {
   projectId: string;
   state?: DesktopState;
-  onClose: () => void;
-  closeLabel: string;
+  panelActions: ReactNode;
 }) {
   const { t } = useUiTranslation('browser');
   const slot = useRef<HTMLDivElement>(null);
@@ -354,17 +352,7 @@ export function DesktopBrowser({
           </DialogContent>
         </Dialog>
         <span className="desktop-browser-divider" aria-hidden="true" />
-        <Button
-          type="button"
-          size="icon-xs"
-          variant="ghost"
-          className="desktop-browser-icon"
-          aria-label={closeLabel}
-          title={closeLabel}
-          onClick={onClose}
-        >
-          <X aria-hidden="true" />
-        </Button>
+        {panelActions}
       </div>
       <form
         className="desktop-browser-toolbar"

@@ -1,7 +1,7 @@
 /**
  * @file 组织 Git 侧栏、全窗口和文件阅读标签。
- * @implementation 管理工作树、功能视图和文件版本标签及其滚动位置，协调同步、异常提示、通知和弹窗。
- * @updated 2026-11-25T17:09:41+08:00
+ * @implementation 管理工作树、视图、文件标签和滚动位置，协调同步反馈，并接入共享布局按钮和忙碌保护。
+ * @updated 2026-11-27T02:41:56+08:00
  */
 import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -12,12 +12,11 @@ import {
   GitBranch,
   GitCompareArrows,
   History,
-  Maximize2,
-  Minimize2,
   Plus,
   RefreshCw,
   X,
 } from 'lucide-react';
+import { PanelLayoutButtons } from '@/components/panel-layout-buttons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -43,6 +42,7 @@ import { useUiTranslation } from '@/i18n';
 import { useGitOverview } from '@/use-query/git/use-git-overview';
 import { useGitRepoStatus } from '@/use-query/git/use-git-repo-status';
 import { useGitWorkspaceSync } from '@/use-query/git/use-git-workspace-sync';
+import type { PanelLayoutActions } from '@/panel-sdk';
 import type { Project } from '@shared/types';
 import { CreateDevelopmentSession } from './create-development-session';
 import { GitFilesView, GitHistoryView, GitQueryFeedback } from './git-views';
@@ -64,22 +64,18 @@ export default function GitBoard({
   project,
   initialTree,
   initialTab,
-  expanded,
-  onToggleExpanded,
+  layout,
   busy,
   onBusy,
-  onClose,
   onCreated,
   onQuoteCode,
 }: {
   project: Project;
   initialTree?: string;
   initialTab?: GitTab;
-  expanded: boolean;
-  onToggleExpanded?: () => void;
+  layout: PanelLayoutActions;
   busy: boolean;
   onBusy: (busy: boolean) => void;
-  onClose: () => void;
   onCreated: (id: string) => void;
   onQuoteCode?: QuoteGitCode;
 }) {
@@ -98,7 +94,7 @@ export default function GitBoard({
   const fileStrip = useRef<HTMLDivElement>(null);
   const focusSelectedTab = useRef(false);
   const readerScroll = useRef(new Map<string, GitReaderScroll>());
-  const expandLabel = t(expanded ? 'board.dock' : 'board.expand');
+  const { expanded, expandable, onRequestExpand, onRequestHide } = layout;
   const fileTabId = (key: string) => baseId + '-file-' + encodeURIComponent(key);
   const selectedTabId = fileTabs.active ? fileTabId(fileTabs.active) : baseId + '-' + tab;
   const fileVersion = ({ target }: GitOpenFile) => {
@@ -206,8 +202,8 @@ export default function GitBoard({
         )
           return;
         event.preventDefault();
-        if (expanded && onToggleExpanded) onToggleExpanded();
-        else onClose();
+        if (expanded && expandable) onRequestExpand();
+        else onRequestHide();
       }}
     >
       <header className="git-board-heading">
@@ -219,29 +215,13 @@ export default function GitBoard({
           </span>
         </div>
         <div className="git-board-actions">
-          {onToggleExpanded ? (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={expandLabel}
-              title={expandLabel}
-              onClick={onToggleExpanded}
-            >
-              {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            disabled={busy}
-            aria-label={t('board.close')}
-            title={t('board.close')}
-            onClick={onClose}
-          >
-            <X aria-hidden="true" />
-          </Button>
+          <PanelLayoutButtons
+            layout={layout}
+            expandLabel={t('board.expand')}
+            dockLabel={t('board.dock')}
+            collapseLabel={t('board.collapse')}
+            collapseDisabled={busy}
+          />
         </div>
         <p className="sr-only" id={baseId + '-description'}>
           {t('board.description', { project: project.name })}
@@ -523,7 +503,9 @@ export default function GitBoard({
                 file={file}
                 showToast={showToast}
                 onQuoteCode={onQuoteCode}
-                checkout={data?.worktrees.find(({ id }) => id === file.worktreeId)?.branch ?? undefined}
+                checkout={
+                  data?.worktrees.find(({ id }) => id === file.worktreeId)?.branch ?? undefined
+                }
                 position={readerScroll.current.get(file.key)}
                 onScroll={(position) => readerScroll.current.set(file.key, position)}
               />

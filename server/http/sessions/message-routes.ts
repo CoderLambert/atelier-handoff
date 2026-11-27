@@ -16,6 +16,7 @@ const insertionInput = z.strictObject({
   runId: z.string().uuid(),
   mode: z.enum(['live', 'priority']),
 });
+const resumeInput = z.strictObject({ reviewItemId: z.string().uuid().optional() });
 
 export function createSessionMessageRoutes({
   store,
@@ -52,8 +53,8 @@ export function createSessionMessageRoutes({
     if (parts.length === 5) {
       if (method === 'DELETE') queue.withdraw(id, z.string().uuid().parse(parts[4]));
       else if (method === 'POST' && parts[4] === 'resume') {
-        z.strictObject({}).parse(await body(req));
-        await queue.resume(session);
+        const { reviewItemId } = resumeInput.parse(await body(req));
+        await queue.resume(session, reviewItemId);
       } else throw new AppError('NOT_FOUND', '接口不存在。', 404);
       return json(res, { ok: true });
     }

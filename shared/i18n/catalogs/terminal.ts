@@ -9,7 +9,6 @@ export const terminal = {
   hide: ['收起终端面板', 'Hide terminal panel'],
   expand: ['全屏查看终端', 'Expand terminal to full window'],
   dock: ['收回终端侧栏', 'Dock terminal sidebar'],
-  resize: ['调整终端面板宽度', 'Resize terminal panel'],
   new: ['新建终端', 'New terminal'],
   creating: ['正在创建终端…', 'Creating terminal…'],
   end: ['结束终端', 'End terminal'],
@@ -129,5 +128,5 @@ export const terminal = {
     '此面板未能显示。可以重试或关闭面板。',
     'This panel could not be displayed. Retry or close it.',
   ],
-  panelClose: ['关闭面板', 'Close panel'],
+  hideRightTool: ['收起面板', 'Hide panel'],
 } as const;

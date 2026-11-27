@@ -1,7 +1,7 @@
 /**
  * @file 定义提交会话消息和持久队列意图的校验契约。
- * @implementation 共用请求 schema，并兼容原队列记录中的可选执行器和 Skill 范围字段。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 共用请求 schema，记录排队时的授权指纹，并兼容旧队列记录中可选的执行器、Skill 范围和 Skill ID。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { z } from 'zod';
 import { composerTextLimit } from '../../../shared/message-quotes.js';
@@ -30,6 +30,7 @@ export const queuedIntent = z.object({
   scope: z.string(),
   executor: executorSchema.optional(),
   skillScope: z.string().optional(),
+  skillIds: z.array(z.string().uuid()).optional(),
 });
 
 export type Executor = z.infer<typeof executorSchema>;

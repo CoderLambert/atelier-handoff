@@ -1,13 +1,21 @@
 /**
  * @file 展示当前会话输入区上方的待处理消息队列。
- * @implementation 按权威快照显示紧凑消息、投递与暂停状态，保留全文展开，并通过会话隔离的 hook 插入、撤回或继续。
- * @updated 2026-11-21T00:15:48+08:00
+ * @implementation 按快照显示消息、投递和暂停状态，支持展开正文及插入、撤回。队首授权范围变化时要求用户确认后继续。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import { useUiTranslation } from '@/i18n';
-import { useId } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Run, SessionMessageQueue } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useSessionMessageQueue } from './hooks/use-session-message-queue';
 
 export function MessageQueue({
@@ -25,6 +33,11 @@ export function MessageQueue({
 }) {
   const { t } = useUiTranslation('chat');
   const actions = useSessionMessageQueue(sessionId);
+  const resumeButton = useRef<HTMLButtonElement>(null);
+  const [reviewId, setReviewId] = useState<string>();
+  const head = queue.items.find((item) => !item.delivery);
+  const needsReview = head?.scopeChanged === true;
+  const resumeDisabled = archived || !available || actions.busy || (needsReview && !!activeRun);
   const priorityDescriptionId = useId();
   const canInsert =
     activeRun?.sessionId === sessionId &&
@@ -45,12 +58,16 @@ export function MessageQueue({
         </span>
         {queue.paused && queue.items.length > 0 ? (
           <Button
+            ref={resumeButton}
             size="xs"
             variant="outline"
-            disabled={archived || !available || actions.busy}
-            onClick={actions.onResume}
+            disabled={resumeDisabled}
+            onClick={() => {
+              if (needsReview) setReviewId(head.id);
+              else actions.onResume();
+            }}
           >
-            {actions.resuming ? t('queue.resuming') : t('queue.resume')}
+            {t(actions.resuming ? 'queue.resuming' : needsReview ? 'queue.review' : 'queue.resume')}
           </Button>
         ) : null}
       </div>
@@ -89,7 +106,11 @@ export function MessageQueue({
                     </summary>
                     <p className="chat-message-queue-text">{item.text}</p>
                   </details>
-                  {item.error ? <p className="chat-message-queue-error">{item.error}</p> : null}
+                  {item.error ? (
+                    <p className="chat-message-queue-error">
+                      {item.scopeChanged ? t('queue.scopeChanged') : item.error}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="chat-message-queue-actions">
                   {deliveryLabel ? (
@@ -157,6 +178,40 @@ export function MessageQueue({
           {actions.error}
         </p>
       ) : null}
+      {reviewId && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setReviewId(undefined);
+          }}
+        >
+          <DialogContent
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              resumeButton.current?.focus();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t('queue.reviewTitle')}</DialogTitle>
+              <DialogDescription>{t('queue.reviewDescription')}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReviewId(undefined)}>
+                {t('queue.reviewCancel')}
+              </Button>
+              <Button
+                disabled={resumeDisabled || !needsReview || head.id !== reviewId}
+                onClick={() => {
+                  actions.onResume(reviewId);
+                  setReviewId(undefined);
+                }}
+              >
+                {t('queue.reviewConfirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   );
 }

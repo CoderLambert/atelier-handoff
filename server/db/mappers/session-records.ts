@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { contextUsageSchema } from '../../../shared/context-usage.js';
+import { runRequestTimingSchema } from '../../../shared/request-timing.js';
 import { bashExecutionSchema } from '../../../shared/bash-execution.js';
 import { rtkTraceSchema } from '../../../shared/rtk-trace.js';
 import { messageQuotesSchema } from '../../../shared/message-quotes.js';
@@ -136,6 +137,7 @@ export const records = {
     config,
     usage: usage.nullable(),
     contextUsage: contextUsageSchema.optional().catch(undefined),
+    requestTiming: runRequestTimingSchema.optional().catch(undefined),
     approvalMode,
     executor,
     maxSearchChargeFen: num.optional(),

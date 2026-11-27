@@ -1,7 +1,7 @@
 /**
  * @file 展示单次运行的执行轨迹。
- * @implementation 关联运行事件、工具、输出和审批，展示用量、子任务、诊断以及 Skill 来源。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 关联运行事件、工具、输出和审批，展示用量、请求计时、子任务与 Skill 来源，提供诊断下载。
+ * @updated 2026-11-27T03:04:32+08:00
  */
 import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
@@ -14,6 +14,7 @@ import { useRunTrace } from '@/use-query/runs/use-run-trace';
 import { runModeLabel } from '@/features/chat/run-mode';
 import { SubagentProgress, groupRunWork, permissionSubagentSource } from './subagent-progress';
 import { ToolDetail, ToolDetailBody, toolCallSummary } from './tool-detail';
+import { RequestTimings } from './request-timings';
 import type { Snapshot } from '@/api/types';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
 import {
@@ -267,6 +268,7 @@ function TraceDetail({
           </DetailField>
         ))}
       </dl>
+      {run.requestTiming && <RequestTimings timing={run.requestTiming} />}
       <section aria-labelledby="inspector-tools-heading">
         <div className="mb-3 flex items-center gap-2">
           <h3 id="inspector-tools-heading" className="text-sm font-semibold">

@@ -27,6 +27,10 @@ export const shortcuts = {
     'Recently updated first. Search by title or project.',
   ],
   switcherPlaceholder: ['搜索会话或项目…', 'Search conversations or projects…'],
+  switcherHint: [
+    '↑ ↓ 选择 · Enter 切换 · Esc 返回',
+    '↑ ↓ to select · Enter to switch · Esc to return',
+  ],
   switcherEmpty: ['没有匹配的会话。', 'No matching conversations.'],
   switcherLoading: ['正在读取会话…', 'Loading conversations…'],
   switcherFailed: ['会话读取失败，请重试。', 'Conversations could not be loaded. Try again.'],

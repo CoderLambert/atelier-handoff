@@ -1,7 +1,7 @@
 /**
  * @file 计算并应用全局、项目和会话的 Skill 继承策略。
- * @implementation 汇总安装项与本机目录生成可用性快照，校验策略更新和手动选择，并为运行组装自动 Skill 与手动指令。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 汇总安装项与本机目录生成可用性快照，校验策略和手动选择，并按可选允许列表组装自动 Skill 与手动指令。
+ * @updated 2026-11-27T02:25:28+08:00
  */
 import {
   AppError,
@@ -15,15 +15,21 @@ import type {
   SkillInheritanceView,
 } from '../shared/skill-inheritance.js';
 import { inspectMarkdown, type ExtensionBundle } from './extensions.js';
-import { discoverHostSkills, discoverLocalSkills, type LocalSkill } from './local-skill-catalog.js';
+import {
+  discoverHostSkills,
+  discoverLocalSkills,
+  discoverProjectMarkdownSkills,
+  type LocalSkill,
+} from './local-skill-catalog.js';
 import { selectRunSkills, type RunSkill } from './run-skills.js';
 import type { Store } from './store.js';
 
-type SkillContext = {
+export type SkillContext = {
   projectId?: string;
   sessionId?: string;
   directory?: string;
   native: boolean;
+  workspaceAutomatic?: boolean;
   installed?: Extension[];
   boundAuto?: ReadonlySet<string>;
 };
@@ -35,13 +41,27 @@ export class SkillInheritance {
   ) {}
 
   snapshot(context: SkillContext, forRun = false) {
-    const { projectId, sessionId, directory, native, installed = [], boundAuto } = context;
+    const {
+      projectId,
+      sessionId,
+      directory,
+      native,
+      workspaceAutomatic,
+      installed = [],
+      boundAuto,
+    } = context;
+    const allowProjectMarkdown = Boolean(!native && workspaceAutomatic && !boundAuto);
     const enabled = this.policy.readGlobal();
     const projectMode = projectId ? this.policy.projectMode(projectId) : 'follow';
     const globalModes = this.policy.hostModes();
     const overrides = sessionId ? this.policy.sessionModes(sessionId) : undefined;
-    const workspace =
-      directory && (!forRun || native) ? discoverLocalSkills('workspace', directory) : [];
+    const workspace = !directory
+      ? []
+      : native
+        ? discoverLocalSkills('workspace', directory)
+        : !forRun || allowProjectMarkdown
+          ? discoverProjectMarkdownSkills(directory)
+          : [];
     const host =
       !forRun || (native && enabled && projectMode === 'follow')
         ? discoverHostSkills(this.home)
@@ -92,7 +112,7 @@ export class SkillInheritance {
           ? 'global-off'
           : source === 'host' && projectMode === 'block'
             ? 'project-blocked'
-            : projectId && !native
+            : !native && (source === 'host' ? projectId : !allowProjectMarkdown)
               ? 'not-native'
               : mode === 'off' || (mode === 'manual' && !manual) || (mode === 'auto' && !auto)
                 ? 'disabled'
@@ -182,20 +202,27 @@ export function applySkillScope(
   installed: Extension[],
   local: LocalSkill[],
   requestText: string,
+  allowedSkillIds?: ReadonlySet<string>,
 ) {
   const items = new Map(snapshot.view.items.map((item) => [item.id, item]));
+  const isAutomatic = (id: string) =>
+    items.get(id)?.effective === 'auto' && (allowedSkillIds?.has(id) ?? true);
   for (const ref of bundle.used) {
     if (ref.kind === 'skill' && items.get(ref.id)?.effective === 'off')
       throw new AppError('EXTENSION_CHANGED', '所选 Skill 已停用，请重新选择。', 409);
   }
   const skills = selectRunSkills(
     installed.filter(
-      ({ id }) => items.get(id)?.effective === 'auto' || bundle.used.some((ref) => ref.id === id),
+      ({ id }) => isAutomatic(id) || bundle.used.some((ref) => ref.id === id),
     ),
     bundle.used,
   );
   for (const skill of snapshot.local.values()) {
-    if (items.get(skill.id)?.effective !== 'auto') continue;
+    if (
+      !isAutomatic(skill.id) ||
+      (skill.projectMarkdown && local.some(({ id }) => id === skill.id))
+    )
+      continue;
     skills.push({
       ...localReference(skill),
       kind: 'skill',
@@ -205,13 +232,17 @@ export function applySkillScope(
     } satisfies RunSkill);
   }
   const localInstructions = local.map((skill) => {
-    const text = skill.text
-      .replaceAll('${CLAUDE_SKILL_DIR}', () => skill.directory)
-      .replace(/\$ARGUMENTS|\$0|\$1|\$2|\$3/gu, (match) => {
-        if (match === '$ARGUMENTS') return requestText;
-        return requestText.split(/\s+/u)[Number(match.slice(1))] ?? '';
-      });
-    return `Skill ${skill.source}-skills:${skill.slug}（附属文件目录：${skill.directory}）：\n${text}`;
+    const label = `Skill ${skill.source}-skills:${skill.slug}`;
+    const body = skill.projectMarkdown
+      ? skill.text
+      : skill.text.replaceAll('${CLAUDE_SKILL_DIR}', () => skill.directory);
+    const text = body.replace(/\$ARGUMENTS|\$0|\$1|\$2|\$3/gu, (match) => {
+      if (match === '$ARGUMENTS') return requestText;
+      return requestText.split(/\s+/u)[Number(match.slice(1))] ?? '';
+    });
+    return skill.projectMarkdown
+      ? `${label}（仅 Markdown 正文，不提供附属文件）：\n${text}`
+      : `${label}（附属文件目录：${skill.directory}）：\n${text}`;
   });
   const used = [...bundle.used, ...local.map(localReference)];
   return { skills, used, prompt: [...localInstructions, bundle.prompt].join('\n\n') };

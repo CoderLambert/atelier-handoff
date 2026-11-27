@@ -311,7 +311,7 @@ try {
   assert.notEqual(addedBg, removedBg);
   const screenshot = process.env.ATELIER_GIT_SCREENSHOT;
   if (screenshot) await page.screenshot({ path: screenshot });
-  const divider = page.getByRole('separator', { name: '调整 Git 面板宽度' });
+  const divider = page.getByRole('separator', { name: '调整右侧工具宽度' });
   const initial = await board.boundingBox();
   assert.ok(initial);
   await dragSeparator(page, divider, 106);
@@ -446,7 +446,7 @@ try {
     3000,
     'Git hid the native view',
   );
-  await board.getByRole('button', { name: '关闭 Git 面板', exact: true }).click();
+  await board.getByRole('button', { name: '收起 Git 面板', exact: true }).click();
   await page.locator('.desktop-browser-slot[aria-label="Git fixture browser"]').waitFor();
   await until(
     async () => (await nativeViews()) > baseViews || undefined,
@@ -514,7 +514,7 @@ try {
   await board.getByRole('button', { name: 'Expand Git to full window' }).click();
   await board.getByRole('button', { name: 'Dock Git sidebar' }).click();
   await page.setViewportSize({ width: 1920, height: 1080 });
-  const resize = page.getByRole('separator', { name: 'Resize Git panel' });
+  const resize = page.getByRole('separator', { name: 'Resize right tool panel' });
   const beforeKeyboard = await board.boundingBox();
   assert.ok(beforeKeyboard);
   await resize.focus();
@@ -546,7 +546,7 @@ try {
   const finalNavigation = await navigation.boundingBox();
   assert.ok(finalNavigation && Math.abs(originalNavigation.width - finalNavigation.width) < 2);
   assert.deepEqual(await readLayout(page), savedLayout);
-  await board.getByRole('button', { name: 'Close Git panel' }).click();
+  await board.getByRole('button', { name: 'Hide Git panel' }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
   console.log('English controls, keyboard resize, dark syntax, and stable navigation width passed');
   const two = await createDevelopmentSession(page, branches[1], true);
@@ -628,7 +628,7 @@ try {
   );
   await board.getByRole('button', { name: 'Retry reclaim', exact: true }).click();
   await board.getByText('Snapshot saved and checkout reclaimed.', { exact: true }).waitFor();
-  await board.getByRole('button', { name: 'Close Git panel' }).click();
+  await board.getByRole('button', { name: 'Hide Git panel' }).click();
   await assert.rejects(readFile(join(first.path, 'same.txt')), { code: 'ENOENT' });
   await page.getByRole('button', { name: 'Restore worktree', exact: true }).waitFor();
 

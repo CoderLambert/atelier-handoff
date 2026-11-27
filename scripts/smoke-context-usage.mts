@@ -216,7 +216,7 @@ try {
   await webInput.pressSequentially('local input');
   assert.equal(await webInput.inputValue(), 'local input');
 
-  const splitter = page.getByRole('separator', { name: '调整浏览器宽度' });
+  const splitter = page.getByRole('separator', { name: '调整右侧工具宽度' });
   const originalWidth = await native.evaluate(() => innerWidth);
   await splitter.press('ArrowLeft');
   const wider = await until(
@@ -315,7 +315,7 @@ try {
     2_000,
     'tab close returns focus to the remaining tab',
   );
-  await page.getByRole('button', { name: '关闭浏览器', exact: true }).click();
+  await page.getByRole('button', { name: '收起浏览器面板', exact: true }).click();
   await browser.waitFor({ state: 'hidden' });
   await until(
     async () =>

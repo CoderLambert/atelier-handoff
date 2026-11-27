@@ -22,12 +22,19 @@
 
 1. 在 `features/<name>/` 创建业务入口，以 `PanelViewProps<PanelInstance<...>>` 作为公共部分。项目工具使用 `ProjectPanelTarget`；需要会话归属的工具使用 `SessionPanelTarget`。
 2. 为标题、按钮、状态及错误补齐中英文类型化词条。manifest 的 `titleKey` 必须是已有词条。
-3. 在静态注册表增加 `PanelDefinition<Props>`：`apiVersion: 1`、唯一 `id`、正确 `scope`、`slot: 'right'`、宽度约束、图标和 `load()`。
-4. 在工作区编排 hook 中提供命名的打开、关闭和导航动作；在工具栏或对应业务入口接入。需要可恢复路由时，同时更新路由定义和 `shared/workspace-location.ts` 的白名单。
+3. 在静态注册表增加 `PanelDefinition<Props>`：`apiVersion: 1`、唯一 `id`、正确 `scope`、`slot: 'right'`、图标和 `load()`。
+4. 在工作区编排 hook 中提供命名的打开和导航动作；在工具栏或对应业务入口接入。需要可恢复路由时，同时更新路由定义和 `shared/workspace-location.ts` 的白名单。
 5. 经 `PanelHost` 渲染并传入 ID 化 target。异步操作必须校验点击时捕获的目标，过期完成不能切换新会话的面板或焦点。
 6. 有后端资源时，先定义共享 schema、明确能力查询与资源唯一所有者，再实现 API。增加覆盖实际副作用和关键失败路径的测试；在真实 Electron 窗口验收布局、键盘和原生 Browser 遮挡。
 
-Git 和 Browser 保留各自的适配器 props。Git 的 busy/关闭保护按实例生效；Browser 隐藏仍通过现有原生视图通路处理。公共 Host 不推断某个面板的业务资源是否应该销毁。
+## 右侧工具交互规则
+
+以终端为基准。使用 `PanelLayoutButtons` 在页首提供全屏／恢复停靠、收起两个动作，业务按钮和单独的标签关闭动作留在工具内。
+
+- 收起只隐藏同一实例：不退出路由、不清空 Git 草稿、不关闭浏览器标签或终端。点击顶部同一个工具按钮或使用「切换右侧面板」可恢复。Git 忙时仍保护当前操作。
+- 全屏占满工作区，不改变系统窗口。窗口宽度低于 1120 px 时自动全屏；变宽后恢复先前布局选择。收起或全屏均不覆盖停靠尺寸。
+- 停靠时统一使用同一分隔条和 450–1440 px 宽度偏好，并为会话区保留至少 420 px。由工作区持久化最近一次显式拖动的宽度，不为各面板单独配置。
+- Browser 隐藏通过现有原生槽位通路处理。公共 Host 不推断某个面板的业务资源是否应该销毁。详见[决策和回退](decisions/2026-11-27-right-tool-panels.md)。
 
 ### Agent 接入任务模板
 

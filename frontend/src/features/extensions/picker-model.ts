@@ -1,5 +1,7 @@
 import { getTranslator } from '@/i18n';
+import type { SkillInheritanceItem } from '@shared/skill-inheritance';
 import type { Draft, Extension, ExtensionSelection, Mode } from '@shared/types';
+import { canSelectSkill } from './inheritance-model';
 
 export interface CompletionTrigger {
   start: number;
@@ -8,11 +10,14 @@ export interface CompletionTrigger {
   query: string;
   word: string;
 }
+type CompletionSkill = SkillInheritanceItem & { kind: 'skill' };
+
 export interface CompletionChoice {
-  item: Extension;
+  item: Extension | CompletionSkill;
   label: string;
   description: string;
   kind: string;
+  skillSource?: SkillInheritanceItem['source'];
   tools?: string[];
 }
 export function inCode(text: string) {
@@ -72,8 +77,13 @@ export function allowedTools(item: Extension, mode: Mode) {
     (tool) => discovered.has(tool.name) && (mode !== 'readonly' || tool.access === 'read'),
   );
 }
+export function completionSkills(items: readonly SkillInheritanceItem[]) {
+  // The session preview owns eligibility (including host opt-in and agent scope).
+  return items.filter(canSelectSkill).map((item): CompletionSkill => ({ ...item, kind: 'skill' }));
+}
+
 export function choices(
-  items: Extension[],
+  items: (Extension | CompletionSkill)[],
   trigger: CompletionTrigger,
   text: string,
   mode: Mode,
@@ -81,11 +91,23 @@ export function choices(
   const t = getTranslator('extensions');
   const rows: CompletionChoice[] = [];
   for (const item of items) {
+    if ('effective' in item) {
+      if (trigger.symbol !== '/' || !canSelectSkill(item) || !/^[\p{L}\p{N}_:-]+$/u.test(item.name))
+        continue;
+      rows.push({
+        item,
+        label: `/${item.name}`,
+        description: item.description,
+        kind: t('common.skills'),
+        skillSource: item.source,
+      });
+      continue;
+    }
     if (!item.enabled || (item.kind !== 'mcp' && !item.supported)) continue;
     if (trigger.symbol === '/') {
       if (
         item.kind === 'mcp' ||
-        (item.kind === 'skill' && item.userInvocable === false) ||
+        item.kind === 'skill' ||
         !/^[\p{L}\p{N}_:-]+$/u.test(item.name)
       )
         continue;
@@ -94,7 +116,7 @@ export function choices(
         item,
         label: `/${item.name}`,
         description: item.description,
-        kind: item.kind === 'skill' ? t('common.skills') : t('common.commands'),
+        kind: t('common.commands'),
       });
     } else if (item.kind === 'mcp') {
       const allowed = allowedTools(item, mode);
