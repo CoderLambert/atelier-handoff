@@ -1,13 +1,15 @@
 /**
- * @file 管理父运行内的原生子代理派发与工具归属。
- * @implementation 本机信任沿用 SDK 前后台选择。按任务与调用标识核对启动、交接和终态，以单次票据传递分支身份。
- * @updated 2026-11-26T23:08:48+08:00
+ * @file 管理父运行内的原生子代理派发、分支中止信号与工具归属。
+ * @implementation 本机信任沿用 SDK 前后台选择；复用统一 SDK 任务帧 schema 核对启动、交接和终态，并将分支 AbortController 生命周期收归任务本身。
+ * @updated 2026-11-27T19:48:00+08:00
  */
-import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
-import { AppError, now, type Run } from '../shared/types.js';
-import type { Subagent } from '../shared/subagents.js';
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
+import type { Subagent } from '../shared/subagents.js';
+import { AppError, now, type Run } from '../shared/types.js';
+import { agentTaskFrames } from './modules/runs/sdk-task-coordinator.js';
+
+export { ProjectWrites } from './modules/runs/tool-invocation-gate.js';
 
 export const agentKinds = { 'atelier-explore': 'explore', 'atelier-worker': 'worker' } as const;
 const dispatchSchema = z.object({
@@ -20,26 +22,11 @@ const reportSchema = z.object({
   status: z.literal('completed'),
   content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
 });
-const taskFrame = z.object({
-  session_id: z.string(),
-  task_id: z.string(),
-  run_id: z.string().optional(),
-  tool_use_id: z.string().optional(),
-});
-const startedFrame = taskFrame.extend({
-  task_type: z.literal('local_agent'),
-  parent_task_id: z.undefined().optional(),
-  is_backgrounded: z.boolean().optional(),
-});
-const updatedFrame = taskFrame.extend({ patch: z.object({ is_backgrounded: z.literal(true) }) });
-const terminalFrame = taskFrame.extend({
-  status: z.enum(['completed', 'failed', 'stopped']),
-  reason: z.literal('worker_restart').optional(),
-  summary: z.string(),
-});
 const handoffSchema = z.object({ status: z.literal('async_launched'), agentId: z.string() });
 type EndStatus = Exclude<Subagent['status'], 'running'>;
-type Terminal = z.infer<typeof terminalFrame>;
+type TaskFrame = z.infer<typeof agentTaskFrames.base>;
+type Terminal = z.infer<typeof agentTaskFrames.terminal>;
+
 interface Journal {
   startSubagent(value: Subagent): void;
   finishSubagent(id: string, runId: string, status: EndStatus, summary: string | null): void;
@@ -54,15 +41,12 @@ interface Task {
   handoffAgentId?: string;
   terminal?: Terminal;
   moveRejected?: boolean;
+  controller?: AbortController;
 }
 
 export class SubagentRun {
   private readonly tasks = new Map<string, Task>();
   private readonly bySdkId = new Map<string, string>();
-  private readonly tickets = new Map<
-    string,
-    { id: string; name: string; hash: string; subagentId?: string }
-  >();
 
   constructor(
     private readonly run: Pick<Run, 'id' | 'sessionId'>,
@@ -80,8 +64,23 @@ export class SubagentRun {
     return [...this.tasks.values()].some((task) => task.background);
   }
 
+  isActive(id: string): boolean {
+    return this.tasks.has(id);
+  }
+
   isBackground(id: string) {
     return this.tasks.get(id)?.background === true;
+  }
+
+  branchSignal(id: string): AbortSignal | undefined {
+    return this.tasks.get(id)?.controller?.signal;
+  }
+
+  ensureBranchSignal(id: string): AbortSignal {
+    const task = this.tasks.get(id);
+    if (!task) throw new Error('当前子任务身份无效或已结束。');
+    task.controller ??= new AbortController();
+    return task.controller.signal;
   }
 
   canMove(id: string) {
@@ -101,6 +100,17 @@ export class SubagentRun {
     }
   }
 
+  async stop(sdk: Pick<Query, 'stopTask'>, id: string): Promise<void> {
+    const task = this.tasks.get(id);
+    const sdkId = task?.taskId;
+    if (!task || !sdkId) throw new AppError('SUBAGENT_NOT_ACTIVE', '子任务已结束或尚未就绪。', 409);
+    // Abort workbench-owned approvals and commands independently of the parent run.
+    task.controller ??= new AbortController();
+    const stopping = sdk.stopTask(sdkId);
+    task.controller.abort();
+    await stopping;
+  }
+
   reserve(id: string, toolUseId: string, input: unknown) {
     const args = dispatchSchema.strict().parse(input);
     if (!this.native && args.run_in_background) throw new Error('受控子代理只能在前台运行。');
@@ -114,7 +124,7 @@ export class SubagentRun {
   }
 
   started(input: unknown) {
-    const parsed = startedFrame.safeParse(input);
+    const parsed = agentTaskFrames.started.safeParse(input);
     if (!parsed.success || parsed.data.session_id !== this.sdkSessionId) return;
     const message = parsed.data;
     if (!message.tool_use_id) return;
@@ -157,7 +167,7 @@ export class SubagentRun {
     return this.tasks.get(appTaskId)?.taskId;
   }
 
-  private matches(task: Task, message: z.infer<typeof taskFrame>) {
+  private matches(task: Task, message: TaskFrame) {
     return (
       message.session_id === this.sdkSessionId &&
       task.sdkRunId === message.run_id &&
@@ -167,7 +177,7 @@ export class SubagentRun {
 
   updated(input: unknown) {
     if (!this.native) return;
-    const parsed = updatedFrame.safeParse(input);
+    const parsed = agentTaskFrames.updated.safeParse(input);
     if (!parsed.success) return;
     const id = this.bySdkId.get(parsed.data.task_id);
     const task = id ? this.tasks.get(id) : undefined;
@@ -175,7 +185,7 @@ export class SubagentRun {
   }
 
   notify(input: unknown) {
-    const parsed = terminalFrame.safeParse(input);
+    const parsed = agentTaskFrames.terminal.safeParse(input);
     if (!parsed.success) return false;
     const message = parsed.data;
     const id = this.bySdkId.get(message.task_id);
@@ -239,57 +249,11 @@ export class SubagentRun {
       this.bySdkId.delete(task.taskId);
     }
     this.tasks.delete(id);
-    this.dropToolTickets(id);
+    task.controller?.abort();
     this.onFinish(id, status, preview);
   }
 
-  ticket(id: string, name: string, hash: string, subagentId?: string) {
-    const ticket = randomUUID();
-    this.tickets.set(ticket, { id, name, hash, subagentId });
-    return ticket;
-  }
-
-  claim(ticket: unknown, name: string, hash: string) {
-    if (typeof ticket !== 'string') return;
-    const entry = this.tickets.get(ticket);
-    if (!entry || entry.name !== name || entry.hash !== hash) return;
-    this.tickets.delete(ticket);
-    if (!entry.subagentId || this.tasks.has(entry.subagentId)) return entry;
-  }
-
-  dropToolTickets(subagentId: string) {
-    for (const [ticket, entry] of this.tickets)
-      if (entry.subagentId === subagentId) this.tickets.delete(ticket);
-  }
-
   close(status: EndStatus, reason: string) {
-    this.tickets.clear();
-    for (const id of this.tasks.keys()) this.finish(id, status, reason);
-  }
-}
-
-/** Acquired at execution time, after user approval. Held until the actual side effect settles. */
-export class ProjectWrites {
-  private readonly tails = new Map<string, Promise<void>>();
-
-  async run<T>(
-    verify: () => void | Promise<void>,
-    effect: () => Promise<T>,
-    directory = '',
-  ): Promise<T> {
-    const previous = this.tails.get(directory);
-    let unlock: () => void = () => {};
-    const tail = new Promise<void>((resolve) => {
-      unlock = resolve;
-    });
-    this.tails.set(directory, tail);
-    try {
-      await previous;
-      await verify();
-      return await effect();
-    } finally {
-      if (this.tails.get(directory) === tail) this.tails.delete(directory);
-      unlock();
-    }
+    for (const id of [...this.tasks.keys()]) this.finish(id, status, reason);
   }
 }

@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
- * @implementation 协调 SDK 流、工具、子任务和会话续接，委托运行模块管理进程、启动资源、实时输入和转录。将请求计时及运行终态写入本地存储。
- * @updated 2026-11-27T18:16:47+08:00
+ * @implementation 协调 SDK 流、工具、子任务和会话续接，委托运行模块管理进程、启动资源、任务帧协调、票据门禁、实时输入和转录。将请求计时及运行终态写入本地存储。
+ * @updated 2026-11-27T19:48:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -29,7 +29,7 @@ import {
 import { Store } from './store.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
-import { fingerprint, readProjectText, resolveProjectPath } from './files.js';
+import { readProjectText, resolveProjectPath } from './files.js';
 import { readRunUsage } from './usage.js';
 import { sampleContextUsage } from './context-usage.js';
 import { magpieModel } from './magpie-models.js';
@@ -52,7 +52,7 @@ import {
   outputPointer,
 } from './tool-output-context.js';
 import { NativeBashTasks, type BashTaskReceipt } from './native-bash.js';
-import { ProjectWrites, SubagentRun } from './subagent-run.js';
+import { SubagentRun } from './subagent-run.js';
 import { McpSessions } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
 import type { DesktopBrowserAccess } from './desktop-browser-access.js';
@@ -68,6 +68,8 @@ import { RunTranscriptLedger } from './modules/runs/run-transcript-ledger.js';
 import { buildInitialPrompt, RunEnvironment } from './modules/runs/run-environment.js';
 import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
 import { resolveRunOutcome } from './modules/runs/run-outcome.js';
+import { SdkTaskCoordinator } from './modules/runs/sdk-task-coordinator.js';
+import { ProjectWrites, ToolInvocationGate } from './modules/runs/tool-invocation-gate.js';
 import { buildRunMcpTools } from './modules/runs/mcp-tools/index.js';
 import { hasSkillToolBindingConfig, readSkillToolBindings } from './skill-tool-bindings.js';
 
@@ -217,7 +219,6 @@ export class AgentRunner implements Runner {
     const session = this.store.get('sessions', run.sessionId);
     const allowed = (capability: AgentCapability) =>
       !run.agent || run.agent.capabilities.includes(capability);
-    const branchControllers = new Map<string, AbortController>();
     const toolContext = new AsyncLocalStorage<AbortSignal>();
     const toolSignal = () => toolContext.getStore() ?? signal;
     const verifyCurrent = () => {
@@ -345,8 +346,7 @@ export class AgentRunner implements Runner {
       native,
       this.store,
       (id, status, summary) => {
-        branchControllers.get(id)?.abort();
-        branchControllers.delete(id);
+        toolGate.revokeForActor(id);
         finishTool(
           id,
           status === 'stopped' || status === 'interrupted' ? 'stopped' : status === 'completed',
@@ -354,9 +354,9 @@ export class AgentRunner implements Runner {
         );
       },
     );
+    const toolGate = new ToolInvocationGate((id) => subagents.isActive(id));
     const writeProject = <T>(effect: () => Promise<T>) =>
       this.writes.run(verifyDispatch, effect, workingDirectory);
-    const runningTools = new Map<string, { useId?: string; subagentId?: string }>();
     const bash = native
       ? new NativeBashTasks(sdkSessionId, (id, execution) => {
           const record = this.store.get('tools', id);
@@ -365,16 +365,7 @@ export class AgentRunner implements Runner {
           this.store.event(run.id, session.id, 'tool.bash_updated', { toolCallId: id });
         })
       : undefined;
-    const callHash = (name: string, args: Record<string, unknown>) =>
-      fingerprint(
-        JSON.stringify(
-          name === 'mcp__atelier__list_files' ? { ...args, path: args.path ?? '' } : args,
-          (_key, value) =>
-            value && typeof value === 'object' && !Array.isArray(value)
-              ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
-              : value,
-        ),
-      );
+    const tasks = new SdkTaskCoordinator(subagents, bash);
     const createAssistant = () =>
       this.store.put('messages', {
         id: randomUUID(),
@@ -404,9 +395,7 @@ export class AgentRunner implements Runner {
       sdkSessionId,
       signal,
       liveInput: live,
-      runningTools,
-      subagents,
-      bash,
+      tasks,
       blockedByLocalWork: () =>
         (!native && subagents.active) ||
         [...toolWork.values()].some((subagentId) => !native || !subagentId) ||
@@ -477,7 +466,7 @@ export class AgentRunner implements Runner {
         startedAt: now(),
         endedAt: null,
       }));
-      runningTools.set(id, { useId, subagentId });
+      tasks.trackTool(id, { useId, subagentId });
       progress.started(value);
       this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
       return value;
@@ -506,7 +495,7 @@ export class AgentRunner implements Runner {
       if (prior.status !== 'running' && prior.status !== 'awaiting_permission' && prior.endedAt)
         return;
       bash?.complete(id);
-      runningTools.delete(id);
+      tasks.untrackTool(id);
       if (!prior.subagentId) turn.onToolBoundary();
       const skill = skillCalls.get(id);
       if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
@@ -587,12 +576,12 @@ export class AgentRunner implements Runner {
       verifyDispatch,
       signal,
       toolSignal,
-      branchSignal: (id) => branchControllers.get(id)?.signal,
+      branchSignal: (id) => subagents.branchSignal(id),
       toolContext,
       toolWork,
       commands,
       sendInsertion: () => turn.sendInsertion(),
-      claimTool: (ticket, name, args) => subagents.claim(ticket, name, callHash(name, args)),
+      claimTool: (ticket, name, args) => toolGate.claim(ticket, name, args),
       finishTool,
       cleanError: (error) => this.clean(error, Infinity),
       pagedOutputIds,
@@ -653,14 +642,7 @@ export class AgentRunner implements Runner {
           .parse(event.tool_input);
         const id = appToolId(event.tool_use_id, event.agent_id);
         const actor = event.agent_id ? subagents.actor(event.agent_id) : undefined;
-        if (actor) {
-          let controller = branchControllers.get(actor.id);
-          if (!controller) {
-            controller = new AbortController();
-            branchControllers.set(actor.id, controller);
-          }
-          controller.signal.throwIfAborted();
-        }
+        if (actor) subagents.ensureBranchSignal(actor.id).throwIfAborted();
         if (
           actor &&
           !(actor.kind === 'explore' ? exploreTools : workerTools).includes(event.tool_name)
@@ -771,12 +753,7 @@ export class AgentRunner implements Runner {
         const updatedInput = permittedMcp.has(event.tool_name)
           ? {
               ...args,
-              atelierTicket: subagents.ticket(
-                id,
-                event.tool_name,
-                callHash(event.tool_name, args),
-                actor?.id,
-              ),
+              atelierTicket: toolGate.issue(id, event.tool_name, args, actor?.id),
             }
           : rtkCandidate;
         return decision('allow', '受控工具，审批由工作台执行器按本轮设置处理。', updatedInput);
@@ -825,9 +802,9 @@ export class AgentRunner implements Runner {
         const call = this.store.get('tools', id);
         if (call.name !== 'Bash' || call.endedAt) return;
         capturing.add(id);
-        const branch = call.subagentId ? branchControllers.get(call.subagentId) : undefined;
+        const branchSignal = call.subagentId ? subagents.branchSignal(call.subagentId) : undefined;
         const sdkActorId = call.subagentId ? subagents.taskId(call.subagentId) : undefined;
-        const scope = branch ? AbortSignal.any([signal, branch.signal]) : signal;
+        const scope = branchSignal ? AbortSignal.any([signal, branchSignal]) : signal;
         const work =
           hookSession === sdkSessionId
             ? this.files.captureBashLog(
@@ -1142,15 +1119,9 @@ export class AgentRunner implements Runner {
         if (message.type === 'system' && message.subtype === 'init') {
           contextSessionId = message.session_id;
           live.stopSubagent = async (id) => {
-            const sdkId = subagents.taskId(id);
-            if (!connection || !sdkId || !live.stopSubagent)
+            if (!connection || !live.stopSubagent)
               throw new AppError('SUBAGENT_NOT_ACTIVE', '子任务已结束或尚未就绪。', 409);
-            // Abort workbench-owned approvals and commands independently of the parent run.
-            const controller = branchControllers.get(id) ?? new AbortController();
-            branchControllers.set(id, controller);
-            const stopping = connection.stopTask(sdkId);
-            controller.abort();
-            await stopping;
+            await subagents.stop(connection, id);
           };
           if (bash && !turn.isDrainingInput) {
             const sdk = connection;
@@ -1201,20 +1172,18 @@ export class AgentRunner implements Runner {
         } else if (message.type === 'system' && message.subtype === 'session_state_changed') {
           turn.onSessionStateChanged(message.session_id, message.state);
         } else if (message.type === 'system' && message.subtype === 'task_started') {
-          subagents.started(message);
-          bash?.started(message);
+          tasks.handleStarted(message);
         } else if (message.type === 'system' && message.subtype === 'task_updated') {
-          subagents.updated(message);
-          bash?.updated(message);
+          tasks.handleUpdated(message);
           turn.sendInsertion();
         } else if (message.type === 'system' && message.subtype === 'task_notification') {
-          if (subagents.notify(message)) {
+          const { subagentFinished, bashReceipt } = tasks.handleNotification(message);
+          if (subagentFinished) {
             turn.sendInsertion();
             turn.afterDeferredWork();
           }
-          const task = bash?.terminal(message);
-          if (task && !capturing.has(task.id)) {
-            await finishBashTask(task);
+          if (bashReceipt && !capturing.has(bashReceipt.id)) {
+            await finishBashTask(bashReceipt);
             turn.afterDeferredWork();
           }
         } else if (message.type === 'stream_event') {
@@ -1443,6 +1412,7 @@ export class AgentRunner implements Runner {
       const timing = await environment.dispose(async (spans) => {
         const timing = requestTiming.finish(streamEnded, spans?.requests, spans?.omitted);
         await Promise.allSettled([...commands, ...toolWork.keys()]);
+        toolGate.clear();
         subagents.close(
           live.reason === 'user' ? 'stopped' : 'interrupted',
           failure ?? '父运行结束，子任务已清理。',

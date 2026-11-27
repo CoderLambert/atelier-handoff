@@ -1,7 +1,7 @@
 /**
  * @file 从持久化会话历史生成跨轮恢复检查点。
- * @implementation 按会话和执行范围形成有界的用户要求、来源与操作摘要，并按 UTF-8 字节选取近期可见对话。
- * @updated 2026-11-23T18:25:00+08:00
+ * @implementation 按会话和执行范围形成有界的用户要求、来源与操作摘要，直接复用无状态工具证据投影而不依赖停滞观察状态机。
+ * @updated 2026-11-27T19:48:00+08:00
  */
 import type { InheritedMessage, Message, Run, ToolCall } from '../shared/types.js';
 import {
@@ -9,7 +9,7 @@ import {
   checkpointReference,
   checkpointUserExcerpt,
   type ProgressEvidence,
-} from './harness-progress.js';
+} from './tool-evidence.js';
 
 type RecoveryRows = {
   runs: readonly Run[];

@@ -1,45 +1,27 @@
 /**
  * @file 关联单次 SDK 运行的 Bash 调用与原生命令任务。
- * @implementation 根据所属会话的 SDK 回执更新状态，并串行处理同一命令的后台和停止请求。
- * @updated 2026-11-25T22:05:06+08:00
+ * @implementation 复用统一 SDK 任务帧 schema 根据所属会话回执更新状态，并串行处理同一命令的后台和停止请求。
+ * @updated 2026-11-27T19:48:00+08:00
  */
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { BashControl, BashExecution } from '../shared/bash-execution.js';
 import { AppError, now } from '../shared/types.js';
+import { bashTaskFrames, sdkTaskIdentifierSchema } from './modules/runs/sdk-task-coordinator.js';
 
-const identifier = z.string().regex(/^[a-zA-Z0-9_-]{1,200}$/);
-const frame = z.object({
-  session_id: identifier,
-  task_id: identifier,
-  run_id: identifier.optional(),
-  tool_use_id: identifier.optional(),
-});
-const startedFrame = frame.extend({
-  task_type: z.literal('local_bash'),
-  is_backgrounded: z.boolean().optional(),
-  parent_task_id: identifier.optional(),
-});
-const updatedFrame = frame.extend({ patch: z.object({ is_backgrounded: z.literal(true) }) });
-const terminalFrame = frame.extend({
-  status: z.enum(['completed', 'failed', 'stopped']),
-  reason: z.literal('worker_restart').optional(),
-  output_file: z.string().max(4096),
-  summary: z.string(),
-});
 const handoff = z.object({
-  backgroundTaskId: identifier,
+  backgroundTaskId: sdkTaskIdentifierSchema,
   timedOutAfterMs: z.int().positive().optional(),
 });
-const stopInput = z.object({ task_id: identifier });
+const stopInput = z.object({ task_id: sdkTaskIdentifierSchema });
 
-type Frame = z.infer<typeof frame>;
+type Frame = z.infer<typeof bashTaskFrames.base>;
 type Action = BashControl['action'];
 export type BashTaskReceipt = {
   id: string;
   useId: string;
   sdkActorId?: string;
-  receipt: z.infer<typeof terminalFrame>;
+  receipt: z.infer<typeof bashTaskFrames.terminal>;
   failure?: string;
 };
 type Call = {
@@ -102,7 +84,7 @@ export class NativeBashTasks {
   }
 
   started(input: unknown) {
-    const result = startedFrame.safeParse(input);
+    const result = bashTaskFrames.started.safeParse(input);
     if (!result.success || result.data.session_id !== this.sdkSessionId) return;
     const message = result.data;
     const call = [...this.calls.values()].find(
@@ -125,7 +107,7 @@ export class NativeBashTasks {
   }
 
   updated(input: unknown) {
-    const result = updatedFrame.safeParse(input);
+    const result = bashTaskFrames.updated.safeParse(input);
     const call = result.success ? this.owner(result.data) : undefined;
     if (call) this.backgrounded(call);
   }
@@ -184,7 +166,7 @@ export class NativeBashTasks {
   }
 
   terminal(input: unknown) {
-    const result = terminalFrame.safeParse(input);
+    const result = bashTaskFrames.terminal.safeParse(input);
     if (!result.success) return undefined;
     const call = this.owner(result.data);
     if (!call) return undefined;

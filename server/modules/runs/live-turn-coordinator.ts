@@ -1,11 +1,10 @@
 /**
  * @file 管理单轮 SDK 流的实时插话与输入排空。
- * @implementation 维护输入槽、前台任务交接与回执，按执行模式等待空闲或结算；通过运行宿主回调写入消息与发布事件。
- * @updated 2026-11-27T17:49:36+08:00
+ * @implementation 维护输入槽、消费统一 SdkTaskCoordinationView 前后台视图与回执，按执行模式等待空闲或结算；通过运行宿主回调写入消息与发布事件。
+ * @updated 2026-11-27T19:48:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type {
-  Query,
   SDKResultMessage,
   SDKSessionStateChangedMessage,
   SDKUserMessage,
@@ -13,6 +12,12 @@ import type {
 import { AppError } from '../../../shared/types.js';
 import type { NativeBashTasks } from '../../native-bash.js';
 import type { SubagentRun } from '../../subagent-run.js';
+import {
+  createTaskCoordinationView,
+  type RunningToolEntry,
+  type SdkTaskCoordinationView,
+  type TaskBackgroundControl,
+} from './sdk-task-coordinator.js';
 
 export type AttachmentImages = {
   type: 'image';
@@ -88,21 +93,25 @@ export function sdkInputIds(message: {
 }
 
 type Receipt = 'replay' | 'reply' | 'result';
-type BackgroundControl = Pick<Query, 'backgroundTasks' | 'stopTask'>;
 type TimerHandle = ReturnType<typeof setTimeout> | number;
 type ResultAction = 'continue' | 'finish' | 'unfinished-subagents';
 
-interface LiveTurnOptions {
+type TaskCoordinationSource =
+  | { tasks: SdkTaskCoordinationView }
+  | {
+      runningTools: ReadonlyMap<string, RunningToolEntry>;
+      subagents: Pick<
+        SubagentRun,
+        'active' | 'hasBackground' | 'isBackground' | 'canMove' | 'moveToBackground'
+      >;
+      bash?: Pick<NativeBashTasks, 'hasDeferredReceipt' | 'isBackground' | 'canMove' | 'control'>;
+    };
+
+type LiveTurnOptions = TaskCoordinationSource & {
   native: boolean;
   sdkSessionId: string;
   signal: AbortSignal;
   liveInput: { insert?: (message: LiveInput) => void | Promise<void> };
-  runningTools: ReadonlyMap<string, { useId?: string; subagentId?: string }>;
-  subagents: Pick<
-    SubagentRun,
-    'active' | 'hasBackground' | 'isBackground' | 'canMove' | 'moveToBackground'
-  >;
-  bash?: Pick<NativeBashTasks, 'hasDeferredReceipt' | 'isBackground' | 'canMove' | 'control'>;
   blockedByLocalWork(): boolean;
   onInputCheckpoint?(): void;
   persistInput(message: LiveInput): void;
@@ -112,10 +121,11 @@ interface LiveTurnOptions {
   idleTimeoutMs?: number;
   setTimeout?(callback: () => void, delay: number): TimerHandle;
   clearTimeout?(handle: TimerHandle): void;
-}
+};
 
 export class LiveTurnCoordinator {
   private readonly queue = new InputQueue();
+  private readonly tasks: SdkTaskCoordinationView;
   private readonly idleTimeoutMs: number;
   private readonly scheduleTimeout: NonNullable<LiveTurnOptions['setTimeout']>;
   private readonly cancelTimeout: NonNullable<LiveTurnOptions['clearTimeout']>;
@@ -131,6 +141,7 @@ export class LiveTurnCoordinator {
   private finalResult?: SDKResultMessage;
 
   constructor(private readonly options: LiveTurnOptions) {
+    this.tasks = 'tasks' in options ? options.tasks : createTaskCoordinationView(options);
     this.idleTimeoutMs = options.idleTimeoutMs ?? 120_000;
     this.scheduleTimeout = options.setTimeout ?? setTimeout;
     this.cancelTimeout = options.clearTimeout ?? clearTimeout;
@@ -160,7 +171,7 @@ export class LiveTurnCoordinator {
     this.queue.push(text, images, uuid);
   }
 
-  onInitialized(sdk: BackgroundControl) {
+  onInitialized(sdk: TaskBackgroundControl) {
     const firstInit = !this.initialized;
     this.initialized = true;
     if (!this.drainingInput && !this.closing)
@@ -192,7 +203,7 @@ export class LiveTurnCoordinator {
     // This checks whether foreground work can move. Slot ownership is checked separately.
     return (
       !this.options.blockedByLocalWork() &&
-      this.foregroundTools().every((id) => this.canBackground(id))
+      this.tasks.foregroundTools().every((id) => this.tasks.canBackground(id))
     );
   }
 
@@ -202,50 +213,26 @@ export class LiveTurnCoordinator {
       !this.insertion &&
       !this.options.blockedByLocalWork() &&
       (!this.awaitingModel || this.atToolBoundary) &&
-      !this.foregroundTools().length
+      !this.tasks.foregroundTools().length
     );
   }
 
-  private foregroundTools() {
-    const { runningTools, bash, subagents } = this.options;
-    return [...runningTools]
-      .filter(
-        ([id, { subagentId }]) =>
-          !subagentId && !bash?.isBackground(id) && !subagents.isBackground(id),
-      )
-      .map(([id]) => id);
-  }
-
-  private canBackground(id: string) {
-    const { runningTools, bash, subagents } = this.options;
-    const useId = runningTools.get(id)?.useId;
-    return (
-      !!useId &&
-      (subagents.canMove(id) || bash?.canMove(id)) &&
-      [...runningTools.values()].filter((call) => call.useId === useId).length === 1
-    );
-  }
-
-  async insert(message: LiveInput, sdk: BackgroundControl) {
+  async insert(message: LiveInput, sdk: TaskBackgroundControl) {
     if (this.insertion)
       throw new AppError('LIVE_INPUT_BUSY', '上一条补充消息还在处理，请稍后再插入。', 409);
     const current = { message, sent: false, preparing: true };
     this.insertion = current;
-    const { bash, subagents, runningTools, signal } = this.options;
+    const { signal } = this.options;
     try {
-      if (bash && (message.priority ?? 'now') === 'now') {
+      if (this.tasks.hasBash && (message.priority ?? 'now') === 'now') {
         if (!this.canInsertNow())
           throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
         if (message.canDispatch?.() === false)
           throw new AppError('QUEUE_CHANGED', '队列或执行范围已变化。', 409);
-        for (const id of this.foregroundTools()) {
+        for (const id of this.tasks.foregroundTools()) {
           signal.throwIfAborted();
-          if (!runningTools.has(id) || bash.isBackground(id) || subagents.isBackground(id))
-            continue;
-          if (!this.canBackground(id))
-            throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
-          if (subagents.canMove(id)) await subagents.moveToBackground(sdk, id);
-          else await bash.control(sdk, id, 'background');
+          if (!this.tasks.isForeground(id)) continue;
+          await this.tasks.backgroundTool(sdk, id);
         }
       }
       current.preparing = false;
@@ -257,17 +244,18 @@ export class LiveTurnCoordinator {
   }
 
   sendInsertion() {
-    const { bash, signal } = this.options;
+    const { signal } = this.options;
     if (
       this.closing ||
       signal.aborted ||
       !this.initialized ||
       this.options.blockedByLocalWork() ||
-      (bash && this.foregroundTools().length)
+      (this.tasks.hasBash && this.tasks.foregroundTools().length)
     )
       return;
     if (!this.insertion) {
-      if (bash && (!this.awaitingModel || this.atToolBoundary)) this.options.onInputCheckpoint?.();
+      if (this.tasks.hasBash && (!this.awaitingModel || this.atToolBoundary))
+        this.options.onInputCheckpoint?.();
       return;
     }
     if (this.insertion.sent || this.insertion.preparing) return;
@@ -329,24 +317,20 @@ export class LiveTurnCoordinator {
     if (this.hasUnsettledInput()) {
       this.sendInsertion();
       this.awaitInputSettlement();
-    } else if (this.hasDeferredWork()) {
+    } else if (this.tasks.hasDeferredWork) {
       flush();
       this.sendInsertion();
     } else if (
       this.options.native &&
       !this.finalResult?.is_error &&
-      !this.options.subagents.active
+      !this.tasks.hasActiveSubagents
     ) {
       this.afterDeferredWork();
     } else {
       this.options.liveInput.insert = undefined;
-      return this.options.subagents.active ? 'unfinished-subagents' : 'finish';
+      return this.tasks.hasActiveSubagents ? 'unfinished-subagents' : 'finish';
     }
     return 'continue';
-  }
-
-  private hasDeferredWork() {
-    return this.options.bash?.hasDeferredReceipt || this.options.subagents.hasBackground;
   }
 
   private drainInput() {
@@ -362,12 +346,12 @@ export class LiveTurnCoordinator {
   }
 
   private awaitInputSettlement() {
-    const { native, bash } = this.options;
+    const { native } = this.options;
     // An older result can arrive while the native CLI is processing a new input.
     if (
       (native && !this.sdkSessionIdle) ||
       !this.hasUnsettledInput() ||
-      this.hasDeferredWork() ||
+      this.tasks.hasDeferredWork ||
       this.insertionIdleTimer !== undefined
     )
       return;
@@ -376,15 +360,15 @@ export class LiveTurnCoordinator {
       if (
         this.hasUnsettledInput() &&
         (native ? this.sdkSessionIdle : !(this.awaitingResultFor && this.awaitingModel)) &&
-        !this.hasDeferredWork() &&
-        (!bash || !this.foregroundTools().length)
+        !this.tasks.hasDeferredWork &&
+        (!this.tasks.hasBash || !this.tasks.foregroundTools().length)
       )
         this.drainInput();
     }, this.idleTimeoutMs);
   }
 
   afterDeferredWork() {
-    if (this.hasDeferredWork() || !this.finalResult || this.options.subagents.active) return;
+    if (this.tasks.hasDeferredWork || !this.finalResult || this.tasks.hasActiveSubagents) return;
     if (this.hasUnsettledInput()) this.awaitInputSettlement();
     else if (this.options.native ? this.sdkSessionIdle : !this.awaitingModel) this.drainInput();
   }
