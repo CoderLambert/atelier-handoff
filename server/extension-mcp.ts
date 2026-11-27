@@ -125,8 +125,8 @@ export class McpSessions {
     return entry.frame;
   }
 
-  noteBrowserPage(id: string, cwd: string, text: string) {
-    const entry = this.sessions.get(JSON.stringify([id, cwd]));
+  noteBrowserPage(id: string, projectId: string, cwd: string, text: string) {
+    const entry = this.sessions.get(JSON.stringify([id, projectId, cwd]));
     const url = /^- Page URL: (https?:\/\/[^\r\n]+)$/m.exec(text)?.[1];
     if (entry?.browser && url) entry.pageUrl = url.trim();
   }
@@ -141,16 +141,17 @@ export class McpSessions {
     signal: AbortSignal,
     work: (client: Client, secrets: string[]) => Promise<T>,
     verify?: () => void | Promise<void>,
+    projectId = server.projectId,
   ): Promise<T> {
     signal.throwIfAborted();
     await verify?.();
     signal.throwIfAborted();
-    const key = JSON.stringify([server.id, cwd]);
-    const transportKey = JSON.stringify([server.projectId, cwd, server.transport]);
+    const key = JSON.stringify([server.id, projectId, cwd]);
+    const transportKey = JSON.stringify(server.transport);
     let session = this.sessions.get(key);
     if (session && session.transportKey !== transportKey) {
       await this.closeEntry(key);
-      return this.use(server, cwd, signal, work, verify);
+      return this.use(server, cwd, signal, work, verify, projectId);
     }
     if (!session) {
       if (this.sessions.size >= 8)
@@ -163,7 +164,7 @@ export class McpSessions {
         transportKey,
         id: server.id,
         cwd,
-        projectId: server.projectId,
+        projectId,
         tail: Promise.resolve(),
       };
       this.sessions.set(key, session);
@@ -327,6 +328,7 @@ export async function callMcp(
   beforeCall?: () => void | Promise<void>,
   sessions?: McpSessions,
   publishScreenshot?: (data: string) => Promise<string>,
+  projectId = server.projectId,
 ): Promise<string> {
   if (!server.allowedTools.some((tool) => tool.name === name))
     throw new AppError('MCP_TOOL_NOT_ALLOWED', '当前运行未选择此工具。', 403);
@@ -372,7 +374,7 @@ export async function callMcp(
     }
     let text = blocks.join('\n');
     if (!result.isError && name.startsWith('browser_'))
-      sessions?.noteBrowserPage(server.id, cwd, text);
+      sessions?.noteBrowserPage(server.id, projectId, cwd, text);
     for (const secret of secrets) text = text.replaceAll(secret, '[已隐藏]');
     if (result.isError)
       throw new AppError(
@@ -383,6 +385,6 @@ export async function callMcp(
     return text.length > 32000 ? text.slice(0, 32000) + '\n[结果已截断]' : text || '工具执行完成。';
   };
   return sessions && server.transport.type === 'stdio' && server.transport.keepAlive
-    ? sessions.use(server, cwd, signal, work, beforeCall)
+    ? sessions.use(server, cwd, signal, work, beforeCall, projectId)
     : useClient(server, cwd, signal, work);
 }

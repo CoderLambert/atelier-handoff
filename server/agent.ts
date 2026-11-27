@@ -85,7 +85,7 @@ import { createHarnessProcess } from './harness-process.js';
 import { NativeBashTasks, type BashTaskReceipt } from './native-bash.js';
 import { ProjectWrites, SubagentRun } from './subagent-run.js';
 import { callMcp, isLegacyDesktopPlaywright, McpSessions } from './extension-mcp.js';
-import type { EnabledMcp } from './extensions.js';
+import { isSharedMcp, type EnabledMcp } from './extensions.js';
 import { desktopBrowserArgs, type DesktopBrowserToolName } from '../shared/desktop-browser.js';
 import { callDesktopBrowser } from './desktop-browser.js';
 import type { DesktopBrowserAccess } from './desktop-browser-access.js';
@@ -321,10 +321,10 @@ export class AgentRunner implements Runner {
     if (native && (run.mode !== 'edit' || run.agent || run.retryOf || process.platform !== 'linux'))
       throw new AppError('NATIVE_EXECUTION_UNAVAILABLE', '此运行不支持本机执行。', 409);
     const automaticApproval = run.approvalMode === 'automatic';
-    const approvalInstruction = automaticApproval
-      ? '本轮已启用全工具自动化，应用会自动裁决本轮已授权工具的审批。按工具返回结果继续任务。'
-      : '本轮按工具操作需要逐次审批。';
     const project = this.store.get('projects', run.projectId);
+    const approvalInstruction = automaticApproval
+      ? '本轮已启用全工具自动化，应用会自动裁决本轮已授权工具的审批；跨项目 MCP 调用仍需逐次人工审批。按工具返回结果继续任务。'
+      : '本轮按工具操作需要逐次审批。';
     const workingDirectory = run.workspacePath ?? project.path;
     const session = this.store.get('sessions', run.sessionId);
     const allowed = (capability: AgentCapability) =>
@@ -1645,6 +1645,7 @@ export class AgentRunner implements Runner {
         );
     }
     for (const [serverIndex, server] of mcp.entries()) {
+      const shared = server.projectId !== project.id;
       for (const [toolIndex, selected] of server.allowedTools.entries()) {
         const definition = server.tools.find((tool) => tool.name === selected.name)!;
         const description = `${server.name}/${selected.name} — ${definition.description}
@@ -1660,7 +1661,23 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
               const encoded = JSON.stringify(args);
               if (Buffer.byteLength(encoded) > 64 * 1024)
                 throw new AppError('MCP_ARGUMENTS_TOO_LARGE', 'MCP 工具参数过大。', 413);
-              if (selected.access === 'approval') {
+              const recheck = () => {
+                verifyCurrent();
+                const current = this.store.get('extensions', server.id);
+                if (
+                  current.kind !== 'mcp' ||
+                  !current.enabled ||
+                  current.projectId !== server.projectId ||
+                  current.version !== server.version ||
+                  (shared && !isSharedMcp(current)) ||
+                  !current.allowedTools.some(
+                    (tool) => tool.name === selected.name && tool.access === selected.access,
+                  )
+                )
+                  throw new AppError('MCP_TOOL_NOT_ALLOWED', 'MCP 工具授权或配置已变更。', 403);
+              };
+              recheck();
+              if (shared || selected.access === 'approval') {
                 if (run.mode !== 'edit')
                   throw new AppError('MCP_TOOL_NOT_ALLOWED', '此工具需要受控修改模式。', 403);
                 await this.permissions.request(
@@ -1671,24 +1688,12 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                     kind: 'mcp',
                     command: `${server.name}/${selected.name}\n${JSON.stringify(args, null, 2)}`,
                     reason: `向 MCP 服务 ${server.name} 发送参数并执行 ${selected.name}。`,
+                    requireManual: shared,
                   },
                   toolSignal(),
                 );
+                recheck();
               }
-              const recheck = () => {
-                verifyCurrent();
-                const current = this.store.get('extensions', server.id);
-                if (
-                  current.kind !== 'mcp' ||
-                  !current.enabled ||
-                  current.version !== server.version ||
-                  !current.allowedTools.some(
-                    (tool) => tool.name === selected.name && tool.access === selected.access,
-                  )
-                )
-                  throw new AppError('MCP_TOOL_NOT_ALLOWED', 'MCP 工具授权或配置已变更。', 403);
-              };
-              recheck();
               const identity = { server: server.name, tool: selected.name, toolCallId: id };
               this.store.event(run.id, session.id, 'mcp.call_started', identity);
               try {
@@ -1704,6 +1709,7 @@ Input JSON Schema: ${JSON.stringify(definition.inputSchema ?? {})}`;
                   },
                   this.mcpSessions,
                   publishScreenshot,
+                  project.id,
                 );
                 toolSignal().throwIfAborted();
                 this.store.event(run.id, session.id, 'mcp.call_finished', {

@@ -21,6 +21,18 @@ import type { PublicImportInput } from '../shared/public-extensions.js';
 import { fingerprint } from './files.js';
 
 type McpExtension = Extract<Extension, { kind: 'mcp' }>;
+
+export function isSharedMcp(item: Extension): item is McpExtension {
+  return (
+    item.kind === 'mcp' &&
+    item.transport.type === 'stdio' &&
+    item.provider !== 'playwright-browser' &&
+    item.shareAcrossProjects === true &&
+    item.enabled &&
+    item.status === 'connected' &&
+    item.allowedTools.some(({ name }) => item.tools.some((tool) => tool.name === name))
+  );
+}
 const name = z
   .string()
   .trim()
@@ -81,6 +93,7 @@ const extensionInput = z.union([
     ...shared,
     kind: z.literal('mcp'),
     autoUseInChat: z.boolean().optional(),
+    shareAcrossProjects: z.boolean().optional(),
     transport: z.union([http, stdio]),
     allowedTools: z
       .array(z.object({ name: toolName, access: z.enum(['read', 'approval']) }))
@@ -207,6 +220,15 @@ export class ProjectExtensions {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  selectionCatalog(projectId: string): Extension[] {
+    const local = this.list(projectId);
+    const names = new Set(local.filter((item) => item.kind === 'mcp').map(({ name }) => name));
+    const shared = this.store
+      .list('extensions')
+      .filter((item) => item.projectId !== projectId && isSharedMcp(item) && !names.has(item.name));
+    return [...local, ...shared].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   get(projectId: string, id: string): Extension {
     const record = this.store.get('extensions', id);
     if (record.projectId !== projectId) throw new AppError('NOT_FOUND', '项目扩展不存在。', 404);
@@ -263,12 +285,18 @@ export class ProjectExtensions {
       const allowedTools = [
         ...new Map(input.allowedTools.map((entry) => [entry.name, entry])).values(),
       ].filter((entry) => tools.some((tool) => tool.name === entry.name));
+      const provider = browserProvider(input.transport);
+      const shareAcrossProjects =
+        input.transport.type === 'stdio' &&
+        provider.provider !== 'playwright-browser' &&
+        input.shareAcrossProjects === true;
       record = {
         ...base,
         kind: 'mcp',
         transport: input.transport,
-        ...browserProvider(input.transport),
-        autoUseInChat: input.autoUseInChat,
+        ...provider,
+        ...(input.shareAcrossProjects !== undefined ? { shareAcrossProjects } : {}),
+        autoUseInChat: shareAcrossProjects ? false : input.autoUseInChat,
         source: input.transport.type === 'stdio' ? '本机进程' : 'HTTP',
         tools,
         allowedTools,
@@ -462,7 +490,9 @@ export class ProjectExtensions {
     selections: ExtensionSelection[],
     scope?: ReadonlySet<string>,
   ): ExtensionBundle {
-    const catalog = this.list(projectId).filter((item) => !scope || scope.has(item.id));
+    const catalog = (
+      scope || !selections.length ? this.list(projectId) : this.selectionCatalog(projectId)
+    ).filter((item) => !scope || scope.has(item.id));
     const supplied = new Map(selections.map((selection) => [selection.id, selection]));
     const slash = /^\/([a-z0-9][a-z0-9_-]{0,63})(?:\s+|$)/.exec(text);
     let args = text;
@@ -482,6 +512,7 @@ export class ProjectExtensions {
           item.kind !== 'mcp' ||
           this.isLegacyBrowserUnavailable(item) ||
           !item.enabled ||
+          item.shareAcrossProjects ||
           !item.autoUseInChat ||
           item.status !== 'connected' ||
           supplied.has(item.id)
@@ -524,10 +555,12 @@ export class ProjectExtensions {
           '请移除本轮的 Playwright 选择，然后在右侧浏览器面板启用 Agent 控制。',
           409,
         );
+      const shared = item.projectId !== projectId;
       const allowed = item.allowedTools.filter(
         (tool) =>
           (selection.tools === undefined || selection.tools.includes(tool.name)) &&
-          (mode === 'edit' || tool.access === 'read'),
+          (mode === 'edit' || (!shared && tool.access === 'read')) &&
+          (!shared || item.tools.some(({ name }) => name === tool.name)),
       );
       if (
         !allowed.length ||

@@ -14,7 +14,14 @@ import { previewPublic, type PublicEntry } from '../../public-extensions.js';
 export interface ExtensionServiceOptions {
   extensions: Pick<
     ProjectExtensions,
-    'list' | 'get' | 'save' | 'remove' | 'installedGithubVersion' | 'savePublic' | 'recordTest'
+    | 'list'
+    | 'selectionCatalog'
+    | 'get'
+    | 'save'
+    | 'remove'
+    | 'installedGithubVersion'
+    | 'savePublic'
+    | 'recordTest'
   >;
   mcpSessions: Pick<McpSessions, 'close' | 'preview'>;
   getProject(projectId: string): Pick<Project, 'path'>;

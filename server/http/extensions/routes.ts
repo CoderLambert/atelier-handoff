@@ -48,7 +48,9 @@ export function createExtensionRoutes(options: ExtensionRoutesOptions): RouteHan
     if (resource !== 'extensions') return false;
 
     if (parts.length === 4 && method === 'GET')
-      return json(res, { items: service.listPublicExtensions(projectId) });
+      return json(res, {
+        items: service.listPublicExtensions(projectId, url.searchParams.get('scope') === 'picker'),
+      });
     if (parts.length === 4 && method === 'POST')
       return json(res, { item: extensions.save(projectId, await body(req)) }, 201);
 
