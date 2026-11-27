@@ -36,7 +36,7 @@
 <li><a href="#decisions">16 待技术验证的事项</a></li>
 <li><a href="#sources">17 资料来源与维护规则</a></li>
 </ol>
-<div class="nav-links"><a href="../prototype/index.html">打开归档设计原型 ↗</a><a href="../README.md">阅读项目入口 ↗</a><a href="development-tasks.md">开发任务清单 ↗</a><a href="../image.png">查看原始参考图 ↗</a></div>
+<div class="nav-links"><a href="../prototype/index.html">打开归档设计原型 ↗</a><a href="../README.md">阅读项目入口 ↗</a><a href="development-tasks.md">开发任务清单 ↗</a><a href="assets/design-reference.png">查看原始参考图 ↗</a></div>
 </nav>
 <main class="document"><article>
 <header><p class="eyebrow">PRODUCT &amp; ENGINEERING HANDOFF</p><h1>AI 工作台<br>产品与开发交接说明</h1><p class="lead">以当前 atelier. 交互设计为基线，将对话、执行、审批与成果串成可以逐步实现、验证和交付的产品闭环。</p><div class="meta"><span class="tag">设计基线：第二轮优化版</span><span class="tag">目标：个人开发者 · 本机项目</span><span class="tag">本机首版已接入真实 SDK</span></div></header>
@@ -45,7 +45,7 @@
 <div class="note"><p><strong>三种信息必须区分：</strong>“原型现状”来自现有源码；“目标需求”是正式产品需要达到的行为；“建议方案 / 待验证”尚未通过真实 SDK 或运行环境验证，不能当作已存在的能力。</p></div>
 <div class="table-wrap"><table><caption>交接内容与事实状态</caption><thead><tr><th>内容</th><th>交接位置</th><th>状态</th></tr></thead><tbody>
 <tr><td>可编辑交互原型</td><td><code>index.html</code>、<code>styles.css</code>、<code>app.js</code></td><td>已有静态源码；模拟执行、审批和交付物</td></tr>
-<tr><td>原始参考素材</td><td><code>image.png</code></td><td>项目已有图片，供设计对照，不是新版界面截图</td></tr>
+<tr><td>原始参考素材</td><td><code>docs/assets/design-reference.png</code></td><td>项目已有图片，供设计对照，不是新版界面截图</td></tr>
 <tr><td>完整开发说明</td><td><code>docs/development-guide.html</code></td><td>本次整理；可在浏览器阅读并使用浏览器打印</td></tr>
 <tr><td>开发入口与任务清单</td><td><code>README.md</code>、<code>docs/development-tasks.md</code></td><td>本次整理；Markdown，可直接放入代码仓库</td></tr>
 <tr><td>移交压缩包</td><td><code>atelier-handoff.zip</code></td><td>收录上述设计、参考素材和文档；不包含宿主内部文件</td></tr>
@@ -239,7 +239,7 @@ Idempotency-Key: {clientRequestId}
 <tr><td>index.html</td><td>三栏结构、导航、标签、输入框、侧栏与 dialog 容器</td><td>使用固定 DOM ID 和 data-action；脚本依赖这些标识，迁移时成组处理</td></tr>
 <tr><td>styles.css</td><td>布局基础、设计变量、组件样式、响应式和 reduced-motion</td><td>:root 为设计变量主入口；按组件分组；保留原生 hidden 与 closed-dialog 行为</td></tr>
 <tr><td>app.js</td><td>内存状态、本地缓存、渲染、事件代理、模拟执行与下载</td><td>正式开发重点替换模拟状态来源，拆分 Session / Run / ToolCall / Permission</td></tr>
-<tr><td>image.png</td><td>原始视觉参考</td><td>仅作为参考素材链接；当前界面由 HTML / CSS 绘制，不嵌入截图</td></tr>
+<tr><td>docs/assets/design-reference.png</td><td>原始视觉参考</td><td>仅作为参考素材链接；当前界面由 HTML / CSS 绘制，不嵌入截图</td></tr>
 </tbody></table></div>
 <div class="table-wrap"><table><caption>关键函数与交互入口</caption><thead><tr><th>函数 / 数据</th><th>对应能力</th><th>正式开发处理</th></tr></thead><tbody>
 <tr><td>initial / statusMap</td><td>种子会话、演示状态映射</td><td>移入明确的开发夹具；正式运行不混入示例数据</td></tr>
@@ -324,7 +324,7 @@ Idempotency-Key: {clientRequestId}
 </tbody></table></div>
 </section>
 <section id="sources"><span class="section-number">17 / SOURCES &amp; MAINTENANCE</span><h2>资料来源与维护规则</h2>
-<ul><li>用户原始需求：参考所给界面，设计底层封装 Claude SDK 的 AI 工作台。</li><li>用户提供的原始参考图：项目文件 <a href="../image.png">image.png</a>。仅作为设计参考保留；作者和许可未提供，不宣称获得额外发布授权。</li><li>当前设计基线：本项目 <a href="../index.html">index.html</a>、<a href="../styles.css">styles.css</a> 与 <a href="../app.js">app.js</a> 的第二轮优化版本。</li><li>前文《产品开发功能说明书 v1.0》：定位、F01—F16、对象与状态、审批约束、验收和阶段划分已纳入本文。</li><li>初始交接中的 SDK/API 内容为应用侧设计建议；2026-11-18 的 T01 已补充官方文档核实与固定版本实测，来源和限制见 <a href="t01-sdk-validation.md">T01 验证报告</a>。本文建议的产品 HTTP 接口仍未实现。</li></ul>
+<ul><li>用户原始需求：参考所给界面，设计底层封装 Claude SDK 的 AI 工作台。</li><li>用户提供的原始参考图：项目文件 <a href="assets/design-reference.png">docs/assets/design-reference.png</a>。仅作为设计参考保留；作者和许可未提供，不宣称获得额外发布授权。</li><li>当前设计基线：本项目 <a href="../index.html">index.html</a>、<a href="../styles.css">styles.css</a> 与 <a href="../app.js">app.js</a> 的第二轮优化版本。</li><li>前文《产品开发功能说明书 v1.0》：定位、F01—F16、对象与状态、审批约束、验收和阶段划分已纳入本文。</li><li>初始交接中的 SDK/API 内容为应用侧设计建议；2026-11-18 的 T01 已补充官方文档核实与固定版本实测，来源和限制见 <a href="t01-sdk-validation.md">T01 验证报告</a>。本文建议的产品 HTTP 接口仍未实现。</li></ul>
 <p><strong>维护顺序：</strong>产品行为变更更新本文对应功能编号；实施进度与证据更新任务清单；文件与启动入口变更更新 README；设计变量只维护 styles.css；重新交接时从明确文件清单重新打包 ZIP。压缩包是快照，源码或文档后续修改不会自动同步进旧 ZIP。</p>
 <p>不将 .od-frames、宿主 artifact 元数据、内部运行输入或代理环境文件作为产品交接依赖。交付包不需要这些文件即可阅读设计和资料。</p>
 </section>

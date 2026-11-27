@@ -250,4 +250,4 @@ docs/development-guide.html     初始设计需求与交接说明
 docs/development-tasks.md       T01—T20 状态
 ```
 
-初始技术验证报告保留在 [T01 SDK 验证记录](docs/t01-sdk-validation.md)。原始参考图 [image.png](image.png) 仅用于设计对照，其作者与许可未随素材提供。旧交接 ZIP 是初始快照，本轮未自动重打包。
+初始技术验证报告保留在 [T01 SDK 验证记录](docs/t01-sdk-validation.md)。原始参考图 [docs/assets/design-reference.png](docs/assets/design-reference.png) 仅用于设计对照，其作者与许可未随素材提供。旧交接 ZIP 是初始快照，本轮未自动重打包。
