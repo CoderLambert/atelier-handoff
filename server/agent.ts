@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
- * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，委托 MCP 模块装配工具，按输入 UUID 确认消息。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，停止后的通知附带标记，诊断文本统一脱敏。
- * @updated 2026-11-27T17:26:33+08:00
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，委托运行模块装配 MCP 工具及管理实时输入。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，停止后的通知附带标记，诊断文本统一脱敏。
+ * @updated 2026-11-27T17:49:36+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -25,7 +25,6 @@ import {
   createSdkMcpServer,
   type HookCallback,
   type SDKUserMessage,
-  type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { BashControl } from '../shared/bash-execution.js';
@@ -84,75 +83,16 @@ import {
   type RunSkill,
 } from './run-skills.js';
 import { executeSkillPackage } from './skill-package-runtime.js';
+import {
+  LiveTurnCoordinator,
+  sdkInputIds,
+  type AttachmentImages,
+  type LiveInput,
+} from './modules/runs/live-turn-coordinator.js';
 import { buildRunMcpTools } from './modules/runs/mcp-tools/index.js';
 import { hasSkillToolBindingConfig, readSkillToolBindings } from './skill-tool-bindings.js';
 
-export type AttachmentImages = {
-  type: 'image';
-  source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg'; data: string };
-}[];
-
-class InputQueue {
-  private values: SDKUserMessage[] = [];
-  private ended = false;
-  private wake?: () => void;
-  push(
-    text: string,
-    images: AttachmentImages = [],
-    uuid: NonNullable<SDKUserMessage['uuid']> = randomUUID(),
-    priority?: 'next' | 'now',
-  ) {
-    this.values.push({
-      type: 'user',
-      message: {
-        role: 'user',
-        content: images.length ? [{ type: 'text', text }, ...images] : text,
-      },
-      parent_tool_use_id: null,
-      uuid,
-      ...(priority
-        ? {
-            priority,
-            origin: { kind: 'human' as const },
-            client_composed: true as const,
-          }
-        : {}),
-    });
-    this.wake?.();
-  }
-  end() {
-    this.ended = true;
-    this.wake?.();
-  }
-  async *[Symbol.asyncIterator](): AsyncGenerator<SDKUserMessage> {
-    while (true) {
-      if (this.values.length) {
-        yield this.values.shift()!;
-        continue;
-      }
-      if (this.ended) return;
-      await new Promise<void>((resolve) => {
-        this.wake = resolve;
-      });
-      this.wake = undefined;
-    }
-  }
-}
-export interface LiveInput {
-  id: NonNullable<SDKUserMessage['uuid']>;
-  text: string;
-  priority?: 'next' | 'now';
-  canDispatch?(): boolean;
-  dispatched(): void;
-  confirmed(): void;
-  released(): void;
-}
-
-function sdkInputIds(message: { user_message_uuid?: string; user_message_uuids?: string[] }) {
-  return (
-    message.user_message_uuids ?? (message.user_message_uuid ? [message.user_message_uuid] : [])
-  );
-}
+export type { AttachmentImages, LiveInput } from './modules/runs/live-turn-coordinator.js';
 
 interface LiveRun {
   cancellation: AbortController;
@@ -298,13 +238,12 @@ export class AgentRunner implements Runner {
     const session = this.store.get('sessions', run.sessionId);
     const allowed = (capability: AgentCapability) =>
       !run.agent || run.agent.capabilities.includes(capability);
-    let closing = false;
     const branchControllers = new Map<string, AbortController>();
     const toolContext = new AsyncLocalStorage<AbortSignal>();
     const toolSignal = () => toolContext.getStore() ?? signal;
     const verifyCurrent = () => {
       toolSignal().throwIfAborted();
-      if (closing) throw new AppError('RUN_STOPPED', '运行正在收尾。', 409);
+      if (turn.isClosing) throw new AppError('RUN_STOPPED', '运行正在收尾。', 409);
       validateAgent?.();
     };
     const verifyDispatch = async () => {
@@ -374,7 +313,6 @@ export class AgentRunner implements Runner {
       this.store.event(run.id, session.id, 'sdk.context_restarted', {
         reason: '本轮权限、模型或扩展范围变化，保留应用历史并新建 SDK 上下文。',
       });
-    const input = new InputQueue();
     let connection: ReturnType<typeof query> | undefined;
     let child: ChildProcessWithoutNullStreams | undefined;
     let childExit: Promise<void> | undefined;
@@ -441,9 +379,7 @@ export class AgentRunner implements Runner {
       return messages.length ? messages.join('\n') : undefined;
     };
     let firstText = true;
-    let initialized = false;
     let observedModel = modelId;
-    let finalResult: SDKResultMessage | undefined;
     let failure: string | null = null;
     let cleanupUncertain = false;
     let lastHeartbeat = 0;
@@ -518,33 +454,6 @@ export class AgentRunner implements Runner {
     let assistantId = createAssistant();
     transcript.associateInput(promptMessageId, assistantId);
     let assistantAnchor: string | undefined;
-    let insertion: { message: LiveInput; sent: boolean; preparing?: boolean } | undefined;
-    live.hasLiveInputSlot = () => !insertion;
-    let insertionIdleTimer: ReturnType<typeof setTimeout> | undefined;
-    const clearInputIdleTimer = () => {
-      clearTimeout(insertionIdleTimer);
-      insertionIdleTimer = undefined;
-    };
-    let awaitingResultFor: string | undefined;
-    const hasUnsettledInput = () => Boolean(insertion || awaitingResultFor);
-    const acknowledgeInsertion = (
-      sdkSession: string | undefined,
-      consumed: readonly string[],
-      receipt: 'replay' | 'reply' | 'result',
-    ) => {
-      if (signal.aborted || sdkSession !== sdkSessionId || !insertion?.sent) return;
-      const { message } = insertion;
-      if (!consumed.includes(message.id)) return;
-      message.confirmed();
-      transcript.acknowledgeInput(message.id);
-      awaitingResultFor = message.id;
-      insertion = undefined;
-      clearInputIdleTimer();
-      this.store.event(run.id, run.sessionId, 'sdk.input_confirmed', {
-        messageId: message.id,
-        receipt,
-      });
-    };
     let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
     const flush = () => {
       const changes = transcript.takeChanges();
@@ -563,71 +472,41 @@ export class AgentRunner implements Runner {
       transcriptNotices.push(notice);
       saveTranscript();
     };
-    let atToolBoundary = false;
-    let awaitingModel = true;
-    let sdkSessionIdle = false;
-    const hasDeferredWork = () => bash?.hasDeferredReceipt || subagents.hasBackground;
-    const blockedByLocalWork = () =>
-      (!native && subagents.active) ||
-      [...toolWork.values()].some((subagentId) => !native || !subagentId) ||
-      commands.size > 0 ||
-      this.store.get('runs', run.id).status === 'awaiting_permission';
-    const foregroundTools = () =>
-      [...runningTools]
-        .filter(
-          ([id, { subagentId }]) =>
-            !subagentId && !bash?.isBackground(id) && !subagents.isBackground(id),
-        )
-        .map(([id]) => id);
-    const canBackground = (id: string) => {
-      const useId = runningTools.get(id)?.useId;
-      return (
-        !!useId &&
-        (subagents.canMove(id) || bash?.canMove(id)) &&
-        [...runningTools.values()].filter((call) => call.useId === useId).length === 1
-      );
-    };
-    const sendInsertion = () => {
-      if (
-        closing ||
-        signal.aborted ||
-        !initialized ||
-        blockedByLocalWork() ||
-        (bash && foregroundTools().length)
-      )
-        return;
-      if (!insertion) {
-        if (bash && (!awaitingModel || atToolBoundary)) this.onInputCheckpoint?.(session.id);
-        return;
-      }
-      if (insertion.sent || insertion.preparing) return;
-      const { message } = insertion;
-      if (message.canDispatch?.() === false) {
-        insertion = undefined;
-        message.released();
-        return;
-      }
-      message.dispatched();
-      insertion.sent = true;
-      flush();
-      this.store.put('messages', {
-        id: message.id,
-        runId: run.id,
-        sessionId: session.id,
-        role: 'user',
-        text: message.text,
-        createdAt: now(),
-        transcriptOrder: transcript.nextOrder(),
-      });
-      assistantId = createAssistant();
-      transcript.associateInput(message.id, assistantId);
-      assistantAnchor = undefined;
-      awaitingModel = true;
-      sdkSessionIdle = false;
-      if (native) clearInputIdleTimer();
-      input.push(message.text, [], message.id, message.priority ?? 'now');
-      this.store.event(run.id, session.id, 'message.delta', { messageId: message.id });
-    };
+    const turn = new LiveTurnCoordinator({
+      native,
+      sdkSessionId,
+      signal,
+      liveInput: live,
+      runningTools,
+      subagents,
+      bash,
+      blockedByLocalWork: () =>
+        (!native && subagents.active) ||
+        [...toolWork.values()].some((subagentId) => !native || !subagentId) ||
+        commands.size > 0 ||
+        this.store.get('runs', run.id).status === 'awaiting_permission',
+      onInputCheckpoint: () => this.onInputCheckpoint?.(session.id),
+      persistInput: (message) => {
+        flush();
+        this.store.put('messages', {
+          id: message.id,
+          runId: run.id,
+          sessionId: session.id,
+          role: 'user',
+          text: message.text,
+          createdAt: now(),
+          transcriptOrder: transcript.nextOrder(),
+        });
+        assistantId = createAssistant();
+        transcript.associateInput(message.id, assistantId);
+        assistantAnchor = undefined;
+      },
+      publishInput: (messageId) =>
+        this.store.event(run.id, session.id, 'message.delta', { messageId }),
+      acknowledgeTranscriptInput: (messageId) => transcript.acknowledgeInput(messageId),
+      event: (type, payload) => this.store.event(run.id, run.sessionId, type, payload),
+    });
+    live.hasLiveInputSlot = () => turn.hasLiveInputSlot();
     const flushTimer = setInterval(flush, 80);
     const appToolId = (id: string, agentId?: string) =>
       agentId ? `${run.id}:${agentId}:${id}` : `${run.id}:${id}`;
@@ -775,7 +654,7 @@ export class AgentRunner implements Runner {
         return;
       bash?.complete(id);
       runningTools.delete(id);
-      if (!prior.subagentId) atToolBoundary = true;
+      if (!prior.subagentId) turn.onToolBoundary();
       const skill = skillCalls.get(id);
       if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
       if (output.length > 32000) this.files.saveOutput(id, output);
@@ -826,11 +705,11 @@ export class AgentRunner implements Runner {
           const stop = live.stopSubagent;
           const branch = finished.subagentId;
           setImmediate(() => {
-            if (!closing && !signal.aborted) void stop(branch).catch(() => undefined);
+            if (!turn.isClosing && !signal.aborted) void stop(branch).catch(() => undefined);
           });
         }
       }
-      if (!prior.subagentId && finished.endedAt && !closing)
+      if (!prior.subagentId && finished.endedAt && !turn.isClosing)
         requestTiming.finishedMainTool(Date.parse(finished.endedAt));
       this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
       if (skill && status === 'succeeded') {
@@ -859,7 +738,7 @@ export class AgentRunner implements Runner {
       toolContext,
       toolWork,
       commands,
-      sendInsertion,
+      sendInsertion: () => turn.sendInsertion(),
       claimTool: (ticket, name, args) => subagents.claim(ticket, name, callHash(name, args)),
       finishTool,
       cleanError: (error) => this.clean(error, Infinity),
@@ -1077,7 +956,7 @@ export class AgentRunner implements Runner {
         hookSession: string,
         outcome: true | 'stopped',
       ) => {
-        if (!seenTools.has(id) || capturing.has(id) || closing) return;
+        if (!seenTools.has(id) || capturing.has(id) || turn.isClosing) return;
         const call = this.store.get('tools', id);
         if (call.name !== 'Bash' || call.endedAt) return;
         capturing.add(id);
@@ -1102,7 +981,7 @@ export class AgentRunner implements Runner {
         try {
           captured = await work;
           toolWork.delete(work);
-          if (scope.aborted || closing) return;
+          if (scope.aborted || turn.isClosing) return;
           const saved = finishTool(id, outcome, raw, captured);
           committed = !!saved;
           return saved;
@@ -1111,7 +990,7 @@ export class AgentRunner implements Runner {
           capturing.delete(id);
           if (!committed && (captured?.status === 'complete' || captured?.status === 'partial'))
             await this.files.discardBashLog(id);
-          sendInsertion();
+          turn.sendInsertion();
         }
       };
       const finishBashTask = async (task: BashTaskReceipt) => {
@@ -1148,7 +1027,7 @@ export class AgentRunner implements Runner {
               ),
           captured,
         );
-        sendInsertion();
+        turn.sendInsertion();
       };
       const documentManifest: {
         name: string;
@@ -1264,7 +1143,7 @@ export class AgentRunner implements Runner {
         ...localSkillPlugins,
       ].map((path) => ({ type: 'local' as const, path }));
       connection = query({
-        prompt: input,
+        prompt: turn.input,
         options: {
           cwd: workingDirectory,
           model: modelId,
@@ -1348,8 +1227,8 @@ export class AgentRunner implements Runner {
                       if (event.session_id !== sdkSessionId || event.agent_id) return {};
                       const id = appToolId(event.tool_use_id, event.agent_id);
                       subagents.report(id, event.tool_response);
-                      atToolBoundary = true;
-                      sendInsertion();
+                      turn.onToolBoundary();
+                      turn.sendInsertion();
                       return {};
                     }
                     if (event.tool_name === 'TodoWrite') {
@@ -1372,11 +1251,11 @@ export class AgentRunner implements Runner {
                       const raw = JSON.stringify(response) ?? '';
                       if (event.tool_name === 'Bash' && bash && event.session_id === sdkSessionId) {
                         recordRtkReceipt(id, event.tool_input);
-                        if (!event.agent_id) atToolBoundary = true;
+                        if (!event.agent_id) turn.onToolBoundary();
                         const handoff = bash.handedOff(id, response);
                         if (handoff) {
                           if (handoff.terminal) await finishBashTask(handoff.terminal);
-                          sendInsertion();
+                          turn.sendInsertion();
                           return {};
                         }
                       }
@@ -1406,7 +1285,7 @@ export class AgentRunner implements Runner {
                       }
                       if (replacement || logNote) pagedOutputIds.add(id);
                     }
-                    sendInsertion();
+                    turn.sendInsertion();
                     const context = [feedbackFor(id), replacement?.context, logNote]
                       .filter(Boolean)
                       .join('\n');
@@ -1443,7 +1322,7 @@ export class AgentRunner implements Runner {
                           signal.aborted || event.is_interrupt === true ? 'stopped' : 'failed',
                           error,
                         );
-                        sendInsertion();
+                        turn.sendInsertion();
                         return {};
                       }
                       const saved = finishTool(
@@ -1454,7 +1333,7 @@ export class AgentRunner implements Runner {
                         error,
                         event.tool_name === 'Bash' ? { status: 'receipt-only' } : undefined,
                       );
-                      sendInsertion();
+                      turn.sendInsertion();
                       const pointer =
                         saved && error.length > inlineOutputLimit
                           ? [
@@ -1560,48 +1439,14 @@ ${JSON.stringify(nativePackagePaths)}
       const weatherGuidance = weatherEnabled
         ? '用户请求实时天气或近期预报时，先调用 weather_lookup。可以使用城市的常用英文名（如昆山用 Kunshan）或用户提供的坐标。回复中注明来源、匹配地点和观测时间。\n\n'
         : '';
-      input.push(
+      turn.enqueueInitialPrompt(
         `${native ? projectInstructionContext(workingDirectory) : ''}${checkpoint ? checkpoint + '\n\n' : ''}${historyContext ? '<prior_conversation>\n' + historyContext + '\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n' : ''}本轮运行模式：${modeInstruction}${allowed('plan') ? '计划工具为 update_plan。' : ''}\n\n${skillDelivery}${packageGuidance}${packagePathsGuidance}${weatherGuidance}${bindingGuidance.length ? `本轮 Skill 工具绑定（优先使用绑定工具，无需照抄 Skill 中的命令）：\n${bindingGuidance.join('\n')}\n\n` : ''}${attachmentGuidance}用户本轮任务：\n${inputText}`,
         images,
         promptMessageId,
       );
       let contextSessionId: string | undefined;
-      let drainingInput = false;
-      const drainInput = () => {
-        drainingInput = true;
-        live.insert = undefined;
-        input.end();
-      };
-      const awaitInputSettlement = () => {
-        // A result for an older input does not tell us whether the native CLI
-        // is already processing the next one. Use its explicit idle signal.
-        if (
-          (native && !sdkSessionIdle) ||
-          !hasUnsettledInput() ||
-          hasDeferredWork() ||
-          insertionIdleTimer
-        )
-          return;
-        insertionIdleTimer = setTimeout(() => {
-          insertionIdleTimer = undefined;
-          if (
-            hasUnsettledInput() &&
-            (native ? sdkSessionIdle : !(awaitingResultFor && awaitingModel)) &&
-            !hasDeferredWork() &&
-            (!bash || !foregroundTools().length)
-          )
-            drainInput();
-        }, 120_000);
-      };
-      const afterDeferredWork = () => {
-        if (hasDeferredWork() || !finalResult || subagents.active) return;
-        if (hasUnsettledInput()) awaitInputSettlement();
-        else if (native ? sdkSessionIdle : !awaitingModel) drainInput();
-      };
       for await (const message of connection) {
         if (message.type === 'system' && message.subtype === 'init') {
-          const firstInit = !initialized;
-          initialized = true;
           contextSessionId = message.session_id;
           live.stopSubagent = async (id) => {
             const sdkId = subagents.taskId(id);
@@ -1614,7 +1459,7 @@ ${JSON.stringify(nativePackagePaths)}
             controller.abort();
             await stopping;
           };
-          if (bash && !drainingInput) {
+          if (bash && !turn.isDrainingInput) {
             const sdk = connection;
             live.controlBash = async (id, action) => {
               try {
@@ -1623,60 +1468,16 @@ ${JSON.stringify(nativePackagePaths)}
                 const failure = action === 'stop' ? bash.failureAfterRejectedStop(id) : undefined;
                 if (failure !== undefined) {
                   finishTool(id, false, failure, { status: 'receipt-only' });
-                  sendInsertion();
-                  afterDeferredWork();
+                  turn.sendInsertion();
+                  turn.afterDeferredWork();
                 }
                 throw error;
               }
             };
-            live.canInsertNow = () =>
-              !blockedByLocalWork() && foregroundTools().every(canBackground);
-            live.canInsertNext = () =>
-              !!live.insert &&
-              !insertion &&
-              !blockedByLocalWork() &&
-              (!awaitingModel || atToolBoundary) &&
-              !foregroundTools().length;
+            live.canInsertNow = () => turn.canInsertNow();
+            live.canInsertNext = () => turn.canInsertNext();
           }
-          if (!drainingInput)
-            live.insert = async (message) => {
-              if (insertion)
-                throw new AppError(
-                  'LIVE_INPUT_BUSY',
-                  '上一条补充消息还在处理，请稍后再插入。',
-                  409,
-                );
-              const current = { message, sent: false, preparing: true };
-              insertion = current;
-              try {
-                if (bash && (message.priority ?? 'now') === 'now') {
-                  if (!live.canInsertNow?.())
-                    throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前步骤需要先停止本轮。', 409);
-                  if (message.canDispatch?.() === false)
-                    throw new AppError('QUEUE_CHANGED', '队列或执行范围已变化。', 409);
-                  const sdk = connection;
-                  if (sdk)
-                    for (const id of foregroundTools()) {
-                      signal.throwIfAborted();
-                      if (
-                        !runningTools.has(id) ||
-                        bash.isBackground(id) ||
-                        subagents.isBackground(id)
-                      )
-                        continue;
-                      if (!canBackground(id))
-                        throw new AppError('LIVE_INPUT_UNAVAILABLE', '当前运行无法插入消息。', 409);
-                      if (subagents.canMove(id)) await subagents.moveToBackground(sdk, id);
-                      else await bash.control(sdk, id, 'background');
-                    }
-                }
-                current.preparing = false;
-                sendInsertion();
-              } catch (error) {
-                if (insertion === current) insertion = undefined;
-                throw error;
-              }
-            };
+          const firstInit = turn.onInitialized(connection);
           observedModel = message.model || observedModel;
           this.store.update('sessions', session.id, {
             sdkSessionId: message.session_id,
@@ -1705,38 +1506,32 @@ ${JSON.stringify(nativePackagePaths)}
             resumed: !!resumeExisting,
           });
         } else if (message.type === 'system' && message.subtype === 'session_state_changed') {
-          if (!native || message.session_id !== sdkSessionId) continue;
-          sdkSessionIdle = message.state === 'idle';
-          if (!sdkSessionIdle) clearInputIdleTimer();
-          else afterDeferredWork();
+          turn.onSessionStateChanged(message.session_id, message.state);
         } else if (message.type === 'system' && message.subtype === 'task_started') {
           subagents.started(message);
           bash?.started(message);
         } else if (message.type === 'system' && message.subtype === 'task_updated') {
           subagents.updated(message);
           bash?.updated(message);
-          sendInsertion();
+          turn.sendInsertion();
         } else if (message.type === 'system' && message.subtype === 'task_notification') {
           if (subagents.notify(message)) {
-            sendInsertion();
-            afterDeferredWork();
+            turn.sendInsertion();
+            turn.afterDeferredWork();
           }
           const task = bash?.terminal(message);
           if (task && !capturing.has(task.id)) {
             await finishBashTask(task);
-            afterDeferredWork();
+            turn.afterDeferredWork();
           }
         } else if (message.type === 'stream_event') {
           requestTiming.observe(message, Date.now(), performance.now());
           if (message.parent_tool_use_id) continue;
           const event = message.event;
-          acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
+          turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
           transcript.acceptStream(message, assistantId, appToolId);
           publishToolPositions();
-          if (event.type === 'message_start') {
-            atToolBoundary = false;
-            awaitingModel = true;
-          }
+          if (event.type === 'message_start') turn.onModelStarted();
           if (
             firstText &&
             event.type === 'content_block_delta' &&
@@ -1796,7 +1591,7 @@ ${JSON.stringify(nativePackagePaths)}
           requestTiming.linkAssistant(message.request_id, message.message.id);
           if (message.parent_tool_use_id || message.agent_id) continue;
           if (!message.error)
-            acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
+            turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
           const owner = transcript.acceptAssistant(message, assistantId, appToolId);
           publishToolPositions();
           if (owner === assistantId)
@@ -1822,7 +1617,7 @@ ${JSON.stringify(nativePackagePaths)}
             !('agent_id' in message && message.agent_id) &&
             !message.isSynthetic
           )
-            acknowledgeInsertion(message.session_id, [message.uuid], 'replay');
+            turn.acknowledgeInsertion(message.session_id, [message.uuid], 'replay');
         } else if (message.type === 'user' && Array.isArray(message.message.content)) {
           for (const block of message.message.content)
             if (block.type === 'tool_result') {
@@ -1858,19 +1653,7 @@ ${JSON.stringify(nativePackagePaths)}
                 );
             }
         } else if (message.type === 'result') {
-          finalResult = message;
-          awaitingModel = false;
-          const consumedInputs = sdkInputIds(message);
-          if (!message.is_error) acknowledgeInsertion(message.session_id, consumedInputs, 'result');
-          if (
-            message.session_id === sdkSessionId &&
-            awaitingResultFor &&
-            consumedInputs.includes(awaitingResultFor)
-          ) {
-            awaitingResultFor = undefined;
-            clearInputIdleTimer();
-          }
-          const continuingInsertion = hasUnsettledInput();
+          const continuingInsertion = turn.onFinalResult(message);
           for (const denied of message.permission_denials) {
             const id = appToolId(denied.tool_use_id);
             if (transcript.toolPosition(id)?.name) recordBlockedTool(id, denied.tool_name);
@@ -1902,24 +1685,12 @@ ${JSON.stringify(nativePackagePaths)}
             deniedTools: message.permission_denials?.length ?? null,
           });
           this.store.event(run.id, session.id, 'usage.updated', {});
-          if (drainingInput) continue;
-          if (hasUnsettledInput()) {
-            sendInsertion();
-            // End input only if the query is idle with no matching reply or result.
-            awaitInputSettlement();
-          } else if (hasDeferredWork()) {
-            flush();
-            sendInsertion();
-          } else if (native && !message.is_error && !subagents.active) {
-            afterDeferredWork();
-          } else {
-            live.insert = undefined;
-            if (subagents.active) {
-              failure = '主会话结束时仍有未收尾的子任务。';
-              live.cancellation.abort();
-            }
-            break;
+          const action = turn.afterResultRecorded(flush);
+          if (action === 'unfinished-subagents') {
+            failure = '主会话结束时仍有未收尾的子任务。';
+            live.cancellation.abort();
           }
+          if (action !== 'continue') break;
         } else if (!(message.type === 'system' && message.subtype === 'status')) {
           this.store.event(run.id, session.id, 'sdk.notice', {
             type: message.type,
@@ -1927,9 +1698,9 @@ ${JSON.stringify(nativePackagePaths)}
           });
         }
       }
-      if (insertion?.sent && !signal.aborted) failure = '补充消息未收到 SDK 回执。';
-      else if (awaitingResultFor && !signal.aborted && !finalResult?.is_error)
-        failure = 'SDK 连接已结束，但未返回补充消息的终态。';
+      const inputFailure = turn.unsettledInputFailure();
+      const finalResult = turn.result;
+      if (inputFailure) failure = inputFailure;
       else if (bash?.hasDeferredReceipt && !signal.aborted)
         failure = 'SDK 连接结束，Bash 命令未返回终态。';
       else if (subagents.active && !signal.aborted) failure = '主会话结束时仍有未收尾的子任务。';
@@ -1957,12 +1728,12 @@ ${JSON.stringify(nativePackagePaths)}
     } finally {
       const streamEnded = performance.now();
       live.stopSubagent = undefined;
-      live.insert = undefined;
       live.controlBash = undefined;
       live.canInsertNext = undefined;
       live.canInsertNow = undefined;
       // Block new approvals and queued writes whenever the SDK can no longer consume their results.
-      closing = true;
+      turn.onClosing();
+      const finalResult = turn.result;
       if (
         !finalResult ||
         commands.size ||
@@ -1971,14 +1742,13 @@ ${JSON.stringify(nativePackagePaths)}
         bash?.hasDeferredReceipt
       )
         live.cancellation.abort();
-      clearTimeout(insertionIdleTimer);
-      insertion?.message.released();
-      insertion = undefined;
+      // Release the queue claim before canceling approvals and flushing the last transcript changes.
+      turn.releaseUnconfirmedInput();
       clearTimeout(timer);
       this.permissions.cancelRun(run.id);
       clearInterval(flushTimer);
       flush();
-      input.end();
+      turn.dispose();
       connection?.close();
       if (processOwner) {
         const cleanup = await processOwner.cleanup();
@@ -2033,7 +1803,7 @@ ${JSON.stringify(nativePackagePaths)}
         }
       }
       if (
-        initialized &&
+        turn.wasInitialized &&
         (!finalResult || (native && (live.reason || cleanupUncertain || bash?.hasDeferredReceipt)))
       )
         this.store.update('sessions', session.id, {

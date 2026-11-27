@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C1 第 2 步：实时插话与输入排空拆分（已验证）
+
+- `LiveTurnCoordinator`（`server/modules/runs/live-turn-coordinator.ts`）接管 SDK 输入队列、插话槽、前台 Agent/Bash 后台交接、SDK 回执与 120 秒空闲结算，运行宿主负责原有消息持久化、助手占位和事件。原生模式继续等待同一 SDK 会话的 `idle`，受控模式沿用模型状态判定。`server/agent.ts` 从 2,102 行减至 1,872 行（净减 230 行），`Runner` 和 `AgentRunner` 构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-live-turn-coordinator.md)
+- 主会话复核通过 `npm run check`、`npm run check:headers`、`npm run build`、`npm run build:desktop` 及 Prettier；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 运行时 850 通过、6 跳过（含新增 `tests/live-turn-coordinator.test.ts` 17 项纯内存用例与真实 SDK 0.3.332 回环测试），前端 154 通过、1 跳过，两处并行计时抖动项（`conversation-transcript-sdk.test.ts` 与 `catalog-controls.test.ts`）单独复跑均全通过。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-subagent-insertion.mts`（中英文 `Ctrl+Enter` 与队列插话、双前台子代理后台交接与二次插话、隔离回环模型）全部通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：将定时器与任务交接注入 `LiveTurnCoordinator` 内存夹具后，120 秒空闲结算、前台工具动态变化与排空条件全部可毫秒级确定性单测，配合真实 Electron 子代理插话烟测形成双层兜底；下一轮 C1 第 3 步继续独立抽离 `RunTranscriptLedger`。
+
 ## 2026-11-27 · C1 第 1 步：`server/agent.ts` MCP 工具注册与执行层拆分（已验证）
 
 - 将 `server/agent.ts` 中的 `custom()` 与全部 MCP 工具注册/执行逻辑抽离至 `server/modules/runs/mcp-tools/`（`index.ts`、`checked-mcp.ts`、`builtin-tools.ts`、`browser-tools.ts`、`extension-tools.ts`），`server/agent.ts` 从 2,953 行降至 2,102 行（净减 851 行）；以统一 `invokeCheckedMcp()` 合并绑定 MCP 与外部 MCP 的 64 KiB 参数上限、审批和三处复核逻辑，并用显式守卫替换外部工具定义查找的非空断言。对外 `Runner` 接口、SDK 主循环、工具名称/描述/schema 及全部事件语义不变。[决策与回退](../../../docs/decisions/2026-11-27-run-mcp-tools.md)
