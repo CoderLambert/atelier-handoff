@@ -105,4 +105,8 @@ export const schedules = {
   'panel.expand': ['全屏查看定时任务', 'Expand scheduled tasks panel'],
   'panel.dock': ['恢复停靠', 'Restore docked width'],
   'panel.collapse': ['收起定时任务面板', 'Collapse scheduled tasks panel'],
+  'sections.basics': ['任务内容', 'Task details'],
+  'sections.schedule': ['运行时间', 'Schedule'],
+  'sections.advanced': ['权限与高级策略', 'Permissions & advanced'],
+  'meta.taskCount': ['{{count}} 个任务', '{{count}} tasks'],
 } as const;

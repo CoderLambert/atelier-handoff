@@ -1,13 +1,21 @@
 /**
  * @file 提供工作台右侧受控的定时任务详情面板。
- * @implementation 复用 PanelLayoutButtons 与规则表单/运行历史双页签，支持在对话不中断的情况下编辑任务、启停、立即执行与查看运行记录。
- * @updated 2026-11-27T13:48:00+08:00
+ * @implementation 复用 PanelLayoutButtons、Radix Select 任务切换器与规则表单/运行历史双页签。
+ * @updated 2026-11-27T23:59:00+08:00
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, Clock, Pause, Play, Trash2, Zap } from 'lucide-react';
 import type { Project, Session } from '@shared/types';
 import { PanelLayoutButtons } from '@/components/panel-layout-buttons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useUiTranslation } from '@/i18n';
 import type { PanelViewProps } from '@/panel-sdk';
 import { useDeleteSchedule } from '@/use-query/schedules/use-delete-schedule';
@@ -68,23 +76,23 @@ export function ScheduleInspectorPanel({
     <div className="schedule-right-panel">
       <header className="schedule-right-panel-header">
         <div className="schedule-right-panel-heading">
-          <Clock className="size-4" aria-hidden="true" />
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
           <span className="schedule-right-panel-title">{activeTask?.title ?? t('title')}</span>
         </div>
         <div className="schedule-right-panel-controls">
-          {tasks.length > 1 ? (
-            <select
-              className="schedules-input schedule-right-panel-picker"
-              aria-label={t('title')}
-              value={activeTask?.id ?? ''}
-              onChange={(e) => setSelectedId(e.target.value)}
-            >
-              {tasks.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title}
-                </option>
-              ))}
-            </select>
+          {tasks.length > 1 && activeTask ? (
+            <Select value={activeTask.id} onValueChange={setSelectedId}>
+              <SelectTrigger size="sm" className="w-36" aria-label={t('title')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                {tasks.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : null}
           <PanelLayoutButtons
             layout={layout}
@@ -99,27 +107,44 @@ export function ScheduleInspectorPanel({
         {activeTask ? (
           <>
             <div className="schedules-detail-head">
-              <p className="schedules-muted">
-                {activeTask.nextRunAt
-                  ? t('meta.nextRun', { time: formatDateTime(activeTask.nextRunAt) })
-                  : t('meta.noNextRun')}
-              </p>
+              <div className="schedules-detail-heading">
+                <div className="schedules-detail-title-row">
+                  <Badge
+                    variant={
+                      activeTask.status === 'active'
+                        ? 'default'
+                        : activeTask.status === 'paused'
+                          ? 'secondary'
+                          : 'outline'
+                    }
+                  >
+                    {t(`status.${activeTask.status}`)}
+                  </Badge>
+                  <p className="schedules-muted">
+                    {activeTask.nextRunAt
+                      ? t('meta.nextRun', { time: formatDateTime(activeTask.nextRunAt) })
+                      : t('meta.noNextRun')}
+                  </p>
+                </div>
+              </div>
               <div className="schedules-detail-actions">
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="shrink-0"
                   disabled={runNowMutation.isPending}
                   onClick={() => runNowMutation.mutate(activeTask.id)}
                 >
                   <Zap className="size-3.5" aria-hidden="true" />
-                  {t('actions.runNow')}
+                  <span>{t('actions.runNow')}</span>
                 </Button>
                 {activeTask.status === 'active' ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="shrink-0"
                     disabled={updateMutation.isPending}
                     onClick={() =>
                       updateMutation.mutate({
@@ -129,13 +154,14 @@ export function ScheduleInspectorPanel({
                     }
                   >
                     <Pause className="size-3.5" aria-hidden="true" />
-                    {t('actions.pause')}
+                    <span>{t('actions.pause')}</span>
                   </Button>
                 ) : (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="shrink-0"
                     disabled={updateMutation.isPending}
                     onClick={() =>
                       updateMutation.mutate({
@@ -145,13 +171,14 @@ export function ScheduleInspectorPanel({
                     }
                   >
                     <Play className="size-3.5" aria-hidden="true" />
-                    {t('actions.resume')}
+                    <span>{t('actions.resume')}</span>
                   </Button>
                 )}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="shrink-0"
                   disabled={deleteMutation.isPending}
                   onClick={() => {
                     deleteMutation.mutate(activeTask.id, {
@@ -163,7 +190,7 @@ export function ScheduleInspectorPanel({
                   }}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
-                  {t('actions.delete')}
+                  <span>{t('actions.delete')}</span>
                 </Button>
               </div>
             </div>
@@ -221,7 +248,7 @@ export function ScheduleInspectorPanel({
                   size="sm"
                   onClick={() => onOpenSession(activeTask.targetSessionId!)}
                 >
-                  {t('actions.openSession')}
+                  <span>{t('actions.openSession')}</span>
                   <ArrowUpRight className="size-3.5" aria-hidden="true" />
                 </Button>
               </div>
@@ -229,9 +256,11 @@ export function ScheduleInspectorPanel({
           </>
         ) : (
           <div className="schedules-empty">
-            <Clock className="size-6" aria-hidden="true" />
-            <h2>{t('emptyTitle')}</h2>
-            <p>{t('emptyDescription')}</p>
+            <div className="schedules-empty-icon" aria-hidden="true">
+              <Clock className="size-5" />
+            </div>
+            <h2 className="schedules-empty-title">{t('emptyTitle')}</h2>
+            <p className="schedules-empty-copy">{t('emptyDescription')}</p>
           </div>
         )}
       </div>

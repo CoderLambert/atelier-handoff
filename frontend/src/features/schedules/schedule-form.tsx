@@ -1,9 +1,10 @@
 /**
  * @file 提供定时任务规则的新建与编辑表单组件。
- * @implementation 支持五种权威调度类型、执行落点、权限与自动审批护栏、错失/重叠与通知策略，遵循类型化双语文案。
- * @updated 2026-11-27T13:30:00+08:00
+ * @implementation 采用 Atelier 原生 Radix Select 与分组表单布局，支持五种调度类型、执行落点与可折叠权限策略。
+ * @updated 2026-11-27T23:59:00+08:00
  */
 import { useEffect, useState, type FormEvent } from 'react';
+import { ChevronDown, SlidersHorizontal } from 'lucide-react';
 import type {
   CreateScheduledTaskInput,
   Project,
@@ -17,6 +18,13 @@ import type {
   UpdateScheduledTaskInput,
 } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useUiTranslation } from '@/i18n';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -100,6 +108,7 @@ export function ScheduleForm({
   const [notifyPolicy, setNotifyPolicy] = useState<ScheduleNotifyPolicy>(
     task?.notifyPolicy ?? 'on_error',
   );
+  const [advancedOpen, setAdvancedOpen] = useState(task?.mode === 'edit');
 
   useEffect(() => {
     if (!task) return;
@@ -128,6 +137,7 @@ export function ScheduleForm({
     setMisfirePolicy(task.misfirePolicy);
     setOverlapPolicy(task.overlapPolicy);
     setNotifyPolicy(task.notifyPolicy);
+    setAdvancedOpen(task.mode === 'edit');
   }, [task]);
 
   const projectSessions = sessions.filter(
@@ -206,288 +216,363 @@ export function ScheduleForm({
     );
   }
 
+  const notifyLabel =
+    notifyPolicy === 'always'
+      ? t('notify.always')
+      : notifyPolicy === 'on_attention'
+        ? t('notify.onAttention')
+        : notifyPolicy === 'never'
+          ? t('notify.never')
+          : t('notify.onError');
+
+  const advancedSummary = `${permissionMode === 'edit' ? t('mode.edit') : t('mode.readonly')} · ${notifyLabel}`;
+
   return (
     <form className="schedules-form" onSubmit={handleSubmit}>
       {error ? (
-        <div className="schedules-error" role="alert">
+        <div className="schedules-error-banner" role="alert">
           {error}
         </div>
       ) : null}
 
-      <label className="schedules-field">
-        <span className="schedules-label">{t('fields.title')}</span>
-        <input
-          type="text"
-          className="schedules-input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('fields.titlePlaceholder')}
-          required
-          maxLength={160}
-        />
-      </label>
-
-      {mode === 'create' ? (
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.project')}</span>
-          <select
-            className="schedules-input"
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            required
-          >
-            {projects.map((proj) => (
-              <option key={proj.id} value={proj.id}>
-                {proj.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
-      <label className="schedules-field">
-        <span className="schedules-label">{t('fields.prompt')}</span>
-        <textarea
-          className="schedules-textarea"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={t('fields.promptPlaceholder')}
-          rows={5}
-          required
-        />
-      </label>
-
-      <div className="schedules-grid-2">
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.targetMode')}</span>
-          <select
-            className="schedules-input"
-            value={targetMode}
-            onChange={(e) => setTargetMode(e.target.value as ScheduleTargetMode)}
-          >
-            <option value="new_once">{t('target.newOnce')}</option>
-            <option value="session">{t('target.session')}</option>
-            <option value="new">{t('target.new')}</option>
-          </select>
-        </label>
-
-        {targetMode === 'session' ? (
+      <div className="schedules-section">
+        <div className={mode === 'create' ? 'schedules-row-title-project' : undefined}>
           <label className="schedules-field">
-            <span className="schedules-label">{t('target.session')}</span>
-            <select
+            <span className="schedules-label">{t('fields.title')}</span>
+            <input
+              type="text"
               className="schedules-input"
-              value={targetSessionId}
-              onChange={(e) => setTargetSessionId(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t('fields.titlePlaceholder')}
               required
-            >
-              <option value="">—</option>
-              {projectSessions.map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.title}
-                </option>
-              ))}
-            </select>
+              maxLength={160}
+            />
           </label>
-        ) : null}
-      </div>
 
-      <div className="schedules-grid-2">
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.timingKind')}</span>
-          <select
-            className="schedules-input"
-            value={timingKind}
-            onChange={(e) => setTimingKind(e.target.value as ScheduleTiming['kind'])}
-          >
-            <option value="daily">{t('timing.daily')}</option>
-            <option value="weekly">{t('timing.weekly')}</option>
-            <option value="interval">{t('timing.interval')}</option>
-            <option value="once">{t('timing.once')}</option>
-            <option value="cron">{t('timing.cron')}</option>
-          </select>
-        </label>
+          {mode === 'create' ? (
+            <div className="schedules-field">
+              <span className="schedules-label">{t('fields.project')}</span>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger className="w-full" aria-label={t('fields.project')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  {projects.map((proj) => (
+                    <SelectItem key={proj.id} value={proj.id}>
+                      {proj.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+        </div>
 
         <label className="schedules-field">
-          <span className="schedules-label">{t('fields.timeZone')}</span>
-          <input
-            type="text"
-            className="schedules-input"
-            value={timeZone}
-            onChange={(e) => setTimeZone(e.target.value)}
+          <span className="schedules-label">{t('fields.prompt')}</span>
+          <textarea
+            className="schedules-textarea"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t('fields.promptPlaceholder')}
+            rows={4}
             required
           />
         </label>
+
+        <div className={targetMode === 'session' ? 'schedules-grid-2' : undefined}>
+          <div className="schedules-field">
+            <span className="schedules-label">{t('fields.targetMode')}</span>
+            <Select
+              value={targetMode}
+              onValueChange={(value) => setTargetMode(value as ScheduleTargetMode)}
+            >
+              <SelectTrigger className="w-full" aria-label={t('fields.targetMode')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                <SelectItem value="new_once">{t('target.newOnce')}</SelectItem>
+                <SelectItem value="session">{t('target.session')}</SelectItem>
+                <SelectItem value="new">{t('target.new')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {targetMode === 'session' ? (
+            <div className="schedules-field">
+              <span className="schedules-label">{t('target.session')}</span>
+              <Select value={targetSessionId} onValueChange={setTargetSessionId}>
+                <SelectTrigger className="w-full" aria-label={t('target.session')}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  {projectSessions.map((session) => (
+                    <SelectItem key={session.id} value={session.id}>
+                      {session.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {timingKind === 'daily' ? (
+      <fieldset className="schedules-section-card">
+        <legend className="schedules-section-heading">{t('sections.schedule')}</legend>
+
         <div className="schedules-grid-2">
+          <div className="schedules-field">
+            <span className="schedules-label">{t('fields.timingKind')}</span>
+            <Select
+              value={timingKind}
+              onValueChange={(value) => setTimingKind(value as ScheduleTiming['kind'])}
+            >
+              <SelectTrigger className="w-full" aria-label={t('fields.timingKind')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                <SelectItem value="daily">{t('timing.daily')}</SelectItem>
+                <SelectItem value="weekly">{t('timing.weekly')}</SelectItem>
+                <SelectItem value="interval">{t('timing.interval')}</SelectItem>
+                <SelectItem value="once">{t('timing.once')}</SelectItem>
+                <SelectItem value="cron">{t('timing.cron')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <label className="schedules-field">
-            <span className="schedules-label">{t('fields.time')}</span>
+            <span className="schedules-label">{t('fields.timeZone')}</span>
             <input
-              type="time"
-              className="schedules-input"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
+              type="text"
+              className="schedules-input schedules-mono"
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
               required
             />
           </label>
+        </div>
+
+        {timingKind === 'daily' ? (
+          <div className="schedules-grid-2">
+            <label className="schedules-field">
+              <span className="schedules-label">{t('fields.time')}</span>
+              <input
+                type="time"
+                className="schedules-input schedules-mono"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+              />
+            </label>
+            <label className="schedules-field">
+              <span className="schedules-label">{t('fields.everyDays')}</span>
+              <input
+                type="number"
+                className="schedules-input schedules-mono"
+                min={1}
+                max={365}
+                value={everyDays}
+                onChange={(e) => setEveryDays(Number(e.target.value) || 1)}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {timingKind === 'weekly' ? (
+          <div className="schedules-weekly-group">
+            <label className="schedules-field">
+              <span className="schedules-label">{t('fields.time')}</span>
+              <input
+                type="time"
+                className="schedules-input schedules-mono"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+              />
+            </label>
+            <div className="schedules-field">
+              <span className="schedules-label">{t('fields.weekdays')}</span>
+              <div className="schedules-weekdays">
+                {WEEKDAYS.map((day) => {
+                  const active = weekdays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      className={active ? 'schedules-day schedules-day-active' : 'schedules-day'}
+                      onClick={() => toggleWeekday(day)}
+                      aria-pressed={active}
+                    >
+                      {t(`weekday.${day}`)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {timingKind === 'interval' ? (
           <label className="schedules-field">
-            <span className="schedules-label">{t('fields.everyDays')}</span>
+            <span className="schedules-label">{t('fields.everyMinutes')}</span>
             <input
               type="number"
-              className="schedules-input"
-              min={1}
-              max={365}
-              value={everyDays}
-              onChange={(e) => setEveryDays(Number(e.target.value) || 1)}
-            />
-          </label>
-        </div>
-      ) : null}
-
-      {timingKind === 'weekly' ? (
-        <div className="schedules-field">
-          <label className="schedules-field">
-            <span className="schedules-label">{t('fields.time')}</span>
-            <input
-              type="time"
-              className="schedules-input"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
+              className="schedules-input schedules-mono"
+              min={targetMode === 'new' ? 5 : 1}
+              max={525_600}
+              value={everyMinutes}
+              onChange={(e) => setEveryMinutes(Number(e.target.value) || 1)}
               required
             />
           </label>
-          <span className="schedules-label">{t('fields.weekdays')}</span>
-          <div className="schedules-weekdays">
-            {WEEKDAYS.map((day) => {
-              const active = weekdays.includes(day);
-              return (
-                <button
-                  key={day}
-                  type="button"
-                  className={active ? 'schedules-day schedules-day-active' : 'schedules-day'}
-                  onClick={() => toggleWeekday(day)}
-                  aria-pressed={active}
+        ) : null}
+
+        {timingKind === 'once' ? (
+          <label className="schedules-field">
+            <span className="schedules-label">{t('fields.runAt')}</span>
+            <input
+              type="datetime-local"
+              className="schedules-input schedules-mono"
+              value={runAtLocal}
+              onChange={(e) => setRunAtLocal(e.target.value)}
+              required
+            />
+          </label>
+        ) : null}
+
+        {timingKind === 'cron' ? (
+          <label className="schedules-field">
+            <span className="schedules-label">{t('fields.cron')}</span>
+            <input
+              type="text"
+              className="schedules-input schedules-mono"
+              value={cronExpression}
+              onChange={(e) => setCronExpression(e.target.value)}
+              placeholder="0 9 * * 1-5"
+              required
+            />
+          </label>
+        ) : null}
+      </fieldset>
+
+      <div className="schedules-advanced-card">
+        <button
+          type="button"
+          className="schedules-advanced-toggle"
+          aria-expanded={advancedOpen}
+          onClick={() => setAdvancedOpen((prev) => !prev)}
+        >
+          <span className="schedules-advanced-title">
+            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+            <span>{t('sections.advanced')}</span>
+          </span>
+          <span className="schedules-advanced-summary">{advancedSummary}</span>
+          <ChevronDown
+            className={
+              advancedOpen
+                ? 'size-4 schedules-advanced-chevron schedules-advanced-chevron-open'
+                : 'size-4 schedules-advanced-chevron'
+            }
+            aria-hidden="true"
+          />
+        </button>
+
+        {advancedOpen ? (
+          <div className="schedules-advanced-body">
+            <div className="schedules-grid-2">
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.mode')}</span>
+                <Select
+                  value={permissionMode}
+                  onValueChange={(value) => {
+                    const next = value as 'readonly' | 'edit';
+                    setPermissionMode(next);
+                    if (next === 'readonly') setAutomaticApproval(false);
+                  }}
                 >
-                  {t(`weekday.${day}`)}
-                </button>
-              );
-            })}
+                  <SelectTrigger className="w-full" aria-label={t('fields.mode')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value="readonly">{t('mode.readonly')}</SelectItem>
+                    <SelectItem value="edit">{t('mode.edit')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.approval')}</span>
+                <Select
+                  value={automaticApproval ? 'automatic' : 'manual'}
+                  disabled={permissionMode !== 'edit'}
+                  onValueChange={(value) => setAutomaticApproval(value === 'automatic')}
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.approval')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value="manual">{t('approval.manual')}</SelectItem>
+                    <SelectItem value="automatic">{t('approval.automatic')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="schedules-grid-3">
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.misfire')}</span>
+                <Select
+                  value={misfirePolicy}
+                  onValueChange={(value) => setMisfirePolicy(value as ScheduleMisfirePolicy)}
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.misfire')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value="run_once">{t('misfire.runOnce')}</SelectItem>
+                    <SelectItem value="skip">{t('misfire.skip')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.overlap')}</span>
+                <Select
+                  value={overlapPolicy}
+                  onValueChange={(value) => setOverlapPolicy(value as ScheduleOverlapPolicy)}
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.overlap')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value="skip">{t('overlap.skip')}</SelectItem>
+                    <SelectItem value="queue">{t('overlap.queue')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.notify')}</span>
+                <Select
+                  value={notifyPolicy}
+                  onValueChange={(value) => setNotifyPolicy(value as ScheduleNotifyPolicy)}
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.notify')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value="on_error">{t('notify.onError')}</SelectItem>
+                    <SelectItem value="always">{t('notify.always')}</SelectItem>
+                    <SelectItem value="on_attention">{t('notify.onAttention')}</SelectItem>
+                    <SelectItem value="never">{t('notify.never')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
-        </div>
-      ) : null}
-
-      {timingKind === 'interval' ? (
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.everyMinutes')}</span>
-          <input
-            type="number"
-            className="schedules-input"
-            min={targetMode === 'new' ? 5 : 1}
-            max={525_600}
-            value={everyMinutes}
-            onChange={(e) => setEveryMinutes(Number(e.target.value) || 1)}
-            required
-          />
-        </label>
-      ) : null}
-
-      {timingKind === 'once' ? (
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.runAt')}</span>
-          <input
-            type="datetime-local"
-            className="schedules-input"
-            value={runAtLocal}
-            onChange={(e) => setRunAtLocal(e.target.value)}
-            required
-          />
-        </label>
-      ) : null}
-
-      {timingKind === 'cron' ? (
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.cron')}</span>
-          <input
-            type="text"
-            className="schedules-input schedules-mono"
-            value={cronExpression}
-            onChange={(e) => setCronExpression(e.target.value)}
-            placeholder="0 9 * * 1-5"
-            required
-          />
-        </label>
-      ) : null}
-
-      <div className="schedules-grid-2">
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.mode')}</span>
-          <select
-            className="schedules-input"
-            value={permissionMode}
-            onChange={(e) => {
-              const next = e.target.value as 'readonly' | 'edit';
-              setPermissionMode(next);
-              if (next === 'readonly') setAutomaticApproval(false);
-            }}
-          >
-            <option value="readonly">{t('mode.readonly')}</option>
-            <option value="edit">{t('mode.edit')}</option>
-          </select>
-        </label>
-
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.approval')}</span>
-          <select
-            className="schedules-input"
-            value={automaticApproval ? 'automatic' : 'manual'}
-            disabled={permissionMode !== 'edit'}
-            onChange={(e) => setAutomaticApproval(e.target.value === 'automatic')}
-          >
-            <option value="manual">{t('approval.manual')}</option>
-            <option value="automatic">{t('approval.automatic')}</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="schedules-grid-3">
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.misfire')}</span>
-          <select
-            className="schedules-input"
-            value={misfirePolicy}
-            onChange={(e) => setMisfirePolicy(e.target.value as ScheduleMisfirePolicy)}
-          >
-            <option value="run_once">{t('misfire.runOnce')}</option>
-            <option value="skip">{t('misfire.skip')}</option>
-          </select>
-        </label>
-
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.overlap')}</span>
-          <select
-            className="schedules-input"
-            value={overlapPolicy}
-            onChange={(e) => setOverlapPolicy(e.target.value as ScheduleOverlapPolicy)}
-          >
-            <option value="skip">{t('overlap.skip')}</option>
-            <option value="queue">{t('overlap.queue')}</option>
-          </select>
-        </label>
-
-        <label className="schedules-field">
-          <span className="schedules-label">{t('fields.notify')}</span>
-          <select
-            className="schedules-input"
-            value={notifyPolicy}
-            onChange={(e) => setNotifyPolicy(e.target.value as ScheduleNotifyPolicy)}
-          >
-            <option value="on_error">{t('notify.onError')}</option>
-            <option value="always">{t('notify.always')}</option>
-            <option value="on_attention">{t('notify.onAttention')}</option>
-            <option value="never">{t('notify.never')}</option>
-          </select>
-        </label>
+        ) : null}
       </div>
 
       <div className="schedules-form-actions">
@@ -496,7 +581,16 @@ export function ScheduleForm({
             {t('actions.cancel')}
           </Button>
         ) : null}
-        <Button type="submit" disabled={pending || !title.trim() || !prompt.trim() || !projectId}>
+        <Button
+          type="submit"
+          disabled={
+            pending ||
+            !title.trim() ||
+            !prompt.trim() ||
+            !projectId ||
+            (targetMode === 'session' && !targetSessionId)
+          }
+        >
           {mode === 'create' ? t('actions.create') : t('actions.save')}
         </Button>
       </div>
