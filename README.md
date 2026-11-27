@@ -214,7 +214,21 @@ npm run test:live -- --authorized --final-tools
 
 ## 同步 OpenWiki
 
-在项目根打开 Claude Code，首次启动时确认允许项目的 `openwiki` MCP，然后输入 `/wiki-sync`。命令使用当前会话模型，按当前工作树增量更新中文 Wiki，包括相关的未提交源码改动。[Wiki 入口](openwiki/quickstart.md)
+可直接在 atelier 的项目会话里更新中文 Wiki，不需要启动 Claude Code。项目提供 [OpenWiki stdio 适配器](scripts/atelier-openwiki-mcp.mts)：它复用上游连接；若连接重建，在转发后续操作前会先恢复当前工作树里同一个运行，不会自动重试已发出的页面操作。
+
+1. 在已安装仓库依赖（`npm ci`）且可运行 Git 的本机，确认 `command -v node`（Node 24+）和 `command -v openwiki` 的绝对路径。已安装的 OpenWiki 可直接复用；仓库 CI 使用 `openwiki@0.9.0`。
+2. 在 **项目扩展 → 当前项目 → MCP** 编辑原有 `openwiki`（没有就新增），连接方式选 **本地进程 · stdio**。**可执行命令**填 Node 的绝对路径，**参数**填下面的 JSON，替换成真实绝对路径。保持 **「在项目普通会话中自动提供工具」关闭**；可打开 **「跨会话保留进程」**，减少重新初始化上游连接的开销。
+
+   ```json
+   ["/绝对路径/atelier-handoff/scripts/atelier-openwiki-mcp.mts", "/绝对路径/openwiki"]
+   ```
+
+3. 点 **保存并测试**，只允许发现的六个生命周期工具：`openwiki_begin`、`openwiki_submit_plan`、`openwiki_next_page`、`openwiki_inspect_page_claims`、`openwiki_submit_page`、`openwiki_finish`，权限均选 **每次审批**，再保存。更换命令后需要重新检测和授权。
+4. 在 **受控修改** 会话里从候选列表选中 `#openwiki`，发送「验证 OpenWiki 续跑，不提交计划」。顺序批准 `openwiki_begin` 和后续检查。传给 `begin` 的 `root` 应是**当前会话实际工作树**的 Git 根目录；后续用返回的 `runId`。若 OpenWiki 能识别该运行并提示需要先提交计划，续跑检查就通过了；连接测试成功不等于续跑通过。确认后再发送「同步中文 OpenWiki」。
+
+如果其他 Git 项目也要用，在已配置的那条本地 MCP 上打开 **「所有项目可手动选用」** 并保存，不用复制命令和参数。到目标项目的普通会话选 **受控修改**，从 `#` 候选列表选择同一个扩展。配置仍在原项目管理；其他项目不会自动加载工具，每次调用仍需确认，Wiki 写入目标会话实际使用的 Git 工作树。目标项目已有同名本地扩展时，优先使用本地项。
+
+原生 Claude Code 的 `.mcp.json` 和 `/wiki-sync` 仍可独立使用，不影响桌面登记。[Wiki 入口](openwiki/quickstart.md) · [适配与回退](docs/decisions/2026-11-27-atelier-openwiki-mcp.md)
 
 ## 目录
 
