@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C1 第 4 步（C1 收官）：运行环境、子进程托管与终态判定拆分（已验证）
+
+- 提取 `createRunProcessOwner`（`server/modules/runs/run-process-owner.ts`）统一 native `createHarnessProcess` 与非 native 子进程启停及 1 秒/8 秒取消清理；提取 `RunEnvironment` / `buildInitialPrompt`（`server/modules/runs/run-environment.ts`）收拢临时目录、Skill/RTK 挂载与 Shunt/OTLP 释放顺序；提取扁平守卫纯函数 `resolveRunOutcome()`（`server/modules/runs/run-outcome.ts`）替代 9 层嵌套三元。`server/agent.ts` 从 1,763 行降至 1,497 行（相对最初 2,953 行累计净减 1,456 行 / 49.3%），`Runner` 接口与构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-run-environment-and-outcome.md)
+- `npm run check`、`npm run check:headers`（4 份变更/新增源文件）、`npm run build`、`npm run build:desktop` 及 Prettier 全通过；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 运行时 881 项在 `task-363` 首轮全部通过（含新增 `tests/run-outcome-and-process.test.ts` 17 项用例与真实 SDK 0.3.332 回环测试），无并发争抢复跑 `project-markdown-skills.test.ts` + `git-commit-plan-snapshot.test.ts`（21/21）、前端 154 通过 + `picker-browser.test.ts` 单独复跑 1/1 通过。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-sdk-request-timing.mts`（中英文 OTLP 请求计时、导出及重开恢复、隔离回环模型）通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：C1 沿「MCP 工具 → 实时插话协调器 → 转录账本 → 环境/子进程/终态」4 个独立提交渐进拆分，每步均以真实 SDK 回环测试和针对性 Electron 烟测验收，零回归将 `agent.ts` 砍半并新增 55 项纯内存确定性单测；并行重启时需避免两轮全量测试同时跑抢占 CPU/内存。
+
 ## 2026-11-27 · C1 第 3 步：转录账本与通知补位拆分（已验证）
 
 - 提取 `RunTranscriptLedger`（`server/modules/runs/run-transcript-ledger.ts`），将原外泄在 `server/agent.ts` 闭包中的 `RunTranscript`、`transcriptNotices`、`recordedNotices`、`pendingDenials`、`seenTools`、`unpositionedTools` 及 80 ms 节流刷盘收敛为单一不变量所有者，`server/agent.ts` 从 1,872 行降至 1,763 行（净减 109 行）。收尾保留原有时序，`Runner` 接口与构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-run-transcript-ledger.md)
