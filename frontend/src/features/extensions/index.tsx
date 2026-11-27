@@ -30,6 +30,7 @@ import {
   testLabels,
   useExtensionMutation,
   useExtensions,
+  useInvalidateExtensionPickers,
   type ExtensionKind,
   type StartSkill,
 } from './api';
@@ -113,6 +114,7 @@ function ProjectExtensions({
   const { t } = useUiTranslation('extensions');
   const projectId = project?.id ?? '';
   const query = useExtensions(projectId);
+  const invalidatePickers = useInvalidateExtensionPickers();
   const toggle = useExtensionMutation(projectId);
   const invalidateSkills = useInvalidateSkillCatalogs(projectId);
   const pending = useIsMutating({ mutationKey: extensionKeys.mutations(projectId) }) > 0;
@@ -327,7 +329,13 @@ function ProjectExtensions({
       {query.error ? (
         <div className="ext-error" role="alert">
           {messageOf(query.error)}{' '}
-          <ActionButton disabled={query.isFetching} onClick={() => void query.refetch()}>
+          <ActionButton
+            disabled={query.isFetching}
+            onClick={() => {
+              void query.refetch();
+              void invalidatePickers();
+            }}
+          >
             <RefreshCw data-icon="inline-start" aria-hidden="true" />
             {t('common.reload')}
           </ActionButton>

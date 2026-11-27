@@ -404,7 +404,8 @@ test(
         res.setHeader('Content-Type', 'application/json');
         if (path === '/api/bootstrap')
           return void res.end(JSON.stringify({ csrfToken: 'fixture' }));
-        if (path.endsWith('/extensions')) return void res.end(JSON.stringify({ items: [] }));
+        if (path.endsWith('/extensions?scope=picker'))
+          return void res.end(JSON.stringify({ items: [] }));
         if (path.endsWith('/draft')) return void res.end(JSON.stringify({ ok: true }));
         if (path.endsWith('/insert')) {
           let body = '';

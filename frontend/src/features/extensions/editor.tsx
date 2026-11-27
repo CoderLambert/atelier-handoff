@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { AllowedMcpTool, DiscoveredTool, Extension, McpTransport } from '@shared/types';
 import { ActionButton, ErrorMessage, FeatureDialog, Field, MarkdownPreview } from './components';
 import { SkillToolBindingsDialog } from './tool-bindings';
+import { mcpChatOptions } from './mcp-sharing';
 import {
   allowsAuto,
   autoEnabled,
@@ -71,7 +72,15 @@ export function ExtensionEditor({
   const mcp = initialItem?.kind === 'mcp' ? initialItem : undefined;
   const [source, setSource] = useState(markdown?.source ?? 'manual');
   const [body, setBody] = useState(markdown?.body ?? '');
-  const [autoUseInChat, setAutoUseInChat] = useState(mcp?.autoUseInChat === true);
+  const initialChatOptions = mcpChatOptions(
+    mcp?.transport.type ?? 'http',
+    mcp !== undefined && 'shareAcrossProjects' in mcp && mcp.shareAcrossProjects === true,
+    mcp?.autoUseInChat === true,
+  );
+  const [shareAcrossProjects, setShareAcrossProjects] = useState(
+    initialChatOptions.shareAcrossProjects,
+  );
+  const [autoUseInChat, setAutoUseInChat] = useState(initialChatOptions.autoUseInChat);
   const [autoInvoke, setAutoInvoke] = useState(autoEnabled(markdown));
   const [transportType, setTransportType] = useState<McpTransport['type']>(
     mcp?.transport.type ?? 'http',
@@ -225,7 +234,12 @@ export function ExtensionEditor({
         ...(keepAlive ? { keepAlive: true } : {}),
       };
     }
-    return { ...fields, transport, allowedTools, autoUseInChat };
+    return {
+      ...fields,
+      transport,
+      allowedTools,
+      ...mcpChatOptions(transport.type, shareAcrossProjects, autoUseInChat),
+    };
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -395,9 +409,11 @@ export function ExtensionEditor({
             <>
               <label className="ext-auto-field">
                 <Switch
-                  checked={autoUseInChat}
-                  disabled={busy}
-                  aria-describedby={`${id}-auto-chat-help`}
+                  checked={!shareAcrossProjects && autoUseInChat}
+                  disabled={busy || shareAcrossProjects}
+                  aria-describedby={
+                    shareAcrossProjects ? `${id}-share-help` : `${id}-auto-chat-help`
+                  }
                   onCheckedChange={setAutoUseInChat}
                 />
                 <span>
@@ -414,9 +430,31 @@ export function ExtensionEditor({
                     { value: 'http', label: t('common.http') },
                     { value: 'stdio', label: t('extensionEditor.stdio') },
                   ]}
-                  onValueChange={setTransportType}
+                  onValueChange={(type) => {
+                    setTransportType(type);
+                    if (type !== 'stdio') setShareAcrossProjects(false);
+                  }}
                 />
               </Field>
+              {transportType === 'stdio' ? (
+                <label className="ext-auto-field">
+                  <Switch
+                    checked={shareAcrossProjects}
+                    disabled={busy}
+                    aria-describedby={`${id}-share-help`}
+                    onCheckedChange={(checked) => {
+                      setShareAcrossProjects(checked);
+                      if (checked) setAutoUseInChat(false);
+                    }}
+                  />
+                  <span>
+                    {t('extensionEditor.shareAcrossProjects')}
+                    <small id={`${id}-share-help`}>
+                      {t('extensionEditor.shareAcrossProjectsHelp')}
+                    </small>
+                  </span>
+                </label>
+              ) : null}
               {transportType === 'http' ? (
                 <>
                   <Field label={t('extensionEditor.serviceUrl')}>

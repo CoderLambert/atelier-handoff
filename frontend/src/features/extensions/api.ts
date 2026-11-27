@@ -1,13 +1,27 @@
 /**
- * @file 提供扩展目录和技能工具绑定的数据访问接口。
- * @implementation 定义查询键、响应和错误辅助方法，通过 React Query 查询、修改数据并刷新相关缓存。
- * @updated 2026-11-23T04:58:09+08:00
+ * @file 提供扩展界面的显示辅助方法和数据访问入口。
+ * @implementation 重导出扩展目录的查询层接口，保留技能工具绑定的遗留操作与本地化辅助方法。
+ * @updated 2026-11-27T00:00:00+08:00
  */
 import { getTranslator, translateError } from '@/i18n';
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Extension, ExtensionSelection, SkillToolBinding } from '@shared/types';
 import { api, ApiError } from '@/api/client';
 import { endpoint, extensionKeys } from '@/use-query/extensions/keys';
+
+export { endpoint, extensionKeys, extensionPickerKeys } from '@/use-query/extensions/keys';
+export { extensionsQuery, useExtensions } from '@/use-query/extensions/use-extensions';
+export {
+  invalidateExtensionPickers,
+  pickerCatalogItems,
+  useInvalidateExtensionPickers,
+} from '@/use-query/extensions/picker-cache';
+export {
+  extensionMutationOptions,
+  returnedItem,
+  useExtensionMutation,
+  type ItemResponse,
+} from '@/use-query/extensions/use-extension-mutation';
 
 export type ExtensionKind = Extension['kind'];
 export type McpExtension = Extract<Extension, { kind: 'mcp' }>;
@@ -25,7 +39,6 @@ export interface TestResult {
   statusMessage?: string;
   item?: Extension;
 }
-export type ItemResponse = { item?: Extension; extension?: Extension } | Extension | undefined;
 
 export const kinds: Record<ExtensionKind, string> = {
   get skill() {
@@ -134,26 +147,7 @@ export const isConflict = (error: unknown) =>
 export const allowsAuto = (item?: MarkdownExtension) => item?.modelInvocable !== false;
 export const autoEnabled = (item?: MarkdownExtension) =>
   allowsAuto(item) && item?.autoInvoke !== false;
-export { endpoint, extensionKeys };
-export function returnedItem(result: ItemResponse) {
-  if (!result) return undefined;
-  if ('id' in result) return result;
-  return result.item ?? result.extension;
-}
-export const extensionsQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: extensionKeys.list(projectId),
-    queryFn: async ({ signal }) => {
-      const result = await api<{ items: Extension[] }>(endpoint(projectId), { signal });
-      if (!Array.isArray(result?.items)) throw new Error('扩展列表响应缺少 items。');
-      return result.items;
-    },
-    staleTime: 30_000,
-    enabled: Boolean(projectId),
-  });
-export function useExtensions(projectId?: string) {
-  return useQuery(extensionsQuery(projectId ?? ''));
-}
+
 interface ToolBindingsResponse {
   bindings: SkillToolBinding[];
 }
@@ -192,46 +186,6 @@ export function useSaveSkillToolBindings(projectId: string, skillId: string) {
     },
     onSuccess: async (bindings) => {
       client.setQueryData(queryKey, bindings);
-      await client.invalidateQueries({ queryKey: extensionKeys.list(projectId) });
-    },
-  });
-}
-interface ExtensionOperation {
-  suffix?: string;
-  method: 'POST' | 'PATCH' | 'DELETE';
-  body?: unknown;
-  removeId?: string;
-}
-// Hook-level callbacks finish even when the dialog that started a request unmounts.
-// Every operation carries its own project key; late responses cannot update another project.
-export function useExtensionMutation<T = ItemResponse>(projectId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationKey: extensionKeys.mutations(projectId),
-    scope: { id: `extensions:${projectId}` },
-    mutationFn: (operation: ExtensionOperation) =>
-      api<T>(endpoint(projectId, operation.suffix), {
-        method: operation.method,
-        body: operation.body,
-      }),
-    onMutate: async () => {
-      await client.cancelQueries({ queryKey: extensionKeys.list(projectId) });
-    },
-    onSuccess: (result, operation) => {
-      const item = returnedItem(result as ItemResponse);
-      if (item)
-        client.setQueryData<Extension[]>(extensionKeys.list(projectId), (items) => {
-          if (!items) return [item];
-          return items.some((old) => old.id === item.id)
-            ? items.map((old) => (old.id === item.id ? item : old))
-            : [...items, item];
-        });
-      if (operation.removeId)
-        client.setQueryData<Extension[]>(extensionKeys.list(projectId), (items) =>
-          items?.filter((old) => old.id !== operation.removeId),
-        );
-    },
-    onSettled: async () => {
       await client.invalidateQueries({ queryKey: extensionKeys.list(projectId) });
     },
   });
