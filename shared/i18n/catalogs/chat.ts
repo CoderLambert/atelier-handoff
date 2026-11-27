@@ -283,7 +283,7 @@ export const chat = {
   ],
   'conversation.browserIssue': ['浏览器操作异常', 'Browser action issue'],
   'conversation.browserTrace': ['查看浏览器执行轨迹', 'View browser execution trace'],
-  'conversation.checkProgress': ['检查任务进度', 'Check task progress'],
+  'conversation.resumeReadOnly': ['只读续接', 'Resume read-only'],
   'conversation.context': ['本轮已读取的上下文', 'Context read for this turn'],
   'conversation.deliverables': ['本轮交付物', 'Deliverables for this turn'],
   'conversation.executionResult': ['本轮执行结果', 'Execution result for this turn'],
@@ -307,8 +307,8 @@ export const chat = {
     'Read · Project file · {{path}}',
   ],
   'conversation.retryHelp': [
-    '助手会读取现有结果，检查已完成的工作。',
-    'The assistant will read the existing results and check completed work.',
+    '只读续接会发起新一轮模型请求，基于现有结果继续，不会重放写入或命令。',
+    'Resuming starts a new read-only model turn using existing results. It will not replay writes or commands.',
   ],
   'conversation.reviewApproval': ['查看并审批', 'Review and approve'],
   'conversation.runFailed': [
@@ -316,6 +316,10 @@ export const chat = {
     'This run did not complete. View the execution trace for details.',
   ],
   'conversation.runResult': ['本轮运行结果', 'Run result for this turn'],
+  'conversation.stoppedReason': [
+    '用户停止，进程已退出；已发生的修改保留。',
+    'Stopped by the user. The process exited, and changes already made were kept.',
+  ],
   'conversation.sourceSession': ['来源会话', 'Source session'],
   'conversation.toolFailed': ['{{name}}失败', '{{name}} failed'],
   'conversation.toolSummary_one': [
