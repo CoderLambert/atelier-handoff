@@ -1,7 +1,7 @@
 /**
  * @file 在隔离真实 Electron 窗口验收按顺序显示的会话。
- * @implementation 用本地回环模型驱动真实 SDK、反向完成工具与连续文本，并核对双语、焦点及重开。
- * @updated 2026-11-26T10:30:00+08:00
+ * @implementation 用本地回环模型驱动真实 SDK，在隔离 Electron 中核对工具与文本顺序、终止后续发间距、双语、焦点及重开。
+ * @updated 2026-11-27T13:49:53+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -96,13 +96,25 @@ await mkdir(project);
 await writeFile(join(project, 'synthetic-log.txt'), 'synthetic-log-line\n'.repeat(10000));
 const model = 'fixture-ordered-ui';
 let calls = 0;
+let markStopRequest = () => {};
+const stopRequest = new Promise<void>((resolve) => {
+  markStopRequest = resolve;
+});
 const gateway = createServer(async (request, response) => {
   if (request.method !== 'POST')
     return response.end(JSON.stringify({ data: [{ model, id: model }] }));
   for await (const _chunk of request) {
     /* Drain the real SDK request. */
   }
-  if (++calls === 1)
+  calls++;
+  if (calls === 3) {
+    response.writeHead(200, { 'content-type': 'text/event-stream', 'request-id': randomUUID() });
+    response.flushHeaders();
+    markStopRequest();
+    return;
+  }
+  if (calls >= 4) return reply(response, model, [{ text: 'FOLLOWUP_COMPLETE' }]);
+  if (calls === 1)
     return reply(response, model, [
       { text: 'TRANSCRIPT_INTRO 😀' },
       {
@@ -137,6 +149,7 @@ try {
         resolve('dist/desktop/main.mjs'),
         `--user-data-dir=${join(directory, 'profile')}`,
         '--disable-gpu',
+        ...(process.env.WAYLAND_DISPLAY ? ['--ozone-platform=wayland'] : []),
       ],
       env: {
         ...process.env,
@@ -259,10 +272,58 @@ try {
       true,
     );
   }
+  await page.getByRole('button', { name: '发送任务', exact: true }).waitFor();
+  await page.locator('#prompt-input').fill('STOP_SPACING_FIXTURE');
+  await page.locator('#prompt-input').press('Enter');
+  await page.locator('.composer-stop-button').waitFor();
+  await within(stopRequest, 'stop fixture request');
+  const stopButton = page.locator('.composer-stop-button');
+  const stopRoute = '**/api/runs/*/stop';
+  await page.route(stopRoute, async (route) => {
+    await route.fulfill({ status: 503, json: { error: { code: 'STOP_FIXTURE', message: 'STOP_FAILED_FIXTURE' } } });
+  });
+  await stopButton.click();
+  await page.locator('.workspace-notice').getByText('会话操作失败。', { exact: true }).waitFor();
+  assert.equal(await stopButton.isEnabled(), true);
+  await page.unroute(stopRoute);
+  await stopButton.click();
+  await page.getByRole('button', { name: '正在停止…', exact: true }).waitFor();
+  assert.equal(await stopButton.isDisabled(), true);
+  await page.locator('.run-recovery[data-status="stopped"]').waitFor();
+  await page.getByRole('button', { name: '只读续接', exact: true }).waitFor();
+  assert.equal(await page.locator('[data-transcript-notice-kind="api_retry"]').count(), 0);
+  console.log('stage: stop failure recovers and confirmed stop retains no retry lines');
+  await page.getByRole('button', { name: '发送任务', exact: true }).waitFor();
+  await page.locator('#prompt-input').fill('FOLLOWUP_SPACING_FIXTURE');
+  await page.locator('#prompt-input').press('Enter');
+  await page.getByText('FOLLOWUP_COMPLETE', { exact: true }).waitFor();
+  const stoppedCard = page.locator('.run-recovery[data-status="stopped"]');
+  const followupBubble = page
+    .locator('.user-message-bubble')
+    .filter({ hasText: 'FOLLOWUP_SPACING_FIXTURE' });
+  for (const [width, height] of [
+    [1280, 800],
+    [1440, 900],
+    [1920, 1080],
+  ] as const) {
+    await app.evaluate(
+      ({ BrowserWindow }, size) =>
+        BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height),
+      { width, height },
+    );
+    const gap = await followupBubble.evaluate((bubble) => {
+      const card = document.querySelector('.run-recovery[data-status="stopped"]');
+      if (!card) throw new Error('Stopped recovery card missing');
+      return bubble.getBoundingClientRect().top - card.getBoundingClientRect().bottom;
+    });
+    assert.ok(Math.abs(gap - 24) < 0.1, `stopped-to-followup gap at ${width}x${height}: ${gap}`);
+  }
+  await followupBubble.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(evidence, 'stopped-followup-zh.png') });
   const sessionHash = new URL(page.url()).hash;
   await page.reload();
   await page.getByText('TRANSCRIPT_FINAL_504', { exact: true }).waitFor();
-  assert.equal(await page.locator('[data-transcript-kind="text"]').count(), 507);
+  assert.equal(await page.locator('[data-transcript-kind="text"]').count(), 508);
   await page.goto(new URL('/#/settings/models', page.url()).href);
   await page.getByRole('combobox', { name: '界面语言', exact: true }).click();
   await page.getByRole('option', { name: 'English', exact: true }).click();
@@ -270,6 +331,15 @@ try {
   await page.goto(new URL('/' + sessionHash, page.url()).href);
   await page.getByText('TRANSCRIPT_FINAL_504', { exact: true }).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  await page.getByRole('button', { name: 'Resume read-only', exact: true }).waitFor();
+  await stoppedCard.getByText('Stopped by the user. The process exited, and changes already made were kept.', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-transcript-notice-kind="api_retry"]').count(), 0);
+  const englishGap = await followupBubble.evaluate((bubble) => {
+    const card = document.querySelector('.run-recovery[data-status="stopped"]');
+    if (!card) throw new Error('Stopped recovery card missing');
+    return bubble.getBoundingClientRect().top - card.getBoundingClientRect().bottom;
+  });
+  assert.ok(Math.abs(englishGap - 24) < 0.1, `English stopped-to-followup gap: ${englishGap}`);
   await page.screenshot({ path: join(evidence, 'completed-en.png') });
   if (!(await first.evaluate((element) => element.hasAttribute('open'))))
     await first.locator(':scope > summary').click();
@@ -290,8 +360,17 @@ try {
   // Add a pre-feature persisted run only after the isolated runtime has released its writer.
   const legacyStore = new Store(join(directory, 'data'));
   try {
-    const source = legacyStore.list('runs')[0];
-    assert.ok(source);
+    const storedRuns = legacyStore.list('runs');
+    const source = storedRuns[0];
+    const stopped = storedRuns.find((run) => run.status === 'stopped');
+    assert.ok(source && stopped?.transcript);
+    const retry = { kind: 'api_retry', order: 100, at: stopped.endedAt ?? stopped.createdAt, attempt: 1, maxRetries: 9 } as const;
+    legacyStore.update('runs', stopped.id, {
+      transcript: { ...stopped.transcript, notices: [...stopped.transcript.notices, retry] },
+    });
+    legacyStore.event(stopped.id, stopped.sessionId, 'sdk.api_retry', {
+      attempt: 1, maxRetries: 9, httpStatus: null, error: 'unknown',
+    });
     const { transcript: _transcript, ...runData } = source;
     const at = new Date(Date.parse(source.createdAt) - 60_000).toISOString();
     const legacyRun = legacyStore.put('runs', {
@@ -340,7 +419,7 @@ try {
   page.setDefaultTimeout(20_000);
   await page.goto(new URL('/' + sessionHash, page.url()).href);
   await page.getByText('TRANSCRIPT_FINAL_504', { exact: true }).waitFor();
-  assert.equal(await page.locator('[data-transcript-kind="text"]').count(), 507);
+  assert.equal(await page.locator('[data-transcript-kind="text"]').count(), 508);
   await page.getByText('LEGACY_USER_BODY', { exact: true }).waitFor();
   await page.getByText('LEGACY_ASSISTANT_BODY', { exact: true }).waitFor();
   const legacy = page.locator('[data-run-id="legacy_transcript_fixture"]');
@@ -355,7 +434,11 @@ try {
   if (!(await legacyTool.evaluate((element) => element.hasAttribute('open'))))
     await legacyTool.locator(':scope > summary').click();
   await legacyTool.getByText('LEGACY_TOOL_RECEIPT', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-transcript-notice-kind="api_retry"]').count(), 0);
   await page.getByRole('tab', { name: /^Activity/ }).click();
+  await page.locator('#inspector-trace-run').click();
+  await page.getByRole('option', { name: /STOP_SPACING_FIXTURE/ }).click();
+  await page.getByText('SDK retry notice · Received after stop request', { exact: true }).waitFor();
   await page.locator('#inspector-trace-run').click();
   await page.getByRole('option', { name: /LEGACY_USER_BODY/ }).click();
   const legacyEvent = page
