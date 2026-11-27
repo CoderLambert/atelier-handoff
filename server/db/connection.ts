@@ -1,10 +1,12 @@
 /**
  * @file 打开工作台 SQLite 连接并装配 Drizzle 仓储。
- * @implementation 让旧 Store 与全部 Drizzle 仓储共用数据库句柄，以 repos 组合暴露仓储，提供读取事务并按版本顺序登记迁移。
- * @updated 2026-11-27T20:10:00+08:00
+ * @implementation 让旧 Store 与全部 Drizzle 仓储共用数据库句柄，以 repos 组合暴露仓储，提供读写事务并按版本顺序登记迁移。
+ * @updated 2026-11-27T11:20:00-08:00
  */
 import SQLite from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { appConfigRepository } from './repositories/app-config.js';
+import { documentTablesRepository } from './repositories/document-tables.js';
 import { sessionSnapshotRepository } from './repositories/session-snapshot.js';
 import { sessionEventRepository } from './repositories/session-events.js';
 import { runReceiptRepository } from './repositories/run-receipts.js';
@@ -60,6 +62,8 @@ export function openWorkbenchDatabase(path: string) {
     { version: 12, apply: () => applyScheduledTasks(db) },
   ];
   const repos = {
+    appConfig: appConfigRepository(orm),
+    documents: documentTablesRepository(orm),
     sessionSnapshots: sessionSnapshotRepository(orm),
     sessionEvents: sessionEventRepository(orm),
     runReceipts: runReceiptRepository(orm),
@@ -80,6 +84,7 @@ export function openWorkbenchDatabase(path: string) {
   return {
     db,
     readTransaction: <T>(work: () => T): T => native.transaction(work).deferred(),
+    writeTransaction: <T>(work: () => T): T => native.transaction(work).immediate(),
     assertForeignKeyIntegrity: () => assertForeignKeyIntegrity(db),
     repos,
     migrations,

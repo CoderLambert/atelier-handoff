@@ -4,34 +4,15 @@
     "sql:387fd27c84bea8f2",
     "sql:a3c147b985bf1a6e"
   ],
-  "server/data-owner.ts": [
-    "driver:09fdf6ba9fb1abd0",
-    "sql:60cb3ba8a74ea4d7"
-  ],
+  "server/data-owner.ts": ["driver:09fdf6ba9fb1abd0", "sql:60cb3ba8a74ea4d7"],
   "server/store.ts": [
-    "sql:0480da62edf0b442",
     "sql:11cae514e17e8032",
-    "sql:27848d3d48e2217b",
-    "sql:294061417fd5af77",
-    "sql:32942146ce40175c",
-    "sql:36298931fad180d7",
-    "sql:3bc40a49d855e0a3",
     "sql:52e9e50c1e64c8be",
     "sql:60d3a3820233a8d4",
     "sql:74f5a9793dc5b180",
-    "sql:77f35582677a347a",
-    "sql:7829b6f98ddf6371",
-    "sql:79c845deaba6357e",
-    "sql:93c0eaf31a9cf05b",
     "sql:9c75f193a4fe8fbe",
     "sql:a3c147b985bf1a6e",
     "sql:b05142d7ad92500e",
-    "sql:ca65a39f03817b95",
-    "sql:cec5ac31f4a5aa5e",
-    "sql:e5ef7a46fbf348c3",
-    "sql:e838e77d1c28bf1b",
-    "sql:eefcb623aafd09f1",
-    "sql:f80f2f3297b6edfd",
-    "sql:fa01a76cb02fcde6"
+    "sql:f80f2f3297b6edfd"
   ]
 }
