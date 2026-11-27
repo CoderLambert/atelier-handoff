@@ -1150,6 +1150,49 @@ test('automatic approval resolves all operation kinds without waiting and still 
     }
   }));
 
+test('a cross-project MCP approval cannot be decided by automatic mode', async () =>
+  fixture(async (base, project) => {
+    const store = new Store(join(base, 'data'));
+    const service = new PermissionService(store);
+    const run = store.put('runs', { ...runData(), approvalMode: 'automatic' });
+    const tool = store.put('tools', {
+      id: randomUUID(),
+      runId: run.id,
+      sessionId: run.sessionId,
+      name: 'shared-mcp',
+      inputSummary: '',
+      output: '',
+      status: 'running',
+      startedAt: now(),
+      endedAt: null,
+    });
+    try {
+      const pending = service.request(
+        run,
+        project,
+        {
+          toolCallId: tool.id,
+          kind: 'mcp',
+          command: 'fixture',
+          reason: 'test',
+          requireManual: true,
+        },
+        AbortSignal.timeout(2000),
+      );
+      const [permission] = store.list('permissions');
+      assert.ok(permission);
+      assert.equal(permission.status, 'pending');
+      assert.equal(store.get('runs', run.id).status, 'awaiting_permission');
+      await service.decide(permission.id, 'allow', permission.version);
+      const result = await pending;
+      assert.equal(result.status, 'allowed');
+      assert.notEqual(result.decisionSource, 'automatic');
+    } finally {
+      service.cancelRun(run.id);
+      store.close();
+    }
+  }));
+
 test('automation is explicit for one edit run, participates in idempotency, and does not survive retry', async () =>
   fixture(async (base, project) => {
     const app = await createApp({

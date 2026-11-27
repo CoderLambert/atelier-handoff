@@ -91,6 +91,7 @@ export type Extension = ExtensionBase &
         provider?: 'mcp' | 'playwright-browser';
         browserOrigins?: string[];
         autoUseInChat?: boolean;
+        shareAcrossProjects?: boolean;
         transport: McpTransport;
         allowedTools: AllowedMcpTool[];
         tools: DiscoveredTool[];

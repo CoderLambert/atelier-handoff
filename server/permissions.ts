@@ -16,6 +16,7 @@ export interface RequestedOperation {
   before?: string | null;
   after?: string | null;
   reason: string;
+  requireManual?: boolean;
 }
 async function fileBaselineIssue(
   permission: Permission,
@@ -80,7 +81,12 @@ export class PermissionService {
       expiresAt: new Date(Date.now() + this.ttlMs).toISOString(),
       reason: operation.reason,
     };
-    if (current.approvalMode === 'automatic' && current.mode === 'edit' && !current.retryOf) {
+    if (
+      !operation.requireManual &&
+      current.approvalMode === 'automatic' &&
+      current.mode === 'edit' &&
+      !current.retryOf
+    ) {
       const staleReason = permission.path ? await fileBaselineIssue(permission, root) : undefined;
       signal.throwIfAborted();
       const latest = this.store.get('runs', run.id);

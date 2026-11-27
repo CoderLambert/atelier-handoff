@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -308,6 +308,136 @@ test('project MCP opt-in gives normal chats only tools allowed in their mode', a
   }
 });
 
+test('shared MCP is explicit, versioned, and not editable from another project', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'atelier-shared-mcp-'));
+  const started: { projectId: string; extensionIds: string[] }[] = [];
+  const app = await createApp({
+    root,
+    data: folder,
+    runnerFactory: (store) => ({
+      start(run, _prompt, mcp = []) {
+        started.push({ projectId: run.projectId, extensionIds: mcp.map(({ id }) => id) });
+        store.update('runs', run.id, { status: 'completed' });
+      },
+      stop() {},
+      async shutdown() {},
+    }),
+  });
+  try {
+    await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+    const address = app.server.address();
+    assert.ok(address && typeof address !== 'string');
+    const base = `http://127.0.0.1:${address.port}`;
+    const registry = new ProjectExtensions(app.store);
+    function addProject(name: string) {
+      return app.store.put('projects', {
+        id: randomUUID(),
+        name,
+        path: join(folder, name),
+        branch: '',
+        available: true,
+        createdAt: new Date().toISOString(),
+      }).id;
+    }
+    await Promise.all(['owner', 'consumer'].map((name) => mkdir(join(folder, name))));
+    const owner = addProject('owner');
+    const consumer = addProject('consumer');
+    const { csrfToken } = await (await fetch(`${base}/api/bootstrap`)).json();
+    const post = async (path: string, body: object, status: number) => {
+      const response = await fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Atelier-Token': csrfToken },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      assert.equal(response.status, status, JSON.stringify(result));
+      return result;
+    };
+    const { session } = await post('/api/sessions', { projectId: consumer }, 201);
+    const send = (
+      extensionSelections: { id: string; version: number; tools: string[] }[],
+      status: number,
+    ) =>
+      post(
+        `/api/sessions/${session.id}/messages`,
+        {
+          text: 'Use OpenWiki',
+          mode: 'edit',
+          extensionSelections,
+          idempotencyKey: randomUUID(),
+        },
+        status,
+      );
+    const item = registry.save(owner, {
+      kind: 'mcp',
+      name: 'openwiki-atelier',
+      enabled: true,
+      shareAcrossProjects: true,
+      autoUseInChat: true,
+      transport: { type: 'stdio', command: process.execPath, args: [fixture], envNames: [] },
+    });
+    assert.equal(item.kind, 'mcp');
+    assert.equal(item.autoUseInChat, false);
+    assert.deepEqual(registry.selectionCatalog(consumer), []);
+    const tested = registry.recordTest(item, {
+      status: 'connected',
+      tools: [{ name: 'fixture_echo', description: '' }],
+    });
+    assert.deepEqual(registry.selectionCatalog(consumer), []);
+    const shared = registry.save(
+      owner,
+      { version: tested.version, allowedTools: [{ name: 'fixture_echo', access: 'read' }] },
+      item.id,
+    );
+    assert.deepEqual(registry.list(consumer), []);
+    assert.deepEqual(
+      registry.selectionCatalog(consumer).map(({ id }) => id),
+      [shared.id],
+    );
+    const endpoint = `${base}/api/projects/${consumer}/extensions`;
+    const localResponse = await fetch(endpoint);
+    assert.equal(localResponse.status, 200);
+    assert.deepEqual(await localResponse.json(), { items: [] });
+    const picker = async () => {
+      const response = await fetch(`${endpoint}?scope=picker`);
+      assert.equal(response.status, 200);
+      return (await response.json()).items;
+    };
+    const [offered] = await picker();
+    assert.equal(offered?.id, shared.id);
+    assert.deepEqual(offered.allowedTools, [{ name: 'fixture_echo', access: 'approval' }]);
+    assert.throws(() => registry.get(consumer, shared.id), { code: 'NOT_FOUND' });
+    assert.deepEqual(registry.resolve(owner, 'edit', 'wiki', []).mcp, []);
+    assert.deepEqual(registry.resolve(consumer, 'edit', 'wiki', []).mcp, []);
+    const selections = [{ id: shared.id, version: shared.version, tools: ['fixture_echo'] }];
+    const [resolved] = registry.resolve(consumer, 'edit', 'wiki', selections).mcp;
+    assert.equal(resolved?.id, shared.id);
+    assert.equal(resolved.projectId, owner);
+    assert.deepEqual(resolved.allowedTools, [{ name: 'fixture_echo', access: 'read' }]);
+    assert.throws(() => registry.resolve(consumer, 'readonly', 'wiki', selections), {
+      code: 'MCP_TOOL_NOT_ALLOWED',
+    });
+    assert.throws(
+      () => registry.resolve(consumer, 'edit', 'wiki', selections, new Set([shared.id])),
+      { code: 'EXTENSION_CHANGED' },
+    );
+    await send([], 202);
+    await send(selections, 202);
+    assert.deepEqual(started, [
+      { projectId: consumer, extensionIds: [] },
+      { projectId: consumer, extensionIds: [shared.id] },
+    ]);
+    registry.save(owner, { version: shared.version, shareAcrossProjects: false }, shared.id);
+    assert.deepEqual(registry.selectionCatalog(consumer), []);
+    assert.deepEqual(await picker(), []);
+    assert.equal((await send(selections, 409)).error.code, 'EXTENSION_CHANGED');
+    assert.equal(started.length, 2);
+  } finally {
+    await app.close();
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
 test('MCP stdio discovery and calling use only explicitly allowed tools', async () => {
   const server = {
     kind: 'mcp' as const,
@@ -359,13 +489,27 @@ test('opt-in stdio MCP sessions reuse state, isolate services, and reset after c
     const discovered = await testMcp(server, root, AbortSignal.timeout(10_000));
     assert.equal(discovered.status, 'connected');
     const configured = { ...server, ...discovered };
-    const count = (item: typeof configured) =>
-      callMcp(item, root, 'fixture_count', {}, AbortSignal.timeout(10_000), undefined, sessions);
+    const count = (item: typeof configured, projectId?: string) =>
+      callMcp(
+        item,
+        root,
+        'fixture_count',
+        {},
+        AbortSignal.timeout(10_000),
+        undefined,
+        sessions,
+        undefined,
+        projectId,
+      );
+    const otherProject = randomUUID();
     assert.deepEqual(await Promise.all([count(configured), count(configured)]), ['1', '2']);
     assert.equal(await count({ ...configured, id: randomUUID(), projectId: randomUUID() }), '1');
+    assert.equal(await count(configured, otherProject), '1');
     assert.equal(await count(configured), '3');
+    assert.equal(await count(configured, otherProject), '2');
     await sessions.close(configured.id);
     assert.equal(await count(configured), '1');
+    assert.equal(await count(configured, otherProject), '1');
     const ephemeral = { ...configured, transport: { ...configured.transport, keepAlive: false } };
     assert.equal(await count(ephemeral), '1');
     assert.equal(await count(ephemeral), '1');

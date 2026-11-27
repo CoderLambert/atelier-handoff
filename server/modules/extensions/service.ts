@@ -75,16 +75,20 @@ export function createExtensionService({
     return login;
   }
 
-  function listPublicExtensions(projectId: string) {
-    return extensions
-      .list(projectId)
-      .map((item) =>
-        publicExtension(
-          item.kind === 'skill' && item.modelInvocable === undefined
+  function listPublicExtensions(projectId: string, picker = false) {
+    const items = picker ? extensions.selectionCatalog(projectId) : extensions.list(projectId);
+    return items.map((item) =>
+      publicExtension(
+        item.kind === 'mcp' && item.projectId !== projectId
+          ? {
+              ...item,
+              allowedTools: item.allowedTools.map(({ name }) => ({ name, access: 'approval' })),
+            }
+          : item.kind === 'skill' && item.modelInvocable === undefined
             ? { ...item, modelInvocable: inspectMarkdown(item.body, item.package).modelInvocable }
             : item,
-        ),
-      );
+      ),
+    );
   }
 
   function browserPreview(projectId: string, includeImage: boolean) {
@@ -156,6 +160,7 @@ export function createExtensionService({
       previous.kind === 'mcp' &&
       (item.kind !== 'mcp' ||
         !item.enabled ||
+        item.shareAcrossProjects !== previous.shareAcrossProjects ||
         JSON.stringify(item.transport) !== JSON.stringify(previous.transport))
     )
       await mcpSessions.close(id);

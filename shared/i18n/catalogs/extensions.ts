@@ -442,8 +442,8 @@ export const extensions = {
   'extensions.importMarkdown': ['导入 Markdown', 'Import Markdown'],
   'extensions.addMcp': ['添加 MCP', 'Add MCP'],
   'extensions.mcpScope': [
-    '只在当前项目生效。连接测试通过后，可在会话中输入 # 选择已允许的工具。',
-    'Applies only to this project. After a successful connection test, type # in a session to select allowed tools.',
+    '此列表只管理当前项目的 MCP。连接测试通过后，可在会话中输入 # 选择已允许的工具；共享的本地进程也可在其他项目中手动选用。',
+    'This list manages only the current project’s MCPs. After a successful connection test, type # in a session to select allowed tools. Shared local processes can also be selected manually in other projects.',
   ],
   'extensions.skillScope': [
     '只在当前项目生效。允许自动调用的 Skill 可由模型按需使用；输入 / 可手动选择支持的 Skill。',
@@ -601,6 +601,14 @@ export const extensions = {
     '会话模式和已授权工具决定本轮可用范围。',
     'The session mode and allowed tools determine access for this turn.',
   ],
+  'extensionEditor.shareAcrossProjects': [
+    '所有项目可手动选用',
+    'Allow manual selection in all projects',
+  ],
+  'extensionEditor.shareAcrossProjectsHelp': [
+    '仅适用于本地 stdio 进程。启用并通过连接测试后，可在任何项目的会话中用 # 手动选用已允许的工具。共享时不会自动提供工具；在其他项目中每次调用都要审批。',
+    'Only for local stdio processes. Once enabled and successfully tested, allowed tools can be selected manually with # in any project. Shared tools are never offered automatically and each call from another project requires approval.',
+  ],
   'extensionEditor.transport': ['连接方式', 'Connection type'],
   'extensionEditor.stdio': ['本地进程 · stdio', 'Local process · stdio'],
   'extensionEditor.serviceUrl': ['服务 URL', 'Service URL'],
@@ -692,6 +700,8 @@ export const extensions = {
   'picker.filesHeading': ['项目文件', 'Project files'],
   'picker.chooseCommand': ['选择命令或 Skill', 'Choose a command or Skill'],
   'picker.chooseMcp': ['选择 MCP 工具', 'Choose an MCP tool'],
+  'picker.mcpScope': ['当前项目与共享 MCP', 'Current project and shared MCPs'],
+  'picker.sharedApproval': ['共享 · 每次调用需审批', 'Shared · approval required for each call'],
   'picker.chooseFile': ['选择要引用的项目文件', 'Choose a project file to reference'],
   'picker.noTools': [
     '没有可用工具。请先测试 MCP 并允许工具。',
