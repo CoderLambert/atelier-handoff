@@ -1,7 +1,7 @@
 /**
  * @file 验证真实 SDK 会话顺序、流式文本和模型请求计时。
- * @implementation 使用隔离 HTTP 工作台与回环模型检查混合文本工具、历史恢复、重试及错误，并核对请求与流的计时和脱敏诊断。
- * @updated 2026-11-27T03:14:40+08:00
+ * @implementation 使用隔离 HTTP 工作台与回环模型验证混合正文工具、恢复、停止及错误，核对重试只记运行事件、请求与流的计时及脱敏诊断。
+ * @updated 2026-11-27T14:21:24+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +19,7 @@ import type {
   Message,
   Permission,
   Run,
+  RunEvent,
   SendSessionMessageResult,
   ToolCall,
 } from '../shared/types.js';
@@ -264,7 +265,7 @@ test(
       }
       throw new Error('Timed out observing ' + label);
     }
-    const trace = (id: string) => request<{ run: Run; tools: ToolCall[] }>('/api/runs/' + id);
+    const trace = (id: string) => request<{ run: Run; tools: ToolCall[]; events: RunEvent[] }>('/api/runs/' + id);
     const snapshot = (id: string) =>
       request<{ messages: Message[]; runs: Run[]; tools: ToolCall[] }>('/api/sessions/' + id);
     try {
@@ -418,24 +419,13 @@ test(
         async () => ((await trace(retried.run)).run.status === 'completed' ? true : undefined),
         'retry recovery',
       );
-      const retriedRun = (await trace(retried.run)).run;
-      const retry = retriedRun.transcript?.notices.find((notice) => notice.kind === 'api_retry');
+      const { run: retriedRun, events: retryEvents } = await trace(retried.run);
+      const retry = retryEvents.find((event) => event.type === 'sdk.api_retry');
+      assert.equal(retry?.payload.httpStatus, 429);
+      assert.equal(retry?.payload.afterStopRequested, undefined);
+      assert.ok(!retriedRun.transcript?.notices.some((notice) => notice.kind === 'api_retry'));
       assert.ok(retriedRun.requestTiming?.records.some(({ request }) => (request?.attempts ?? 0) > 1));
-      assert.ok(retry?.kind === 'api_retry');
-      assert.ok(retry.attempt >= 1 && retry.maxRetries >= retry.attempt);
-      const recoveredSnapshot = await snapshot(retried.session);
-      const retryUserOrder = recoveredSnapshot.messages.find(
-        (message) => message.role === 'user',
-      )?.transcriptOrder;
-      const recoveredTextOrder = recoveredSnapshot.messages.find(
-        (message) => message.role === 'assistant',
-      )?.transcriptParts?.[0]?.order;
-      assert.ok(
-        retryUserOrder &&
-          recoveredTextOrder &&
-          retryUserOrder < retry.order &&
-          retry.order < recoveredTextOrder,
-      );
+      assert.ok(attempts.get('RETRY_FIXTURE') === 2);
       const errored = await start('ERROR_FIXTURE');
       await wait(
         async () => ((await trace(errored.run)).run.status === 'failed' ? true : undefined),

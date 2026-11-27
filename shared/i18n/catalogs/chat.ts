@@ -579,10 +579,6 @@ export const chat = {
   'plan.inProgress': ['进行中', 'In progress'],
   'plan.label': ['任务', 'Tasks'],
   'plan.pending': ['待执行', 'Pending'],
-  'transcript.retry': [
-    '模型正在重试（{{attempt}} / {{maxRetries}}）',
-    'Model retry ({{attempt}} / {{maxRetries}})',
-  ],
   'transcript.apiError': ['模型请求失败：{{code}}', 'Model request failed: {{code}}'],
   'transcript.toolPreparing': ['正在准备 {{name}}', 'Preparing {{name}}'],
   'transcript.toolInterrupted': ['{{name}} 已在启动前停止', '{{name}} stopped before starting'],
