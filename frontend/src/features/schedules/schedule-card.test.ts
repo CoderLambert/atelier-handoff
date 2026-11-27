@@ -1,12 +1,12 @@
 /**
- * @file 测试对话内定时任务卡片的工具结果解析逻辑。
- * @implementation 验证 create/update_scheduled_task 成功输出能还原完整任务对象，并忽略失败或无关工具输出。
- * @updated 2026-11-27T13:55:00+08:00
+ * @file 测试对话内定时任务卡片的工具结果解析与摘要格式化逻辑。
+ * @implementation 验证 create/update_scheduled_task 成功输出能还原完整任务对象、忽略失败或无关工具输出，并正确展示按需触发摘要。
+ * @updated 2026-11-27T15:20:00+08:00
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ToolCall } from '@shared/types';
-import { parseScheduledTaskFromTool } from './schedule-card';
+import { formatScheduleSummary, parseScheduledTaskFromTool } from './schedule-card';
 
 function sampleTool(overrides: Partial<ToolCall> = {}): ToolCall {
   return {
@@ -20,6 +20,7 @@ function sampleTool(overrides: Partial<ToolCall> = {}): ToolCall {
       task: {
         id: 'task-1',
         projectId: 'proj-1',
+        slug: 'daily-sync',
         targetMode: 'new_once',
         targetSessionId: null,
         agentRevisionId: null,
@@ -34,6 +35,8 @@ function sampleTool(overrides: Partial<ToolCall> = {}): ToolCall {
         misfirePolicy: 'run_once',
         overlapPolicy: 'skip',
         notifyPolicy: 'on_error',
+        remoteTriggerEnabled: false,
+        hasTriggerToken: false,
         status: 'active',
         pauseReason: null,
         nextRunAt: '2026-11-28T01:00:00.000Z',
@@ -55,6 +58,7 @@ test('parseScheduledTaskFromTool extracts valid task from create/update schedule
   const parsed = parseScheduledTaskFromTool(sampleTool());
   assert.ok(parsed);
   assert.equal(parsed.id, 'task-1');
+  assert.equal(parsed.slug, 'daily-sync');
   assert.equal(parsed.title, '定时检查分支同步');
 
   assert.equal(parseScheduledTaskFromTool(sampleTool({ status: 'failed' })), undefined);
@@ -63,4 +67,12 @@ test('parseScheduledTaskFromTool extracts valid task from create/update schedule
     undefined,
   );
   assert.equal(parseScheduledTaskFromTool(sampleTool({ output: 'not-json' })), undefined);
+});
+
+test('formatScheduleSummary handles manual on-demand timing', () => {
+  const summary = formatScheduleSummary(
+    { timing: { kind: 'manual' }, timeZone: 'Asia/Shanghai' },
+    (key) => key,
+  );
+  assert.equal(summary, 'timing.manual');
 });

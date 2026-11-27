@@ -119,7 +119,7 @@ export async function createApp(options: CreateAppOptions) {
       options.rtkBinary
         ? { binary: options.rtkBinary, enabled: (id) => rtkSettings.enabled(id) }
         : undefined,
-      schedules,
+      schedulesRuntime.mcpHost,
     );
   const csrfToken = randomBytes(32).toString('hex');
   const gateway = createGatewayService({

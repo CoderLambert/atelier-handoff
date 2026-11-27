@@ -1,28 +1,30 @@
 /**
- * @file 注册定时任务管理相关的内置 MCP 工具。
- * @implementation 允许会话内 Agent 列出、创建、更新或删除定时任务；创建或提权至 edit + automatic 或修改高权限任务提示词时强制走人工审批。
- * @updated 2026-11-27T13:18:00+08:00
+ * @file 注册定时任务管理与跨会话触发相关的内置 MCP 工具。
+ * @implementation 允许会话内 Agent 列出、创建、更新、删除、按需触发或查询定时任务运行结果；涉及高权限写任务时强制走人工审批并传递链路深度防环。
+ * @updated 2026-11-27T15:10:00+08:00
  */
 import { z } from 'zod';
 import { AppError } from '../../../../shared/errors.js';
 import {
+  SCHEDULE_TRIGGER_INPUT_MAX_LENGTH,
   scheduleMisfirePolicySchema,
   scheduleNotifyPolicySchema,
   scheduleOverlapPolicySchema,
+  scheduleSlugSchema,
   scheduleTargetModeSchema,
   scheduleTimingSchema,
 } from '../../../../shared/schedules.js';
 import type { RunMcpToolHost, ToolRegistration } from './types.js';
 
 export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRegistration) {
-  const { schedules, run, projectId, approve, toolSignal, verifyCurrent } = host;
+  const { schedules, run, projectId, approve, toolSignal, verifyCurrent, automaticApproval } = host;
   if (!schedules) return;
   const { custom, mcpTools } = registration;
 
   mcpTools.push(
     custom(
       'list_scheduled_tasks',
-      'List scheduled automation tasks in the current project, including their id, title, timing, status, and nextRunAt.',
+      'List scheduled or on-demand automation tasks in the current project, including their id, slug, title, timing, status, and nextRunAt.',
       {
         status: z.enum(['active', 'paused', 'ended']).optional(),
       },
@@ -33,8 +35,9 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
     ),
     custom(
       'create_scheduled_task',
-      'Create a durable scheduled automation task in the current project. Defaults to readonly mode and dedicated automation session (new_once). Creating an edit + automatic task requires explicit manual user approval.',
+      'Create a durable scheduled or on-demand (timing.kind="manual") automation task in the current project. Optional slug provides a stable alias for triggering. Creating an edit + automatic task requires explicit manual user approval.',
       {
+        slug: scheduleSlugSchema.nullable().optional(),
         title: z.string().trim().min(1).max(160),
         prompt: z.string().trim().min(1).max(32_000),
         timing: scheduleTimingSchema,
@@ -74,6 +77,7 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
         const task = schedules.create(
           {
             projectId,
+            ...(args.slug !== undefined ? { slug: args.slug } : {}),
             title: args.title,
             prompt: args.prompt,
             timing: args.timing,
@@ -98,6 +102,7 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
       {
         id: z.string().min(1),
         expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
+        slug: scheduleSlugSchema.nullable().optional(),
         title: z.string().trim().min(1).max(160).optional(),
         prompt: z.string().trim().min(1).max(32_000).optional(),
         timing: scheduleTimingSchema.optional(),
@@ -159,6 +164,91 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
         verifyCurrent();
         schedules.remove(args.id);
         return { deleted: true, id: args.id };
+      },
+    ),
+    custom(
+      'trigger_scheduled_task',
+      'Asynchronously trigger an automation task in the current project by its id or slug. Optional input is appended to this single run without mutating the task template. Returns immediately with the task run record.',
+      {
+        target: z.string().trim().min(1).max(160),
+        input: z.string().trim().min(1).max(SCHEDULE_TRIGGER_INPUT_MAX_LENGTH).optional(),
+        idempotencyKey: z.string().trim().min(1).max(160).optional(),
+        reason: z.string().trim().min(1).max(500).optional(),
+      },
+      async (args, toolCallId) => {
+        const targetTask = schedules.resolve(args.target, projectId);
+        const requiresManual =
+          targetTask.mode === 'edit' &&
+          targetTask.approvalMode === 'automatic' &&
+          !automaticApproval;
+        if (requiresManual) {
+          await approve(
+            {
+              toolCallId,
+              kind: 'mcp',
+              command: `trigger_scheduled_task: ${targetTask.slug ?? targetTask.title}`,
+              reason:
+                args.reason ??
+                `触发具有无人值守修改权限的任务「${targetTask.title}」需要人工确认。`,
+              requireManual: true,
+            },
+            toolSignal(),
+          );
+        }
+        verifyCurrent();
+        const currentMeta = run.scheduleMeta;
+        const visitedTaskIds = Array.from(
+          new Set([
+            ...(currentMeta?.visitedTaskIds ?? []),
+            ...(currentMeta?.taskId ? [currentMeta.taskId] : []),
+          ]),
+        );
+        const nextChainDepth = currentMeta ? (currentMeta.chainDepth ?? 0) + 1 : 1;
+        const triggerSource = currentMeta
+          ? `task:${currentMeta.taskId}`
+          : `session:${run.sessionId}`;
+        const result = await schedules.trigger(targetTask.id, {
+          triggerKind: 'agent',
+          projectId,
+          input: args.input,
+          idempotencyKey: args.idempotencyKey,
+          triggerSource,
+          chainDepth: nextChainDepth,
+          visitedTaskIds,
+          allowPaused: false,
+        });
+        return {
+          task: {
+            id: targetTask.id,
+            slug: targetTask.slug,
+            title: targetTask.title,
+          },
+          run: result.run,
+          deduplicated: result.deduplicated,
+        };
+      },
+    ),
+    custom(
+      'get_scheduled_task_run',
+      'Read the status and result metadata of a previously triggered automation task run in the current project.',
+      {
+        runRecordId: z.string().trim().min(1),
+      },
+      async (args) => {
+        verifyCurrent();
+        const record = schedules.getRun(args.runRecordId);
+        const task = schedules.get(record.taskId);
+        if (task.projectId !== projectId) {
+          throw new AppError('NOT_FOUND', '当前项目不存在该任务运行记录。', 404);
+        }
+        return {
+          task: {
+            id: task.id,
+            slug: task.slug,
+            title: task.title,
+          },
+          run: record,
+        };
       },
     ),
   );

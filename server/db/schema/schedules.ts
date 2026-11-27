@@ -1,7 +1,7 @@
 /**
  * @file 定义定时任务与触发历史的 Drizzle 表结构。
- * @implementation 使用外键级联管理项目归属与会话解绑，并维护到期扫描与运行历史索引。
- * @updated 2026-11-27T13:05:00+08:00
+ * @implementation 使用外键级联管理项目归属与会话解绑，并维护别名、单任务远程令牌哈希、幂等键与链路深度字段。
+ * @updated 2026-11-27T15:00:00+08:00
  */
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { projects, runs, sessions } from './session-snapshot.js';
@@ -11,6 +11,7 @@ export const scheduledTasks = sqliteTable('scheduled_tasks', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
+  slug: text('slug'),
   targetMode: text('target_mode').notNull(),
   targetSessionId: text('target_session_id').references(() => sessions.id, {
     onDelete: 'set null',
@@ -28,6 +29,8 @@ export const scheduledTasks = sqliteTable('scheduled_tasks', {
   misfirePolicy: text('misfire_policy').notNull().default('run_once'),
   overlapPolicy: text('overlap_policy').notNull().default('skip'),
   notifyPolicy: text('notify_policy').notNull().default('on_error'),
+  remoteTriggerEnabled: integer('remote_trigger_enabled').notNull().default(0),
+  triggerTokenHash: text('trigger_token_hash'),
   status: text('status').notNull().default('active'),
   pauseReason: text('pause_reason'),
   nextRunAt: text('next_run_at'),
@@ -52,6 +55,9 @@ export const scheduledTaskRuns = sqliteTable('scheduled_task_runs', {
   status: text('status').notNull(),
   skipReason: text('skip_reason'),
   error: text('error'),
+  idempotencyKey: text('idempotency_key'),
+  triggerSource: text('trigger_source'),
+  chainDepth: integer('chain_depth').notNull().default(0),
   createdAt: text('created_at').notNull(),
   finishedAt: text('finished_at'),
 });

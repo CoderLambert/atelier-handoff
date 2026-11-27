@@ -1,7 +1,7 @@
 /**
  * @file 提供对话内嵌的定时任务卡片与定时触发标识组件。
  * @implementation 解析 create/update_scheduled_task 工具输出并渲染可点击打开右侧详情面板的任务卡片，同时为带 scheduleMeta 的运行渲染触发头。
- * @updated 2026-11-27T13:48:00+08:00
+ * @updated 2026-11-27T15:15:00+08:00
  */
 import { Clock } from 'lucide-react';
 import {
@@ -39,6 +39,8 @@ export function formatScheduleSummary(
 ): string {
   const { timing, timeZone } = task;
   switch (timing.kind) {
+    case 'manual':
+      return t('timing.manual');
     case 'daily':
       return `${t('timing.daily')} ${timing.time} (${timeZone})`;
     case 'weekly': {

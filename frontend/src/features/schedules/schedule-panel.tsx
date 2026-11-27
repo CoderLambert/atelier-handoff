@@ -25,6 +25,7 @@ import { useSchedules } from '@/use-query/schedules/use-schedules';
 import { useUpdateSchedule } from '@/use-query/schedules/use-update-schedule';
 import { ScheduleForm } from './schedule-form';
 import { ScheduleHistory } from './schedule-history';
+import { ScheduleTriggerSection } from './schedule-trigger-section';
 import './schedules.css';
 
 export function ScheduleInspectorPanel({
@@ -219,19 +220,22 @@ export function ScheduleInspectorPanel({
             </div>
 
             {tab === 'rules' ? (
-              <ScheduleForm
-                mode="edit"
-                task={activeTask}
-                projects={projects}
-                sessions={sessions}
-                pending={updateMutation.isPending}
-                error={
-                  updateMutation.error?.message ??
-                  runNowMutation.error?.message ??
-                  deleteMutation.error?.message
-                }
-                onUpdate={(id, patch) => updateMutation.mutate({ id, patch })}
-              />
+              <>
+                <ScheduleForm
+                  mode="edit"
+                  task={activeTask}
+                  projects={projects}
+                  sessions={sessions}
+                  pending={updateMutation.isPending}
+                  error={
+                    updateMutation.error?.message ??
+                    runNowMutation.error?.message ??
+                    deleteMutation.error?.message
+                  }
+                  onUpdate={(id, patch) => updateMutation.mutate({ id, patch })}
+                />
+                <ScheduleTriggerSection task={activeTask} />
+              </>
             ) : (
               <ScheduleHistory
                 runs={runsQuery.data ?? []}

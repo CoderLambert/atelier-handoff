@@ -68,6 +68,7 @@ export function ScheduleForm({
     task?.projectId ?? defaultProjectId ?? projects[0]?.id ?? '',
   );
   const [title, setTitle] = useState(task?.title ?? '');
+  const [slug, setSlug] = useState(task?.slug ?? '');
   const [prompt, setPrompt] = useState(task?.prompt ?? '');
   const [targetMode, setTargetMode] = useState<ScheduleTargetMode>(task?.targetMode ?? 'new_once');
   const [targetSessionId, setTargetSessionId] = useState(task?.targetSessionId ?? '');
@@ -114,6 +115,7 @@ export function ScheduleForm({
     if (!task) return;
     setProjectId(task.projectId);
     setTitle(task.title);
+    setSlug(task.slug ?? '');
     setPrompt(task.prompt);
     setTargetMode(task.targetMode);
     setTargetSessionId(task.targetSessionId ?? '');
@@ -146,6 +148,8 @@ export function ScheduleForm({
 
   function buildTiming(): ScheduleTiming {
     switch (timingKind) {
+      case 'manual':
+        return { kind: 'manual' };
       case 'once':
         return { kind: 'once', runAt: new Date(runAtLocal).toISOString() };
       case 'interval':
@@ -167,9 +171,11 @@ export function ScheduleForm({
     event.preventDefault();
     const timing = buildTiming();
     const approvalMode = permissionMode === 'edit' && automaticApproval ? 'automatic' : null;
+    const normalizedSlug = slug.trim() || null;
     if (mode === 'create' && onCreate) {
       onCreate({
         projectId,
+        ...(normalizedSlug ? { slug: normalizedSlug } : {}),
         title: title.trim(),
         prompt: prompt.trim(),
         timing,
@@ -186,6 +192,7 @@ export function ScheduleForm({
     } else if (mode === 'edit' && task && onUpdate) {
       onUpdate(task.id, {
         expectedUpdatedAt: task.updatedAt,
+        slug: normalizedSlug,
         title: title.trim(),
         prompt: prompt.trim(),
         timing,
@@ -322,7 +329,7 @@ export function ScheduleForm({
       <fieldset className="schedules-section-card">
         <legend className="schedules-section-heading">{t('sections.schedule')}</legend>
 
-        <div className="schedules-grid-2">
+        <div className={timingKind === 'manual' ? undefined : 'schedules-grid-2'}>
           <div className="schedules-field">
             <span className="schedules-label">{t('fields.timingKind')}</span>
             <Select
@@ -333,6 +340,7 @@ export function ScheduleForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" align="start">
+                <SelectItem value="manual">{t('timing.manual')}</SelectItem>
                 <SelectItem value="daily">{t('timing.daily')}</SelectItem>
                 <SelectItem value="weekly">{t('timing.weekly')}</SelectItem>
                 <SelectItem value="interval">{t('timing.interval')}</SelectItem>
@@ -342,16 +350,18 @@ export function ScheduleForm({
             </Select>
           </div>
 
-          <label className="schedules-field">
-            <span className="schedules-label">{t('fields.timeZone')}</span>
-            <input
-              type="text"
-              className="schedules-input schedules-mono"
-              value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
-              required
-            />
-          </label>
+          {timingKind !== 'manual' ? (
+            <label className="schedules-field">
+              <span className="schedules-label">{t('fields.timeZone')}</span>
+              <input
+                type="text"
+                className="schedules-input schedules-mono"
+                value={timeZone}
+                onChange={(e) => setTimeZone(e.target.value)}
+                required
+              />
+            </label>
+          ) : null}
         </div>
 
         {timingKind === 'daily' ? (
@@ -481,6 +491,17 @@ export function ScheduleForm({
 
         {advancedOpen ? (
           <div className="schedules-advanced-body">
+            <label className="schedules-field">
+              <span className="schedules-label">{t('fields.slug')}</span>
+              <input
+                type="text"
+                className="schedules-input schedules-mono"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder={t('fields.slugPlaceholder')}
+                maxLength={64}
+              />
+            </label>
             <div className="schedules-grid-2">
               <div className="schedules-field">
                 <span className="schedules-label">{t('fields.mode')}</span>

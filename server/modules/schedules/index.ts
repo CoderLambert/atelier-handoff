@@ -1,13 +1,14 @@
 /**
  * @file 装配定时任务领域服务与调度器。
- * @implementation 统一创建 ScheduleService 与 ScheduleScheduler，暴露启动、停止与会话归档/删除联动钩子。
- * @updated 2026-11-27T13:20:00+08:00
+ * @implementation 统一创建 ScheduleService 与 ScheduleScheduler，并通过 mcpHost 桥接服务与延迟挂载的触发器，避免循环依赖。
+ * @updated 2026-11-27T15:05:00+08:00
  */
+import { AppError } from '../../../shared/errors.js';
+import type { Session } from '../../../shared/types.js';
 import type { AgentProfiles } from '../../agent-profiles.js';
 import type { Store } from '../../store.js';
 import type { StartRun } from '../runs/create-run.js';
-import type { Session } from '../../../shared/types.js';
-import { createScheduleScheduler } from './scheduler.js';
+import { createScheduleScheduler, type TriggerScheduleOptions } from './scheduler.js';
 import { createScheduleService } from './service.js';
 
 export function createSchedulesRuntime(options: {
@@ -23,6 +24,22 @@ export function createSchedulesRuntime(options: {
     onChanged: () => rescheduleTasks?.(),
   });
   let scheduler: ReturnType<typeof createScheduleScheduler> | undefined;
+
+  const mcpHost = {
+    list: service.list,
+    get: service.get,
+    resolve: service.resolve,
+    getRun: service.getRun,
+    create: service.create,
+    update: service.update,
+    remove: service.remove,
+    trigger: (idOrSlug: string, triggerOptions: TriggerScheduleOptions) => {
+      if (!scheduler) {
+        throw new AppError('SCHEDULE_NOT_READY', '定时任务调度器尚未就绪。', 503);
+      }
+      return scheduler.trigger(idOrSlug, triggerOptions);
+    },
+  };
 
   function attach(deps: {
     createSession(input: {
@@ -45,5 +62,5 @@ export function createSchedulesRuntime(options: {
     return scheduler;
   }
 
-  return { service, attach };
+  return { service, mcpHost, attach };
 }

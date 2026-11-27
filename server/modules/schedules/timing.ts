@@ -1,7 +1,7 @@
 /**
  * @file 计算与校验定时任务的下一次触发时刻。
- * @implementation 基于 croner 进行标准 5 段 Cron 与 IANA 时区算术，保留五种权威调度规则并处理夏令时跳变。
- * @updated 2026-11-27T13:08:00+08:00
+ * @implementation 基于 croner 进行标准 5 段 Cron 与 IANA 时区算术，保留按需触发与五种时钟调度规则并处理夏令时跳变。
+ * @updated 2026-11-27T15:05:00+08:00
  */
 import { Cron } from 'croner';
 import { AppError } from '../../../shared/errors.js';
@@ -56,6 +56,8 @@ export function normalizeTiming(
 ): ScheduleTiming {
   validateTimeZone(timeZone);
   switch (timing.kind) {
+    case 'manual':
+      return { kind: 'manual' };
     case 'once': {
       const target = new Date(timing.runAt);
       if (Number.isNaN(target.getTime()))
@@ -130,6 +132,8 @@ export function computeNextRunAt(
   options?: { lastRunAt?: string | null },
 ): string | null {
   switch (timing.kind) {
+    case 'manual':
+      return null;
     case 'once': {
       const target = new Date(timing.runAt);
       return target.getTime() > after.getTime() ? target.toISOString() : null;
@@ -183,6 +187,8 @@ export function computeNextRunAt(
 export function timingEquals(a: ScheduleTiming, b: ScheduleTiming): boolean {
   if (a.kind !== b.kind) return false;
   switch (a.kind) {
+    case 'manual':
+      return b.kind === 'manual';
     case 'once':
       return b.kind === 'once' && a.runAt === b.runAt;
     case 'interval':

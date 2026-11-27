@@ -1,7 +1,7 @@
 /**
  * @file 定义运行 MCP 工具宿主与注册器共享契约。
  * @implementation 打破 mcp-tools 桶文件与各子注册模块间的仅类型循环依赖，保持单一权威类型来源。
- * @updated 2026-11-27T22:35:00+08:00
+ * @updated 2026-11-27T15:10:00+08:00
  */
 import type { AsyncLocalStorage } from 'node:async_hooks';
 import type { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
@@ -21,6 +21,11 @@ import type { McpSessions } from '../../../extension-mcp.js';
 import type { RequestedOperation } from '../../../permissions.js';
 import type { RunSkill } from '../../../run-skills.js';
 import type { executeSkillPackage } from '../../../skill-package-runtime.js';
+import type {
+  ScheduleScheduler,
+  TriggerScheduleOptions,
+  TriggerScheduleResult,
+} from '../../schedules/scheduler.js';
 import type { ScheduleService } from '../../schedules/service.js';
 
 export type McpTools = NonNullable<Parameters<typeof createSdkMcpServer>[0]['tools']>;
@@ -77,7 +82,15 @@ export interface RunMcpToolHost {
   executePackage(
     options: Omit<Parameters<typeof executeSkillPackage>[0], 'storage' | 'run' | 'files'>,
   ): Promise<unknown>;
-  schedules?: Pick<ScheduleService, 'list' | 'get' | 'create' | 'update' | 'remove'>;
+  schedules?: Pick<
+    ScheduleService,
+    'list' | 'get' | 'resolve' | 'getRun' | 'create' | 'update' | 'remove'
+  > & {
+    trigger: (
+      idOrSlug: string,
+      options: TriggerScheduleOptions,
+    ) => Promise<TriggerScheduleResult> | ReturnType<ScheduleScheduler['trigger']>;
+  };
 }
 
 export interface ToolRegistration {

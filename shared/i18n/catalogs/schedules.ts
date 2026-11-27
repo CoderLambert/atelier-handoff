@@ -1,13 +1,13 @@
 /**
  * @file 定义定时任务界面的中英文词条目录。
- * @implementation 覆盖导航入口、任务列表、规则表单、执行记录、状态标签及错误提示。
- * @updated 2026-11-27T13:05:00+08:00
+ * @implementation 覆盖导航入口、任务列表、规则表单、按需与远程触发面板、执行记录、状态标签及错误提示。
+ * @updated 2026-11-27T15:15:00+08:00
  */
 export const schedules = {
   title: ['自动化任务', 'Scheduled tasks'],
   subtitle: [
-    '按计划在后台自动触发 Agent 运行，并保留完整执行记录。',
-    'Run agent prompts automatically on a schedule with full execution history.',
+    '按计划或按需触发 Agent 运行，并保留完整执行记录。',
+    'Run agent prompts on a schedule or on demand with full execution history.',
   ],
   newTask: ['新建任务', 'New task'],
   emptyTitle: ['还没有定时任务', 'No scheduled tasks yet'],
@@ -27,6 +27,8 @@ export const schedules = {
   'trigger.scheduled': ['定时触发', 'Scheduled'],
   'trigger.manual': ['手动触发', 'Manual'],
   'trigger.misfire': ['补跑触发', 'Catch-up'],
+  'trigger.agent': ['会话/任务触发', 'Agent'],
+  'trigger.webhook': ['远程触发', 'Remote'],
   'actions.runNow': ['立即执行', 'Run now'],
   'actions.pause': ['暂停任务', 'Pause'],
   'actions.resume': ['恢复任务', 'Resume'],
@@ -40,6 +42,11 @@ export const schedules = {
   'fields.titlePlaceholder': [
     '例如：定时检查本地与远程分支同步状态',
     'e.g. Daily git branch sync check',
+  ],
+  'fields.slug': ['任务别名（可选）', 'Task alias (optional)'],
+  'fields.slugPlaceholder': [
+    '例如：daily-sync（用于会话与远程调用）',
+    'e.g. daily-sync (for agent or remote triggers)',
   ],
   'fields.project': ['所属项目', 'Project'],
   'fields.prompt': ['自动化任务内容', 'Prompt'],
@@ -64,6 +71,7 @@ export const schedules = {
   'target.newOnce': ['专属自动化会话（复用）', 'Dedicated automation session'],
   'target.session': ['指定已有会话', 'Existing session'],
   'target.new': ['每次新建独立会话', 'New session per run'],
+  'timing.manual': ['仅按需触发（无定时）', 'On-demand only (manual)'],
   'timing.daily': ['每天', 'Daily'],
   'timing.weekly': ['每周', 'Weekly'],
   'timing.interval': ['固定间隔', 'Interval'],
@@ -109,4 +117,26 @@ export const schedules = {
   'sections.schedule': ['运行时间', 'Schedule'],
   'sections.advanced': ['权限与高级策略', 'Permissions & advanced'],
   'meta.taskCount': ['{{count}} 个任务', '{{count}} tasks'],
+  'remote.title': ['触发方式与远程遥控', 'Triggers & remote control'],
+  'remote.summaryOn': ['已启用远程触发', 'Remote enabled'],
+  'remote.summaryOff': ['仅本地与会话触发', 'Local & agent only'],
+  'remote.agentHint': [
+    '在任意会话中让 Agent 触发「{{target}}」即可按需启动并透传补充上下文。',
+    'Ask an agent in any session to trigger "{{target}}" on demand with optional context.',
+  ],
+  'remote.description': [
+    '开启后将签发仅限当前任务的独立 Bearer Token，可用于快捷指令、IM 机器人或内网隧道触发，不会暴露其他工作台权限。',
+    'Issues a scoped Bearer token restricted to this single task for shortcuts, bots, or tunnels without exposing workbench APIs.',
+  ],
+  'remote.endpoint': ['远程触发端点', 'Remote trigger endpoint'],
+  'remote.enable': ['启用并生成令牌', 'Enable & generate token'],
+  'remote.rotate': ['轮换令牌', 'Rotate token'],
+  'remote.revoke': ['关闭并吊销', 'Disable & revoke'],
+  'remote.tokenOnceWarning': [
+    '令牌明文仅显示这一次，请立即复制保存。',
+    'This token is shown once. Copy and store it securely now.',
+  ],
+  'remote.copyCurl': ['复制 curl 示例', 'Copy curl example'],
+  'remote.copied': ['已复制', 'Copied'],
+  'remote.sampleInput': ['可选补充上下文', 'Optional context for this run'],
 } as const;

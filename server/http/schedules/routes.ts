@@ -1,7 +1,7 @@
 /**
  * @file 提供定时任务的 REST HTTP 路由。
- * @implementation 支持全局/按项目列表、创建、查看、乐观锁更新、删除、手动立即执行及历史记录分页读取。
- * @updated 2026-11-27T13:13:00+08:00
+ * @implementation 支持全局/按项目列表、创建、查看、乐观锁更新、删除、带参数立即触发、单任务远程令牌签发/吊销及历史记录读取。
+ * @updated 2026-11-27T15:10:00+08:00
  */
 import { AppError } from '../../../shared/errors.js';
 import { scheduleStatusSchema } from '../../../shared/schedules.js';
@@ -10,10 +10,21 @@ import type { ScheduleService } from '../../modules/schedules/service.js';
 import { body } from '../body.js';
 import { json } from '../response.js';
 import type { RouteHandler } from '../types.js';
+import { extractIdempotencyKeyHeader, readOptionalTriggerBody } from './trigger-routes.js';
 
 export function createScheduleRoutes(
-  service: Pick<ScheduleService, 'list' | 'get' | 'create' | 'update' | 'remove' | 'listRuns'>,
-  scheduler: Pick<ScheduleScheduler, 'runNow'>,
+  service: Pick<
+    ScheduleService,
+    | 'list'
+    | 'get'
+    | 'create'
+    | 'update'
+    | 'remove'
+    | 'listRuns'
+    | 'issueTriggerToken'
+    | 'revokeTriggerToken'
+  >,
+  scheduler: Pick<ScheduleScheduler, 'trigger'>,
 ): RouteHandler {
   return async ({ req, res, url, parts, method }) => {
     const [api, resource, id, action] = parts;
@@ -45,8 +56,26 @@ export function createScheduleRoutes(
     }
 
     if (parts.length === 4 && id && action === 'run' && method === 'POST') {
-      const run = await scheduler.runNow(id);
-      return json(res, { run }, 201);
+      const parsed = await readOptionalTriggerBody(req);
+      const idempotencyKey = parsed.idempotencyKey ?? extractIdempotencyKeyHeader(req);
+      const result = await scheduler.trigger(id, {
+        triggerKind: 'manual',
+        input: parsed.input,
+        idempotencyKey,
+        allowPaused: parsed.allowPaused ?? true,
+        triggerSource: 'api',
+      });
+      return json(res, result, result.deduplicated ? 200 : 201);
+    }
+
+    if (parts.length === 4 && id && action === 'trigger-token' && method === 'POST') {
+      const issued = service.issueTriggerToken(id);
+      return json(res, issued, 201);
+    }
+
+    if (parts.length === 4 && id && action === 'trigger-token' && method === 'DELETE') {
+      const task = service.revokeTriggerToken(id);
+      return json(res, { task });
     }
 
     if (parts.length === 4 && id && action === 'runs' && method === 'GET') {

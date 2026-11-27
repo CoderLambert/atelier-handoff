@@ -1,7 +1,7 @@
 /**
  * @file 装配工作台运行时的全部 HTTP 领域路由。
  * @implementation 聚合核心领域路由并保持匹配顺序，避免顶层 app.ts 超过热点行数上限。
- * @updated 2026-11-27T13:42:00+08:00
+ * @updated 2026-11-27T15:10:00+08:00
  */
 import type { ServerResponse } from 'node:http';
 import type { AgentProfiles } from '../agent-profiles.js';
@@ -38,6 +38,7 @@ import { createGitRoutes } from './git/routes.js';
 import { createPermissionRoutes } from './permissions/routes.js';
 import { createRunRoutes } from './runs/routes.js';
 import { createScheduleRoutes } from './schedules/routes.js';
+import { createScheduleTriggerRoutes } from './schedules/trigger-routes.js';
 import { createAttachmentRoutes } from './sessions/attachment-routes.js';
 import { createSessionMessageRoutes } from './sessions/message-routes.js';
 import { createSessionRoutes } from './sessions/routes.js';
@@ -82,6 +83,7 @@ export function buildRuntimeRoutes(deps: {
 }): RouteHandler[] {
   const { store, files } = deps;
   return [
+    createScheduleTriggerRoutes(deps.schedules, deps.scheduleScheduler),
     createTerminalRoutes(deps.terminals),
     createBootstrapRoutes({
       store,

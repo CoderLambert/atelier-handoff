@@ -25,6 +25,7 @@ import { useSchedules } from '@/use-query/schedules/use-schedules';
 import { formatScheduleSummary } from './schedule-card';
 import { ScheduleForm } from './schedule-form';
 import { ScheduleHistory } from './schedule-history';
+import { ScheduleTriggerSection } from './schedule-trigger-section';
 import './schedules.css';
 
 const ALL_PROJECTS = '__all__';
@@ -337,15 +338,18 @@ export default function SchedulesPage({
                 </div>
 
                 {tab === 'rules' ? (
-                  <ScheduleForm
-                    mode="edit"
-                    task={activeTask}
-                    projects={projects}
-                    sessions={sessions}
-                    pending={updateMutation.isPending}
-                    error={mutationError}
-                    onUpdate={(id, patch) => updateMutation.mutate({ id, patch })}
-                  />
+                  <>
+                    <ScheduleForm
+                      mode="edit"
+                      task={activeTask}
+                      projects={projects}
+                      sessions={sessions}
+                      pending={updateMutation.isPending}
+                      error={mutationError}
+                      onUpdate={(id, patch) => updateMutation.mutate({ id, patch })}
+                    />
+                    <ScheduleTriggerSection task={activeTask} />
+                  </>
                 ) : (
                   <ScheduleHistory
                     runs={runsQuery.data ?? []}

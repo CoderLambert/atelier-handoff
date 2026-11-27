@@ -1,12 +1,13 @@
 /**
- * @file 驱动定时任务到期触发、补跑收敛、并发公平与运行结果回写。
- * @implementation 维护单定时器加 60 秒漂移自检，复用 createRun 幂等触发，并为交互式会话预留至少 1 个执行槽。
- * @updated 2026-11-27T13:12:00+08:00
+ * @file 驱动定时任务到期触发、统一触发漏斗、防环护栏、并发公平与运行结果回写。
+ * @implementation 维护单定时器加 60 秒漂移自检，所有触发入口统一收口到 trigger()，共用幂等去重、重叠保护、链路防环与槽位预留。
+ * @updated 2026-11-27T15:05:00+08:00
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { AppError } from '../../../shared/errors.js';
 import {
   SCHEDULE_CONSECUTIVE_FAILURE_LIMIT,
+  SCHEDULE_MAX_CHAIN_DEPTH,
   type ScheduledTask,
   type ScheduledTaskRun,
   type ScheduleNotifyPolicy,
@@ -46,6 +47,28 @@ function deterministicUuid(seed: string): string {
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
   const hex = bytes.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function composeEffectivePrompt(basePrompt: string, input?: string): string {
+  const trimmed = input?.trim();
+  if (!trimmed) return basePrompt;
+  return `${basePrompt}\n\n---\n本次触发补充上下文：\n${trimmed}`;
+}
+
+export interface TriggerScheduleOptions {
+  triggerKind: 'manual' | 'agent' | 'webhook';
+  projectId?: string;
+  input?: string;
+  idempotencyKey?: string;
+  triggerSource?: string;
+  allowPaused?: boolean;
+  chainDepth?: number;
+  visitedTaskIds?: readonly string[];
+}
+
+export interface TriggerScheduleResult {
+  run: ScheduledTaskRun;
+  deduplicated: boolean;
 }
 
 export interface ScheduleSchedulerOptions {
@@ -118,6 +141,14 @@ export function createScheduleScheduler({
     triggered: boolean,
   ): ScheduledTask {
     const nowIso = nowDate.toISOString();
+    if (task.timing.kind === 'manual') {
+      return {
+        ...task,
+        nextRunAt: null,
+        lastRunAt: triggered ? nowIso : task.lastRunAt,
+        updatedAt: nowIso,
+      };
+    }
     const nextRunAt =
       task.timing.kind === 'once'
         ? null
@@ -182,11 +213,22 @@ export function createScheduleScheduler({
     triggerKind: ScheduleRunTriggerKind,
     scheduledFor: string,
     consumeSchedule: boolean,
+    meta?: {
+      input?: string;
+      idempotencyKey?: string;
+      triggerSource?: string;
+      chainDepth?: number;
+      visitedTaskIds?: readonly string[];
+    },
   ): Promise<ScheduledTaskRun> {
     const nowDate = clock();
     const nowIso = nowDate.toISOString();
+    const effectivePrompt = composeEffectivePrompt(task.prompt, meta?.input);
+    const chainDepth = meta?.chainDepth ?? 0;
+    const triggerSource = meta?.triggerSource ?? triggerKind;
+    const externalKey = meta?.idempotencyKey ?? null;
 
-    if (triggerKind !== 'manual') {
+    if (triggerKind === 'scheduled' || triggerKind === 'misfire') {
       const existing = store.repos.schedules.findRunByIdempotency(
         task.id,
         triggerKind,
@@ -204,10 +246,13 @@ export function createScheduleScheduler({
         scheduledFor,
         targetSessionId: task.targetSessionId,
         runId: null,
-        promptSnapshot: task.prompt,
+        promptSnapshot: effectivePrompt,
         status: 'skipped',
         skipReason: resolved.skipReason,
         error: null,
+        idempotencyKey: externalKey,
+        triggerSource,
+        chainDepth,
         createdAt: nowIso,
         finishedAt: nowIso,
       };
@@ -239,10 +284,13 @@ export function createScheduleScheduler({
         scheduledFor,
         targetSessionId: session.id,
         runId: null,
-        promptSnapshot: task.prompt,
+        promptSnapshot: effectivePrompt,
         status: 'skipped',
         skipReason: 'session_busy',
         error: null,
+        idempotencyKey: externalKey,
+        triggerSource,
+        chainDepth,
         createdAt: nowIso,
         finishedAt: nowIso,
       };
@@ -257,10 +305,11 @@ export function createScheduleScheduler({
     }
 
     const runRecordId = randomUUID();
-    const idempotencyKey =
-      triggerKind === 'manual'
-        ? runRecordId
-        : deterministicUuid(`schedule:${task.id}:${scheduledFor}`);
+    const runIdempotencyKey = externalKey
+      ? deterministicUuid(`schedule:${task.id}:key:${externalKey}`)
+      : triggerKind === 'scheduled' || triggerKind === 'misfire'
+        ? deterministicUuid(`schedule:${task.id}:${scheduledFor}`)
+        : runRecordId;
 
     const initialRecord: ScheduledTaskRun = {
       id: runRecordId,
@@ -269,10 +318,13 @@ export function createScheduleScheduler({
       scheduledFor,
       targetSessionId: session.id,
       runId: null,
-      promptSnapshot: task.prompt,
+      promptSnapshot: effectivePrompt,
       status: 'dispatched',
       skipReason: null,
       error: null,
+      idempotencyKey: externalKey,
+      triggerSource,
+      chainDepth,
       createdAt: nowIso,
       finishedAt: null,
     };
@@ -286,10 +338,12 @@ export function createScheduleScheduler({
       store.repos.schedules.update(nextTaskState);
     });
 
+    const nextVisited = Array.from(new Set([...(meta?.visitedTaskIds ?? []), task.id]));
+
     try {
       const result = await createRun(session.id, {
-        text: task.prompt,
-        idempotencyKey,
+        text: effectivePrompt,
+        idempotencyKey: runIdempotencyKey,
         mode: task.mode,
         ...(task.approvalMode ? { approvalMode: task.approvalMode } : {}),
         ...(task.maxSearchChargeFen > 0 ? { maxSearchChargeFen: task.maxSearchChargeFen } : {}),
@@ -298,6 +352,9 @@ export function createScheduleScheduler({
           taskName: task.title,
           triggerKind,
           scheduledFor,
+          triggerSource,
+          chainDepth,
+          visitedTaskIds: nextVisited,
         },
       });
       let updatedRecord =
@@ -362,6 +419,9 @@ export function createScheduleScheduler({
           status: 'skipped',
           skipReason: 'misfired',
           error: null,
+          idempotencyKey: null,
+          triggerSource: 'misfire',
+          chainDepth: 0,
           createdAt: nowIso,
           finishedAt: nowIso,
         };
@@ -406,13 +466,97 @@ export function createScheduleScheduler({
     return runningTick;
   }
 
-  async function runNow(taskId: string): Promise<ScheduledTaskRun> {
+  async function trigger(
+    idOrSlug: string,
+    options: TriggerScheduleOptions,
+  ): Promise<TriggerScheduleResult> {
     if (isShuttingDown()) throw new AppError('SHUTTING_DOWN', '服务正在关闭。', 503);
-    const task = store.repos.schedules.get(taskId);
+    const task = store.repos.schedules.findByIdOrSlug(idOrSlug, options.projectId);
+    if (!task) throw new AppError('NOT_FOUND', '定时任务不存在。', 404);
+
+    if (task.status === 'paused' && !options.allowPaused) {
+      throw new AppError('SCHEDULE_PAUSED', '该任务当前已暂停，请先恢复后再触发。', 409);
+    }
+    if (task.status === 'ended' && !options.allowPaused) {
+      throw new AppError('SCHEDULE_ENDED', '该一次性任务已结束，请重新配置或手动试跑。', 409);
+    }
+
+    const chainDepth = options.chainDepth ?? 0;
+    if (chainDepth > SCHEDULE_MAX_CHAIN_DEPTH) {
+      throw new AppError(
+        'SCHEDULE_CHAIN_DEPTH_EXCEEDED',
+        `任务触发链路深度超过上限（最多 ${SCHEDULE_MAX_CHAIN_DEPTH} 层），已自动拦截。`,
+        400,
+      );
+    }
+    if (options.visitedTaskIds?.includes(task.id)) {
+      throw new AppError(
+        'SCHEDULE_CYCLE_DETECTED',
+        '检测到任务自触发或循环触发，已自动拦截。',
+        400,
+      );
+    }
+
+    const idempotencyKey = options.idempotencyKey?.trim() || undefined;
+    if (idempotencyKey) {
+      const existing = store.repos.schedules.findRunByKey(task.id, idempotencyKey);
+      if (existing) return { run: existing, deduplicated: true };
+    }
+
     const nowIso = clock().toISOString();
-    const record = await dispatchTask(task, 'manual', nowIso, false);
+    if (
+      options.triggerKind !== 'manual' &&
+      store.repos.runs.listActive().length >= SCHEDULE_CONCURRENCY_CAP &&
+      task.overlapPolicy === 'skip'
+    ) {
+      const skipped: ScheduledTaskRun = {
+        id: randomUUID(),
+        taskId: task.id,
+        triggerKind: options.triggerKind,
+        scheduledFor: nowIso,
+        targetSessionId: task.targetSessionId,
+        runId: null,
+        promptSnapshot: composeEffectivePrompt(task.prompt, options.input),
+        status: 'skipped',
+        skipReason: 'concurrency_cap',
+        error: null,
+        idempotencyKey: idempotencyKey ?? null,
+        triggerSource: options.triggerSource ?? options.triggerKind,
+        chainDepth,
+        createdAt: nowIso,
+        finishedAt: nowIso,
+      };
+      store.repos.schedules.insertRun(skipped);
+      emitTaskEvent(task, 'schedule.run.updated');
+      return { run: skipped, deduplicated: false };
+    }
+
+    const record = await dispatchTask(task, options.triggerKind, nowIso, false, {
+      input: options.input,
+      idempotencyKey,
+      triggerSource: options.triggerSource ?? options.triggerKind,
+      chainDepth,
+      visitedTaskIds: options.visitedTaskIds,
+    });
     armTimer();
-    return record;
+    return { run: record, deduplicated: false };
+  }
+
+  async function runNow(
+    idOrSlug: string,
+    options?: Pick<
+      TriggerScheduleOptions,
+      'input' | 'idempotencyKey' | 'allowPaused' | 'triggerSource'
+    >,
+  ): Promise<ScheduledTaskRun> {
+    const result = await trigger(idOrSlug, {
+      triggerKind: 'manual',
+      allowPaused: options?.allowPaused ?? true,
+      input: options?.input,
+      idempotencyKey: options?.idempotencyKey,
+      triggerSource: options?.triggerSource ?? 'manual',
+    });
+    return result.run;
   }
 
   function finalizeRunRecord(
@@ -501,6 +645,7 @@ export function createScheduleScheduler({
     wakeFromSuspend: () => {
       if (started && !isShuttingDown()) void tick();
     },
+    trigger,
     runNow,
   };
 }

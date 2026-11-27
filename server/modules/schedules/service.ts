@@ -1,9 +1,9 @@
 /**
- * @file 提供定时任务的增删改查、乐观并发控制与会话生命周期联动。
+ * @file 提供定时任务的增删改查、别名寻址、单任务远程令牌签发与会话生命周期联动。
  * @implementation 统一校验项目、目标会话、权限组合与调度规则；修改已暂停任务时保持暂停，归档/删除目标会话时安全暂停关联任务。
- * @updated 2026-11-27T13:10:00+08:00
+ * @updated 2026-11-27T15:05:00+08:00
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { AppError } from '../../../shared/errors.js';
 import {
   createScheduledTaskInputSchema,
@@ -22,6 +22,16 @@ import {
   timingEquals,
   validateTimeZone,
 } from './timing.js';
+
+function hashTriggerToken(rawToken: string): string {
+  return createHash('sha256').update(rawToken, 'utf8').digest('hex');
+}
+
+function safeHashEqual(leftHex: string, rightHex: string): boolean {
+  const left = Buffer.from(leftHex, 'hex');
+  const right = Buffer.from(rightHex, 'hex');
+  return left.length === right.length && timingSafeEqual(left, right);
+}
 
 export interface ScheduleServiceOptions {
   store: Pick<Store, 'get' | 'transaction' | 'event' | 'repos'>;
@@ -68,6 +78,22 @@ export function createScheduleService({
     }
   }
 
+  function validateSlugUnique(
+    projectId: string,
+    slug: string | null,
+    excludeTaskId?: string,
+  ): void {
+    if (!slug) return;
+    const conflict = store.repos.schedules.findBySlug(projectId, slug);
+    if (conflict && conflict.id !== excludeTaskId) {
+      throw new AppError(
+        'SCHEDULE_SLUG_CONFLICT',
+        `当前项目已存在别名为「${slug}」的自动化任务。`,
+        409,
+      );
+    }
+  }
+
   function validateTargetSession(
     projectId: string,
     targetMode: ScheduledTask['targetMode'],
@@ -105,9 +131,21 @@ export function createScheduleService({
     return store.repos.schedules.get(id);
   }
 
+  function resolve(idOrSlug: string, projectId?: string): ScheduledTask {
+    const task = store.repos.schedules.findByIdOrSlug(idOrSlug, projectId);
+    if (!task) throw new AppError('NOT_FOUND', '定时任务不存在。', 404);
+    return task;
+  }
+
   function listRuns(id: string, limit = 50): ScheduledTaskRun[] {
     store.repos.schedules.get(id);
     return store.repos.schedules.listRuns(id, limit);
+  }
+
+  function getRun(runRecordId: string): ScheduledTaskRun {
+    const run = store.repos.schedules.findRunById(runRecordId);
+    if (!run) throw new AppError('NOT_FOUND', '任务运行记录不存在。', 404);
+    return run;
   }
 
   function create(
@@ -120,6 +158,8 @@ export function createScheduleService({
     const nowDate = clock();
     const nowIso = nowDate.toISOString();
     const project = store.get('projects', input.projectId);
+    const slug = input.slug ?? null;
+    validateSlugUnique(project.id, slug);
     const timeZone = validateTimeZone(input.timeZone ?? resolveSystemTimeZone());
     const approvalMode = input.approvalMode ?? null;
     validatePolicyCombination(input.mode, approvalMode, input.maxSearchChargeFen);
@@ -131,12 +171,13 @@ export function createScheduleService({
     if (input.agentRevisionId) agents.requireReady(project.id, input.agentRevisionId);
     const timing = normalizeTiming(input.timing, timeZone, input.targetMode, nowDate);
     const nextRunAt = computeNextRunAt(timing, timeZone, nowDate);
-    if (!nextRunAt) {
+    if (timing.kind !== 'manual' && !nextRunAt) {
       throw new AppError('SCHEDULE_INVALID_TIMING', '定时任务的执行时间必须晚于当前时刻。', 400);
     }
     const task: ScheduledTask = {
       id: randomUUID(),
       projectId: project.id,
+      slug,
       targetMode: input.targetMode,
       targetSessionId,
       agentRevisionId: input.agentRevisionId ?? null,
@@ -151,6 +192,8 @@ export function createScheduleService({
       misfirePolicy: input.misfirePolicy,
       overlapPolicy: input.overlapPolicy,
       notifyPolicy: input.notifyPolicy,
+      remoteTriggerEnabled: false,
+      hasTriggerToken: false,
       status: 'active',
       pauseReason: null,
       nextRunAt,
@@ -176,6 +219,8 @@ export function createScheduleService({
       if (patch.expectedUpdatedAt !== undefined && patch.expectedUpdatedAt !== current.updatedAt) {
         throw new AppError('SCHEDULE_CONFLICT', '定时任务已被其他操作更新，请刷新后重试。', 409);
       }
+      const nextSlug = patch.slug !== undefined ? patch.slug : current.slug;
+      validateSlugUnique(current.projectId, nextSlug, current.id);
       const nextTargetMode = patch.targetMode ?? current.targetMode;
       const rawTargetSessionId =
         patch.targetSessionId !== undefined
@@ -221,7 +266,9 @@ export function createScheduleService({
       const pausing = nextStatus === 'paused';
 
       let nextRunAt = current.nextRunAt;
-      if (resuming || (nextStatus === 'active' && timingChanged)) {
+      if (nextTiming.kind === 'manual') {
+        nextRunAt = null;
+      } else if (resuming || (nextStatus === 'active' && timingChanged)) {
         nextRunAt = computeNextRunAt(nextTiming, nextTimeZone, nowDate, {
           lastRunAt: current.lastRunAt,
         });
@@ -240,6 +287,7 @@ export function createScheduleService({
 
       const nextTask: ScheduledTask = {
         ...current,
+        slug: nextSlug,
         title: patch.title ?? current.title,
         prompt: patch.prompt ?? current.prompt,
         timing: nextTiming,
@@ -276,6 +324,41 @@ export function createScheduleService({
     store.repos.schedules.remove(id);
     emitTaskEvent(existing, 'schedule.updated');
     onChanged?.();
+  }
+
+  function issueTriggerToken(id: string): { task: ScheduledTask; token: string } {
+    store.repos.schedules.get(id);
+    const token = `atk_${randomBytes(32).toString('base64url')}`;
+    const hash = hashTriggerToken(token);
+    const nowIso = clock().toISOString();
+    const task = store.repos.schedules.setTriggerToken(id, hash, true, nowIso);
+    emitTaskEvent(task, 'schedule.updated');
+    return { task, token };
+  }
+
+  function revokeTriggerToken(id: string): ScheduledTask {
+    store.repos.schedules.get(id);
+    const nowIso = clock().toISOString();
+    const task = store.repos.schedules.setTriggerToken(id, null, false, nowIso);
+    emitTaskEvent(task, 'schedule.updated');
+    return task;
+  }
+
+  function verifyTriggerToken(idOrSlug: string, rawToken: string): ScheduledTask | null {
+    const trimmed = rawToken.trim();
+    if (!trimmed) return null;
+    let task: ScheduledTask | undefined;
+    try {
+      task = store.repos.schedules.findByIdOrSlug(idOrSlug);
+    } catch {
+      return null;
+    }
+    if (!task) return null;
+    const auth = store.repos.schedules.getTriggerAuth(task.id);
+    if (!auth?.remoteTriggerEnabled || !auth.triggerTokenHash) return null;
+    const providedHash = hashTriggerToken(trimmed);
+    if (!safeHashEqual(auth.triggerTokenHash, providedHash)) return null;
+    return task;
   }
 
   function pauseForArchivedSession(sessionId: string): void {
@@ -319,10 +402,15 @@ export function createScheduleService({
   return {
     list,
     get,
+    resolve,
     listRuns,
+    getRun,
     create,
     update,
     remove,
+    issueTriggerToken,
+    revokeTriggerToken,
+    verifyTriggerToken,
     pauseForArchivedSession,
     pauseForDeletedSession,
   };

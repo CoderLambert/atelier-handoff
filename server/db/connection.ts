@@ -1,7 +1,7 @@
 /**
  * @file 打开工作台 SQLite 连接并装配 Drizzle 仓储。
  * @implementation 让旧 Store 与全部 Drizzle 仓储共用数据库句柄，以 repos 组合暴露仓储，提供读写事务并按版本顺序登记迁移。
- * @updated 2026-11-27T11:20:00-08:00
+ * @updated 2026-11-27T15:00:00+08:00
  */
 import SQLite from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -31,6 +31,7 @@ import { applyGitCommitOperationLifecycle } from './migrations/apply-git-commit-
 import { gitCommitOperationRepository } from './repositories/git-commit-operations.js';
 import { assertForeignKeyIntegrity } from './maintenance/foreign-key-integrity.js';
 import { applyScheduledTasks } from './migrations/apply-scheduled-tasks.js';
+import { applyScheduleTriggers } from './migrations/apply-schedule-triggers.js';
 import { scheduleRepository } from './repositories/schedules.js';
 
 // The transitional Store only uses scalar bindings and ordinary row-object statements.
@@ -45,7 +46,7 @@ export interface LegacyDatabase {
   close(): void;
 }
 
-export const LATEST_SCHEMA_VERSION = 12;
+export const LATEST_SCHEMA_VERSION = 13;
 export type SchemaMigration = { version: number; apply: () => void };
 
 export function openWorkbenchDatabase(path: string) {
@@ -60,6 +61,7 @@ export function openWorkbenchDatabase(path: string) {
     { version: 10, apply: () => applyGitCommitOperationLifecycle(db) },
     { version: 11, apply: () => applyRuntimeHotpathIndexes(db) },
     { version: 12, apply: () => applyScheduledTasks(db) },
+    { version: 13, apply: () => applyScheduleTriggers(db) },
   ];
   const repos = {
     appConfig: appConfigRepository(orm),

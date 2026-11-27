@@ -331,7 +331,12 @@ test('mcp tools: edit + automatic scheduled task creation requires manual approv
       packages: new Map(),
       storage: fixture.dir,
       executePackage: async () => ({}),
-      schedules: service,
+      schedules: {
+        ...service,
+        trigger: async () => {
+          throw new Error('unused in privilege test');
+        },
+      },
     });
 
     const createTool = mcpTools.find((item) => item.name === 'create_scheduled_task');
@@ -483,4 +488,310 @@ test('notifications and system-resume IPC: respects notifyPolicy and validates r
     }).success,
     false,
   );
+});
+
+test('unified trigger: manual timing, slug uniqueness, input injection, idempotency, paused gate, and cycle/depth guards', async () => {
+  const fixture = createFixture();
+  try {
+    const service = createScheduleService({
+      store: fixture.store,
+      agents: { requireReady: () => ({}) as never },
+    });
+
+    const manualTask = service.create({
+      projectId: fixture.project.id,
+      slug: 'release-check',
+      title: 'Release check',
+      prompt: 'Run release checklist',
+      timing: { kind: 'manual' },
+      timeZone: 'Asia/Shanghai',
+    });
+    assert.equal(manualTask.nextRunAt, null);
+    assert.equal(manualTask.slug, 'release-check');
+    assert.equal(manualTask.remoteTriggerEnabled, false);
+    assert.equal(manualTask.hasTriggerToken, false);
+
+    // Duplicate slug within same project must fail with 409
+    assert.throws(
+      () =>
+        service.create({
+          projectId: fixture.project.id,
+          slug: 'release-check',
+          title: 'Duplicate slug',
+          prompt: 'Should fail',
+          timing: { kind: 'manual' },
+          timeZone: 'Asia/Shanghai',
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'SCHEDULE_SLUG_CONFLICT',
+    );
+
+    const dispatchedTexts: string[] = [];
+    const dispatchedMeta: Array<Record<string, unknown> | undefined> = [];
+    const scheduler = createScheduleScheduler({
+      store: fixture.store,
+      createSession: async ({ projectId, title }) =>
+        fixture.store.put('sessions', {
+          id: `sess-${Math.random().toString(36).slice(2, 8)}`,
+          projectId,
+          title: title ?? 'Automation',
+          status: 'active',
+          origin: 'schedule',
+          sdkSessionId: null,
+          draft: { text: '', contextPaths: [], attachmentIds: [], mode: 'readonly' },
+          createdAt: now(),
+          updatedAt: now(),
+        }),
+      createRun: (async (
+        sessionId: string,
+        request: { text: string; scheduleMeta?: Record<string, unknown> },
+      ) => {
+        dispatchedTexts.push(request.text);
+        dispatchedMeta.push(request.scheduleMeta);
+        const runId = `run-${dispatchedTexts.length}`;
+        const run = fixture.store.put('runs', {
+          id: runId,
+          sessionId,
+          status: 'completed',
+          mode: 'readonly',
+          prompt: request.text,
+          createdAt: now(),
+          startedAt: now(),
+          endedAt: now(),
+          error: null,
+          plan: [],
+        } as never);
+        return { run };
+      }) as never,
+      sameSessionRunning: () => false,
+      isShuttingDown: () => false,
+    });
+
+    // Trigger by slug with temporary input + idempotencyKey
+    const first = await scheduler.trigger('release-check', {
+      triggerKind: 'agent',
+      projectId: fixture.project.id,
+      input: 'Focus on auth migration',
+      idempotencyKey: 'pr-42-check',
+      triggerSource: 'session:sess-caller',
+      chainDepth: 1,
+      visitedTaskIds: ['upstream-task'],
+    });
+    assert.equal(first.deduplicated, false);
+    assert.equal(first.run.triggerKind, 'agent');
+    assert.equal(first.run.triggerSource, 'session:sess-caller');
+    assert.equal(first.run.chainDepth, 1);
+    assert.equal(first.run.idempotencyKey, 'pr-42-check');
+    assert.match(first.run.promptSnapshot, /Run release checklist/);
+    assert.match(first.run.promptSnapshot, /Focus on auth migration/);
+    // Original task prompt must remain untouched
+    assert.equal(service.get(manualTask.id).prompt, 'Run release checklist');
+    assert.equal(service.get(manualTask.id).status, 'active');
+
+    // Duplicate idempotencyKey returns existing run without re-dispatching
+    const duplicate = await scheduler.trigger('release-check', {
+      triggerKind: 'agent',
+      projectId: fixture.project.id,
+      input: 'Different text ignored',
+      idempotencyKey: 'pr-42-check',
+    });
+    assert.equal(duplicate.deduplicated, true);
+    assert.equal(duplicate.run.id, first.run.id);
+    assert.equal(dispatchedTexts.length, 1);
+
+    // Cycle detection blocks self/loop trigger
+    await assert.rejects(
+      () =>
+        scheduler.trigger('release-check', {
+          triggerKind: 'agent',
+          projectId: fixture.project.id,
+          chainDepth: 1,
+          visitedTaskIds: [manualTask.id],
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'SCHEDULE_CYCLE_DETECTED',
+    );
+
+    // Depth limit blocks deep chain (> 3)
+    await assert.rejects(
+      () =>
+        scheduler.trigger('release-check', {
+          triggerKind: 'agent',
+          projectId: fixture.project.id,
+          chainDepth: 4,
+          visitedTaskIds: ['t1', 't2', 't3'],
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'SCHEDULE_CHAIN_DEPTH_EXCEEDED',
+    );
+
+    // Paused task rejects external/agent trigger unless allowPaused is true
+    service.update(manualTask.id, { status: 'paused' });
+    await assert.rejects(
+      () =>
+        scheduler.trigger('release-check', {
+          triggerKind: 'agent',
+          projectId: fixture.project.id,
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'SCHEDULE_PAUSED',
+    );
+    const manualOverride = await scheduler.runNow('release-check');
+    assert.equal(manualOverride.triggerKind, 'manual');
+    assert.equal(dispatchedTexts.length, 2);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('http remote trigger narrow endpoint: Bearer token auth, idempotency, cross-site block, rotation & revocation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-schedules-remote-'));
+  const projectDir = join(dir, 'project');
+  mkdirSync(projectDir, { recursive: true });
+  const app = await createApp({
+    root: process.cwd(),
+    data: join(dir, 'data'),
+    desktopPairing: 'secret-desktop-pairing',
+    runnerFactory: (store) => ({
+      start(run) {
+        const finishedAt = now();
+        store.update('runs', run.id, {
+          status: 'completed',
+          startedAt: finishedAt,
+          endedAt: finishedAt,
+        });
+        store.event(run.id, run.sessionId, 'run.finished', { status: 'completed' });
+      },
+      stop() {},
+      async shutdown() {},
+    }),
+  });
+  await new Promise<void>((resolve) => app.server.listen(0, '127.0.0.1', resolve));
+  try {
+    const port = (app.server.address() as AddressInfo).port;
+    const base = `http://127.0.0.1:${port}`;
+    const pairingHeaders = { 'X-Atelier-Desktop-Pairing': 'secret-desktop-pairing' };
+    const boot = (await (
+      await fetch(`${base}/api/bootstrap`, { headers: pairingHeaders })
+    ).json()) as { csrfToken: string };
+    const adminHeaders = {
+      'Content-Type': 'application/json',
+      'X-Atelier-Token': boot.csrfToken,
+      ...pairingHeaders,
+    };
+
+    const project = app.store.put('projects', {
+      id: 'proj-remote',
+      name: 'Remote Demo',
+      path: projectDir,
+      branch: 'main',
+      available: true,
+      createdAt: now(),
+    });
+
+    const createRes = await fetch(`${base}/api/schedules`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({
+        projectId: project.id,
+        slug: 'nightly-deploy-check',
+        title: 'Nightly check',
+        prompt: 'Check deployment health',
+        timing: { kind: 'manual' },
+      }),
+    });
+    assert.equal(createRes.status, 201);
+    const { task } = (await createRes.json()) as { task: { id: string; slug: string } };
+
+    // Before enabling token, remote endpoint returns 401
+    const unauthRes = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer atk_invalid' },
+    });
+    assert.equal(unauthRes.status, 401);
+
+    // Issue token via admin endpoint
+    const issueRes = await fetch(`${base}/api/schedules/${task.id}/trigger-token`, {
+      method: 'POST',
+      headers: adminHeaders,
+    });
+    assert.equal(issueRes.status, 201);
+    const { token: token1, task: enabledTask } = (await issueRes.json()) as {
+      token: string;
+      task: { remoteTriggerEnabled: boolean; hasTriggerToken: boolean };
+    };
+    assert.ok(token1.startsWith('atk_'));
+    assert.equal(enabledTask.remoteTriggerEnabled, true);
+    assert.equal(enabledTask.hasTriggerToken, true);
+
+    // Browser cross-site request is blocked even with valid token
+    const corsBlocked = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token1}`,
+        Origin: 'https://evil.example',
+      },
+    });
+    assert.equal(corsBlocked.status, 403);
+
+    // Remote trigger works WITHOUT x-atelier-token and WITHOUT desktopPairing!
+    const triggerRes = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token1}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'remote-evt-1',
+      },
+      body: JSON.stringify({ input: 'Triggered from phone shortcut' }),
+    });
+    assert.equal(triggerRes.status, 201);
+    const firstTrigger = (await triggerRes.json()) as {
+      run: { id: string; triggerKind: string; promptSnapshot: string; status: string };
+      deduplicated: boolean;
+    };
+    assert.equal(firstTrigger.deduplicated, false);
+    assert.equal(firstTrigger.run.triggerKind, 'webhook');
+    assert.equal(firstTrigger.run.status, 'completed');
+    assert.match(firstTrigger.run.promptSnapshot, /Triggered from phone shortcut/);
+
+    // Same Idempotency-Key deduplicates (200)
+    const dedupRes = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token1}`,
+        'Idempotency-Key': 'remote-evt-1',
+      },
+    });
+    assert.equal(dedupRes.status, 200);
+    const dedupBody = (await dedupRes.json()) as { run: { id: string }; deduplicated: boolean };
+    assert.equal(dedupBody.deduplicated, true);
+    assert.equal(dedupBody.run.id, firstTrigger.run.id);
+
+    // Rotate token -> old token immediately rejected
+    const rotateRes = await fetch(`${base}/api/schedules/${task.id}/trigger-token`, {
+      method: 'POST',
+      headers: adminHeaders,
+    });
+    assert.equal(rotateRes.status, 201);
+    const { token: token2 } = (await rotateRes.json()) as { token: string };
+    assert.notEqual(token2, token1);
+
+    const oldTokenRes = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token1}` },
+    });
+    assert.equal(oldTokenRes.status, 401);
+
+    // Revoke token -> new token also rejected
+    const revokeRes = await fetch(`${base}/api/schedules/${task.id}/trigger-token`, {
+      method: 'DELETE',
+      headers: adminHeaders,
+    });
+    assert.equal(revokeRes.status, 200);
+
+    const revokedRes = await fetch(`${base}/api/triggers/schedules/${task.slug}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token2}` },
+    });
+    assert.equal(revokedRes.status, 401);
+  } finally {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

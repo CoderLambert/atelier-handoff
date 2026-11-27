@@ -46,5 +46,11 @@
     "key": "driver-call:7d784e0c97c5e809",
     "decision": "docs/decisions/2026-11-27-scheduled-tasks.md",
     "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-triggers.ts",
+    "key": "driver-call:a467949f4d608d66",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
   }
 ]
