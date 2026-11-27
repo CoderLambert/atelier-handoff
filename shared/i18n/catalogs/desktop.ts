@@ -125,4 +125,8 @@ export const desktop = {
     'The deliverable exceeds the size limit for saving a copy.',
   ],
   'host.files.saveFailed': ['无法保存选定的文件。', 'The selected file could not be saved.'],
+  'host.tray.tooltip': ['atelier 工作台', 'atelier Workbench'],
+  'host.tray.show': ['显示工作台', 'Show atelier'],
+  'host.tray.minimizeToTray': ['关闭窗口时最小化到托盘', 'Minimize to tray on close'],
+  'host.tray.quit': ['退出 atelier', 'Quit atelier'],
 } as const;

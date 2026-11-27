@@ -76,6 +76,7 @@ test('desktop notifications IPC channels and schemas validate payloads', () => {
     completionSound: true,
     failureSound: false,
     focusOnCompletion: true,
+    minimizeToTrayOnClose: false,
     volume: 60,
   };
   assert.deepEqual(desktopUiNotificationSetSchema.parse(valid), valid);
@@ -98,6 +99,7 @@ test('desktop notifications preference persists in user profile across loads', a
       completionSound: false,
       failureSound: true,
       focusOnCompletion: false,
+      minimizeToTrayOnClose: true,
       volume: 45,
     };
     await preferences.set(custom);

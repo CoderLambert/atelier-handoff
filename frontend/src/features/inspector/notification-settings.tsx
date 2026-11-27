@@ -1,7 +1,7 @@
 /**
  * @file 提供运行提示音与窗口焦点设置表单。
- * @implementation 呈现提示音风格切换、开关、音量调节滑块、实时试听与自动聚焦窗口配置，变更即时持久化。
- * @updated 2026-11-23T16:40:00+08:00
+ * @implementation 呈现提示音风格切换、开关、音量调节滑块、实时试听、自动聚焦与桌面托盘常驻配置，变更即时持久化。
+ * @updated 2026-11-27T23:50:00+08:00
  */
 import { useId } from 'react';
 import { Volume2 } from 'lucide-react';
@@ -22,12 +22,14 @@ import { type SoundTheme } from '@shared/desktop-ui-notifications';
 export function NotificationSettings() {
   const { t } = useUiTranslation('inspector');
   const { notifications, updateNotifications, playTestSound } = useUiNotifications();
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.atelierUiNotifications);
 
   const completionId = useId();
   const themeId = useId();
   const failureId = useId();
   const volumeId = useId();
   const focusId = useId();
+  const trayId = useId();
 
   return (
     <div className="settings-form">
@@ -159,6 +161,24 @@ export function NotificationSettings() {
             />
           </div>
         </div>
+
+        {isDesktop && (
+          <div className="settings-field-row">
+            <div className="settings-field-copy">
+              <label htmlFor={trayId}>{t('settings.notificationsMinimizeToTray')}</label>
+              <p>{t('settings.notificationsMinimizeToTrayDescription')}</p>
+            </div>
+            <div className="flex items-center justify-start pt-1">
+              <Switch
+                id={trayId}
+                checked={notifications.minimizeToTrayOnClose}
+                onCheckedChange={(checked) =>
+                  updateNotifications({ minimizeToTrayOnClose: checked })
+                }
+              />
+            </div>
+          </div>
+        )}
       </fieldset>
     </div>
   );

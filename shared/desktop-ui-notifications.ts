@@ -1,7 +1,7 @@
 /**
  * @file 定义桌面通知与提示音偏好及 IPC 契约。
  * @implementation 共享 Zod schema 校验持久偏好与请求响应，preload 仅暴露偏好读写和窗口唤醒。
- * @updated 2026-11-23T16:35:00+08:00
+ * @updated 2026-11-27T23:50:00+08:00
  */
 import { z } from 'zod';
 
@@ -13,6 +13,7 @@ export const desktopUiNotificationsSchema = z.strictObject({
   completionSound: z.boolean(),
   failureSound: z.boolean(),
   focusOnCompletion: z.boolean(),
+  minimizeToTrayOnClose: z.boolean().default(false),
   volume: z.number().int().min(0).max(100),
 });
 
@@ -23,6 +24,7 @@ export const defaultDesktopUiNotifications: DesktopUiNotifications = {
   completionSound: true,
   failureSound: true,
   focusOnCompletion: true,
+  minimizeToTrayOnClose: false,
   volume: 80,
 };
 
@@ -50,6 +52,10 @@ export function resolveDesktopUiNotifications(value: unknown): DesktopUiNotifica
         typeof candidate.focusOnCompletion === 'boolean'
           ? candidate.focusOnCompletion
           : defaultDesktopUiNotifications.focusOnCompletion,
+      minimizeToTrayOnClose:
+        typeof candidate.minimizeToTrayOnClose === 'boolean'
+          ? candidate.minimizeToTrayOnClose
+          : defaultDesktopUiNotifications.minimizeToTrayOnClose,
       volume:
         typeof candidate.volume === 'number' && candidate.volume >= 0 && candidate.volume <= 100
           ? Math.round(candidate.volume)

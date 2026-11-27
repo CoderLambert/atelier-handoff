@@ -1,7 +1,7 @@
 /**
  * @file 绑定桌面通知偏好与窗口唤醒 IPC。
  * @implementation 复用统一的可信偏好绑定器处理通知偏好读写，并绑定窗口激活通道及对称清理函数。
- * @updated 2026-11-27T22:00:00+08:00
+ * @updated 2026-11-27T23:50:00+08:00
  */
 import { ipcMain, type BrowserWindow } from 'electron';
 import {
@@ -10,6 +10,7 @@ import {
   desktopUiNotificationResultSchema,
   desktopUiNotificationSetSchema,
   desktopWindowFocusResultSchema,
+  type DesktopUiNotifications,
 } from '../../shared/desktop-ui-notifications.js';
 import { focusWindow } from './window.mjs';
 import type { DesktopUiNotificationsPreferences } from './ui-notifications.mjs';
@@ -22,6 +23,7 @@ export function bindUiNotifications(
   getWindow: () => BrowserWindow | undefined,
   getConnection: () => Connection | undefined,
   isStopping: () => boolean,
+  onChanged?: (notifications: DesktopUiNotifications) => void,
 ): () => void {
   const { assertTrustedIpc, unbind } = bindTrustedPreferenceIpc({
     channels: desktopUiNotificationChannels,
@@ -36,6 +38,7 @@ export function bindUiNotifications(
       invalidSource: 'Untrusted UI notifications request.',
       connectionChanged: 'UI notifications request connection changed.',
     },
+    afterSet: onChanged ? (result) => onChanged(result) : undefined,
   });
 
   ipcMain.handle(desktopUiNotificationChannels.focusWindow, (event) => {

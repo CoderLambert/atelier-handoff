@@ -306,6 +306,11 @@ export const inspector = {
     '在后台或非激活状态下完成任务时，自动将应用窗口前置并聚焦会话。',
     'Bring the application window to the foreground and focus the session when a background run finishes.',
   ],
+  'settings.notificationsMinimizeToTray': ['关闭窗口时最小化到托盘', 'Minimize to Tray on Close'],
+  'settings.notificationsMinimizeToTrayDescription': [
+    '点击窗口关闭按钮时隐藏到系统托盘并保持后台运行，便于定时任务按计划触发。',
+    'Hide the window to the system tray instead of quitting when closed so scheduled tasks continue running in the background.',
+  ],
   'settings.diagnosticsDescription': [
     '遇到连接或运行问题时，导出诊断文件辅助排查。',
     'Export diagnostics to troubleshoot connection or runtime problems.',

@@ -1,9 +1,9 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
- * @implementation 装配窗口、快捷键与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
- * @updated 2026-11-27T22:00:00+08:00
+ * @implementation 装配窗口、快捷键、系统托盘与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
+ * @updated 2026-11-27T23:50:00+08:00
  */
-import { app, powerMonitor, type BrowserWindow } from 'electron';
+import { app, powerMonitor, type BrowserWindow, type Event as ElectronEvent } from 'electron';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { importWorkspace } from './host/migration.mjs';
@@ -41,6 +41,7 @@ import { bindUiNotifications } from './host/ui-notifications-ipc.mjs';
 import { bindDesktopGit } from './host/git-ipc.mjs';
 import { createTrustedSenderPredicate } from './host/trusted-ipc.mjs';
 import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
+import { DesktopTrayController } from './host/tray.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // The development bundle lives in dist/desktop; source execution lives in desktop.
@@ -144,6 +145,7 @@ const managedShunt =
 let unbindPairing: (() => void) | undefined;
 let unbindShortcutWindow: (() => void) | undefined;
 let recovery: Promise<void> | undefined;
+let desktopTray: DesktopTrayController | undefined;
 let quitting = false;
 const supervisor = new RuntimeSupervisor(
   { packaged: app.isPackaged, root, dataDir, rtkBinary },
@@ -154,6 +156,12 @@ const supervisor = new RuntimeSupervisor(
     void recover(reason);
   },
 );
+
+function handleWindowClose(event: ElectronEvent): void {
+  if (!desktopTray?.shouldHideOnClose(stopping, quitting)) return;
+  event.preventDefault();
+  if (window && !window.isDestroyed()) window.hide();
+}
 
 function clearRuntimeWindow(): void {
   origin = undefined;
@@ -185,6 +193,8 @@ async function start(): Promise<void> {
       ? window
       : createWindow(join(here, 'preload.cjs'), () => origin, uiTheme.get());
   window = owner;
+  owner.removeListener('close', handleWindowClose);
+  owner.on('close', handleWindowClose);
   owner.webContents.removeListener('render-process-gone', rendererGone);
   owner.webContents.on('render-process-gone', rendererGone);
   unbindPairing = bindPairing(owner, origin, connection.pairing);
@@ -246,22 +256,38 @@ if (temporaryProfile || requestedProfile || app.isPackaged || process.env.ATELIE
 }
 if (temporaryProfile)
   app.once('will-quit', () => rmSync(temporaryProfile, { recursive: true, force: true }));
-const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) =>
-  desktopI18n.changeLanguage(locale),
-);
+const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) => {
+  void desktopI18n.changeLanguage(locale).then(() => desktopTray?.refreshMenu());
+});
 const uiTheme = new DesktopUiThemePreferences(regularProfile);
 const uiNotifications = new DesktopUiNotificationsPreferences(regularProfile);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {
-    if (origin && window) focusWindow(window);
+    if (origin && window && !window.isDestroyed()) focusWindow(window);
+  });
+  app.on('activate', () => {
+    if (origin && window && !window.isDestroyed()) focusWindow(window);
   });
   void app
     .whenReady()
     .then(async () => {
       await Promise.all([uiLanguage.load(), uiTheme.load(), uiNotifications.load()]);
       if (!migrationMode) {
+        desktopTray = new DesktopTrayController({
+          isMinimizeToTrayEnabled: () => uiNotifications.get().minimizeToTrayOnClose,
+          onToggleMinimizeToTray: (enabled) => {
+            void uiNotifications
+              .set({ ...uiNotifications.get(), minimizeToTrayOnClose: enabled })
+              .then(() => desktopTray?.refreshMenu())
+              .catch(() => desktopTray?.refreshMenu());
+          },
+          onShowWindow: () => {
+            if (origin && window && !window.isDestroyed()) focusWindow(window);
+          },
+          onQuit: () => app.quit(),
+        });
         const unbindUiLanguage = bindUiLanguage(
           uiLanguage,
           () => window,
@@ -279,6 +305,7 @@ else {
           () => window,
           () => runtimeConnection,
           () => stopping,
+          () => desktopTray?.refreshMenu(),
         );
         const unbindDesktopGit = bindDesktopGit(
           () => window,
@@ -290,6 +317,8 @@ else {
         const onSystemResume = () => supervisor.notifySystemResume();
         powerMonitor.on('resume', onSystemResume);
         app.once('will-quit', () => {
+          desktopTray?.destroy();
+          desktopTray = undefined;
           powerMonitor.off('resume', onSystemResume);
           unbindUiLanguage();
           unbindUiTheme();
@@ -321,12 +350,17 @@ else {
       void recover(asDesktopHostError(error));
     });
 }
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  if (desktopTray?.shouldKeepAliveOnAllClosed(stopping, quitting)) return;
+  app.quit();
+});
 app.on('before-quit', (event) => {
   if (quitting) return;
   event.preventDefault();
   if (stopping) return;
   stopping = true;
+  desktopTray?.destroy();
+  desktopTray = undefined;
   lifecycle.abort();
   clearRuntimeWindow();
   void supervisor
