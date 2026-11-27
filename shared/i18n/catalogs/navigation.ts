@@ -36,6 +36,8 @@ export const navigation = {
   'sidebar.closeSearch': ['关闭搜索', 'Close search'],
   'sidebar.sessions': ['会话', 'Sessions'],
   'sidebar.sessionsAndProjects': ['会话与项目', 'Sessions and projects'],
+  'sidebar.recentSessions': ['最近会话', 'Recent sessions'],
+  'sidebar.switchAllSessions': ['切换全部会话…', 'Switch all sessions…'],
   'sidebar.artifactCount': ['交付物 · {{count}}', 'Deliverables · {{count}}'],
   'sidebar.mainNavigation': ['主导航', 'Main navigation'],
   'sidebar.projectSessions': ['项目会话', 'Project sessions'],

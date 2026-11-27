@@ -321,6 +321,7 @@ export default function Workspace() {
       setProjectsOpen(true);
     },
     onSettings: () => nav.openView('settings'),
+    onOpenSwitcher: () => setSwitcherOpen(true),
   };
 
   const pendingPermissions =

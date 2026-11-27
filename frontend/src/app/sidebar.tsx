@@ -5,32 +5,20 @@
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  Activity,
-  Bot,
-  ChevronDown,
-  FolderOpen,
-  MessagesSquare,
-  Package,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Puzzle,
-  Search,
-  Settings,
+  Activity, Bot, ChevronDown, FolderOpen, MessagesSquare, Package,
+  PanelLeftClose, PanelLeftOpen, Plus, Puzzle, Search, Settings,
 } from 'lucide-react';
 import { type Project, type RunStatus, type Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
 import { useActiveRuns } from '@/use-query/runs/use-active-runs';
+import { sessionSwitchItems } from './session-switcher-model';
 import { buildProjectSessionGroups, type SessionTreePagination } from './session-tree';
+import { CollapsedSessionMenuItems } from './sidebar-collapsed-sessions';
 import type { SessionAction } from './sidebar-session-menu';
 import { SidebarProjectGroup } from './sidebar-project-group';
 import { SidebarSearchBar } from './sidebar-search-bar';
@@ -60,6 +48,7 @@ export function Sidebar({
   onNewProject,
   onProjects,
   onSettings,
+  onOpenSwitcher,
   collapsed = false,
   onToggleCollapsed,
 }: {
@@ -78,6 +67,7 @@ export function Sidebar({
   onNewProject?: (id: string) => void;
   onProjects: () => void;
   onSettings: () => void;
+  onOpenSwitcher?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
 }) {
@@ -124,11 +114,16 @@ export function Sidebar({
   const treeId = useId();
   const filter = search.trim();
 
-  const groups = useMemo(() => {
-    const knownProjects = new Map(projects?.map((entry) => [entry.id, entry]));
-    if (project && !knownProjects.has(project.id)) knownProjects.set(project.id, project);
-    return buildProjectSessionGroups(sessions ?? [], [...knownProjects.values()], filter);
-  }, [sessions, projects, project, filter]);
+  const knownProjects = useMemo(() => {
+    const map = new Map(projects?.map((entry) => [entry.id, entry]));
+    if (project && !map.has(project.id)) map.set(project.id, project);
+    return [...map.values()];
+  }, [projects, project]);
+
+  const groups = useMemo(
+    () => buildProjectSessionGroups(sessions ?? [], knownProjects, filter),
+    [sessions, knownProjects, filter],
+  );
 
   const selected = view === 'chat' ? current : undefined;
   const unseenOutcomes = useWorkspace((state) => state.workspace.unseenRunOutcomes);
@@ -141,6 +136,25 @@ export function Sidebar({
     [activity],
   );
   const now = useMemo(() => new Date(), [sessions, activity]);
+
+  const recentSessions = useMemo(
+    () =>
+      collapsed
+        ? sessionSwitchItems(sessions ?? [], knownProjects, '').filter(
+            (item) => item.session.status !== 'archived',
+          )
+        : [],
+    [collapsed, sessions, knownProjects],
+  );
+
+  const collapsedSessionProps = {
+    recentSessions,
+    selected,
+    bySession,
+    unseenOutcomes,
+    runStatus,
+    onSession,
+  };
 
   const handleToggleBranch = useCallback(
     (sessionId: string, expanded: boolean) => {
@@ -207,7 +221,7 @@ export function Sidebar({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 className="sidebar-session-menu"
-                side="bottom"
+                side={collapsed ? 'right' : 'bottom'}
                 align="start"
                 sideOffset={6}
                 collisionPadding={8}
@@ -225,6 +239,12 @@ export function Sidebar({
                     {t('sidebar.workspaceSettings')}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
+                {collapsed ? (
+                  <CollapsedSessionMenuItems
+                    {...collapsedSessionProps}
+                    onOpenSwitcher={onOpenSwitcher}
+                  />
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="sidebar-toolbar-actions">
@@ -235,8 +255,12 @@ export function Sidebar({
                 className="sidebar-icon"
                 aria-label={t('sidebar.search')}
                 title={t('sidebar.search')}
-                disabled={collapsed && !onToggleCollapsed}
+                disabled={collapsed && !onOpenSwitcher && !onToggleCollapsed}
                 onClick={() => {
+                  if (collapsed && onOpenSwitcher) {
+                    onOpenSwitcher();
+                    return;
+                  }
                   if (collapsed) onToggleCollapsed?.();
                   setSearchOpen(true);
                 }}
