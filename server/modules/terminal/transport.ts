@@ -1,7 +1,7 @@
 /**
  * @file 接入人工终端的 WebSocket 数据流。
- * @implementation 在现有 HTTP server 上验证单次票据与 Origin，限制入站帧、维持心跳并显式释放升级连接。
- * @updated 2026-11-27T21:25:00+08:00
+ * @implementation 在现有 HTTP server 上验证单次票据与 Origin，限制入站帧、复用预序列化下行字符串并维持心跳和停滞断开。
+ * @updated 2026-11-27T22:10:00+08:00
  */
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
@@ -60,9 +60,9 @@ export function registerTerminalTransport(
           get bufferedAmount() {
             return ws.bufferedAmount;
           },
-          send(frame) {
+          send(frame, encoded) {
             if (ws.readyState !== WebSocket.OPEN) throw new Error('Disconnected');
-            ws.send(JSON.stringify(frame));
+            ws.send(encoded ?? JSON.stringify(frame));
           },
           close(code) {
             if (ws.readyState === WebSocket.OPEN) ws.close(1008, code);

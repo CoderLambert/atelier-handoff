@@ -1,13 +1,14 @@
 /**
  * @file 管理运行时 Skill 包资源与脚本执行。
  * @implementation 校验包内路径，读取文本资源，写入临时包目录并通过受控 Python 执行器发布允许的产物。
- * @updated 2026-11-26T15:53:01+08:00
+ * @updated 2026-11-27T22:10:00+08:00
  */
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { AppError, type Run, type SkillPackage } from '../shared/types.js';
 import type { FileRecords } from './artifacts.js';
 import type { RunSkill } from './run-skills.js';
+import { createSearchSkillBrokerSpec, rewriteSearchCheckoutOutput } from './search-skill-broker.js';
 import { runPackagePython } from './skill-package-execution.js';
 
 const searchDigest = 'c65ec10e007a3e4c898a930099abc65e81be6e27093c77c7b83bef4332ebf168';
@@ -83,7 +84,7 @@ export async function executeSkillPackage(options: {
       state,
       output,
       signal,
-      search: options.search,
+      broker: options.search ? createSearchSkillBrokerSpec(options.args) : undefined,
     });
     const artifacts = [];
     if (result.code === 0 && (!run.agent || run.agent.capabilities.includes('artifact'))) {
@@ -96,12 +97,7 @@ export async function executeSkillPackage(options: {
         artifacts.push({ id: artifact.id, name: artifact.name });
       }
     }
-    const text = options.search
-      ? result.output.replaceAll(
-          'http://127.0.0.1:17863/checkout',
-          'https://skill.zhaopintong.com/checkout',
-        )
-      : result.output;
+    const text = options.search ? rewriteSearchCheckoutOutput(result.output) : result.output;
     return { ...result, output: text, artifacts };
   } finally {
     await rm(scratch, { recursive: true, force: true });

@@ -2,6 +2,14 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C10-A：终端附件会话拆解、帧预序列化透传与 `search-skill-broker` 抽离（已验证）
+
+- **终端会话与实例拆解**：将 `server/modules/terminal/manager.ts`（**841 行降至 650 行**）中的单连接快照围栏、`512/384/192 KiB` 双水位流控、单调帧序/ACK 校验与单次 JSON 序列化拆入 `server/modules/terminal/attachment-session.ts`（218 行，`TerminalAttachmentSession`），将 `outputChunks`、顺序异步队列、`pauses` 集合及统一状态谓词（`isTerminalClosedOrClosing` / `isTerminalRetained` / `isTerminalClosing` / `isTerminalRunning`）拆入 `server/modules/terminal/terminal-instance.ts`（137 行，`TerminalInstance`）；扩展 `TerminalConnection.send(frame, encoded?)` 与 `server/modules/terminal/transport.ts`（163 行），直接发送已测字节的预序列化 JSON 字符串，消除快照校验和下行输出热路径上的重复序列化。
+- **搜索技能代理剥离**：将 `server/skill-package-execution.ts`（**532 行降至 297 行**）内嵌的 `@zhaopintong/multi-search-engine` 白名单校验、Unix socket HTTP 代理与结账地址改写逻辑迁入 `server/search-skill-broker.ts`（322 行）；`runPackagePython` 改为接收通用可选 `broker?: PackagePythonBrokerSpec`（保留 `search?: boolean` 兼容入口并消除 `!` 断言），`server/skill-package-runtime.ts`（109→105 行）显式注入 `createSearchSkillBrokerSpec` 并复用 `rewriteSearchCheckoutOutput`。决策与回退见 `docs/decisions/2026-11-27-terminal-session-and-skill-broker.md`。
+- **验证**：`npm run check`（`check:architecture`、`check:query`、`check:i18n`、`check:ui`、`tsc`、desktop、tools）、`npm run check:headers`（8 份 C10-A 源文件）与 `npm run build` / `npm run build:desktop` 全通过；新增 `tests/terminal-attachment-and-broker.test.ts` 与全部 6 组现行终端/Skill 定向套件合跑 **40/40 全通过**；主机 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 后端首轮 **899/908** 通过、6 跳过（2 个无关 Git 并行竞争文件 `git-multi-commit-orphan-api.test.ts` 与 `git-commit-plan-recovery.test.ts` 单独串行重跑分别 **1/1** 与 **61/61** 全通过），`npm run test:frontend` **177/178** 通过、1 跳过、0 失败；隔离 Wayland 真实 Electron 烟测 `scripts/smoke-right-tool-panels.mts`（zh-CN/en 终端/Git/浏览器 450–1440 px、窄窗、全屏、收起恢复）通过（锁定依赖与真实 `node-pty`/Chromium，未用付费模型，未测系统包）。
+- **已知限制**：后端 `test:skill-package-execution` 真实 `bwrap` 运行需在宿主 Linux 命名空间中执行（受限嵌套容器沙箱无 `bwrap` / 非同 UID `/tmp` 权限时会拒绝）。
+- **开发过程 review**：先读全 `manager.ts` 和 `skill-package-execution.ts` 并保留 `search?: boolean` 与 `TerminalConnection` 重导出兼容层，使全部 40 项定向单测一次性 40/40 通过；重跑并行抖动 Git 测试时因误与前端套件并发启动导致 `git-commit-plan-recovery` 出现一次 `LocalGit.open` 竞争，彻底改为单文件串行后 61/61 全绿，后续复测只做纯串行重跑。下一轮进入 **C10-B（`SettingsPage` 表单解耦、`RunTrace` 单趟 Facts 与 `Sidebar` 记忆化，以及最终架构护栏收紧）**。
+
 ## 2026-11-27 · C9：桌面浏览器控制器拆分、`trusted-ipc` 收口与 `DesktopBrowser` 瘦身（已验证）
 
 - **Host 偏好 IPC 与可信发送方注入**：在 `desktop/host/trusted-ipc.mts`（31→127 行）新增 `createTrustedSenderPredicate` 与 `bindTrustedPreferenceIpc`，收口 `ui-language-ipc.mts`（50→39 行）、`ui-theme-ipc.mts`（52→43 行）与 `ui-notifications-ipc.mts`（62→52 行）的通道校验、连接稳定性检查和对称解绑；`desktop/main.mts`（328→336 行）向 `createBrowserController` 注入 `isTrustedSender`，严守 `check:architecture` 中 `desktop/browser/*` 不直接导入 `desktop/host/*` 的边界。
