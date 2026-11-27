@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C1 第 1 步：`server/agent.ts` MCP 工具注册与执行层拆分（已验证）
+
+- 将 `server/agent.ts` 中的 `custom()` 与全部 MCP 工具注册/执行逻辑抽离至 `server/modules/runs/mcp-tools/`（`index.ts`、`checked-mcp.ts`、`builtin-tools.ts`、`browser-tools.ts`、`extension-tools.ts`），`server/agent.ts` 从 2,953 行降至 2,102 行（净减 851 行）；以统一 `invokeCheckedMcp()` 合并绑定 MCP 与外部 MCP 的 64 KiB 参数上限、审批和三处复核逻辑，并用显式守卫替换外部工具定义查找的非空断言。对外 `Runner` 接口、SDK 主循环、工具名称/描述/schema 及全部事件语义不变。[决策与回退](../../../docs/decisions/2026-11-27-run-mcp-tools.md)
+- `npm run check`、`npm run check:headers`（6 份变更/新增源文件）、`npm run build`、`npm run build:desktop` 及 Prettier 检查全部通过；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 运行时 833 通过、6 跳过，唯一并行超时项 `tests/harness-process.test.ts` 单独复跑 11/11 通过（含新增 `tests/run-mcp-tools.test.ts` 14 项确定性单测与真实 Claude Agent SDK 0.3.332 回环测试）；前端 155 通过、1 跳过。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-ordered-conversation.mts`（锁定 SDK + 隔离回环模型、中英文 1280/1440/1920）通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：按「仅拆离 MCP 工具注册/执行接缝、不动主循环与流控」单步委派 Codex（`gpt-6.2-sol` + `high`），在严格保持 24 处工具定义与测试零回归的前提下一次削减 851 行并补齐 14 项纯内存单测；后续 C1 第 2 步继续按同一节奏独立抽离 `LiveTurnCoordinator`。
+
 ## 2026-11-27 · 架构体检第 0 批 Quick Wins（已验证）
 
 - 修复并收敛 6 项现存缺陷与漂移：① `frontend/src/features/extensions/api.ts` 消除重复中文 Map 键覆盖，在 `public-import.tsx` 按 `'github-preview'` 场景保留停用提示；② 提取 `desktop/host/trusted-ipc.mts` 统一 5 个宿主 IPC 的来源守卫，并为 `desktop/host/files.mts` 补齐 `isStopping()` 检查；③ `frontend/src/app/desktop-browser.tsx` 抽出 `observeNativeBrowserSlot`，过滤无关 DOM/滚动变动并去重坐标 IPC，移除 `window.atelierDesktop!` 非空断言；④ 提取 `frontend/src/features/chat/run-stage.ts` 统一 `RunProgress` 与 `RunLiveStatus` 的阶段优先级和 `toolLabel` 本地化；⑤ 修复 `frontend/src/features/extensions/picker.tsx` 按 `activeCount` 设置 `aria-activedescendant` 并去重三条选择路径的光标恢复；⑥ 提取 `server/secret-redaction.ts` 统一 `agent.ts` 与 `harness-progress.ts` 凭据脱敏，删除零生产调用的 v1 `buildHarnessCheckpoint`/`renderHarnessCheckpoint` 死代码。无数据库迁移与外部契约破坏，回退可直接撤销本提交。
