@@ -1,18 +1,20 @@
 /**
  * @file 提供输入区扩展和文件补全。
- * @implementation 跟踪光标和输入法以查询补全候选，同步无障碍选中项，并在选用候选后统一恢复输入焦点与光标。
- * @updated 2026-11-27T17:00:34+08:00
+ * @implementation 随宿主输入节点同步光标和无障碍状态，只处理补全按键，并返回候选影响的草稿字段。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import {
-  useEffect,
+  useCallback,
+  useImperativeHandle,
   useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
-  type RefObject,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type Ref,
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentSessionInfo, Draft, Extension } from '@shared/types';
@@ -40,10 +42,17 @@ import {
   chooseExtension,
   chooseFile,
   completionSkills,
+  selectCompletionKey,
   selectionReason,
   triggerAt,
 } from './picker-model';
 import './extensions.css';
+
+export interface ExtensionPickerHandle {
+  handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>): boolean;
+}
+
+type PickerDraftPatch = Partial<Pick<Draft, 'text' | 'extensionSelections'>>;
 
 export interface ExtensionPickerProps {
   projectId?: string;
@@ -53,10 +62,11 @@ export interface ExtensionPickerProps {
   agent?: AgentSessionInfo;
   contextAllowed?: boolean;
   draft: Draft;
-  onChange: (draft: Draft) => void;
-  inputRef: RefObject<HTMLTextAreaElement | null>;
-  onSubmit: () => void;
-  onQuickInsert?: () => void;
+  selectionMode: Draft['mode'];
+  onChange: (patch: PickerDraftPatch) => void;
+  input: HTMLTextAreaElement | null;
+  composing?: boolean;
+  keyHandlerRef: Ref<ExtensionPickerHandle>;
 }
 interface FileCompletionRow {
   path: string;
@@ -115,10 +125,11 @@ export function ExtensionPicker({
   agent,
   contextAllowed = true,
   draft,
+  selectionMode,
   onChange,
-  inputRef,
-  onSubmit,
-  onQuickInsert,
+  input,
+  composing = false,
+  keyHandlerRef,
 }: ExtensionPickerProps) {
   const { t } = useUiTranslation('extensions');
   const query = useExtensions(projectId, 'picker');
@@ -127,27 +138,17 @@ export function ExtensionPicker({
   const [cursor, setCursor] = useState(emptyCursor);
   const [index, setIndex] = useState(0);
   const [dismissed, setDismissed] = useState('');
-  const [composing, setComposing] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
-  const composition = useRef({ active: false, until: 0 });
-  const binding = useRef<{ input: HTMLTextAreaElement; cleanup: () => void } | undefined>(
-    undefined,
-  );
   const menuRef = useRef<HTMLDivElement>(null);
   const selectionFrame = useRef<number | undefined>(undefined);
-  const lastScope = useRef(projectId);
+  const committedDraftText = useRef(draft.text);
   const catalog = client.getQueryState<Extension[]>(extensionPickerKeys.list(projectId ?? ''));
   const pickerLoading = query.isPending || (query.isFetching && Boolean(catalog?.isInvalidated));
   const items = scopeExtensions(pickerCatalogItems(projectId, query.data, catalog), agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
-  const completionKey = JSON.stringify([
-    projectId,
-    skillScope.sessionId,
-    skillScope.mode,
-    cursor.text,
-    cursor.start,
-    cursor.end,
-  ]);
+  const cursorKey = (text: string, start: number, end: number) =>
+    JSON.stringify([projectId, skillScope.sessionId, skillScope.mode, text, start, end]);
+  const completionKey = cursorKey(cursor.text, cursor.start, cursor.end);
   const active = Boolean(
     projectId && cursor.focused && !cursor.disabled && !composing && dismissed !== completionKey,
   );
@@ -162,7 +163,7 @@ export function ExtensionPicker({
           isSlash ? [...items.filter(({ kind }) => kind === 'command'), ...skillItems] : items,
           trigger,
           cursor.text,
-          draft.mode,
+          selectionMode,
         );
 
   const fileSearch = useSearchProjectFiles(
@@ -206,45 +207,16 @@ export function ExtensionPicker({
         previewError ||
         previewLoading),
   );
-  const current = useRef({
-    projectId,
-    skillScope,
-    agent,
-    draft,
-    onChange,
-    onSubmit,
-    onQuickInsert,
-    open,
-    rows,
-    fileRows,
-    selectedIndex,
-    trigger,
-    completionKey,
-  });
-  current.current = {
-    projectId,
-    skillScope,
-    agent,
-    draft,
-    onChange,
-    onSubmit,
-    onQuickInsert,
-    open,
-    rows,
-    fileRows,
-    selectedIndex,
-    trigger,
-    completionKey,
-  };
-
-  function sync() {
-    const input = inputRef.current;
-    if (!input) return;
+  const sync = useCallback(() => {
+    if (!input) {
+      setCursor(emptyCursor);
+      return;
+    }
     const next: Cursor = {
       text: input.value,
       start: input.selectionStart,
       end: input.selectionEnd,
-      focused: document.activeElement === input,
+      focused: input.ownerDocument.activeElement === input,
       disabled: input.disabled || input.readOnly,
     };
     setCursor((old) =>
@@ -256,42 +228,39 @@ export function ExtensionPicker({
         ? old
         : next,
     );
-  }
-  function hide() {
-    setDismissed(current.current.completionKey);
-  }
+  }, [input]);
+
   function choose(choiceIndex: number) {
-    const state = current.current;
-    const input = inputRef.current;
-    if (
-      !input ||
-      !state.projectId ||
-      input.disabled ||
-      input.readOnly ||
-      composition.current.active
-    )
-      return;
+    if (!open || !input || !projectId || input.disabled || input.readOnly) return;
     const token = triggerAt(input.value, input.selectionStart, input.selectionEnd);
-    if (!token || token.start !== state.trigger?.start || token.word !== state.trigger.word) {
+    if (!token || token.start !== trigger?.start || token.word !== trigger.word) {
       sync();
       return;
     }
-    const applyChoice = ({ draft, caret }: { draft: Draft; caret: number }, directory = false) => {
-      const scope = state.projectId;
+    const liveDraft = { ...draft, text: input.value };
+    const applyChoice = (
+      { draft: next, caret }: { draft: Draft; caret: number },
+      directory = false,
+    ) => {
       // Preserve the caret for the controlled host input before React applies the draft.
-      input.value = draft.text;
+      input.value = next.text;
       input.setSelectionRange(caret, caret);
       if (directory) setIndex(0);
-      else setDismissed(JSON.stringify([scope, draft.text, caret, caret]));
-      state.onChange(draft);
+      else setDismissed(cursorKey(next.text, caret, caret));
+      onChange({
+        text: next.text,
+        ...(next.extensionSelections !== draft.extensionSelections
+          ? { extensionSelections: next.extensionSelections }
+          : {}),
+      });
       sync();
-      if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
+      if (selectionFrame.current !== undefined) cancelAnimationFrame(selectionFrame.current);
       selectionFrame.current = requestAnimationFrame(() => {
+        selectionFrame.current = undefined;
         if (
-          current.current.projectId !== scope ||
-          inputRef.current !== input ||
           !input.isConnected ||
-          current.current.draft.text !== draft.text
+          committedDraftText.current !== next.text ||
+          input.value !== next.text
         )
           return;
         input.focus({ preventScroll: true });
@@ -300,31 +269,30 @@ export function ExtensionPicker({
       });
     };
     if (token.symbol === '@') {
-      const fileRow = state.fileRows[choiceIndex];
+      const fileRow = fileRows[choiceIndex];
       if (!fileRow) {
         sync();
         return;
       }
-      if (fileRow.isDirectory) applyChoice(chooseDirectory(state.draft, token, fileRow), true);
-      else applyChoice(chooseFile(state.draft, token, fileRow));
+      if (fileRow.isDirectory) applyChoice(chooseDirectory(liveDraft, token, fileRow), true);
+      else applyChoice(chooseFile(liveDraft, token, fileRow));
       return;
     }
-    const row = state.rows[choiceIndex];
+    const row = rows[choiceIndex];
     if (!row) return;
     const latest = (() => {
       if ('effective' in row.item) {
         const cached = client.getQueryState<SkillInheritanceView>(
-          skillInheritanceKeys.view(state.skillScope),
+          skillInheritanceKeys.view(skillScope),
         );
         if (cached?.status !== 'success' || cached.fetchStatus !== 'idle' || cached.isInvalidated)
           return;
         return completionSkills(cached.data?.items ?? []).find(({ id }) => id === row.item.id);
       }
-      const cached = client.getQueryState<Extension[]>(extensionPickerKeys.list(state.projectId));
-      return scopeExtensions(
-        pickerCatalogItems(state.projectId, cached?.data, cached),
-        state.agent,
-      ).find((item) => item.id === row.item.id);
+      const cached = client.getQueryState<Extension[]>(extensionPickerKeys.list(projectId));
+      return scopeExtensions(pickerCatalogItems(projectId, cached?.data, cached), agent).find(
+        (item) => item.id === row.item.id,
+      );
     })();
     if (
       !latest ||
@@ -336,157 +304,98 @@ export function ExtensionPicker({
       return;
     }
     if (latest.kind === 'mcp') {
-      const allowed = new Set(allowedTools(latest, state.draft.mode).map((tool) => tool.name));
+      const allowed = new Set(allowedTools(latest, selectionMode).map((tool) => tool.name));
       if (!row.tools?.length || row.tools.some((tool) => !allowed.has(tool))) {
         sync();
         return;
       }
     }
-    applyChoice(
-      chooseExtension({ ...state.draft, text: input.value }, token, { ...row, item: latest }),
-    );
+    applyChoice(chooseExtension(liveDraft, token, { ...row, item: latest }, selectionMode));
   }
-  function keydown(event: KeyboardEvent) {
-    if (
-      composition.current.active ||
-      event.isComposing ||
-      event.keyCode === 229 ||
-      Date.now() < composition.current.until
-    ) {
-      if (event.key === 'Enter') event.stopImmediatePropagation();
-      return;
-    }
-    const state = current.current;
-    if (
-      event.key === 'Enter' &&
-      event.altKey !== event.ctrlKey &&
-      !event.metaKey &&
-      !event.shiftKey &&
-      !inputRef.current?.disabled &&
-      !inputRef.current?.readOnly &&
-      state.onQuickInsert
-    ) {
+
+  useImperativeHandle(keyHandlerRef, () => ({
+    handleKeyDown(event) {
+      if (event.currentTarget !== input || input.disabled || input.readOnly) return false;
+      const action = selectCompletionKey(event, open, activeCount);
+      if (!action) return false;
       event.preventDefault();
-      event.stopImmediatePropagation();
-      if (!event.repeat) state.onQuickInsert();
-      return;
-    }
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    const activeLength = state.trigger?.symbol === '@' ? state.fileRows.length : state.rows.length;
-    if (state.open && activeLength && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setIndex(
-        (state.selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + activeLength) % activeLength,
-      );
-    } else if (state.open && activeLength && ['Enter', 'Tab'].includes(event.key)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      choose(state.selectedIndex);
-    } else if (state.open && event.key === 'Escape') {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      hide();
-    } else if (
-      event.key === 'Enter' &&
-      !inputRef.current?.disabled &&
-      !inputRef.current?.readOnly
-    ) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      state.onSubmit();
-    }
-  }
-  const handlers = useRef({ sync, keydown });
-  handlers.current = { sync, keydown };
-  // A host may replace the textarea on session navigation while retaining its ref.
-  // Bind once per actual node and keep listeners current through refs.
-  useLayoutEffect(() => {
-    const input = inputRef.current;
-    if (binding.current?.input !== input) {
-      binding.current?.cleanup();
-      binding.current = undefined;
-      if (input) {
-        const attributes = [
-          'aria-autocomplete',
-          'aria-haspopup',
-          'aria-controls',
-          'aria-expanded',
-          'aria-activedescendant',
-        ];
-        const previous = new Map(attributes.map((name) => [name, input.getAttribute(name)]));
-        const onInput = () => {
-          setDismissed('');
-          setIndex(0);
-          handlers.current.sync();
-        };
-        const onSync = () => handlers.current.sync();
-        const onKeyDown = (event: KeyboardEvent) => handlers.current.keydown(event);
-        const onKeyUp = (event: KeyboardEvent) => {
-          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
-            handlers.current.sync();
-        };
-        const onCompositionStart = () => {
-          composition.current.active = true;
-          setComposing(true);
-        };
-        const onCompositionEnd = () => {
-          composition.current.active = false;
-          composition.current.until = Date.now() + 50;
-          setComposing(false);
-          setDismissed('');
-          handlers.current.sync();
-        };
-        input.addEventListener('input', onInput);
-        input.addEventListener('focus', onSync);
-        input.addEventListener('blur', onSync);
-        input.addEventListener('click', onSync);
-        input.addEventListener('select', onSync);
-        input.addEventListener('keyup', onKeyUp);
-        input.addEventListener('keydown', onKeyDown, true);
-        input.addEventListener('compositionstart', onCompositionStart);
-        input.addEventListener('compositionend', onCompositionEnd);
-        input.setAttribute('aria-autocomplete', 'list');
-        input.setAttribute('aria-haspopup', 'listbox');
-        binding.current = {
-          input,
-          cleanup: () => {
-            input.removeEventListener('input', onInput);
-            input.removeEventListener('focus', onSync);
-            input.removeEventListener('blur', onSync);
-            input.removeEventListener('click', onSync);
-            input.removeEventListener('select', onSync);
-            input.removeEventListener('keyup', onKeyUp);
-            input.removeEventListener('keydown', onKeyDown, true);
-            input.removeEventListener('compositionstart', onCompositionStart);
-            input.removeEventListener('compositionend', onCompositionEnd);
-            for (const [name, value] of previous) {
-              if (value == null) input.removeAttribute(name);
-              else input.setAttribute(name, value);
-            }
-          },
-        };
+      event.stopPropagation();
+      if (action === 'dismiss') setDismissed(completionKey);
+      else if (action === 'choose') choose(selectedIndex);
+      else {
+        const offset = action === 'next' ? 1 : -1;
+        setIndex((selectedIndex + offset + activeCount) % activeCount);
       }
-    }
-    if (lastScope.current !== projectId) {
-      lastScope.current = projectId;
+      return true;
+    },
+  }));
+
+  useLayoutEffect(() => {
+    setDismissed('');
+    setIndex(0);
+  }, [projectId]);
+
+  useLayoutEffect(() => {
+    setDismissed('');
+  }, [composing]);
+
+  useLayoutEffect(() => {
+    if (!input) return;
+    setDismissed('');
+    setIndex(0);
+    const attributes = [
+      'aria-autocomplete',
+      'aria-haspopup',
+      'aria-controls',
+      'aria-expanded',
+      'aria-activedescendant',
+    ];
+    const previous = new Map(attributes.map((name) => [name, input.getAttribute(name)]));
+    const onInput = () => {
       setDismissed('');
       setIndex(0);
-      composition.current.active = false;
-      setComposing(false);
-    }
-    handlers.current.sync();
-  });
-  useEffect(
-    () => () => {
-      binding.current?.cleanup();
-      binding.current = undefined;
-      if (selectionFrame.current) cancelAnimationFrame(selectionFrame.current);
-    },
-    [],
-  );
+      sync();
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) sync();
+    };
+    input.addEventListener('input', onInput);
+    input.addEventListener('focus', sync);
+    input.addEventListener('blur', sync);
+    input.addEventListener('click', sync);
+    input.addEventListener('select', sync);
+    input.addEventListener('keyup', onKeyUp);
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-haspopup', 'listbox');
+    return () => {
+      input.removeEventListener('input', onInput);
+      input.removeEventListener('focus', sync);
+      input.removeEventListener('blur', sync);
+      input.removeEventListener('click', sync);
+      input.removeEventListener('select', sync);
+      input.removeEventListener('keyup', onKeyUp);
+      for (const [name, value] of previous) {
+        if (value == null) input.removeAttribute(name);
+        else input.setAttribute(name, value);
+      }
+    };
+  }, [input, sync]);
+
   useLayoutEffect(() => {
-    const input = inputRef.current;
+    committedDraftText.current = draft.text;
+    sync();
+  }, [sync, draft.text, projectId, composing]);
+  useLayoutEffect(
+    () => () => {
+      if (selectionFrame.current !== undefined) {
+        cancelAnimationFrame(selectionFrame.current);
+        selectionFrame.current = undefined;
+      }
+    },
+    [input, projectId, skillScope.sessionId],
+  );
+
+  useLayoutEffect(() => {
     if (!input) return;
     input.setAttribute('aria-expanded', String(open));
     if (open) input.setAttribute('aria-controls', `${id}-list`);
@@ -497,13 +406,12 @@ export function ExtensionPicker({
     menuRef.current
       ?.querySelector<HTMLElement>(`[data-option-index="${selectedIndex}"]`)
       ?.scrollIntoView({ block: 'nearest' });
-  }, [inputRef, id, open, activeCount, selectedIndex]);
+  }, [input, id, open, activeCount, selectedIndex]);
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || !input) return;
+    const anchor = input;
     function positionMenu() {
-      const input = inputRef.current;
-      if (!input) return;
-      const rect = input.getBoundingClientRect();
+      const rect = anchor.getBoundingClientRect();
       const viewport = window.visualViewport;
       const leftEdge = viewport?.offsetLeft ?? 0;
       const topEdge = viewport?.offsetTop ?? 0;
@@ -529,7 +437,7 @@ export function ExtensionPicker({
     window.visualViewport?.addEventListener('scroll', positionMenu, { passive: true });
     const observer =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(positionMenu) : undefined;
-    if (inputRef.current) observer?.observe(inputRef.current);
+    observer?.observe(input);
     return () => {
       window.removeEventListener('resize', positionMenu);
       window.removeEventListener('scroll', positionMenu, true);
@@ -537,7 +445,7 @@ export function ExtensionPicker({
       window.visualViewport?.removeEventListener('scroll', positionMenu);
       observer?.disconnect();
     };
-  }, [open, inputRef]);
+  }, [open, input]);
   const byId = new Map(items.map((item) => [item.id, item]));
   const pickerSelections = draft.extensionSelections?.filter(({ id }) => !sessionSkillIds.has(id));
   return (
@@ -548,7 +456,7 @@ export function ExtensionPicker({
             const item = byId.get(selection.id);
             const reason =
               selection.tools || item?.kind === 'mcp'
-                ? selectionReason(item, selection, draft.mode, query.data !== undefined)
+                ? selectionReason(item, selection, selectionMode, query.data !== undefined)
                 : preview.isSuccess && !preview.isFetching
                   ? t('picker.unavailable')
                   : '';
@@ -579,12 +487,11 @@ export function ExtensionPicker({
                   aria-label={t('picker.removeLabel', { name: item?.name || selection.id })}
                   onClick={() => {
                     onChange({
-                      ...draft,
                       extensionSelections: draft.extensionSelections?.filter(
                         (value) => value.id !== selection.id,
                       ),
                     });
-                    inputRef.current?.focus({ preventScroll: true });
+                    input?.focus({ preventScroll: true });
                   }}
                 >
                   <X data-icon="inline-start" aria-hidden="true" />

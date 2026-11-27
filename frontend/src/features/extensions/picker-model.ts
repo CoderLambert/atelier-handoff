@@ -1,7 +1,31 @@
+/**
+ * @file 定义扩展和文件补全的候选、键盘动作与草稿替换。
+ * @implementation 从光标令牌和有效权限模式选择候选，保留草稿独立保存的运行偏好。
+ * @updated 2026-11-27T18:34:46+08:00
+ */
 import { getTranslator } from '@/i18n';
 import type { SkillInheritanceItem } from '@shared/skill-inheritance';
 import type { Draft, Extension, ExtensionSelection, Mode } from '@shared/types';
 import { canSelectSkill } from './inheritance-model';
+
+export function selectCompletionKey(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>,
+  open: boolean,
+  optionCount: number,
+) {
+  if (!open || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+  if (event.key === 'Escape') return 'dismiss';
+  if (!optionCount) return;
+  switch (event.key) {
+    case 'ArrowDown':
+      return 'next';
+    case 'ArrowUp':
+      return 'previous';
+    case 'Enter':
+    case 'Tab':
+      return 'choose';
+  }
+}
 
 export interface CompletionTrigger {
   start: number;
@@ -105,11 +129,7 @@ export function choices(
     }
     if (!item.enabled || (item.kind !== 'mcp' && !item.supported)) continue;
     if (trigger.symbol === '/') {
-      if (
-        item.kind === 'mcp' ||
-        item.kind === 'skill' ||
-        !/^[\p{L}\p{N}_:-]+$/u.test(item.name)
-      )
+      if (item.kind === 'mcp' || item.kind === 'skill' || !/^[\p{L}\p{N}_:-]+$/u.test(item.name))
         continue;
       if (item.kind === 'command' && text.slice(0, trigger.start).trim()) continue;
       rows.push({
@@ -153,6 +173,7 @@ export function chooseExtension(
   draft: Draft,
   trigger: CompletionTrigger,
   row: CompletionChoice,
+  selectionMode = draft.mode,
 ): { draft: Draft; caret: number } {
   const latest = row.item;
   const selections = [...(draft.extensionSelections ?? [])];
@@ -161,7 +182,7 @@ export function chooseExtension(
     const previous = selections[index];
     const selection: ExtensionSelection = { id: latest.id, version: latest.version };
     if (latest.kind === 'mcp') {
-      const allowed = new Set(allowedTools(latest, draft.mode).map((tool) => tool.name));
+      const allowed = new Set(allowedTools(latest, selectionMode).map((tool) => tool.name));
       const oldTools =
         previous?.version === latest.version
           ? (previous.tools ?? []).filter((name) => allowed.has(name))

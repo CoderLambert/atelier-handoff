@@ -1,10 +1,16 @@
 /**
  * @file 管理会话草稿、引用、运行偏好与任务发送。
- * @implementation 串行保存草稿，校验并去重文件摘录；发送时组合正文与引用并复用幂等键，确认后清除草稿内容并保留运行偏好。
- * @updated 2026-11-25T17:22:06+08:00
+ * @implementation 串行保存草稿，使用共享引用规则追加文件摘录，发送时组合正文与引用并复用幂等键。
+ * @updated 2026-11-27T18:34:46+08:00
  */
-import { composerTextLimit, formatMessageText, messageQuoteLimit, messageQuotesSchema, type FileQuoteSource } from '@shared/message-quotes';
+import {
+  composerTextLimit,
+  formatMessageText,
+  messageQuotesSchema,
+  type FileQuoteSource,
+} from '@shared/message-quotes';
 import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
+import { appendDraftQuote } from '@/features/chat/composer-policy';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
 import { getTranslator } from '@/i18n';
 import type {
@@ -144,14 +150,9 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft, imm
 export function appendFileQuote(id: string, server: Draft, file: FileQuoteSource, text: string) {
   if (store.getState().workspace.submitting[id]) return 'unavailable';
   const draft = readDraft(id, server);
-  const quotes = draft.messageQuotes ?? [];
-  if (quotes.some((quote) => quote.text === text && JSON.stringify(quote.file) === JSON.stringify(file)))
-    return 'duplicate';
-  if (quotes.length >= messageQuoteLimit) return 'limit';
-  const messageQuotes = [...quotes, { id: `quote:${crypto.randomUUID()}`, text, file }];
-  if (formatMessageText(draft.text, messageQuotes).length > composerTextLimit ||
-    !messageQuotesSchema.safeParse(messageQuotes).success) return 'tooLong';
-  updateDraft(id, { ...draft, messageQuotes }, server, true);
+  const result = appendDraftQuote(draft, { id: `quote:${crypto.randomUUID()}`, text, file });
+  if (result.status !== 'added') return result.status;
+  updateDraft(id, { ...draft, messageQuotes: result.messageQuotes }, server, true);
   return 'added';
 }
 

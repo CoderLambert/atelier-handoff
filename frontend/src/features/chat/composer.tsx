@@ -1,30 +1,31 @@
 /**
  * @file 提供任务输入、引用、附件编辑和运行停止操作。
- * @implementation 按会话管理草稿、附件、上下文和发送；停止请求待处理或运行正在停止时禁用重复操作，输入框使用原生自动高度及兼容回退。
- * @updated 2026-11-27T14:21:24+08:00
+ * @implementation 管理输入事件与发送锁，按会话策略提供运行操作，并将补全和草稿上下文交给各自的组件。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
-import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
-import { ArrowUp, File as FileIcon, Paperclip, Plus, Quote, X } from 'lucide-react';
-import { composerTextLimit, fileQuoteLocation, formatMessageText } from '@shared/message-quotes';
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { ArrowUp, Paperclip, Plus } from 'lucide-react';
+import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
 import type { Draft, ReasoningEffort, Run } from '@shared/types';
 import { attachmentAccept } from '@/use-query/attachments/use-upload-attachment';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
-import { ExtensionPicker } from '@/features/extensions/picker';
+import { ExtensionPicker, type ExtensionPickerHandle } from '@/features/extensions/picker';
 import type { SessionSkillScope } from '@/use-query/skill-inheritance/keys';
 import { DraftSessionSkills, SessionSkillsControl } from '@/features/extensions/session-skills';
 import { useSessionSkills } from '@/features/extensions/use-session-skills';
-import { AttachmentPreview } from './attachment-preview';
+import { ComposerContextChips, ComposerQuotes } from './composer-context';
+import { selectComposerPolicy } from './composer-policy';
 import { ContextPicker } from './context-picker';
 import { selectContextUsage } from './context-usage-model';
 import { ContextUsagePopover } from './context-usage-popover';
-import { isActive } from './conversation';
 import { ComposerModeSelector } from './mode-selector';
 import { ModelPicker } from './model-picker';
-import { composerMode, type ComposerMode } from './run-mode';
+import type { ComposerMode } from './run-mode';
 import { TaskPlan } from './task-plan';
+import { useComposerKeymap } from './use-composer-keymap';
 
 import {
   useComposerAttachments,
@@ -86,8 +87,15 @@ export function Composer({
   submitting: boolean;
 }) {
   const { t } = useUiTranslation('chat');
-  const localInputRef = useRef<HTMLTextAreaElement>(null);
-  const inputRef = externalInputRef ?? localInputRef;
+  const [input, setInput] = useState<HTMLTextAreaElement | null>(null);
+  const bindInput = useCallback(
+    (element: HTMLTextAreaElement | null) => {
+      if (externalInputRef) externalInputRef.current = element;
+      setInput(element);
+    },
+    [externalInputRef],
+  );
+  const pickerKeyHandlerRef = useRef<ExtensionPickerHandle>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const sendLock = useRef(false);
   const dragDepth = useRef(0);
@@ -105,11 +113,19 @@ export function Composer({
     : '';
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
-  const nativeAvailable = nativeExecution && !agent && !snapshot.session.agentRevisionId;
-  const mode = composerMode(draft, agent?.mode === 'readonly', nativeAvailable);
-  const contextAllowed = !agent || agent.capabilities.includes('context');
-  const attachmentsAllowed = !agent || agent.capabilities.includes('attachments');
-  const archived = snapshot.session.status === 'archived';
+  const {
+    archived,
+    nativeAvailable,
+    readonlyProfile,
+    mode,
+    contextAllowed,
+    attachmentsAllowed,
+    directoryAvailable,
+    run,
+    hasQueuedMessages,
+    queueing,
+    insertRunId,
+  } = selectComposerPolicy(snapshot, draft, nativeExecution);
   const skillsDisabled = archived || submitting;
   const skillScope: SessionSkillScope = {
     type: 'session',
@@ -123,15 +139,8 @@ export function Composer({
     disabled: skillsDisabled,
     onDraftChange,
   });
-  const run = snapshot.runs.find(isActive);
   const stopping = run !== undefined && (run.status === 'stopping' || run.id === stopPendingRunId);
-  const hasQueuedMessages = Boolean(snapshot.messageQueue?.items.length);
-  const queueing = Boolean(run || hasQueuedMessages || snapshot.messageQueue?.paused);
   const sendLabel = queueing ? t('composer.queue') : t('composer.sendTask');
-  const insertRunId =
-    !archived && (run?.status === 'running' || run?.status === 'awaiting_permission')
-      ? run.id
-      : undefined;
   const quoteTooLong =
     Boolean(draft.messageQuotes?.length) &&
     formatMessageText(draft.text, draft.messageQuotes).length > composerTextLimit;
@@ -154,9 +163,6 @@ export function Composer({
     onError: (error) => setError({ type: 'attachment', error }),
   });
   const dropAllowed = canUpload && draft.attachmentIds.length < 20;
-  const directoryAvailable = snapshot.workspace
-    ? snapshot.workspace.state === 'ready'
-    : snapshot.project.available;
   const canSend =
     !archived &&
     directoryAvailable &&
@@ -165,20 +171,20 @@ export function Composer({
     !agent?.issues.length &&
     !quoteTooLong &&
     Boolean(draft.text.trim());
-  const attachments = new Map(
-    snapshot.attachments.map((attachment) => [attachment.id, attachment]),
-  );
+  const keymap = useComposerKeymap({
+    insertRunId,
+    consumeCompletion: (event) => pickerKeyHandlerRef.current?.handleKeyDown(event) ?? false,
+    onSubmit: (runId) => void submit(runId),
+  });
 
   useLayoutEffect(() => {
     if (CSS.supports('field-sizing', 'content')) return;
-    const input = inputRef.current;
     if (!input) return;
     input.style.height = 'auto';
     input.style.height = `${input.scrollHeight}px`;
-  }, [draft.text]);
+  }, [input, draft.text]);
 
-  async function submit(event?: FormEvent<HTMLFormElement>, insertIntoRunId?: string) {
-    event?.preventDefault();
+  async function submit(insertIntoRunId?: string) {
     if (!canSend || pendingOperations.current || sendLock.current) return;
     sendLock.current = true;
     setError(undefined);
@@ -227,7 +233,10 @@ export function Composer({
         }
         queueUpload(event.dataTransfer.files);
       }}
-      onSubmit={(event) => void submit(event)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
     >
       {agent?.issues.length ? (
         <p className="text-sm text-destructive" role="status">
@@ -246,7 +255,7 @@ export function Composer({
               variant="outline"
               onClick={() => {
                 onDraftChange((previous) => ({ ...previous, text: starter }));
-                inputRef.current?.focus();
+                input?.focus();
               }}
             >
               {starter}
@@ -266,7 +275,7 @@ export function Composer({
       ) : null}
       <div className="composer-box">
         <p id="composer-mode-help" className="sr-only">
-          {agent?.mode === 'readonly'
+          {readonlyProfile
             ? t('composer.readonlyAgentHelp')
             : mode === 'native'
               ? t('composer.nativeHelp')
@@ -276,95 +285,22 @@ export function Composer({
                   ? t('composer.controlledHelp')
                   : t('composer.readonlyHelp')}
         </p>
-        {(draft.contextPaths.length > 0 ||
-          draft.attachmentIds.length > 0 ||
-          uploads.length > 0) && (
-          <div className="composer-chips-bar" aria-label={t('composer.draftContext')}>
-            {draft.contextPaths.map((path) => {
-              const lastSlash = path.lastIndexOf('/');
-              const dir = lastSlash >= 0 ? path.slice(0, lastSlash + 1) : '';
-              const name = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
-              return (
-                <Button
-                  key={path}
-                  type="button"
-                  variant="secondary"
-                  size="xs"
-                  className="context-chip"
-                  disabled={archived || submitting}
-                  aria-label={t('composer.removeContext', { path })}
-                  title={path}
-                  onClick={() =>
-                    onDraftChange((previous) => ({
-                      ...previous,
-                      contextPaths: previous.contextPaths.filter((value) => value !== path),
-                    }))
-                  }
-                >
-                  <FileIcon className="size-3 text-muted-foreground shrink-0" aria-hidden="true" />
-                  <span className="truncate">
-                    {dir ? <span className="opacity-60 font-mono text-[11px]">{dir}</span> : null}
-                    <strong className="font-semibold text-foreground">{name}</strong>
-                  </span>
-                  <X data-icon="inline-end" aria-hidden="true" />
-                </Button>
-              );
-            })}
-            {draft.attachmentIds.map((id) => {
-              const item = attachments.get(id);
-              const name = item?.name ?? id;
-              const isRemoving = removing.includes(id);
-              return (
-                <div key={id} className="context-chip attachment-chip">
-                  {item ? (
-                    <AttachmentPreview attachment={item}>
-                      <Paperclip data-icon="inline-start" aria-hidden="true" />
-                      <span className="truncate" title={name}>
-                        {name}
-                      </span>
-                    </AttachmentPreview>
-                  ) : (
-                    <span>{name}</span>
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="attachment-remove"
-                    disabled={archived || submitting || isRemoving}
-                    aria-label={t('composer.removeAttachment', { name })}
-                    title={
-                      isRemoving ? t('composer.removing') : t('composer.removeAttachmentTitle')
-                    }
-                    onClick={() => removeAttachment(id)}
-                  >
-                    <X data-icon="inline-start" aria-hidden="true" />
-                  </Button>
-                </div>
-              );
-            })}
-            {uploads.map((entry) =>
-              entry.error ? (
-                <Button
-                  key={entry.id}
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  className="context-chip chat-upload-error"
-                  aria-label={t('composer.dismissUpload', { name: entry.name, error: entry.error })}
-                  onClick={() => dismissUpload(entry.id)}
-                >
-                  {t('composer.failedUpload', { name: entry.name, error: entry.error })}
-                  <X data-icon="inline-end" aria-hidden="true" />
-                </Button>
-              ) : (
-                <span key={entry.id} className="context-chip" role="status">
-                  {t('composer.uploadingFile', { name: entry.name })}
-                </span>
-              ),
-            )}
-          </div>
-        )}
+        <ComposerContextChips
+          contextPaths={draft.contextPaths}
+          attachmentIds={draft.attachmentIds}
+          attachments={snapshot.attachments}
+          uploads={uploads}
+          removing={removing}
+          disabled={archived || submitting}
+          onRemoveContext={(path) =>
+            onDraftChange((previous) => ({
+              ...previous,
+              contextPaths: previous.contextPaths.filter((value) => value !== path),
+            }))
+          }
+          onRemoveAttachment={removeAttachment}
+          onDismissUpload={dismissUpload}
+        />
         <label
           className={cn('composer-label', !archived && !editingMessage && 'sr-only')}
           htmlFor="prompt-input"
@@ -380,52 +316,13 @@ export function Composer({
             {t('composer.editHelp')}
           </p>
         ) : null}
-        {draft.messageQuotes?.length ? (
-          <ul
-            className="composer-quotes"
-            aria-label={t(
-              draft.messageQuotes.some(({ file }) => file)
-                ? 'composer.fileQuotes'
-                : 'composer.quotes',
-            )}
-          >
-            {draft.messageQuotes.map((item, index) => (
-              <li key={item.id} className="composer-quote">
-                <Quote
-                  data-icon="inline-start"
-                  className="composer-quote-mark"
-                  aria-hidden="true"
-                />
-                {item.file ? (
-                  <div className="composer-file-quote">
-                    <code
-                      className="composer-file-quote-location"
-                      title={fileQuoteLocation(item.file)}
-                    >
-                      {fileQuoteLocation(item.file)}
-                    </code>
-                    <span className="composer-quote-excerpt">{item.text}</span>
-                  </div>
-                ) : (
-                  <span className="composer-quote-excerpt">{item.text}</span>
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={archived || submitting}
-                  aria-label={t('composer.removeQuoteNumber', { number: index + 1 })}
-                  title={t('composer.removeQuote')}
-                  onClick={() => onRemoveQuote(item.id)}
-                >
-                  <X data-icon="inline-start" aria-hidden="true" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <ComposerQuotes
+          quotes={draft.messageQuotes}
+          disabled={archived || submitting}
+          onRemoveQuote={onRemoveQuote}
+        />
         <textarea
-          ref={inputRef}
+          ref={bindInput}
           id="prompt-input"
           rows={1}
           maxLength={composerTextLimit}
@@ -440,6 +337,9 @@ export function Composer({
           }
           placeholder={t('composer.placeholder')}
           title={t('composer.inputHint')}
+          onCompositionStart={keymap.onCompositionStart}
+          onCompositionEnd={keymap.onCompositionEnd}
+          onKeyDown={keymap.onKeyDown}
           onPaste={(event) => {
             const files = Array.from(event.clipboardData.files)
               .filter((file) => file.type === 'image/png' || file.type === 'image/jpeg')
@@ -487,19 +387,14 @@ export function Composer({
             skillScope={skillScope}
             sessionSkillIds={sessionSkills.draftSkillIds}
             contextAllowed={contextAllowed && directoryAvailable}
-            draft={{ ...draft, mode: mode === 'readonly' ? 'readonly' : 'edit' }}
-            onChange={(next: Draft) => {
-              if (!skillsDisabled)
-                onDraftChange((previous) => ({
-                  ...next,
-                  mode: previous.mode,
-                  approvalMode: previous.approvalMode,
-                  executionPreference: previous.executionPreference,
-                }));
+            draft={draft}
+            selectionMode={mode === 'readonly' ? 'readonly' : 'edit'}
+            onChange={(patch) => {
+              if (!skillsDisabled) onDraftChange((previous) => ({ ...previous, ...patch }));
             }}
-            inputRef={inputRef}
-            onSubmit={() => void submit()}
-            onQuickInsert={insertRunId ? () => void submit(undefined, insertRunId) : undefined}
+            input={input}
+            composing={keymap.composing}
+            keyHandlerRef={pickerKeyHandlerRef}
           />
         </fieldset>
         <div className="composer-toolbar">
@@ -544,13 +439,17 @@ export function Composer({
             <ComposerModeSelector
               mode={mode}
               nativeExecution={nativeAvailable}
-              readonlyProfile={agent?.mode === 'readonly'}
+              readonlyProfile={readonlyProfile}
               disabled={archived || submitting}
               onModeChange={onModeChange}
             />
           </div>
           <div className="composer-toolbar-right">
-            <span className="composer-run-status" data-status={stopping ? 'stopping' : run?.status} role="status">
+            <span
+              className="composer-run-status"
+              data-status={stopping ? 'stopping' : run?.status}
+              role="status"
+            >
               {dragging ? (
                 dropAllowed ? (
                   t('composer.dropToAdd')
@@ -679,7 +578,7 @@ export function Composer({
           }
           onClose={() => {
             setContextOpen(false);
-            inputRef.current?.focus();
+            input?.focus();
           }}
         />
       ) : null}

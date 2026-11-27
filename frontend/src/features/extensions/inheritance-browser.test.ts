@@ -265,6 +265,9 @@ test(
       );
       await page.keyboard.press('Escape');
       await dialog.waitFor({ state: 'hidden' });
+      await page.waitForFunction(
+        () => document.activeElement?.getAttribute('aria-label') === 'Session Skills',
+      );
       assert.equal(await trigger.evaluate((element) => element === document.activeElement), true);
       await input.fill('please /fixture');
       await option('Workspace directory').waitFor();

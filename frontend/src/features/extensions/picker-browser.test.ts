@@ -1,7 +1,7 @@
 /**
  * @file 验证 @ 文件候选的选中项和编辑器光标。
- * @implementation 使用 Chromium 和隔离的查询缓存，检查键盘切换、目录深入、鼠标选文件及焦点恢复。
- * @updated 2026-11-27T17:01:29+08:00
+ * @implementation 用宿主键盘分派和隔离查询缓存检查候选导航、光标恢复、外部正文同步与输入节点替换。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -35,6 +35,7 @@ test(
         import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
         import { ExtensionPicker } from '@/features/extensions/picker';
         import { extensionPickerKeys } from '@/features/extensions/api';
+        import { useComposerKeymap } from '@/features/chat/use-composer-keymap';
         import { projectKeys } from '@/use-query/projects/keys';
 
         const projectId = 'project';
@@ -51,13 +52,32 @@ test(
         ] });
 
         function App() {
-          const inputRef = useRef(null);
-          const [draft, setDraft] = useState({ text: '', mode: 'readonly', contextPaths: [], attachmentIds: [] });
+          const [input, setInput] = useState(null);
+          const [version, setVersion] = useState(0);
+          const [submissions, setSubmissions] = useState([]);
+          const pickerKeyHandlerRef = useRef(null);
+          const [draft, setDraft] = useState({ text: '', mode: 'edit', executionPreference: 'native-v1',
+            contextPaths: [], attachmentIds: [] });
+          const keymap = useComposerKeymap({
+            insertRunId: 'run',
+            consumeCompletion: (event) => pickerKeyHandlerRef.current?.handleKeyDown(event) ?? false,
+            onSubmit: (id) => setSubmissions((previous) => [...previous, id ?? 'send']),
+          });
+          window.fixture = {
+            replaceInput: () => setVersion((previous) => previous + 1),
+            setText: (text) => setDraft((previous) => ({ ...previous, text })),
+          };
           return <>
-            <textarea ref={inputRef} aria-label="Composer" value={draft.text}
+            <textarea key={version} ref={setInput} aria-label="Composer" value={draft.text}
+              onKeyDown={keymap.onKeyDown} onCompositionStart={keymap.onCompositionStart}
+              onCompositionEnd={keymap.onCompositionEnd}
               onChange={(event) => setDraft({ ...draft, text: event.target.value })} />
             <ExtensionPicker projectId={projectId} sessionId={sessionId} skillScope={skillScope}
-              sessionSkillIds={new Set()} draft={draft} onChange={setDraft} inputRef={inputRef} onSubmit={() => {}} />
+              sessionSkillIds={new Set()} draft={draft} selectionMode="readonly"
+              onChange={(patch) => setDraft((previous) => ({ ...previous, ...patch }))}
+              input={input} composing={keymap.composing} keyHandlerRef={pickerKeyHandlerRef} />
+            <output id="draft">{JSON.stringify(draft)}</output>
+            <output id="submissions">{JSON.stringify(submissions)}</output>
           </>;
         }
 
@@ -98,6 +118,7 @@ test(
       await input.press('Enter');
       await assertActiveOption('index');
       assert.equal(await input.inputValue(), '@src/');
+      assert.equal(await page.locator('#submissions').textContent(), '[]');
       await page.getByRole('option', { name: /index/ }).click();
       await page.waitForFunction(() => {
         const input = document.querySelector('textarea');
@@ -109,6 +130,33 @@ test(
           !input.hasAttribute('aria-activedescendant')
         );
       });
+      assert.match(
+        (await page.locator('#draft').textContent()) ?? '',
+        /"executionPreference":"native-v1"/,
+      );
+
+      await page.evaluate("window.fixture.setText('@')");
+      await assertActiveOption('README');
+      await input.press('ArrowUp');
+      await assertActiveOption('src/');
+      await input.press('Escape');
+      await page.getByRole('listbox').waitFor({ state: 'hidden' });
+      await input.press('Enter');
+      assert.equal(await page.locator('#submissions').textContent(), '["send"]');
+
+      const previous = await input.elementHandle();
+      assert.ok(previous);
+      await page.evaluate('window.fixture.replaceInput()');
+      await page.waitForFunction((element) => !element.isConnected, previous);
+      assert.equal(await previous.getAttribute('aria-autocomplete'), null);
+      await input.focus();
+      await input.press('End');
+      await assertActiveOption('README');
+      await input.press('Control+Enter');
+      assert.equal(await page.locator('#submissions').textContent(), '["send","run"]');
+      await input.press('Tab');
+      assert.equal(await input.inputValue(), '@README.md ');
+      assert.equal(await page.locator('#submissions').textContent(), '["send","run"]');
     } finally {
       await browser.close();
     }

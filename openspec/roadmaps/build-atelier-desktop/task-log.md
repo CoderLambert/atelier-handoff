@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C2：`Composer` 与 `ExtensionPicker` 键盘归主与策略统一（已验证）
+
+- 提取 `use-composer-keymap.ts`、`composer-policy.ts` 与 `composer-context.tsx`，将 `Enter` 提交、`Ctrl/Alt+Enter` 快捷插话与 IME 50 ms 保护归还 `Composer` 的 textarea，移除 `ExtensionPicker` 的原生捕获劫持、`onSubmit`/`onQuickInsert` props、无依赖 `useLayoutEffect` 与 `mode` 降级还原补丁；统一 `composer.tsx`、`session-chat.tsx`、`features/chat/index.tsx`、`message-queue.tsx` 的目录/模式/插话判定，并将 `drafts.ts` 与 `chat/index.tsx` 的引用去重/长度校验收敛进 `appendDraftQuote`。`composer.tsx` 从 688 行降至 587 行，`picker.tsx` 从 793 行降至 700 行。[决策与回退](../../../docs/decisions/2026-11-27-composer-picker-decoupling.md)
+- `npm run check`、`npm run check:headers`（10 份变更/新增源文件）、`npm run build`、`npm run build:desktop` 全通过；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm run test:frontend` **164 通过、1 跳过、0 失败**（含新增 `composer-policy.test.ts` 与真实 Chromium `picker-browser.test.ts` / `inheritance-browser.test.ts`）。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-subagent-insertion.mts`（中英文 `Ctrl+Enter` 快捷插话与队列插话、回环模型）通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：移除 `picker.tsx` 无依赖 `useLayoutEffect` 后弹窗关闭渲染提速，暴露出 `inheritance-browser.test.ts:268` 对 Radix 异步焦点归还的同步断言竞态；另 `picker-browser.test.ts` 替换 textarea 后在 Chromium 默认光标为 0 需先按 `End`。主会话真实 Chromium 复跑第一时间定位并修正了这两处测试夹具。
+
 ## 2026-11-27 · C1 第 4 步（C1 收官）：运行环境、子进程托管与终态判定拆分（已验证）
 
 - 提取 `createRunProcessOwner`（`server/modules/runs/run-process-owner.ts`）统一 native `createHarnessProcess` 与非 native 子进程启停及 1 秒/8 秒取消清理；提取 `RunEnvironment` / `buildInitialPrompt`（`server/modules/runs/run-environment.ts`）收拢临时目录、Skill/RTK 挂载与 Shunt/OTLP 释放顺序；提取扁平守卫纯函数 `resolveRunOutcome()`（`server/modules/runs/run-outcome.ts`）替代 9 层嵌套三元。`server/agent.ts` 从 1,763 行降至 1,497 行（相对最初 2,953 行累计净减 1,456 行 / 49.3%），`Runner` 接口与构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-run-environment-and-outcome.md)

@@ -1,13 +1,14 @@
 /**
  * @file 连接会话输入、运行偏好与消息发送。
- * @implementation 按会话提供草稿与按需读取入口，传递输入焦点请求及完成回执，将快捷插入投递到发送回执指定的队列项。
- * @updated 2026-11-27T01:26:00+08:00
+ * @implementation 按会话提供草稿和焦点回执，使用共享策略校验本机运行偏好，按发送回执将快捷插入投递到指定队列项。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useCallback, useEffect, useMemo } from 'react';
 import type { Draft } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import Chat from '@/features/chat';
+import { isNativeAvailable } from '@/features/chat/composer-policy';
 import { withComposerMode, type ComposerMode } from '@/features/chat/run-mode';
 import { useInsertQueuedMessage } from '@/use-query/sessions/use-insert-queued-message';
 import { useSendSessionMessage } from '@/use-query/sessions/use-send-session-message';
@@ -66,7 +67,8 @@ export default function SessionChat({
   const insert = useInsertQueuedMessage(id);
   const getDraft = useCallback(() => readDraft(id, serverDraft), [id, serverDraft]);
   const fallback = useMemo(getDraft, [getDraft]);
-  const nativeAvailable = nativeExecution && !snapshot.agent && !snapshot.session.agentRevisionId;
+  const nativeAvailable = isNativeAvailable(snapshot, nativeExecution);
+  const readonlyProfile = snapshot.agent?.mode === 'readonly';
   const changeDraft = useCallback(
     (next: Draft | ((previous: Draft) => Draft), immediate = false) => {
       updateDraft(
@@ -85,7 +87,7 @@ export default function SessionChat({
   );
   function changeMode(mode: ComposerMode) {
     if (store.getState().workspace.submitting[id]) return;
-    if (snapshot.agent?.mode === 'readonly' && mode !== 'readonly') return;
+    if (readonlyProfile && mode !== 'readonly') return;
     if (mode === 'native' && !nativeAvailable) return;
     if (mode !== 'automatic') store.dispatch(actions.setSearchChargeLimit({ id }));
     updateDraft(id, (previous) => withComposerMode(previous, mode), serverDraft, true);
@@ -97,7 +99,7 @@ export default function SessionChat({
         id,
         serverDraft,
         message.mutateAsync,
-        snapshot.agent?.mode === 'readonly',
+        readonlyProfile,
         defaultModel || undefined,
         nativeAvailable,
       );
@@ -134,7 +136,7 @@ export default function SessionChat({
       draft={savedDraft ?? fallback}
       getDraft={getDraft}
       defaultModel={defaultModel}
-      nativeExecution={nativeAvailable}
+      nativeExecution={nativeExecution}
       onOpenLink={onOpenLink}
       onModelChange={(model) => {
         if (store.getState().workspace.submitting[id]) return;

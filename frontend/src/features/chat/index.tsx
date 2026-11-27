@@ -1,12 +1,12 @@
 /**
  * @file 组合会话消息、待处理队列、任务清单和输入界面。
- * @implementation 为对话提供稳定回调并按需读取草稿，协调任务清单、输入焦点及焦点回执，将当前运行的停止请求状态传给对话和输入区。
- * @updated 2026-11-27T14:21:24+08:00
+ * @implementation 使用共享策略选择活动运行及引用追加结果，协调历史操作、队列、任务清单和输入焦点。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useIsMutating } from '@tanstack/react-query';
-import { composerTextLimit, formatMessageText, messageQuoteLimit } from '@shared/message-quotes';
+import { composerTextLimit, messageQuoteLimit } from '@shared/message-quotes';
 import type { Draft, Message, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { permissionKeys } from '@/use-query/permissions/keys';
@@ -14,7 +14,8 @@ import { useRunStopPending } from '@/use-query/runs/use-stop-run';
 import { sessionKeys } from '@/use-query/sessions/keys';
 import type { ChatLinkOpener } from './chat-web-link-dialog';
 import { Composer, type DraftChange } from './composer';
-import { Conversation, isActive } from './conversation';
+import { appendDraftQuote, findActiveRun, isDirectoryAvailable } from './composer-policy';
+import { Conversation } from './conversation';
 import { MessageQueue } from './message-queue';
 import {
   hasMessageForkAnchor,
@@ -58,7 +59,7 @@ function SessionChat(props: ChatProps) {
     props;
   const sessionId = snapshot.session.id;
   const { onRewindMessage } = props;
-  const activeRun = snapshot.runs.find(isActive);
+  const activeRun = findActiveRun(snapshot.runs);
   const stopPendingRunId = useRunStopPending(activeRun) ? activeRun?.id : undefined;
   const currentRun = activeRun ?? snapshot.runs.at(-1);
   const composerPlan = currentRun?.plan.length ? currentRun : undefined;
@@ -96,7 +97,8 @@ function SessionChat(props: ChatProps) {
     'draft.tooLong' | 'draft.quoteLimit' | 'draft.quoteTooLong' | 'draft.selectionTooLong'
   >();
   const [focusRequest, setFocusRequest] = useState(0);
-  const draftDisabled = snapshot.session.status === 'archived' || submitting;
+  const archived = snapshot.session.status === 'archived';
+  const draftDisabled = archived || submitting;
 
   useEffect(() => {
     if (!draft.text) setEditing(false);
@@ -154,32 +156,21 @@ function SessionChat(props: ChatProps) {
     (message: Message, excerpt?: string): boolean => {
       if (draftDisabled || message.sessionId !== sessionId || message.role !== 'assistant')
         return false;
-      const draft = getDraft();
-      const existing = draft.messageQuotes ?? [];
-      const duplicate = existing.some((item) =>
-        excerpt === undefined
-          ? item.id === message.id
-          : item.sourceMessageId === message.id && item.text === excerpt,
-      );
-      if (duplicate) {
-        setActionError(undefined);
-        focusInput();
-        return true;
-      }
-      if (existing.length >= messageQuoteLimit) {
-        setActionError('draft.quoteLimit');
-        return false;
-      }
       const quote =
         excerpt === undefined
           ? { id: message.id, text: message.text }
           : { id: `quote:${crypto.randomUUID()}`, sourceMessageId: message.id, text: excerpt };
-      const messageQuotes = [...existing, quote];
-      if (formatMessageText(draft.text, messageQuotes).length > composerTextLimit) {
+      const result = appendDraftQuote(getDraft(), quote);
+      if (result.status === 'limit') {
+        setActionError('draft.quoteLimit');
+        return false;
+      }
+      if (result.status === 'tooLong') {
         setActionError(excerpt === undefined ? 'draft.quoteTooLong' : 'draft.selectionTooLong');
         return false;
       }
-      onDraftChange((previous) => ({ ...previous, messageQuotes }));
+      if (result.status === 'added')
+        onDraftChange((previous) => ({ ...previous, messageQuotes: result.messageQuotes }));
       setActionError(undefined);
       focusInput();
       return true;
@@ -250,13 +241,9 @@ function SessionChat(props: ChatProps) {
           key={`queue:${snapshot.session.id}`}
           sessionId={snapshot.session.id}
           queue={snapshot.messageQueue}
-          activeRun={snapshot.runs.find((run) =>
-            ['running', 'awaiting_permission', 'stopping'].includes(run.status),
-          )}
-          archived={snapshot.session.status === 'archived'}
-          available={
-            snapshot.workspace ? snapshot.workspace.state === 'ready' : snapshot.project.available
-          }
+          activeRun={findActiveRun(snapshot.runs, { includeQueued: false })}
+          archived={archived}
+          available={isDirectoryAvailable(snapshot)}
         />
       ) : null}
       <Composer

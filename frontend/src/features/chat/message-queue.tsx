@@ -1,7 +1,7 @@
 /**
  * @file 展示当前会话输入区上方的待处理消息队列。
- * @implementation 按快照显示消息、投递和暂停状态，支持展开正文及插入、撤回。队首授权范围变化时要求用户确认后继续。
- * @updated 2026-11-27T02:25:28+08:00
+ * @implementation 按快照显示投递和暂停状态，使用共享运行策略决定可插入的目标，队首授权范围变化时要求复核。
+ * @updated 2026-11-27T18:34:46+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useRef, useState } from 'react';
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { findInsertableRunId } from './composer-policy';
 import { useSessionMessageQueue } from './hooks/use-session-message-queue';
 
 export function MessageQueue({
@@ -39,9 +40,7 @@ export function MessageQueue({
   const needsReview = head?.scopeChanged === true;
   const resumeDisabled = archived || !available || actions.busy || (needsReview && !!activeRun);
   const priorityDescriptionId = useId();
-  const canInsert =
-    activeRun?.sessionId === sessionId &&
-    (activeRun.status === 'running' || activeRun.status === 'awaiting_permission');
+  const insertRunId = findInsertableRunId(activeRun, sessionId);
   if (!queue.items.length && !actions.error) return null;
   return (
     <section
@@ -127,7 +126,7 @@ export function MessageQueue({
                       size="xs"
                       variant="outline"
                       disabled={
-                        archived || !available || actions.busy || !canInsert || !!item.delivery
+                        archived || !available || actions.busy || !insertRunId || !!item.delivery
                       }
                       aria-label={t(
                         item.insertion === 'live'
@@ -139,10 +138,10 @@ export function MessageQueue({
                         item.insertion === 'priority' ? priorityDescriptionId : undefined
                       }
                       onClick={() => {
-                        if (!canInsert || !activeRun || item.delivery || !item.insertion) return;
+                        if (!insertRunId || item.delivery || !item.insertion) return;
                         actions.onInsert({
                           itemId: item.id,
-                          runId: activeRun.id,
+                          runId: insertRunId,
                           mode: item.insertion,
                         });
                       }}
