@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 持有 Drizzle 仓储共享的连接及事件事务，按注册表升级架构。运行中断恢复委托 recovery 用例在单事务内完成。
- * @updated 2026-11-27T20:10:00+08:00
+ * @implementation 持有 Drizzle 仓储共享的连接及事件事务，按注册表升级架构；文档表、事件与配置读写全部委托 Drizzle 仓储，运行中断恢复委托 recovery 用例在单事务内完成。
+ * @updated 2026-11-27T11:20:00-08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,6 +38,7 @@ export { LATEST_SCHEMA_VERSION, type WorkbenchRepositories };
 export class Store {
   readonly db: LegacyDatabase;
   readonly readTransaction: <T>(work: () => T) => T;
+  private readonly writeTransaction: <T>(work: () => T) => T;
   readonly assertForeignKeyIntegrity: () => void;
   readonly repos: WorkbenchRepositories;
   get gitWorktrees() {
@@ -84,6 +85,7 @@ export class Store {
     const connection = openWorkbenchDatabase(join(directory, 'atelier.sqlite'));
     this.db = connection.db;
     this.readTransaction = connection.readTransaction;
+    this.writeTransaction = connection.writeTransaction;
     this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
     this.repos = connection.repos;
     try {
@@ -173,49 +175,37 @@ export class Store {
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
-    const pending: RunEvent[] = [];
+    const previous = this.pendingEvents;
+    const pending = previous ?? [];
     this.pendingEvents = pending;
     let result: T;
     try {
-      result = work();
-      this.db.exec('COMMIT');
+      result = this.writeTransaction(work);
     } catch (error) {
-      this.pendingEvents = undefined;
-      this.db.exec('ROLLBACK');
+      this.pendingEvents = previous;
       throw error;
     }
-    this.pendingEvents = undefined;
-    for (const event of pending) this.events.emit('event', event);
+    this.pendingEvents = previous;
+    if (!previous) for (const event of pending) this.events.emit('event', event);
     return result;
   }
   get<K extends Table>(table: K, id: string): Tables[K] {
-    const row = this.db.prepare(`SELECT data FROM ${table} WHERE id=?`).get(id);
-    if (!row) throw new AppError('NOT_FOUND', '记录不存在或已删除。', 404);
-    return JSON.parse(row.data as string);
+    return this.repos.documents.get(table, id);
   }
   list<K extends Table>(table: K): Tables[K][] {
-    return this.db
-      .prepare(`SELECT data FROM ${table} ORDER BY rowid`)
-      .all()
-      .map((row) => JSON.parse(row.data as string));
+    return this.repos.documents.list(table);
   }
   put<K extends Table>(table: K, value: Tables[K]): Tables[K] {
-    this.db
-      .prepare(
-        `INSERT INTO ${table}(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`,
-      )
-      .run(value.id, JSON.stringify(value));
-    return value;
+    return this.repos.documents.put(table, value);
   }
   update<K extends Table>(table: K, id: string, changes: Partial<Tables[K]>): Tables[K] {
     return this.put(table, { ...this.get(table, id), ...changes, id });
   }
   delete(table: Table, id: string): void {
-    this.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
+    this.repos.documents.delete(table, id);
   }
   cursor(): number {
-    return Number(this.db.prepare('SELECT COALESCE(MAX(id),0) AS id FROM events').get()!.id);
+    return this.repos.sessionEvents.cursor();
   }
   event(
     runId: string,
@@ -223,96 +213,25 @@ export class Store {
     type: string,
     payload: Record<string, unknown> = {},
   ): RunEvent {
-    const seq = Number(
-      this.db.prepare('SELECT COALESCE(MAX(seq),0)+1 AS seq FROM events WHERE run_id=?').get(runId)!
-        .seq,
-    );
-    const at = now();
-    const insert = this.db
-      .prepare('INSERT INTO events(run_id,session_id,seq,type,at,payload) VALUES(?,?,?,?,?,?)')
-      .run(runId, sessionId, seq, type, at, JSON.stringify(payload));
-    const event = { id: Number(insert.lastInsertRowid), runId, sessionId, seq, type, at, payload };
+    const event = this.repos.sessionEvents.append(runId, sessionId, type, now(), payload);
     if (this.pendingEvents) this.pendingEvents.push(event);
     else this.events.emit('event', event);
     return event;
   }
   since(cursor: number, limit = 1000): RunEvent[] {
-    return this.db
-      .prepare('SELECT * FROM events WHERE id>? ORDER BY id LIMIT ?')
-      .all(cursor, limit)
-      .map((row) => ({
-        id: Number(row.id),
-        runId: row.run_id as string,
-        sessionId: row.session_id as string,
-        seq: Number(row.seq),
-        type: row.type as string,
-        at: row.at as string,
-        payload: JSON.parse(row.payload as string),
-      }));
+    return this.repos.sessionEvents.since(cursor, limit);
   }
   history(sessionId: string): RunEvent[] {
-    return this.db
-      .prepare('SELECT * FROM events WHERE session_id=? ORDER BY id DESC LIMIT 500')
-      .all(sessionId)
-      .reverse()
-      .map((row) => ({
-        id: Number(row.id),
-        runId: row.run_id as string,
-        sessionId: row.session_id as string,
-        seq: Number(row.seq),
-        type: row.type as string,
-        at: row.at as string,
-        payload: JSON.parse(row.payload as string),
-      }));
+    return this.repos.sessionEvents.history(sessionId);
   }
   runHistory(runId: string): { events: RunEvent[]; eventCount: number } {
-    const eventCount = Number(
-      this.db.prepare('SELECT count(*) AS count FROM events WHERE run_id=?').get(runId)!.count,
-    );
-    const events = this.db
-      .prepare(
-        "SELECT * FROM events WHERE run_id=? AND type!='message.delta' ORDER BY seq DESC LIMIT 600",
-      )
-      .all(runId)
-      .reverse()
-      .map((row) => ({
-        id: Number(row.id),
-        runId: row.run_id as string,
-        sessionId: row.session_id as string,
-        seq: Number(row.seq),
-        type: row.type as string,
-        at: row.at as string,
-        payload: JSON.parse(row.payload as string),
-      }));
-    return { events, eventCount };
+    return this.repos.sessionEvents.runHistory(runId);
   }
   config(): AppConfig {
-    const row = this.db.prepare("SELECT value FROM settings WHERE key='config'").get();
-    const maxTurns = 16;
-    const timeoutMs = 300_000;
-    if (row) {
-      const saved = JSON.parse(row.value as string) as AppConfig;
-      return {
-        ...saved,
-        // Older settings always saved the numeric defaults, even without user edits.
-        limitExecution:
-          saved.limitExecution ?? (saved.maxTurns !== maxTurns || saved.timeoutMs !== timeoutMs),
-      };
-    }
-    return {
-      gateway: process.env.ATELIER_GATEWAY || 'http://127.0.0.1:3001',
-      model: process.env.ATELIER_MODEL || 'gpt-6.1-sol',
-      limitExecution: false,
-      maxTurns,
-      timeoutMs,
-    };
+    return this.repos.appConfig.get();
   }
   setConfig(config: AppConfig): void {
-    this.db
-      .prepare(
-        "INSERT INTO settings(key,value) VALUES('config',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      )
-      .run(JSON.stringify(config));
+    this.repos.appConfig.set(config);
   }
   startSubagent(value: Subagent): void {
     const parsed = subagentSchema.parse(value);
