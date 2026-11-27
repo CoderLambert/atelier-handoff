@@ -1,3 +1,8 @@
+/**
+ * @file 校验与执行 Skill 工具绑定。
+ * @implementation 限制公网 HTTPS 模板并防范私网 SSRF，通过 Drizzle 仓储持久化每个 Skill 的绑定配置。
+ * @updated 2026-11-27T12:15:00-06:00
+ */
 import { Resolver } from 'node:dns/promises';
 import { request } from 'node:https';
 import { BlockList, isIP } from 'node:net';
@@ -94,21 +99,16 @@ export function httpBindingUrl(
   return url;
 }
 
-const key = (projectId: string, skillId: string) => `skill-tool-bindings:${projectId}:${skillId}`;
 export function hasSkillToolBindingConfig(store: Store, projectId: string, skillId: string) {
-  return Boolean(
-    store.db.prepare('SELECT 1 FROM settings WHERE key=?').get(key(projectId, skillId)),
-  );
+  return store.skillToolBindings.has(projectId, skillId);
 }
 export function readSkillToolBindings(
   store: Store,
   projectId: string,
   skillId: string,
 ): SkillToolBinding[] {
-  const row = store.db
-    .prepare('SELECT value FROM settings WHERE key=?')
-    .get(key(projectId, skillId));
-  return row ? config.parse(JSON.parse(String(row.value))).bindings : [];
+  const raw = store.skillToolBindings.read(projectId, skillId);
+  return raw ? config.parse(JSON.parse(raw)).bindings : [];
 }
 
 export function saveSkillToolBindings(
@@ -137,11 +137,7 @@ export function saveSkillToolBindings(
         throw new AppError('MCP_TOOL_NOT_ALLOWED', '请先在当前项目授权对应的 MCP 工具。', 403);
     }
   }
-  store.db
-    .prepare(
-      'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-    )
-    .run(key(projectId, skillId), JSON.stringify({ bindings }));
+  store.skillToolBindings.save(projectId, skillId, JSON.stringify({ bindings }));
   return bindings;
 }
 

@@ -4,11 +4,9 @@
     "sql:387fd27c84bea8f2",
     "sql:a3c147b985bf1a6e"
   ],
-  "server/data-owner.ts": ["driver:09fdf6ba9fb1abd0", "sql:60cb3ba8a74ea4d7"],
-  "server/skill-tool-bindings.ts": [
-    "sql:36600144174613b3",
-    "sql:68f9f7631fcc07dd",
-    "sql:c90979c0d08aa986"
+  "server/data-owner.ts": [
+    "driver:09fdf6ba9fb1abd0",
+    "sql:60cb3ba8a74ea4d7"
   ],
   "server/store.ts": [
     "sql:0480da62edf0b442",

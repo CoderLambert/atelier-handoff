@@ -15,6 +15,7 @@ import { workspaceLayoutRepository } from './repositories/workspace-layout.js';
 import { gitMultiCommitPreferencesRepository } from './repositories/git-multi-commit-preferences.js';
 import { shortcutPreferencesRepository } from './repositories/shortcut-preferences.js';
 import { skillInheritanceRepository } from './repositories/skill-inheritance.js';
+import { skillToolBindingsRepository } from './repositories/skill-tool-bindings.js';
 import { githubPublicAuthRepository } from './repositories/github-public-auth.js';
 import { rtkSettingsRepository } from './repositories/rtk-settings.js';
 
@@ -66,6 +67,7 @@ export function openWorkbenchDatabase(path: string) {
     gitMultiCommitPreferences: gitMultiCommitPreferencesRepository(orm),
     shortcutPreferences: shortcutPreferencesRepository(orm),
     skillInheritance: skillInheritanceRepository(orm),
+    skillToolBindings: skillToolBindingsRepository(orm),
     rtkSettings: rtkSettingsRepository(orm),
     githubPublicAuth: githubPublicAuthRepository(orm),
     gitWorktrees: gitWorktreeRepository(orm),

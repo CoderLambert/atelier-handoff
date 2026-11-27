@@ -67,6 +67,9 @@ export class Store {
   get skillInheritance() {
     return this.repos.skillInheritance;
   }
+  get skillToolBindings() {
+    return this.repos.skillToolBindings;
+  }
   get githubPublicAuth() {
     return this.repos.githubPublicAuth;
   }
