@@ -1,21 +1,4 @@
 {
-  "app/workspace.tsx": [
-    "api:0f6e695217a38d87",
-    "api:1b5c725693ff9300",
-    "api:4b7e089ea486f1d6",
-    "api:b8e27b2f8ffa1a01",
-    "api:cc86768cd48a3807",
-    "api:d89b7da0f1f9e8f6",
-    "api:e20bfee22a68e417",
-    "api:e91a762a07b5aca0",
-    "useMutation:0775e48318d1ce48",
-    "useMutation:15221630cd6e2169",
-    "useMutation:609cb9fd287312bc",
-    "useMutation:8f50d8bd760da2c5",
-    "useQuery:20fb5e930d99cd1f",
-    "useQuery:9f6fcd45413b92dd",
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
   "features/agents/api.tsx": [
     "api:d793198efecd4cd8",
     "api:f8be8f7a13a23f92",

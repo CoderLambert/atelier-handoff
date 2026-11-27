@@ -1,42 +1,22 @@
 /**
- * @file 编排工作区、会话及功能面板。
- * @implementation 协调路由与 Git、浏览器、终端面板，向快捷宿主提供语义动作和可用性，并按目标会话交接输入焦点请求。
- * @updated 2026-11-26T21:58:23+08:00
+ * @file 编排工作区外壳、布局面板与功能视图组合。
+ * @implementation 组合导航、查询缓存、工作区面板、会话管理控制器与快捷键宿主，并将浏览器订阅下沉到面板边界、会话动作下沉到 SessionChat。
+ * @updated 2026-11-27T19:25:00+08:00
  */
-import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare, X } from 'lucide-react';
-import { cn } from '@/components/ui/utils';
-import { WorkspaceToolbar } from './workspace-toolbar';
-import { WorkspaceNotice } from './workspace-notice';
 import {
-  useCanGoBack,
-  useLocation,
-  useNavigate,
-  useParams,
-  useRouter,
-} from '@tanstack/react-router';
-import { isWorkspaceLocation, workspaceSessionId } from '@shared/workspace-location';
-import { useRememberWorkspaceLocation } from '@/use-query/settings/use-remember-workspace-location';
-import type { Project, Run, Session } from '@shared/types';
-import { initialWorkspaceLayout, type WorkspaceLayout } from '@shared/workspace-layout';
-import { useWorkspaceLayout } from '@/use-query/settings/use-workspace-layout';
-import { useUpdateWorkspaceLayout } from '@/use-query/settings/use-update-workspace-layout';
-import { useCreateSession } from '@/use-query/sessions/use-create-session';
-import { useUpdateSession } from '@/use-query/sessions/use-update-session';
-import { useDeleteSession } from '@/use-query/sessions/use-delete-session';
-import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
-import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
-import { bootstrap } from '@/api/client';
-import {
-  sessionSnapshotOptions,
-  useSessionSnapshot,
-} from '@/use-query/sessions/use-session-snapshot';
-import { gitKeys } from '@/use-query/git/keys';
-import { SessionWorktree } from '@/features/git/session-worktree';
-import type { QuoteGitCode } from '@/features/git/git-code-selection';
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare } from 'lucide-react';
+import type { Run, Session } from '@shared/types';
+import type { WorkspaceLayout } from '@shared/workspace-layout';
 import { Button } from '@/components/ui/button';
-import { translateError, useUiTranslation } from '@/i18n';
 import {
   Dialog,
   DialogContent,
@@ -44,25 +24,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { appendFileQuote, deleteDraft, lastSession, rememberSession } from './drafts';
-import { keys, useRunEvents } from './events';
-import { ProjectsDialog } from './projects';
-import { Sidebar } from './sidebar';
-import { useBrowserPreview } from '@/use-query/browser/use-browser-preview';
-import { useForkSession } from '@/use-query/sessions/use-fork-session';
+import { cn } from '@/components/ui/utils';
+import type { QuoteGitCode } from '@/features/git/git-code-selection';
+import { SessionWorktree } from '@/features/git/session-worktree';
+import { ShortcutHost, useShortcutCommandLabels, type ShortcutCommand } from '@/features/shortcuts';
+import { translateError, useUiTranslation } from '@/i18n';
+import { useCreateSession } from '@/use-query/sessions/use-create-session';
+import { useSessionSnapshot } from '@/use-query/sessions/use-session-snapshot';
+import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
 import { useUpgradeSessionAgent } from '@/use-query/sessions/use-upgrade-session-agent';
-import { useStopRun } from '@/use-query/runs/use-stop-run';
-import { useRetryRun } from '@/use-query/runs/use-retry-run';
-import { useDesktopBrowser } from './desktop-browser';
+import { useUpdateWorkspaceLayout } from '@/use-query/settings/use-update-workspace-layout';
+import { useWorkspaceLayout } from '@/use-query/settings/use-workspace-layout';
+import { useBootstrap } from '@/use-query/workspace/use-bootstrap';
+import { useWorkspaceCache } from '@/use-query/workspace/use-workspace-cache';
+import { useWorkspaceEvents } from '@/use-query/workspace/use-workspace-events';
+import { appendFileQuote, lastSession } from './drafts';
 import { PanelHost } from './panels/panel-host';
 import { panels } from './panels/registry';
-import { panelLocation } from './panels/panel-location';
 import { useWorkspacePanel } from './panels/use-workspace-panel';
-import { ShortcutHost, useShortcutCommandLabels, type ShortcutCommand } from '@/features/shortcuts';
-import { WorkspaceSessionSwitcher } from './workspace-session-switcher';
+import { ProjectsDialog } from './projects';
+import {
+  SessionManagementController,
+  type SessionActionRequest,
+} from './session-management-controller';
 import { adjacentSessionId, sessionSwitchItems } from './session-switcher-model';
-import { actions, type Tab, useAppDispatch, useWorkspace, type View } from './store';
-import type { SessionAction, SettingsSection } from './types';
+import { Sidebar } from './sidebar';
+import { actions, useAppDispatch, useWorkspace } from './store';
+import type { SessionAction } from './types';
+import { useWorkspaceNavigation } from './use-workspace-navigation';
+import { WorkspaceNotice } from './workspace-notice';
+import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
+import { WorkspaceSessionSwitcher } from './workspace-session-switcher';
+import {
+  applyLayoutOverride,
+  releaseLayoutOverride,
+  resolveWorkspaceLayout,
+  type PendingLayoutOverride,
+} from './workspace-state';
+import { WorkspaceToolbar } from './workspace-toolbar';
 
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
@@ -78,6 +77,7 @@ const Collections = lazy(() =>
   import('@/features/inspector').then(({ Collections }) => ({ default: Collections })),
 );
 const Settings = lazy(() => import('@/features/inspector/settings-page'));
+
 const sectionNames = {
   runs: 'section.runs',
   artifacts: 'section.artifacts',
@@ -85,41 +85,14 @@ const sectionNames = {
   agents: 'section.agents',
   settings: 'section.settings',
 } as const;
-const collectionPaths = {
-  runs: '/runs',
-  artifacts: '/artifacts',
-  extensions: '/extensions',
-  agents: '/agents',
-} as const;
-const settingsPaths = {
-  models: '/settings/models',
-  layout: '/settings/layout',
-  shortcuts: '/settings/shortcuts',
-  notifications: '/settings/notifications',
-  diagnostics: '/settings/diagnostics',
-} as const;
 
-function currentView(pathname: string): View {
-  if (pathname.startsWith('/settings/')) return 'settings';
-  return (
-    (Object.keys(collectionPaths) as (keyof typeof collectionPaths)[]).find(
-      (view) => collectionPaths[view] === pathname,
-    ) ?? 'chat'
-  );
-}
 const tabs = [
   { id: 'conversation', labelKey: 'tab.conversation', Icon: MessagesSquare },
   { id: 'trace', labelKey: 'tab.trace', Icon: Activity },
   { id: 'artifacts', labelKey: 'section.artifacts', Icon: FileText },
 ] as const;
-const active = new Set(['queued', 'running', 'awaiting_permission', 'stopping']);
 
-const sessionActions = {
-  rename: 'session.rename',
-  archive: 'session.archive',
-  restore: 'session.restore',
-  delete: 'session.delete',
-} as const;
+const active = new Set(['queued', 'running', 'awaiting_permission', 'stopping']);
 
 export default function Workspace() {
   const { t, locale } = useUiTranslation('workbench');
@@ -130,36 +103,24 @@ export default function Workspace() {
       {t('loading')}
     </p>
   );
+
   const dispatch = useAppDispatch();
-  const client = useQueryClient();
-  const location = useLocation();
-  const pathname = location.pathname;
-  const router = useRouter();
-  const navigate = useNavigate();
-  const canGoBack = useCanGoBack();
-  const { sessionId, runId: routeRunId, messageId: routeMessageId } = useParams({ strict: false });
-  const { routePanel, contentPath } = panelLocation(pathname, sessionId, location.state);
-  const trace = routePanel ? contentPath.match(/\/trace\/([^/]+)$/u)?.[1] : routeRunId;
-  const messageId = routePanel ? contentPath.match(/\/messages\/([^/]+)$/u)?.[1] : routeMessageId;
-  const view = currentView(pathname);
-  const tab: Tab = contentPath.includes('/trace')
-    ? 'trace'
-    : sessionId && contentPath.endsWith('/artifacts')
-      ? 'artifacts'
-      : 'conversation';
-  const section: SettingsSection =
-    pathname === settingsPaths.layout
-      ? 'layout'
-      : pathname === settingsPaths.shortcuts
-        ? 'shortcuts'
-        : pathname === settingsPaths.notifications
-          ? 'notifications'
-          : pathname === settingsPaths.diagnostics
-            ? 'diagnostics'
-            : 'models';
+  const cache = useWorkspaceCache();
   const drawer = useWorkspace((state) => state.workspace.drawer);
   const connected = useWorkspace((state) => state.workspace.connected);
-  const ready = useQuery({ queryKey: keys.bootstrap, queryFn: bootstrap, staleTime: 30_000 });
+  const ready = useBootstrap();
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [sessionAction, setSessionAction] = useState<SessionActionRequest>();
+  const [notice, setNotice] = useState('');
+
+  const openProjectsOnEmpty = useCallback(() => setProjectsOpen(true), []);
+  const nav = useWorkspaceNavigation({
+    ready: ready.data,
+    onNoProjects: openProjectsOnEmpty,
+  });
+  const { pathname, sessionId, routePanel, trace, messageId, view, tab, section, canGoBack } = nav;
+
   const session = useSessionSnapshot(sessionId);
   const snapshot = session.data;
   const selectedRun =
@@ -174,46 +135,107 @@ export default function Workspace() {
     ready.data?.projects[0];
   const previewProject = view === 'chat' ? project?.id : undefined;
   const desktop = Boolean(window.atelierDesktop);
-  const nativeBrowser = useDesktopBrowser(desktop ? previewProject : undefined);
-  const [projectsOpen, setProjectsOpen] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [inputFocus, setInputFocus] = useState<{ sessionId: string; request: number }>();
-  const focusSequence = useRef(0);
+
   const shortcutLabels = useShortcutCommandLabels();
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
   const { gitBoard, gitBusy, gitTrigger, openGit, browserTrigger, openBrowser } = panel;
   const browserActive = panel.activePanel === 'browser';
   const terminalActive = panel.activePanel === 'terminal';
-  const browser = useBrowserPreview(
-    desktop || !browserActive || panel.rightCollapsed ? undefined : previewProject,
-    true,
-  );
+
   const layoutQuery = useWorkspaceLayout();
   const updateLayout = useUpdateWorkspaceLayout();
-  const [localLayout, setLocalLayout] = useState<WorkspaceLayout>();
-  const layout = localLayout ?? layoutQuery.data ?? initialWorkspaceLayout;
+  const { mutate: updateLayoutMutate } = updateLayout;
+  const [pendingLayout, setPendingLayout] = useState<PendingLayoutOverride>();
+  const pendingLayoutRef = useRef<PendingLayoutOverride | undefined>(undefined);
+  const layout = resolveWorkspaceLayout(pendingLayout, layoutQuery.data);
   const showLeft = width >= 768;
+
+  const createSession = useCreateSession();
+  const upgradeAgent = useUpgradeSessionAgent();
+  const focusGeneration = useRef(0);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
+  const openBrowserRef = useRef(openBrowser);
+  useLayoutEffect(() => {
+    openBrowserRef.current = openBrowser;
+  });
+
+  useWorkspaceEvents(ready.data?.cursor, view === 'chat' ? sessionId : undefined);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const showSessionError = useCallback(
+    (error: unknown) => {
+      setNotice(translateError(error, t('session.actionFailed')));
+    },
+    [t],
+  );
+
+  const openDrawer = useCallback(
+    (next: 'navigation' | 'details') => {
+      drawerTrigger.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dispatch(actions.setDrawer(next));
+    },
+    [dispatch],
+  );
+
+  const changeLayout = useCallback(
+    (next: WorkspaceLayout) => {
+      const override = applyLayoutOverride(pendingLayoutRef.current, next);
+      pendingLayoutRef.current = override;
+      setPendingLayout(override);
+      updateLayoutMutate(next, {
+        onSuccess: () => {
+          const released = releaseLayoutOverride(pendingLayoutRef.current, override.requestId);
+          pendingLayoutRef.current = released;
+          setPendingLayout(released);
+        },
+        onError: (error) => setNotice(translateError(error, t('layout.saveFailed'))),
+      });
+    },
+    [t, updateLayoutMutate],
+  );
+
+  const snapshotProjectId = snapshot?.project.id;
+  const handleOpenDesktopLink = useCallback(
+    async (url: string, destination: 'internal' | 'external') => {
+      const bridge = window.atelierDesktop;
+      if (!bridge || !snapshotProjectId) throw new Error(t('browser.disabled'));
+      if (destination === 'internal') openBrowserRef.current();
+      await bridge.command(
+        snapshotProjectId,
+        destination === 'internal' ? 'open-tab' : 'open-external',
+        url,
+      );
+    },
+    [snapshotProjectId, t],
+  );
+
   const canQuoteGit =
     view === 'chat' &&
     snapshot &&
     snapshot.session.id === sessionId &&
     snapshot.session.status !== 'archived' &&
     snapshot.project.id === gitBoard?.project.id;
+
   const quoteGitCode: QuoteGitCode = (file, text) => {
     if (!canQuoteGit || !snapshot) return 'unavailable';
     const result = appendFileQuote(snapshot.session.id, snapshot.session.draft, file, text);
     if (result === 'added' || result === 'duplicate') {
-      if (tab !== 'conversation') selectTab('conversation');
+      if (tab !== 'conversation') nav.selectTab('conversation');
       if (panel.canDock && panel.fullWindow) panel.dockRight();
-      if (panel.canDock && tab === 'conversation')
-        requestAnimationFrame(() => {
-          if (router.state.location.pathname === pathname)
-            document.getElementById('prompt-input')?.focus({ preventScroll: true });
-        });
+      if (panel.canDock && tab === 'conversation') {
+        dispatch(actions.requestComposerFocus({ sessionId: snapshot.session.id }));
+      }
     }
     return result;
   };
+
   const inputTarget = sessionId
     ? snapshot && snapshot.session.id === sessionId
       ? snapshot.session
@@ -225,23 +247,6 @@ export default function Workspace() {
   const inputSubmitting = useWorkspace((state) =>
     Boolean(inputTarget && state.workspace.submitting[inputTarget.id]),
   );
-  const drawerTrigger = useRef<HTMLElement | null>(null);
-  function openDrawer(next: 'navigation' | 'details') {
-    drawerTrigger.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dispatch(actions.setDrawer(next));
-  }
-  function changeLayout(next: WorkspaceLayout) {
-    setLocalLayout(next);
-    updateLayout.mutate(next, {
-      onError: (error) => setNotice(translateError(error, t('layout.saveFailed'))),
-    });
-  }
-  useEffect(() => {
-    setInputFocus((current) =>
-      current?.sessionId === sessionId && tab === 'conversation' ? current : undefined,
-    );
-  }, [sessionId, tab, pathname]);
 
   async function focusComposer() {
     if (
@@ -253,289 +258,84 @@ export default function Workspace() {
     )
       return;
     const targetId = inputTarget.id;
-    const request = ++focusSequence.current;
+    const generation = ++focusGeneration.current;
     dispatch(actions.setDrawer(undefined));
     if (panel.fullWindow) panel.collapseRight(false);
     if (targetId !== sessionId || tab !== 'conversation' || messageId || view !== 'chat') {
-      await navigate({ to: '/sessions/$sessionId', params: { sessionId: targetId } });
+      await nav.navigateToConversation(targetId);
     }
-    const currentLocation = router.state.location;
-    const currentContent = panelLocation(
-      currentLocation.pathname,
-      targetId,
-      currentLocation.state,
-    ).contentPath;
-    if (focusSequence.current === request && currentContent === `/sessions/${targetId}`)
-      setInputFocus({ sessionId: targetId, request });
-  }
-  const [sessionChange, setSessionChange] = useState<{ type: SessionAction; session: Session }>();
-  const [title, setTitle] = useState('');
-  const sessionActionTrigger = useRef<HTMLElement | null>(null);
-  const [notice, setNotice] = useState('');
-  const forkSession = useForkSession();
-  const forkKeys = useRef(new Map<string, string>());
-  const forking = useRef(false);
-  const savedLocation = useRef<string | undefined>(undefined);
-  const rememberLocation = useRememberWorkspaceLocation();
-  const retryKeys = useRef(new Map<string, string>());
-  useRunEvents(client, ready.data?.cursor, view === 'chat' ? sessionId : undefined);
-
-  useEffect(() => {
-    function onRunFinished(event: Event) {
-      const custom = event as CustomEvent<{ sessionId?: string; status?: string }>;
-      const finishedSessionId = custom.detail?.sessionId;
-      if (finishedSessionId && (!sessionId || sessionId === finishedSessionId)) {
-        if (!sessionId) {
-          void navigate({ to: `/sessions/${encodeURIComponent(finishedSessionId)}` });
-        }
-      }
-    }
-    window.addEventListener('atelier:run-finished', onRunFinished);
-    return () => {
-      window.removeEventListener('atelier:run-finished', onRunFinished);
-    };
-  }, [sessionId, navigate]);
-
-  useEffect(() => {
-    if (!ready.data || pathname !== '/') return;
-    const saved = ready.data.workspaceLocation;
-    const savedId = saved ? workspaceSessionId(saved) : undefined;
     if (
-      saved &&
-      isWorkspaceLocation(saved) &&
-      (!savedId || ready.data.sessions.some(({ id }) => id === savedId))
+      focusGeneration.current === generation &&
+      nav.currentContentPath(targetId) === `/sessions/${targetId}`
     ) {
-      router.history.replace(saved);
-    } else {
-      const previous = ready.data.workspaceLastSession ?? lastSession();
-      const restored =
-        ready.data.sessions.find(({ id }) => id === previous) ??
-        ready.data.sessions.find(({ status }) => status === 'active') ??
-        ready.data.sessions[0];
-      if (restored)
-        void navigate({
-          to: '/sessions/$sessionId',
-          params: { sessionId: restored.id },
-          replace: true,
-        });
-      else void navigate({ to: '/sessions', replace: true });
-      if (!ready.data.projects.length) setProjectsOpen(true);
+      dispatch(actions.requestComposerFocus({ sessionId: targetId }));
     }
-  }, [navigate, pathname, ready.data, router.history]);
-
-  useEffect(() => {
-    if (!ready.data || pathname === savedLocation.current || !isWorkspaceLocation(pathname)) return;
-    if (sessionId && !ready.data.sessions.some(({ id }) => id === sessionId)) return;
-    if (sessionId) rememberSession(sessionId);
-    savedLocation.current = pathname;
-    rememberLocation(pathname);
-  }, [pathname, ready.data, rememberLocation, sessionId]);
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(''), 4500);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
-  function openSession(id?: string, runId?: string) {
-    dispatch(actions.setDrawer(undefined));
-    if (!id) void navigate({ to: '/sessions' });
-    else if (runId)
-      void navigate({ to: '/sessions/$sessionId/trace/$runId', params: { sessionId: id, runId } });
-    else void navigate({ to: '/sessions/$sessionId', params: { sessionId: id } });
   }
+
   function openShortcutSession(id: string) {
     if (gitBusy) return;
-    focusSequence.current++;
-    setInputFocus(undefined);
+    focusGeneration.current++;
+    dispatch(actions.clearComposerFocus());
     if (panel.fullWindow) panel.collapseRight(false);
-    openSession(id);
-  }
-  function openView(next: View) {
-    dispatch(actions.setDrawer(undefined));
-    if (next === 'settings') void navigate({ to: settingsPaths.models });
-    else if (next === 'chat') {
-      if (view === 'chat' && sessionId) return;
-      const saved = lastSession() ?? ready.data?.workspaceLastSession;
-      openSession(
-        ready.data?.sessions.find(({ id }) => id === saved)?.id ?? ready.data?.sessions[0]?.id,
-      );
-    } else void navigate({ to: collectionPaths[next] });
-  }
-  function openTrace(runId: string) {
-    if (sessionId) openSession(sessionId, runId);
-  }
-  function selectTab(next: Tab) {
-    if (!sessionId) return;
-    const params = { sessionId };
-    if (next === 'trace') void navigate({ to: '/sessions/$sessionId/trace', params });
-    else if (next === 'artifacts') void navigate({ to: '/sessions/$sessionId/artifacts', params });
-    else if (tab !== 'conversation') void navigate({ to: '/sessions/$sessionId', params });
-  }
-  async function revalidate(id: string) {
-    void client.invalidateQueries({ queryKey: keys.sessions });
-    void client.invalidateQueries({ queryKey: keys.runs });
-    await client.invalidateQueries({ queryKey: keys.snapshot(id) });
-  }
-  async function continueFromMessage(
-    sourceSessionId: string,
-    messageId: string,
-    rewindFromHead?: string,
-  ) {
-    if (forking.current) throw new Error(t('session.actionBusy'));
-    const sourcePath = router.state.location.pathname;
-    const key = JSON.stringify([sourceSessionId, messageId, rewindFromHead]);
-    const idempotencyKey = forkKeys.current.get(key) ?? crypto.randomUUID();
-    forkKeys.current.set(key, idempotencyKey);
-    forking.current = true;
-    try {
-      const { session: child } = await forkSession.mutateAsync({
-        sessionId: sourceSessionId,
-        messageId,
-        idempotencyKey,
-        rewindFromHead,
-      });
-      forkKeys.current.delete(key);
-      void client.invalidateQueries({ queryKey: keys.bootstrap });
-      void client.invalidateQueries({ queryKey: keys.sessions });
-      if (router.state.location.pathname === sourcePath) {
-        openSession(child.id);
-      } else {
-        setNotice(
-          rewindFromHead
-            ? t('session.rewindCreated', { title: child.title })
-            : t('session.branchCreated', { title: child.title }),
-        );
-      }
-    } finally {
-      forking.current = false;
-    }
+    nav.openSession(id);
   }
 
-  const createSession = useCreateSession();
-  const updateSession = useUpdateSession();
-  const removeSession = useDeleteSession();
-  const [managingSession, setManagingSession] = useState(false);
-  const managingLock = useRef(false);
-  const [managementError, setManagementError] = useState('');
   async function createProjectSession(id: string) {
     const { session: created } = await createSession.mutateAsync(id);
-    openSession(created.id);
-    void client.invalidateQueries({ queryKey: keys.bootstrap });
-    void client.invalidateQueries({ queryKey: keys.sessions });
+    nav.openSession(created.id);
+    cache.invalidateSessionLists();
   }
-  async function manageSession({
-    type,
-    session: target,
-  }: {
-    type: SessionAction;
-    session: Session;
-  }) {
-    if (managingLock.current) return;
-    managingLock.current = true;
-    setManagingSession(true);
-    setManagementError('');
-    try {
-      if (type === 'delete') {
-        await deleteDraft(target.id, () => removeSession.mutateAsync(target.id));
-        if (workspaceSessionId(router.state.location.pathname) === target.id) {
-          const remaining = ready.data?.sessions.filter(({ id }) => id !== target.id) ?? [];
-          const next =
-            remaining.find(
-              (item) => item.projectId === target.projectId && item.status === 'active',
-            ) ?? remaining[0];
-          openSession(next?.id);
-        }
-        client.removeQueries({ queryKey: keys.snapshot(target.id), exact: true });
-        void client.invalidateQueries({ queryKey: keys.sessions });
-      } else {
-        if (type === 'restore') {
-          const { workspace } = await client.fetchQuery(sessionSnapshotOptions(target.id));
-          if (workspace && workspace.state !== 'ready') {
-            openSession(target.id);
-            setSessionChange(undefined);
-            return;
-          }
-        }
-        await updateSession.mutateAsync({
-          id: target.id,
-          ...(type === 'rename'
-            ? { title: title.trim() }
-            : { status: type === 'archive' ? 'archived' : 'active' }),
-        });
-        void revalidate(target.id);
-        void client.invalidateQueries({ queryKey: gitKeys.project(target.projectId) });
-      }
-      setSessionChange(undefined);
-      await client.invalidateQueries({ queryKey: keys.bootstrap });
-    } catch (error) {
-      setManagementError(translateError(error, t('session.actionFailed')));
-    } finally {
-      managingLock.current = false;
-      setManagingSession(false);
-    }
-  }
-  const stopRun = useStopRun();
-  const retryRun = useRetryRun();
-  const upgradeAgent = useUpgradeSessionAgent();
-  function showSessionError(error: unknown) {
-    setNotice(translateError(error, t('session.actionFailed')));
-  }
-  function retrySessionRun(id: string, sessionId: string) {
-    const idempotencyKey = retryKeys.current.get(id) ?? crypto.randomUUID();
-    retryKeys.current.set(id, idempotencyKey);
-    void retryRun.mutateAsync({ id, sessionId, idempotencyKey }).then(() => {
-      if (retryKeys.current.get(id) === idempotencyKey) retryKeys.current.delete(id);
-    }, showSessionError);
-  }
-  function openSessionAction(type: SessionAction, target: Session) {
-    if (managingSession) return;
-    dispatch(actions.setDrawer(undefined));
-    setManagementError('');
-    sessionActionTrigger.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setSessionChange({ type, session: target });
-    setTitle(target.title);
-  }
+
+  const openSessionAction = useCallback(
+    (type: SessionAction, target: Session) => {
+      dispatch(actions.setDrawer(undefined));
+      setSessionAction({
+        type,
+        session: target,
+        trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+      });
+    },
+    [dispatch],
+  );
+  const closeSessionAction = useCallback(() => setSessionAction(undefined), []);
+
   const sideProps = {
     project,
     current: sessionId,
     view,
     projects: ready.data?.projects,
     onSessionAction: openSessionAction,
-    onNewProject: (id: string) =>
-      void createProjectSession(id).catch((error: Error) =>
-        setNotice(translateError(error, t('session.actionFailed'))),
-      ),
+    onNewProject: (id: string) => void createProjectSession(id).catch(showSessionError),
     artifactCount: ready.data?.artifacts.length,
     sessions: ready.data?.sessions,
     sessionsFailed: ready.isError,
     onRetrySessions: () => void ready.refetch(),
-    onSession: openSession,
-    onView: openView,
+    onSession: nav.openSession,
+    onView: nav.openView,
     onNew: () =>
       project?.available
-        ? void createProjectSession(project.id).catch((error: Error) =>
-            setNotice(translateError(error, t('session.actionFailed'))),
-          )
+        ? void createProjectSession(project.id).catch(showSessionError)
         : setProjectsOpen(true),
     onProjects: () => {
       dispatch(actions.setDrawer(undefined));
       setProjectsOpen(true);
     },
-    onSettings: () => openView('settings'),
+    onSettings: () => nav.openView('settings'),
   };
+
   const pendingPermissions =
     snapshot?.permissions.filter((item) => item.status === 'pending').length ?? 0;
   const changesLabel = pendingPermissions
     ? t('changes.pending', { count: pendingPermissions })
     : t('changes.title');
+
   const panelActions = {
     expanded: panel.fullWindow,
     expandable: panel.canDock,
     onRequestExpand: panel.toggleExpanded,
     onRequestHide: () => panel.collapseRight(),
   };
+
   const browserPanel = previewProject ? (
     <PanelHost
       definition={panels.browser}
@@ -546,13 +346,13 @@ export default function Workspace() {
           target: { scope: 'project', projectId: previewProject },
         },
         visible: browserActive,
+        collapsed: panel.rightCollapsed,
         ...panelActions,
         desktop,
-        state: nativeBrowser,
-        preview: { frame: browser.data?.frame, error: browser.isError },
       }}
     />
   ) : null;
+
   const terminalPanel =
     sessionId && project ? (
       <PanelHost
@@ -572,10 +372,12 @@ export default function Workspace() {
         }}
       />
     ) : null;
-  const archiveLabel = sessionChange ? t(sessionActions[sessionChange.type]) : '';
+
   const sessionTitle = snapshot?.session.title;
+  const upgradableAgent = snapshot?.agent?.canUpgrade ? snapshot.agent : undefined;
   const previousSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, -1);
   const nextSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, 1);
+
   const shortcutActions: {
     id: keyof typeof shortcutLabels;
     available: boolean;
@@ -643,7 +445,7 @@ export default function Workspace() {
       available: !gitBusy,
       run: () => {
         if (panel.fullWindow) panel.collapseRight(false);
-        void navigate({ to: settingsPaths.shortcuts });
+        nav.openSettingsSection('shortcuts');
       },
     },
   ];
@@ -651,6 +453,7 @@ export default function Workspace() {
     const label = shortcutLabels[action.id];
     return label ? [{ ...label, ...action }] : [];
   });
+
   return (
     <div className={cn('app react-workspace', desktop && 'desktop-workspace')}>
       <ShortcutHost
@@ -702,9 +505,8 @@ export default function Workspace() {
                   onQuoteCode: canQuoteGit ? quoteGitCode : undefined,
                   onCreated: (id) => {
                     panel.clearGit();
-                    openSession(id);
-                    void client.invalidateQueries({ queryKey: keys.bootstrap });
-                    void client.invalidateQueries({ queryKey: keys.sessions });
+                    nav.openSession(id);
+                    cache.invalidateSessionLists();
                   },
                 },
               }}
@@ -747,7 +549,7 @@ export default function Workspace() {
                         }
                         title={t(labelKey)}
                         tabIndex={tab === id ? 0 : -1}
-                        onClick={() => selectTab(id)}
+                        onClick={() => nav.selectTab(id)}
                         onKeyDown={(event) => {
                           const index = tabs.findIndex((item) => item.id === id);
                           const indexes: Record<string, number> = {
@@ -760,7 +562,7 @@ export default function Workspace() {
                           if (!next) return;
                           event.preventDefault();
                           document.getElementById(`${sessionContentId}-${next.id}`)?.focus();
-                          selectTab(next.id);
+                          nav.selectTab(next.id);
                         }}
                       >
                         <Icon aria-hidden="true" />
@@ -797,8 +599,8 @@ export default function Workspace() {
                     }
                   : undefined
               }
-              onBack={() => router.history.back()}
-              onForward={() => router.history.forward()}
+              onBack={nav.goBack}
+              onForward={nav.goForward}
               onOpenNavigation={() => openDrawer('navigation')}
               sessionActions={
                 view === 'chat' && sessionId
@@ -827,10 +629,8 @@ export default function Workspace() {
                 {view === 'settings' && (
                   <Settings
                     section={section}
-                    onSectionChange={(next: SettingsSection) =>
-                      void navigate({ to: settingsPaths[next] })
-                    }
-                    onBack={() => openView('chat')}
+                    onSectionChange={nav.openSettingsSection}
+                    onBack={() => nav.openView('chat')}
                     layout={{
                       layout,
                       pending: updateLayout.isPending,
@@ -844,7 +644,7 @@ export default function Workspace() {
                     <AgentsPage
                       projects={ready.data?.projects ?? []}
                       projectId={project?.id}
-                      onOpenSession={(id) => openSession(id)}
+                      onOpenSession={(id) => nav.openSession(id)}
                     />
                   </div>
                 ) : null}
@@ -865,8 +665,8 @@ export default function Workspace() {
                             approvalMode: undefined,
                           },
                         });
-                        openSession(session.id);
-                        void revalidate(session.id);
+                        nav.openSession(session.id);
+                        void cache.revalidateSession(session.id);
                       }}
                     />
                   </div>
@@ -876,7 +676,7 @@ export default function Workspace() {
                     <Collections
                       view={view}
                       projects={ready.data?.projects ?? []}
-                      onOpenRun={(run) => openSession(run.sessionId, run.id)}
+                      onOpenRun={(run) => nav.openSession(run.sessionId, run.id)}
                     />
                   </div>
                 ) : null}
@@ -893,7 +693,7 @@ export default function Workspace() {
                     (snapshot?.agent || snapshot?.workspace || snapshot?.session.fork) ? (
                       <header className="session-header">
                         <div className="session-title-row">
-                          {snapshot?.agent?.canUpgrade ? (
+                          {upgradableAgent && snapshot ? (
                             <Button
                               size="sm"
                               disabled={upgradeAgent.isPending}
@@ -901,12 +701,9 @@ export default function Workspace() {
                                 upgradeAgent.mutate(
                                   {
                                     sessionId: snapshot.session.id,
-                                    revisionId: snapshot.agent!.revisionId,
+                                    revisionId: upgradableAgent.revisionId,
                                   },
-                                  {
-                                    onSuccess: () => revalidate(snapshot.session.id),
-                                    onError: showSessionError,
-                                  },
+                                  { onError: showSessionError },
                                 )
                               }
                             >
@@ -917,7 +714,7 @@ export default function Workspace() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => openView('agents')}
+                              onClick={() => nav.openView('agents')}
                               title={t('session.manageAgent')}
                             >
                               {t('session.agentVersion', {
@@ -933,8 +730,8 @@ export default function Workspace() {
                             workspace={snapshot.workspace}
                             onShowTree={() => openGit(snapshot.project, 'worktrees')}
                             onRefresh={async () => {
-                              await revalidate(snapshot.session.id);
-                              void client.invalidateQueries({ queryKey: keys.bootstrap });
+                              await cache.revalidateSession(snapshot.session.id);
+                              void cache.invalidateBootstrap();
                             }}
                           />
                         ) : null}
@@ -954,13 +751,7 @@ export default function Workspace() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() =>
-                                    void navigate({
-                                      to: '/sessions/$sessionId/messages/$messageId',
-                                      params: {
-                                        sessionId: origin.sourceSessionId,
-                                        messageId: origin.sourceMessageId,
-                                      },
-                                    })
+                                    nav.openMessage(origin.sourceSessionId, origin.sourceMessageId)
                                   }
                                 >
                                   {label} · {origin.sourceTitle}
@@ -1007,57 +798,13 @@ export default function Workspace() {
                             snapshot={snapshot}
                             defaultModel={ready.data?.config.model ?? ''}
                             nativeExecution={ready.data?.capabilities.nativeExecution === true}
-                            onOpenLink={
-                              desktop
-                                ? async (url, destination) => {
-                                    const bridge = window.atelierDesktop;
-                                    if (!bridge) throw new Error(t('browser.disabled'));
-                                    if (destination === 'internal') openBrowser();
-                                    await bridge.command(
-                                      snapshot.project.id,
-                                      destination === 'internal' ? 'open-tab' : 'open-external',
-                                      url,
-                                    );
-                                  }
-                                : undefined
-                            }
-                            onForkMessage={(messageId) => {
-                              void continueFromMessage(snapshot.session.id, messageId).catch(
-                                (error: unknown) => {
-                                  setNotice(translateError(error, t('session.createBranchFailed')));
-                                },
-                              );
-                            }}
-                            onRewindMessage={(messageId, expectedHeadId) =>
-                              continueFromMessage(snapshot.session.id, messageId, expectedHeadId)
-                            }
-                            forkingMessageId={
-                              forkSession.isPending &&
-                              !forkSession.variables?.rewindFromHead &&
-                              forkSession.variables?.sessionId === snapshot.session.id
-                                ? forkSession.variables.messageId
-                                : undefined
-                            }
+                            onOpenLink={desktop ? handleOpenDesktopLink : undefined}
                             focusMessageId={messageId}
-                            inputFocusRequest={
-                              inputFocus?.sessionId === snapshot.session.id
-                                ? inputFocus.request
-                                : undefined
-                            }
-                            onInputFocused={(request) =>
-                              setInputFocus((current) =>
-                                current?.request === request ? undefined : current,
-                              )
-                            }
-                            onSent={revalidate}
+                            onSent={cache.revalidateSession}
                             onError={setNotice}
-                            onStop={(id) =>
-                              void stopRun
-                                .mutateAsync({ id, sessionId: snapshot.session.id })
-                                .catch(showSessionError)
-                            }
-                            onRetry={(id) => retrySessionRun(id, snapshot.session.id)}
-                            onTrace={openTrace}
+                            onTrace={nav.openTrace}
+                            onOpenSession={nav.openSession}
+                            getLocationPath={nav.getCurrentPath}
                           />
                         ) : null}
                         {snapshot && tab === 'trace' ? (
@@ -1065,7 +812,7 @@ export default function Workspace() {
                             <RunTrace
                               snapshot={snapshot}
                               runId={selectedRun?.id}
-                              onSelect={openTrace}
+                              onSelect={nav.openTrace}
                             />
                           </div>
                         ) : null}
@@ -1075,7 +822,7 @@ export default function Workspace() {
                               view="artifacts"
                               projects={[snapshot.project]}
                               sessionId={snapshot.session.id}
-                              onOpenRun={(run: Run) => openSession(run.sessionId, run.id)}
+                              onOpenRun={(run: Run) => nav.openSession(run.sessionId, run.id)}
                             />
                           </div>
                         ) : null}
@@ -1112,7 +859,7 @@ export default function Workspace() {
         }
       />
       <Dialog
-        open={!!drawer}
+        open={Boolean(drawer)}
         onOpenChange={(open) => {
           if (!open) dispatch(actions.setDrawer(undefined));
         }}
@@ -1166,64 +913,13 @@ export default function Workspace() {
           }}
         />
       ) : null}
-      <Dialog
-        open={!!sessionChange}
-        onOpenChange={(open) => {
-          if (!open && !managingSession) setSessionChange(undefined);
-        }}
-      >
-        <DialogContent
-          onCloseAutoFocus={(event) => {
-            const trigger = sessionActionTrigger.current;
-            if (trigger?.isConnected) {
-              event.preventDefault();
-              trigger.focus({ preventScroll: true });
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{archiveLabel}</DialogTitle>
-            <DialogDescription>{sessionChange?.session.title}</DialogDescription>
-          </DialogHeader>
-          {sessionChange?.type === 'rename' ? (
-            <label className="grid gap-2">
-              {t('session.name')}
-              <input
-                className="field"
-                value={title}
-                maxLength={160}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </label>
-          ) : null}
-          {sessionChange?.type === 'delete' ? (
-            <p className="text-sm">{t('session.deleteWarning')}</p>
-          ) : null}
-          {managementError && (
-            <p role="alert" className="text-sm text-destructive">
-              {managementError}
-            </p>
-          )}
-          <div className="dialog-actions">
-            <Button
-              variant="secondary"
-              disabled={managingSession}
-              onClick={() => setSessionChange(undefined)}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              variant={sessionChange?.type === 'delete' ? 'destructive' : 'default'}
-              disabled={managingSession || (sessionChange?.type === 'rename' && !title.trim())}
-              onClick={() => {
-                if (sessionChange) void manageSession(sessionChange);
-              }}
-            >
-              {archiveLabel}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SessionManagementController
+        request={sessionAction}
+        sessions={ready.data?.sessions ?? []}
+        getCurrentPath={nav.getCurrentPath}
+        onOpenSession={nav.openSession}
+        onClose={closeSessionAction}
+      />
       <WorkspaceNotice message={notice} />
     </div>
   );

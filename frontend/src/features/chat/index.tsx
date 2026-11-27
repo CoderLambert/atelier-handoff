@@ -1,7 +1,7 @@
 /**
  * @file 组合会话消息、待处理队列、任务清单和输入界面。
- * @implementation 使用共享策略选择活动运行及引用追加结果，协调历史操作、队列、任务清单和输入焦点。
- * @updated 2026-11-27T18:34:46+08:00
+ * @implementation 使用共享策略选择活动运行及引用追加结果，通过 Redux 统一输入焦点信号协调历史操作、队列、任务清单与快捷键聚焦。
+ * @updated 2026-11-27T19:25:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { composerTextLimit, messageQuoteLimit } from '@shared/message-quotes';
 import type { Draft, Message, ReasoningEffort } from '@shared/types';
 import type { Snapshot } from '@/api/types';
+import { actions, useAppDispatch, useWorkspace } from '@/app/store';
 import { permissionKeys } from '@/use-query/permissions/keys';
 import { useRunStopPending } from '@/use-query/runs/use-stop-run';
 import { sessionKeys } from '@/use-query/sessions/keys';
@@ -45,8 +46,6 @@ export interface ChatProps {
   forkingMessageId?: string;
   onOpenLink?: ChatLinkOpener;
   submitting: boolean;
-  inputFocusRequest?: number;
-  onInputFocused?: (request: number) => void;
 }
 
 export default function Chat(props: ChatProps) {
@@ -55,10 +54,16 @@ export default function Chat(props: ChatProps) {
 
 function SessionChat(props: ChatProps) {
   const { t } = useUiTranslation('chat');
+  const dispatch = useAppDispatch();
   const { snapshot, draft, getDraft, onDraftChange, onRetry, onTrace, onOpenLink, submitting } =
     props;
   const sessionId = snapshot.session.id;
   const { onRewindMessage } = props;
+  const composerFocus = useWorkspace((state) =>
+    state.workspace.composerFocus?.sessionId === sessionId
+      ? state.workspace.composerFocus
+      : undefined,
+  );
   const activeRun = findActiveRun(snapshot.runs);
   const stopPendingRunId = useRunStopPending(activeRun) ? activeRun?.id : undefined;
   const currentRun = activeRun ?? snapshot.runs.at(-1);
@@ -96,7 +101,6 @@ function SessionChat(props: ChatProps) {
   const [actionError, setActionError] = useState<
     'draft.tooLong' | 'draft.quoteLimit' | 'draft.quoteTooLong' | 'draft.selectionTooLong'
   >();
-  const [focusRequest, setFocusRequest] = useState(0);
   const archived = snapshot.session.status === 'archived';
   const draftDisabled = archived || submitting;
 
@@ -105,26 +109,23 @@ function SessionChat(props: ChatProps) {
   }, [draft.text]);
 
   useLayoutEffect(() => {
-    if (!focusRequest) return;
-    const input = inputRef.current;
-    input?.focus();
-    const length = input?.value.length ?? 0;
-    input?.setSelectionRange(length, length);
-  }, [focusRequest]);
-
-  useLayoutEffect(() => {
-    const request = props.inputFocusRequest;
-    if (request === undefined || draftDisabled) return;
+    if (!composerFocus || draftDisabled) return;
     const input = inputRef.current;
     if (!input || input.closest('[inert]')) return;
     input.focus({ preventScroll: true });
     input.scrollIntoView({ block: 'nearest' });
-    if (document.activeElement === input) props.onInputFocused?.(request);
-  }, [props.inputFocusRequest, props.onInputFocused, draftDisabled]);
+    if (composerFocus.caretToEnd) {
+      const length = input.value.length;
+      input.setSelectionRange(length, length);
+    }
+    if (document.activeElement === input) {
+      dispatch(actions.acknowledgeComposerFocus(composerFocus.requestId));
+    }
+  }, [composerFocus, dispatch, draftDisabled]);
 
   const focusInput = useCallback(() => {
-    setFocusRequest((previous) => previous + 1);
-  }, []);
+    dispatch(actions.requestComposerFocus({ sessionId, caretToEnd: true }));
+  }, [dispatch, sessionId]);
 
   const replaceText = useCallback(
     (text: string) => {

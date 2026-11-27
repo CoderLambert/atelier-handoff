@@ -1,7 +1,7 @@
 /**
  * @file 管理工作区界面与会话交互状态。
- * @implementation 使用 Redux 保存导航、连接状态、草稿、提交状态、临时搜索费用上限和各会话未查看的运行结果。
- * @updated 2026-11-25T19:11:00+08:00
+ * @implementation 使用 Redux 保存导航、连接状态、草稿、提交状态、临时搜索费用上限、未查看运行结果以及统一的输入焦点请求信号。
+ * @updated 2026-11-27T19:25:00+08:00
  */
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
@@ -10,6 +10,13 @@ import type { Draft, RunStatus } from '@shared/types';
 export type View = 'chat' | 'artifacts' | 'runs' | 'extensions' | 'agents' | 'settings';
 export type Tab = 'conversation' | 'trace' | 'artifacts';
 type UnseenRunOutcome = Extract<RunStatus, 'completed' | 'failed' | 'interrupted'>;
+
+export interface ComposerFocusRequest {
+  sessionId: string;
+  requestId: number;
+  caretToEnd?: boolean;
+}
+
 interface WorkspaceState {
   drawer?: 'navigation' | 'details';
   connected: boolean;
@@ -17,6 +24,8 @@ interface WorkspaceState {
   searchChargeLimits: Record<string, string>;
   submitting: Record<string, boolean>;
   unseenRunOutcomes: Record<string, UnseenRunOutcome | undefined>;
+  composerFocus?: ComposerFocusRequest;
+  composerFocusSeq: number;
 }
 
 const initialState: WorkspaceState = {
@@ -25,6 +34,7 @@ const initialState: WorkspaceState = {
   searchChargeLimits: {},
   submitting: {},
   unseenRunOutcomes: {},
+  composerFocusSeq: 0,
 };
 const workspace = createSlice({
   name: 'workspace',
@@ -58,11 +68,38 @@ const workspace = createSlice({
       if (action.payload.pending) state.submitting[action.payload.id] = true;
       else delete state.submitting[action.payload.id];
     },
+    requestComposerFocus(
+      state,
+      action: PayloadAction<{ sessionId: string; caretToEnd?: boolean }>,
+    ) {
+      const requestId = state.composerFocusSeq + 1;
+      state.composerFocusSeq = requestId;
+      state.composerFocus = {
+        sessionId: action.payload.sessionId,
+        requestId,
+        ...(action.payload.caretToEnd ? { caretToEnd: true } : {}),
+      };
+    },
+    acknowledgeComposerFocus(state, action: PayloadAction<number>) {
+      if (state.composerFocus?.requestId === action.payload) {
+        state.composerFocus = undefined;
+      }
+    },
+    clearComposerFocus(state, action: PayloadAction<{ keepSessionId?: string } | undefined>) {
+      const keepSessionId = action.payload?.keepSessionId;
+      if (!keepSessionId || state.composerFocus?.sessionId !== keepSessionId) {
+        state.composerFocus = undefined;
+      }
+    },
   },
 });
 
 export const actions = workspace.actions;
-export const store = configureStore({ reducer: { workspace: workspace.reducer } });
+export const workspaceReducer = workspace.reducer;
+export function createWorkspaceStore() {
+  return configureStore({ reducer: { workspace: workspace.reducer } });
+}
+export const store = createWorkspaceStore();
 export type RootState = ReturnType<typeof store.getState>;
 export const useWorkspace = useSelector.withTypes<RootState>();
 export const useAppDispatch = useDispatch.withTypes<typeof store.dispatch>();
