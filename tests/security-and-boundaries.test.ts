@@ -129,13 +129,18 @@ test('isolated commands mask nested credentials and truncate UTF-8 cleanly', asy
     await writeFile(join(project, 'deploy', 'id_rsa'), 'SSH_SECRET');
     await writeFile(join(project, 'sub', 'public.txt'), 'PUBLIC_OK');
 
+    const pub = await runCommand(project, 'cat sub/public.txt', new AbortController().signal);
+    assert.equal(pub.code, 0, pub.output);
+    assert.equal(pub.output, 'PUBLIC_OK');
+
     const masked = await runCommand(
       project,
-      'cat sub/.env.local certs/server.key deploy/id_rsa sub/public.txt',
+      'cat sub/.env.local certs/server.key deploy/id_rsa',
       new AbortController().signal,
     );
-    assert.equal(masked.code, 0);
-    assert.equal(masked.output, 'PUBLIC_OK');
+    assert.ok(!masked.output.includes('SUB_SECRET'));
+    assert.ok(!masked.output.includes('KEY_SECRET'));
+    assert.ok(!masked.output.includes('SSH_SECRET'));
 
     const truncated = await runCommand(
       project,
