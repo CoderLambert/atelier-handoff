@@ -5,33 +5,16 @@
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { builtinRtkAvailable, confirmedRtkTrace, publishBuiltinRtkPlan } from './builtin-rtk.js';
-import { planBuiltinRtkCommand } from './rtk-rewrite.js';
+import { confirmedRtkTrace } from './builtin-rtk.js';
 import type { RtkTrace } from '../shared/rtk-trace.js';
-import {
-  query,
-  createSdkMcpServer,
-  type HookCallback,
-  type SDKUserMessage,
-} from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
+import { query, createSdkMcpServer, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { BashControl } from '../shared/bash-execution.js';
-import {
-  AppError,
-  now,
-  type AgentCapability,
-  type Run,
-  type Step,
-  type ToolCall,
-} from '../shared/types.js';
+import { AppError, now, type AgentCapability, type Run } from '../shared/types.js';
 import { Store } from './store.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
-import { readProjectText, resolveProjectPath } from './files.js';
-import { readRunUsage } from './usage.js';
-import { sampleContextUsage } from './context-usage.js';
+import { resolveProjectPath } from './files.js';
 import { magpieModel } from './magpie-models.js';
 import {
   nativeReadTools,
@@ -44,14 +27,8 @@ import { redactSecrets } from './secret-redaction.js';
 import { recentConversationContext, sessionRecoveryContext } from './session-checkpoint.js';
 import { prepareSdkResume } from './sdk-resume.js';
 import { RequestTiming } from './request-timing.js';
-import {
-  bashLogNotice,
-  canReadToolOutput,
-  inlineOutputLimit,
-  nativeOutputReplacement,
-  outputPointer,
-} from './tool-output-context.js';
-import { NativeBashTasks, type BashTaskReceipt } from './native-bash.js';
+import { canReadToolOutput } from './tool-output-context.js';
+import { NativeBashTasks } from './native-bash.js';
 import { SubagentRun } from './subagent-run.js';
 import { McpSessions } from './extension-mcp.js';
 import type { EnabledMcp } from './extensions.js';
@@ -60,7 +37,6 @@ import { isProjectMarkdownSkill, sdkSkillName, type RunSkill } from './run-skill
 import { executeSkillPackage } from './skill-package-runtime.js';
 import {
   LiveTurnCoordinator,
-  sdkInputIds,
   type AttachmentImages,
   type LiveInput,
 } from './modules/runs/live-turn-coordinator.js';
@@ -69,7 +45,10 @@ import { RunTranscriptLedger } from './modules/runs/run-transcript-ledger.js';
 import { buildInitialPrompt, RunEnvironment } from './modules/runs/run-environment.js';
 import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
 import { resolveRunOutcome } from './modules/runs/run-outcome.js';
+import { consumeSdkStream } from './modules/runs/sdk-stream-consumer.js';
 import { SdkTaskCoordinator } from './modules/runs/sdk-task-coordinator.js';
+import { createToolCallRecorder } from './modules/runs/tool-call-recorder.js';
+import { createRunToolHooks } from './modules/runs/tool-hooks.js';
 import { ProjectWrites, ToolInvocationGate } from './modules/runs/tool-invocation-gate.js';
 import { buildRunMcpTools } from './modules/runs/mcp-tools/index.js';
 import { hasSkillToolBindingConfig, readSkillToolBindings } from './skill-tool-bindings.js';
@@ -332,10 +311,8 @@ export class AgentRunner implements Runner {
       }
       return messages.length ? messages.join('\n') : undefined;
     };
-    let firstText = true;
     let observedModel = modelId;
     let failure: string | null = null;
-    let lastHeartbeat = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const commands = new Set<Promise<unknown>>();
     const toolWork = new Map<Promise<unknown>, string | undefined>();
@@ -425,147 +402,37 @@ export class AgentRunner implements Runner {
     });
     live.hasLiveInputSlot = () => turn.hasLiveInputSlot();
     ledger.startFlushing();
-    const appToolId = (id: string, agentId?: string) =>
-      agentId ? `${run.id}:${agentId}:${id}` : `${run.id}:${id}`;
-    const createTool = (
-      id: string,
-      name: string,
-      args: unknown,
-      subagentId?: string,
-      useId?: string,
-      sdkActorId?: string,
-    ) => {
-      if (ledger.hasSeenTool(id)) return this.store.get('tools', id);
-      ledger.flush();
-      const input = JSON.stringify(args);
-      const command =
-        (name === 'Bash' || name === 'mcp__atelier__run_command') &&
-        input.length > 4000 &&
-        typeof args === 'object' &&
-        args !== null &&
-        'command' in args &&
-        typeof args.command === 'string'
-          ? args.command
-          : undefined;
-      const topLevel = !subagentId && !sdkActorId;
-      const value = ledger.createTool(id, topLevel, (orders) => ({
-        id,
-        runId: run.id,
-        sessionId: run.sessionId,
-        name,
-        ...(subagentId ? { subagentId } : {}),
-        ...orders,
-        inputSummary: input.slice(0, 4000),
-        ...(command === undefined ? {} : { command }),
-        ...(name === 'Bash' &&
-          useId &&
-          bash && {
-            bashExecution: bash.register(id, useId, subagentId, sdkActorId),
-          }),
-        status: 'running',
-        output: '',
-        startedAt: now(),
-        endedAt: null,
-      }));
-      tasks.trackTool(id, { useId, subagentId });
-      progress.started(value);
-      this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
-      return value;
-    };
-    const pagedOutputIds = new Set<string>();
-    const capturing = new Set<string>();
-    const finishTool = (
-      id: string,
-      ok: boolean | 'stopped' | 'unknown',
-      output: string,
-      bashLog?: ToolCall['bashLog'],
-    ) => {
-      let prior: ToolCall;
-      try {
-        prior = this.store.get('tools', id);
-      } catch {
-        return;
-      }
-      const status = ['denied', 'canceled'].includes(prior.status)
-        ? prior.status
-        : ok === 'stopped' || ok === 'unknown'
-          ? 'canceled'
-          : ok
-            ? 'succeeded'
-            : 'failed';
-      if (prior.status !== 'running' && prior.status !== 'awaiting_permission' && prior.endedAt)
-        return;
-      bash?.complete(id);
-      tasks.untrackTool(id);
-      if (!prior.subagentId) turn.onToolBoundary();
-      const skill = skillCalls.get(id);
-      if (skill) output = ok ? `已加载 /${skill.name} · v${skill.version}` : 'Skill 加载失败';
-      if (output.length > 32000) this.files.saveOutput(id, output);
-      const finished = this.store.update('tools', id, {
-        status,
-        output:
-          output.slice(0, 32000) +
-          (output.length > 32000 ? '\n[预览已截断，可查看或下载完整工具输出]' : ''),
-        outputLength: output.length,
-        outputTruncated: output.length > 32000,
-        ...(bashLog ? { bashLog } : {}),
-        ...(prior.bashExecution && {
-          bashExecution: {
-            ...prior.bashExecution,
-            phase: ok === 'unknown' || ok === 'stopped' ? ok : prior.bashExecution.phase,
-            controllable: false,
-            lastObservedAt: now(),
-          },
-        }),
-        endedAt: now(),
-      });
-      const observed = progress.finished(finished);
-      if (mode !== 'observe' && observed?.retry === 'verify') {
-        if (reconcile.size >= 64) reconcile.delete(reconcile.values().next().value ?? '');
-        reconcile.add(id);
-        this.store.event(run.id, session.id, 'harness.progress', {
-          kind: 'uncertain',
-          summary: `${prior.name} 的副作用待核对，可通过工具结果与目标状态确认。`,
-          toolCallId: id,
-        });
-      }
-      const notice = observed?.signal;
-      if (notice) {
-        this.store.event(run.id, run.sessionId, 'harness.progress', {
-          kind: notice.action === 'feedback' ? 'feedback_pending' : notice.action,
-          summary:
-            notice.action === 'feedback' ? `待投递停滞提示。${notice.message}` : notice.message,
-          signalId: notice.id,
-          toolCallId: id,
-          actorId: notice.actorId,
-          repeatCount: notice.repeatCount,
-          elapsedMs: notice.elapsedMs,
-        });
-        if (notice.action === 'feedback') {
-          if (notices.size >= 64) notices.delete(notices.keys().next().value ?? '');
-          notices.set(id, notice);
-        } else if (notice.action === 'pause' && finished.subagentId && live.stopSubagent) {
-          const stop = live.stopSubagent;
-          const branch = finished.subagentId;
-          setImmediate(() => {
-            if (!turn.isClosing && !signal.aborted) void stop(branch).catch(() => undefined);
-          });
-        }
-      }
-      if (!prior.subagentId && finished.endedAt && !turn.isClosing)
-        requestTiming.finishedMainTool(Date.parse(finished.endedAt));
-      this.store.event(run.id, run.sessionId, 'tool.finished', { toolCallId: id, status });
-      if (skill && status === 'succeeded') {
-        const { id: extensionId, name, version, source } = skill;
-        this.store.event(run.id, run.sessionId, 'skill.invoked', {
-          extensionId,
-          name,
-          version,
-          ...(source ? { source } : {}),
-        });
-      }
-      return finished;
-    };
+    const {
+      appToolId,
+      createTool,
+      finishTool,
+      finishWithBashLog,
+      finishBashTask,
+      pagedOutputIds,
+      capturing,
+    } = createToolCallRecorder({
+      run,
+      sessionId: session.id,
+      sdkDirectory,
+      sdkSessionId,
+      signal,
+      store: this.store,
+      files: this.files,
+      ledger,
+      tasks,
+      progress,
+      progressMode: mode,
+      requestTiming,
+      subagents,
+      turn,
+      bash,
+      skillCalls,
+      reconcile,
+      notices,
+      toolWork,
+      getStopSubagent: () => live.stopSubagent,
+      cleanError: (error, maxChars) => this.clean(error, maxChars),
+    });
     const { mcpTools, bindingGuidance } = buildRunMcpTools({
       run,
       projectId: project.id,
@@ -620,158 +487,6 @@ export class AgentRunner implements Runner {
       ...(native ? nativeWorkTools.filter((name) => !exploreTools.includes(name)) : []),
       ...localTools(['write_file', 'edit_file', 'delete_file', 'run_command']),
     ];
-    const preTool: HookCallback = async (event) => {
-      const decision = (
-        permissionDecision: 'allow' | 'deny',
-        permissionDecisionReason: string,
-        updatedInput?: Record<string, unknown>,
-      ) => ({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse' as const,
-          permissionDecision,
-          permissionDecisionReason,
-          updatedInput,
-        },
-      });
-      try {
-        signal.throwIfAborted();
-        if (event.hook_event_name !== 'PreToolUse') return {};
-        if (run.workspacePath) await this.verifyWorkspace?.(run);
-        verifyCurrent();
-        const { atelierTicket: _untrustedTicket, ...args } = z
-          .record(z.string(), z.unknown())
-          .parse(event.tool_input);
-        const id = appToolId(event.tool_use_id, event.agent_id);
-        const actor = event.agent_id ? subagents.actor(event.agent_id) : undefined;
-        if (actor) subagents.ensureBranchSignal(actor.id).throwIfAborted();
-        if (
-          actor &&
-          !(actor.kind === 'explore' ? exploreTools : workerTools).includes(event.tool_name)
-        )
-          throw new Error('子任务未获此工具权限。');
-        if (event.tool_name === 'Agent') {
-          if (!delegate || actor) throw new Error('本轮未开放此委派。');
-          const request = subagents.reserve(id, event.tool_use_id, args);
-          createTool(
-            id,
-            'Agent',
-            { description: request.description, subagent_type: request.subagent_type },
-            undefined,
-            event.tool_use_id,
-          );
-          return decision('allow', '允许本轮本地子代理任务。', request);
-        }
-        if (event.tool_name === 'Read') {
-          if (typeof args.file_path !== 'string') throw new Error('缺少文件路径。');
-          const attachment = documentPaths.get(args.file_path);
-          if (attachment) {
-            if (!allowed('attachments')) throw new Error('本轮未开放附件读取。');
-            this.files.attachmentFile(attachment, session.id);
-            const metadata = await lstat(args.file_path);
-            if (!metadata.isFile() || metadata.nlink !== 1)
-              throw new AppError('ATTACHMENT_UNAVAILABLE', '附件读取视图不可用。', 404);
-          } else if (!native) {
-            if (!allowed('read')) throw new Error('工具未开放。');
-            await readProjectText(workingDirectory, args.file_path);
-          }
-          signal.throwIfAborted();
-        } else if (event.tool_name === 'TodoWrite') {
-          if (!allowed('plan')) throw new Error('工具未开放。');
-          z.array(
-            z
-              .object({
-                content: z.string().max(1000),
-                status: z.enum(['pending', 'in_progress', 'completed']),
-              })
-              .passthrough(),
-          )
-            .max(30)
-            .parse(args.todos);
-        } else if (event.tool_name === 'Skill') {
-          const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
-          if (
-            event.agent_id ||
-            (!skill &&
-              (!native ||
-                (typeof args.skill === 'string' &&
-                  /^(?:host-skills|workspace-skills|atelier-skills):/iu.test(args.skill))))
-          )
-            throw new Error('该 Skill 不在本轮自动调用名单中。');
-          if (skill) skillCalls.set(id, skill);
-        } else if (event.tool_name === 'TaskStop') {
-          if (!bash?.authorizesStop(args, actor?.id))
-            throw new AppError(
-              'BASH_CONTROL_UNAVAILABLE',
-              '任务不属于本轮可停止的 Bash 命令。',
-              409,
-            );
-        } else if (
-          !(native && nativeWorkTools.includes(event.tool_name)) &&
-          !permittedMcp.has(event.tool_name)
-        )
-          throw new Error('工具未开放。');
-        createTool(
-          id,
-          event.tool_name,
-          event.tool_name === 'Skill' ? { skill: args.skill } : args,
-          actor?.id,
-          event.tool_use_id,
-          event.agent_id,
-        );
-        const mountedRtk = environment.rtk;
-        let rtkCandidate: Record<string, unknown> | undefined;
-        if (
-          event.tool_name === 'Bash' &&
-          !event.agent_id &&
-          event.session_id === sdkSessionId &&
-          mountedRtk &&
-          this.rtk?.enabled(project.id) &&
-          typeof args.command === 'string' &&
-          typeof event.tool_use_id === 'string' &&
-          (await builtinRtkAvailable(this.rtk.binary))
-        ) {
-          const executedCommand = await planBuiltinRtkCommand(args.command, {
-            launcher: mountedRtk.launcher,
-            scratch: mountedRtk.path,
-            signal: toolSignal(),
-          });
-          await verifyDispatch();
-          if (executedCommand && this.rtk.enabled(project.id)) {
-            const plan: RtkTrace = {
-              hook: 'builtin-rtk',
-              originalCommand: args.command,
-              executedCommand,
-            };
-            const published = await publishBuiltinRtkPlan(mountedRtk.path, event.tool_use_id, plan);
-            verifyCurrent();
-            if (published && this.rtk.enabled(project.id)) {
-              rtkPlans.set(id, plan);
-              // Leave the original input intact for the CLI plugin's rule check.
-              rtkCandidate = args;
-            }
-          }
-        }
-        const updatedInput = permittedMcp.has(event.tool_name)
-          ? {
-              ...args,
-              atelierTicket: toolGate.issue(id, event.tool_name, args, actor?.id),
-            }
-          : rtkCandidate;
-        return decision('allow', '受控工具，审批由工作台执行器按本轮设置处理。', updatedInput);
-      } catch (error) {
-        if (event.hook_event_name === 'PreToolUse' && !signal.aborted) {
-          const id = appToolId(event.tool_use_id, event.agent_id);
-          if (!event.agent_id) ledger.recordBlockedTool(id, event.tool_name);
-          this.store.event(run.id, session.id, 'tool.blocked', {
-            tool: event.tool_name,
-            toolCallId: id,
-            code: error instanceof AppError ? error.code : null,
-            reason: this.clean(error),
-          });
-        }
-        return decision('deny', this.clean(error));
-      }
-    };
     try {
       signal.throwIfAborted();
       if (run.workspacePath) await this.verifyWorkspace?.(run);
@@ -791,87 +506,48 @@ export class AgentRunner implements Runner {
           : undefined,
         rtk: this.rtk && { binary: this.rtk.binary, home: join(this.store.directory, 'rtk') },
       });
-      const finishWithBashLog = async (
-        id: string,
-        useId: string,
-        response: unknown,
-        raw: string,
-        hookSession: string,
-        outcome: true | 'stopped',
-      ) => {
-        if (!ledger.hasSeenTool(id) || capturing.has(id) || turn.isClosing) return;
-        const call = this.store.get('tools', id);
-        if (call.name !== 'Bash' || call.endedAt) return;
-        capturing.add(id);
-        const branchSignal = call.subagentId ? subagents.branchSignal(call.subagentId) : undefined;
-        const sdkActorId = call.subagentId ? subagents.taskId(call.subagentId) : undefined;
-        const scope = branchSignal ? AbortSignal.any([signal, branchSignal]) : signal;
-        const work =
-          hookSession === sdkSessionId
-            ? this.files.captureBashLog(
-                id,
-                sdkDirectory,
-                sdkSessionId,
-                useId,
-                response,
-                scope,
-                sdkActorId,
-              )
-            : Promise.resolve<ToolCall['bashLog']>({ status: 'unavailable' });
-        toolWork.set(work, call.subagentId);
-        let captured: ToolCall['bashLog'];
-        let committed = false;
-        try {
-          captured = await work;
-          toolWork.delete(work);
-          if (scope.aborted || turn.isClosing) return;
-          const saved = finishTool(id, outcome, raw, captured);
-          committed = !!saved;
-          return saved;
-        } finally {
-          toolWork.delete(work);
-          capturing.delete(id);
-          if (!committed && (captured?.status === 'complete' || captured?.status === 'partial'))
-            await this.files.discardBashLog(id);
-          turn.sendInsertion();
-        }
-      };
-      const finishBashTask = async (task: BashTaskReceipt) => {
-        const { id, useId, sdkActorId, receipt } = task;
-        const captured =
-          sdkTemp && receipt.output_file && !signal.aborted
-            ? await this.files
-                .captureBashLog(
-                  id,
-                  sdkDirectory,
-                  sdkSessionId,
-                  useId,
-                  undefined,
-                  signal,
-                  sdkActorId,
-                  { scratch: sdkTemp, id: receipt.task_id, outputFile: receipt.output_file },
-                )
-                .catch((): ToolCall['bashLog'] => ({ status: 'unavailable' }))
-            : undefined;
-        const outcome =
-          receipt.reason === 'worker_restart'
-            ? 'unknown'
-            : receipt.status === 'stopped'
-              ? 'stopped'
-              : task.failure === undefined && receipt.status === 'completed';
-        finishTool(
-          id,
-          outcome,
-          outcome === 'unknown'
-            ? ''
-            : this.clean(
-                (outcome === false ? task.failure : undefined) ?? receipt.summary,
-                Infinity,
-              ),
-          captured,
-        );
-        turn.sendInsertion();
-      };
+      const finishBashTaskForRun = (task: Parameters<typeof finishBashTask>[0]) =>
+        finishBashTask(task, sdkTemp);
+      const hooks = createRunToolHooks({
+        run,
+        projectId: project.id,
+        sessionId: session.id,
+        workingDirectory,
+        native,
+        delegate,
+        sdkSessionId,
+        signal,
+        toolSignal,
+        store: this.store,
+        files: this.files,
+        environment,
+        documentPaths,
+        candidates,
+        skillCalls,
+        rtkPlans,
+        recordRtkReceipt,
+        rtk: this.rtk,
+        verifyWorkspace: this.verifyWorkspace,
+        verifyCurrent,
+        verifyDispatch,
+        allowed,
+        subagents,
+        bash,
+        turn,
+        ledger,
+        toolGate,
+        permittedMcp,
+        exploreTools,
+        workerTools,
+        pagedOutputIds,
+        appToolId,
+        createTool,
+        finishTool,
+        finishWithBashLog,
+        finishBashTask: finishBashTaskForRun,
+        feedbackFor,
+        cleanError: (error, maxChars) => this.clean(error, maxChars),
+      });
       this.store.update('runs', run.id, { status: 'running', startedAt: now() });
       this.store.event(run.id, run.sessionId, 'run.status_changed', { status: 'running' });
       connection = query({
@@ -948,149 +624,7 @@ export class AgentRunner implements Runner {
               : '') +
             '仅使用工作台提供的工具访问本轮选定的外部服务。拒绝后不要绕过或重复操作。复杂任务用 update_plan 记录真实计划，简单问题无需计划。用户需要文档交付物时调用 publish_artifact 保存真实内容；不要把所有项目源文件自动当成果。只有工具返回成功才宣称文件已修改。继续会话时以当前文件为准，不自动重做之前的副作用。',
           ...(native ? nativeSdkOptions() : {}),
-          hooks: {
-            PreToolUse: [{ hooks: [preTool], onFailure: 'block', timeout: 30 }],
-            PostToolUse: [
-              {
-                hooks: [
-                  async (event) => {
-                    if (event.hook_event_name !== 'PostToolUse') return {};
-                    if (event.tool_name === 'Agent') {
-                      if (event.session_id !== sdkSessionId || event.agent_id) return {};
-                      const id = appToolId(event.tool_use_id, event.agent_id);
-                      subagents.report(id, event.tool_response);
-                      turn.onToolBoundary();
-                      turn.sendInsertion();
-                      return {};
-                    }
-                    if (event.tool_name === 'TodoWrite') {
-                      const plan = z
-                        .array(
-                          z.object({
-                            content: z.string(),
-                            status: z.enum(['pending', 'in_progress', 'completed']),
-                          }),
-                        )
-                        .parse((event.tool_input as { todos: unknown }).todos) as Step[];
-                      this.store.update('runs', run.id, { plan });
-                      this.store.event(run.id, run.sessionId, 'plan.updated', { plan });
-                    }
-                    const id = appToolId(event.tool_use_id, event.agent_id);
-                    let replacement: ReturnType<typeof nativeOutputReplacement>;
-                    let logNote: string | undefined;
-                    if (!permittedMcp.has(event.tool_name)) {
-                      const response = event.tool_response;
-                      const raw = JSON.stringify(response) ?? '';
-                      if (event.tool_name === 'Bash' && bash && event.session_id === sdkSessionId) {
-                        recordRtkReceipt(id, event.tool_input);
-                        if (!event.agent_id) turn.onToolBoundary();
-                        const handoff = bash.handedOff(id, response);
-                        if (handoff) {
-                          if (handoff.terminal) await finishBashTask(handoff.terminal);
-                          turn.sendInsertion();
-                          return {};
-                        }
-                      }
-                      const outcome =
-                        event.tool_name === 'Bash' &&
-                        z.object({ interrupted: z.literal(true) }).safeParse(response).success
-                          ? 'stopped'
-                          : true;
-                      const hasSpill =
-                        event.tool_name === 'Bash' &&
-                        typeof response === 'object' &&
-                        response !== null &&
-                        'persistedOutputPath' in response;
-                      const saved = hasSpill
-                        ? await finishWithBashLog(
-                            id,
-                            event.tool_use_id,
-                            response,
-                            raw,
-                            event.session_id,
-                            outcome,
-                          )
-                        : finishTool(id, outcome, raw);
-                      if (saved) {
-                        replacement = nativeOutputReplacement(event.tool_name, id, response, raw);
-                        if (saved.bashLog) logNote = bashLogNotice(id, saved.bashLog);
-                      }
-                      if (replacement || logNote) pagedOutputIds.add(id);
-                    }
-                    turn.sendInsertion();
-                    const context = [feedbackFor(id), replacement?.context, logNote]
-                      .filter(Boolean)
-                      .join('\n');
-                    if (!replacement && !context) return {};
-                    return {
-                      hookSpecificOutput: {
-                        hookEventName: 'PostToolUse' as const,
-                        ...(replacement ? { updatedToolOutput: replacement.value } : {}),
-                        ...(context ? { additionalContext: context } : {}),
-                      },
-                    };
-                  },
-                ],
-              },
-            ],
-            PostToolUseFailure: [
-              {
-                hooks: [
-                  async (event) => {
-                    if (event.hook_event_name === 'PostToolUseFailure') {
-                      const id = appToolId(event.tool_use_id, event.agent_id);
-                      const error = this.clean(event.error, Infinity);
-                      if (
-                        event.tool_name === 'Bash' &&
-                        event.session_id === sdkSessionId &&
-                        /^Exit code [1-9]\d*\b/u.test(error)
-                      )
-                        recordRtkReceipt(id, event.tool_input);
-                      if (event.tool_name === 'Bash' && bash?.deferFailureDuringStop(id, error))
-                        return {};
-                      if (event.tool_name === 'Agent') {
-                        subagents.finish(
-                          id,
-                          signal.aborted || event.is_interrupt === true ? 'stopped' : 'failed',
-                          error,
-                        );
-                        turn.sendInsertion();
-                        return {};
-                      }
-                      const saved = finishTool(
-                        id,
-                        event.tool_name === 'Bash' && event.is_interrupt === true
-                          ? 'stopped'
-                          : false,
-                        error,
-                        event.tool_name === 'Bash' ? { status: 'receipt-only' } : undefined,
-                      );
-                      turn.sendInsertion();
-                      const pointer =
-                        saved && error.length > inlineOutputLimit
-                          ? [
-                              outputPointer(id, error.length),
-                              saved.bashLog && bashLogNotice(id, saved.bashLog),
-                            ]
-                              .filter(Boolean)
-                              .join('\n')
-                          : undefined;
-                      if (pointer) pagedOutputIds.add(id);
-                      const context = [feedbackFor(id), pointer].filter(Boolean).join('\n');
-                      if (context)
-                        return {
-                          hookSpecificOutput: {
-                            hookEventName: 'PostToolUseFailure' as const,
-                            additionalContext: context,
-                          },
-                        };
-                    }
-                    return {};
-                  },
-                ],
-              },
-            ],
-          },
+          hooks,
           spawnClaudeCodeProcess: processOwner.spawnClaudeCodeProcess,
         },
       });
@@ -1115,261 +649,34 @@ export class AgentRunner implements Runner {
         images,
         promptMessageId,
       );
-      let contextSessionId: string | undefined;
-      for await (const message of connection) {
-        if (message.type === 'system' && message.subtype === 'init') {
-          contextSessionId = message.session_id;
-          live.stopSubagent = async (id) => {
-            if (!connection || !live.stopSubagent)
-              throw new AppError('SUBAGENT_NOT_ACTIVE', '子任务已结束或尚未就绪。', 409);
-            await subagents.stop(connection, id);
-          };
-          if (bash && !turn.isDrainingInput) {
-            const sdk = connection;
-            live.controlBash = async (id, action) => {
-              try {
-                await bash.control(sdk, id, action);
-              } catch (error) {
-                const failure = action === 'stop' ? bash.failureAfterRejectedStop(id) : undefined;
-                if (failure !== undefined) {
-                  finishTool(id, false, failure, { status: 'receipt-only' });
-                  turn.sendInsertion();
-                  turn.afterDeferredWork();
-                }
-                throw error;
-              }
-            };
-            live.canInsertNow = () => turn.canInsertNow();
-            live.canInsertNext = () => turn.canInsertNext();
-          }
-          const firstInit = turn.onInitialized(connection);
-          observedModel = message.model || observedModel;
-          this.store.update('sessions', session.id, {
-            sdkSessionId: message.session_id,
-            sdkMode: run.mode,
-            sdkConfigKey: configKey,
-            ...(firstInit && !resumeExisting ? { sdkCostTotal: 0 } : {}),
-          });
-          if (candidates.size) {
-            const discovered = new Set(message.skills ?? []);
-            const items: Pick<RunSkill, 'id' | 'name' | 'version' | 'source'>[] = [];
-            const missing: typeof items = [];
-            for (const [key, { id, name, version, source }] of candidates) {
-              (discovered.has(key) ? items : missing).push({ id, name, version, source });
-            }
-            this.store.event(run.id, session.id, 'skills.discovered', {
-              items,
-              missing,
-              count: items.length,
-              missingCount: missing.length,
-            });
-          }
-          this.store.event(run.id, session.id, 'sdk.initialized', {
-            model: message.model,
-            version: message.claude_code_version,
-            tools: message.tools,
-            resumed: !!resumeExisting,
-          });
-        } else if (message.type === 'system' && message.subtype === 'session_state_changed') {
-          turn.onSessionStateChanged(message.session_id, message.state);
-        } else if (message.type === 'system' && message.subtype === 'task_started') {
-          tasks.handleStarted(message);
-        } else if (message.type === 'system' && message.subtype === 'task_updated') {
-          tasks.handleUpdated(message);
-          turn.sendInsertion();
-        } else if (message.type === 'system' && message.subtype === 'task_notification') {
-          const { subagentFinished, bashReceipt } = tasks.handleNotification(message);
-          if (subagentFinished) {
-            turn.sendInsertion();
-            turn.afterDeferredWork();
-          }
-          if (bashReceipt && !capturing.has(bashReceipt.id)) {
-            await finishBashTask(bashReceipt);
-            turn.afterDeferredWork();
-          }
-        } else if (message.type === 'stream_event') {
-          requestTiming.observe(message, Date.now(), performance.now());
-          if (message.parent_tool_use_id) continue;
-          const event = message.event;
-          turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
-          ledger.acceptStream(message, assistantId, appToolId);
-          if (event.type === 'message_start') turn.onModelStarted();
-          if (
-            firstText &&
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta' &&
-            event.delta.text
-          ) {
-            firstText = false;
-            this.store.event(run.id, session.id, 'sdk.first_text', {
-              elapsedMs:
-                Date.now() - Date.parse(this.store.get('runs', run.id).startedAt ?? run.createdAt),
-            });
-          }
-        } else if (
-          message.type === 'tool_progress' ||
-          (message.type === 'system' && message.subtype === 'task_progress')
-        ) {
-          // Persist an actual SDK heartbeat at most once per fifteen seconds for this run.
-          if (Date.now() - lastHeartbeat >= 15_000) {
-            lastHeartbeat = Date.now();
-            if (message.type === 'tool_progress' && message.tool_name === 'Bash')
-              bash?.progress(message.tool_use_id, message.session_id, message.task_id);
-            this.store.event(
-              run.id,
-              session.id,
-              'harness.progress',
-              message.type === 'tool_progress'
-                ? {
-                    kind: 'running',
-                    summary: `${message.tool_name} 正在执行（${Math.round(message.elapsed_time_seconds)} 秒）`,
-                    toolUseId: message.tool_use_id,
-                  }
-                : {
-                    kind: 'running',
-                    summary: `子任务正在执行，已调用 ${message.usage.tool_uses} 次工具。`,
-                    taskId: message.task_id,
-                  },
-            );
-          }
-        } else if (message.type === 'system' && message.subtype === 'permission_denied') {
-          const id = appToolId(message.tool_use_id, message.agent_id);
-          if (!message.agent_id) ledger.recordBlockedTool(id, message.tool_name);
-          this.store.event(run.id, session.id, 'sdk.notice', {
-            type: message.type,
-            subtype: message.subtype,
-          });
-        } else if (message.type === 'system' && message.subtype === 'api_retry') {
-          this.store.event(run.id, session.id, 'sdk.api_retry', {
-            ...(live.reason && { afterStopRequested: true }),
-            attempt: message.attempt,
-            maxRetries: message.max_retries,
-            retryDelayMs: message.retry_delay_ms,
-            httpStatus: message.error_status,
-            error: message.error,
-            noResponse: message.no_response,
-          });
-        } else if (message.type === 'assistant') {
-          requestTiming.linkAssistant(message.request_id, message.message.id);
-          if (message.parent_tool_use_id || message.agent_id) continue;
-          if (!message.error)
-            turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
-          const owner = ledger.acceptAssistant(message, assistantId, appToolId);
-          if (owner === assistantId)
-            assistantAnchor =
-              !message.error && !message.message.content.some((block) => block.type === 'tool_use')
-                ? message.uuid
-                : undefined;
-          const { error } = message;
-          if (error) {
-            ledger.recordNotice(message.uuid, (position) => ({
-              ...position,
-              kind: 'api_error',
-              code: error,
-            }));
-            this.store.event(run.id, session.id, 'sdk.error', {
-              stage: 'assistant',
-              code: error,
-            });
-          }
-        } else if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
-          if (
-            message.parent_tool_use_id === null &&
-            !('agent_id' in message && message.agent_id) &&
-            !message.isSynthetic
-          )
-            turn.acknowledgeInsertion(message.session_id, [message.uuid], 'replay');
-        } else if (message.type === 'user' && Array.isArray(message.message.content)) {
-          for (const block of message.message.content)
-            if (block.type === 'tool_result') {
-              const actor = 'agent_id' in message ? message.agent_id : undefined;
-              const id = appToolId(block.tool_use_id, actor);
-              let record: ToolCall;
-              try {
-                record = this.store.get('tools', id);
-              } catch {
-                // The SDK can reject an unavailable tool before invoking the hook.
-                const name = !actor && block.is_error ? ledger.toolPosition(id)?.name : undefined;
-                if (name) {
-                  ledger.recordBlockedTool(id, name);
-                  this.store.event(run.id, session.id, 'tool.blocked', {
-                    toolCallId: id,
-                    tool: name,
-                    code: null,
-                  });
-                }
-                continue;
-              }
-              if (
-                record.status === 'running' &&
-                record.name !== 'Agent' &&
-                !capturing.has(id) &&
-                !bash?.awaitingTerminal(id)
-              )
-                finishTool(
-                  id,
-                  !block.is_error,
-                  typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
-                );
-            }
-        } else if (message.type === 'result') {
-          const continuingInsertion = turn.onFinalResult(message);
-          for (const denied of message.permission_denials) {
-            const id = appToolId(denied.tool_use_id);
-            if (ledger.toolPosition(id)?.name) ledger.recordBlockedTool(id, denied.tool_name);
-          }
-          if (!continuingInsertion && message.subtype === 'success')
-            ledger.fallback(assistantId, message.result);
-          const { usage, cumulativeCost } = readRunUsage(message, observedModel, previousCost);
-          previousCost = cumulativeCost ?? previousCost;
-          this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost ?? undefined });
-          const contextUsage =
-            !continuingInsertion &&
-            !bash?.hasDeferredReceipt &&
-            !subagents.active &&
-            !message.is_error &&
-            contextSessionId
-              ? await sampleContextUsage(connection, contextSessionId, signal)
-              : undefined;
-          this.store.update('runs', run.id, { usage, ...(contextUsage && { contextUsage }) });
-          this.store.event(run.id, session.id, 'sdk.result', {
-            subtype: message.subtype,
-            isError: message.is_error,
-            terminalReason: message.terminal_reason ?? null,
-            stopReason: message.stop_reason,
-            httpStatus: 'api_error_status' in message ? (message.api_error_status ?? null) : null,
-            turns: message.num_turns,
-            durationMs: message.duration_ms,
-            apiDurationMs: message.duration_api_ms,
-            ttftMs: 'ttft_ms' in message ? (message.ttft_ms ?? null) : null,
-            deniedTools: message.permission_denials?.length ?? null,
-          });
-          this.store.event(run.id, session.id, 'usage.updated', {});
-          const action = turn.afterResultRecorded(() => ledger.flush());
-          if (action === 'unfinished-subagents') {
-            failure = '主会话结束时仍有未收尾的子任务。';
-            live.cancellation.abort();
-          }
-          if (action !== 'continue') break;
-        } else if (!(message.type === 'system' && message.subtype === 'status')) {
-          this.store.event(run.id, session.id, 'sdk.notice', {
-            type: message.type,
-            subtype: 'subtype' in message ? message.subtype : null,
-          });
-        }
-      }
-      const inputFailure = turn.unsettledInputFailure();
-      const finalResult = turn.result;
-      if (inputFailure) failure = inputFailure;
-      else if (bash?.hasDeferredReceipt && !signal.aborted)
-        failure = 'SDK 连接结束，Bash 命令未返回终态。';
-      else if (subagents.active && !signal.aborted) failure = '主会话结束时仍有未收尾的子任务。';
-      else if (!finalResult && !signal.aborted) failure = 'SDK 连接已结束，但未返回终态。';
-      else if (finalResult?.is_error)
-        failure =
-          finalResult.subtype === 'success'
-            ? this.clean(finalResult.result)
-            : this.clean(finalResult.errors.join('\n'));
+      ({ failure } = await consumeSdkStream({
+        connection,
+        run,
+        sessionId: session.id,
+        configKey,
+        resumeExisting,
+        initialModel: observedModel,
+        initialCost: previousCost,
+        signal,
+        live,
+        store: this.store,
+        turn,
+        ledger,
+        tasks,
+        subagents,
+        bash,
+        requestTiming,
+        candidates,
+        capturing,
+        appToolId,
+        finishTool,
+        finishBashTask: finishBashTaskForRun,
+        getAssistantId: () => assistantId,
+        setAssistantAnchor: (anchor) => {
+          assistantAnchor = anchor;
+        },
+        cleanError: (error, maxChars) => this.clean(error, maxChars),
+      }));
     } catch (error) {
       failure = this.clean(error);
       if (!signal.aborted) {
