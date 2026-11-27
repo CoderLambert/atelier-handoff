@@ -25,6 +25,7 @@ import {
   extensionDetail,
   isConflict,
   messageOf,
+  useInvalidateExtensionPickers,
   type ExtensionKind,
   type PublicEntry,
   type StartSkill,
@@ -58,6 +59,7 @@ export function PublicImport({
   const [installed, setInstalled] = useState<Extension>();
   const [starting, setStarting] = useState(false);
   const mutation = useImportPublicExtension(projectId);
+  const invalidatePickers = useInvalidateExtensionPickers();
   const githubSource =
     kind === 'skill' &&
     !initialSource.startsWith('skillhub:') &&
@@ -160,6 +162,7 @@ export function PublicImport({
         kind,
         ...(updating ? { update: { id: updating.id, version: updating.version } } : {}),
       });
+      if (item.kind !== 'skill') void invalidatePickers();
       onSaved(updating ? t('publicImport.synced') : t('publicImport.imported'));
       if (entry.github && !updating) setInstalled(item);
       else onClose();

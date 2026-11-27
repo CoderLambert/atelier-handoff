@@ -21,7 +21,13 @@ import { Check, ChevronRight, File, Folder, X } from 'lucide-react';
 import { formatBytes } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { ExtensionKindIcon } from './components';
-import { extensionKeys, messageOf, useExtensions } from './api';
+import {
+  extensionPickerKeys,
+  invalidateExtensionPickers,
+  messageOf,
+  pickerCatalogItems,
+  useExtensions,
+} from './api';
 import { useSearchProjectFiles } from '@/use-query/projects/use-search-project-files';
 import { skillInheritanceKeys, type SessionSkillScope } from '@/use-query/skill-inheritance/keys';
 import { useSkillInheritance } from '@/use-query/skill-inheritance/use-skill-inheritance';
@@ -115,7 +121,7 @@ export function ExtensionPicker({
   onQuickInsert,
 }: ExtensionPickerProps) {
   const { t } = useUiTranslation('extensions');
-  const query = useExtensions(projectId);
+  const query = useExtensions(projectId, 'picker');
   const client = useQueryClient();
   const id = useId();
   const [cursor, setCursor] = useState(emptyCursor);
@@ -130,7 +136,9 @@ export function ExtensionPicker({
   const menuRef = useRef<HTMLDivElement>(null);
   const selectionFrame = useRef<number | undefined>(undefined);
   const lastScope = useRef(projectId);
-  const items = scopeExtensions(query.data ?? [], agent);
+  const catalog = client.getQueryState<Extension[]>(extensionPickerKeys.list(projectId ?? ''));
+  const pickerLoading = query.isPending || (query.isFetching && Boolean(catalog?.isInvalidated));
+  const items = scopeExtensions(pickerCatalogItems(projectId, query.data, catalog), agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
   const completionKey = JSON.stringify([
     projectId,
@@ -186,11 +194,17 @@ export function ExtensionPicker({
   const previewError = isSlash && preview.isError;
   const previewLoading = isSlash && (preview.isPending || preview.isFetching);
   const open = Boolean(
-    active && trigger &&
+    active &&
+    trigger &&
     (isFile
       ? contextAllowed &&
         (fileRows.length || !trigger.query || fileSearch.isPending || fileSearch.isError)
-      : rows.length || !trigger.query || query.isPending || query.isError || previewError || previewLoading),
+      : rows.length ||
+        !trigger.query ||
+        pickerLoading ||
+        query.isError ||
+        previewError ||
+        previewLoading),
   );
   const current = useRef({
     projectId,
@@ -315,19 +329,21 @@ export function ExtensionPicker({
     }
     const row = state.rows[choiceIndex];
     if (!row) return;
-    const latest = 'effective' in row.item
-      ? (() => {
-          const cached = client.getQueryState<SkillInheritanceView>(
-            skillInheritanceKeys.view(state.skillScope),
-          );
-          if (cached?.status !== 'success' || cached.fetchStatus !== 'idle' || cached.isInvalidated)
-            return;
-          return completionSkills(cached.data?.items ?? []).find(({ id }) => id === row.item.id);
-        })()
-      : scopeExtensions(
-          client.getQueryData<Extension[]>(extensionKeys.list(state.projectId)) ?? [],
-          state.agent,
-        ).find((item) => item.id === row.item.id);
+    const latest = (() => {
+      if ('effective' in row.item) {
+        const cached = client.getQueryState<SkillInheritanceView>(
+          skillInheritanceKeys.view(state.skillScope),
+        );
+        if (cached?.status !== 'success' || cached.fetchStatus !== 'idle' || cached.isInvalidated)
+          return;
+        return completionSkills(cached.data?.items ?? []).find(({ id }) => id === row.item.id);
+      }
+      const cached = client.getQueryState<Extension[]>(extensionPickerKeys.list(state.projectId));
+      return scopeExtensions(
+        pickerCatalogItems(state.projectId, cached?.data, cached),
+        state.agent,
+      ).find((item) => item.id === row.item.id);
+    })();
     if (
       !latest ||
       latest.version !== row.item.version ||
@@ -571,11 +587,12 @@ export function ExtensionPicker({
         <div className="ext-chips" aria-label={t('picker.selectedLabel')}>
           {pickerSelections.map((selection) => {
             const item = byId.get(selection.id);
-            const reason = selection.tools || item?.kind === 'mcp'
-              ? selectionReason(item, selection, draft.mode, query.isSuccess)
-              : preview.isSuccess && !preview.isFetching
-                ? t('picker.unavailable')
-                : '';
+            const reason =
+              selection.tools || item?.kind === 'mcp'
+                ? selectionReason(item, selection, draft.mode, query.data !== undefined)
+                : preview.isSuccess && !preview.isFetching
+                  ? t('picker.unavailable')
+                  : '';
             return (
               <span
                 key={selection.id}
@@ -636,7 +653,11 @@ export function ExtensionPicker({
                       ? t('picker.heading')
                       : t('common.mcpTools')}
                 </strong>
-                <span>{t('common.currentProject')}</span>
+                <span>
+                  {trigger?.symbol === '#' && !agent
+                    ? t('picker.mcpScope')
+                    : t('common.currentProject')}
+                </span>
               </div>
               <div
                 id={`${id}-list`}
@@ -747,7 +768,13 @@ export function ExtensionPicker({
                           {row.description || (!row.skillSource && row.kind)}
                         </small>
                       </span>
-                      {row.skillSource ? null : <span className="ext-option-kind">{row.kind}</span>}
+                      {row.skillSource ? null : (
+                        <span className="ext-option-kind">
+                          {row.item.kind === 'mcp' && row.item.projectId !== projectId
+                            ? t('picker.sharedApproval')
+                            : row.kind}
+                        </span>
+                      )}
                     </button>
                   ))
                 ) : null}
@@ -759,7 +786,7 @@ export function ExtensionPicker({
                       size="sm"
                       onClick={() => {
                         if (previewError) void preview.refetch();
-                        if (query.isError) void query.refetch();
+                        if (query.isError) void invalidateExtensionPickers(client);
                       }}
                     >
                       {t('common.reload')}
@@ -770,11 +797,15 @@ export function ExtensionPicker({
                     {query.isError ? (
                       <>
                         {messageOf(query.error)}{' '}
-                        <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void invalidateExtensionPickers(client)}
+                        >
                           {t('common.reload')}
                         </Button>
                       </>
-                    ) : previewLoading || query.isPending ? (
+                    ) : previewLoading || pickerLoading ? (
                       t('extensions.loading')
                     ) : trigger?.symbol === '#' ? (
                       t('picker.noTools')
