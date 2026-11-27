@@ -1,7 +1,7 @@
 /**
  * @file 定义聊天消息、输入区及执行反馈的布局和状态。
- * @implementation 用工作台主题组织消息、输入和进度，为草稿预留滚动槽并定义 Electron 原生滚动条的外观。
- * @updated 2026-11-27T00:45:45+08:00
+ * @implementation 用工作台主题组织消息、输入和进度，设置有序轮次与后续消息的间距，并定义草稿滚动槽和 Electron 原生滚动条外观。
+ * @updated 2026-11-27T13:49:53+08:00
  */
 .chat-markdown {
   --markdown-bg: var(--ui-card);
@@ -1764,6 +1764,10 @@
   .chat-conversation .user-message-bubble {
     max-width: 92%;
   }
+}
+
+.chat-conversation .message-thread > .ordered-run + :is(.ordered-run, .message) {
+  margin-block-start: 24px;
 }
 
 .ordered-run {

@@ -435,6 +435,23 @@ test(
         await page.locator('[data-transcript-kind="tool"][data-transcript-order="11"]').count(),
         1,
       );
+      for (const status of ['stopped', 'failed', 'interrupted', 'completed']) {
+        for (const nextLegacy of [false, true]) {
+          for (const hasText of [false, true]) {
+            await page.evaluate(
+              `window.fixture.spacing(${JSON.stringify(status)}, ${nextLegacy}, ${hasText})`,
+            );
+            const next = page.locator('[data-message-id="next-user"] .user-message-bubble');
+            await next.waitFor();
+            const gap = await next.evaluate((bubble) => {
+              const previous = document.querySelector('.message-thread > .ordered-run');
+              if (!previous) throw new Error('Previous ordered run missing');
+              return bubble.getBoundingClientRect().top - previous.getBoundingClientRect().bottom;
+            });
+            assert.equal(gap, 24, `${status}, legacy=${nextLegacy}, text=${hasText}`);
+          }
+        }
+      }
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();
