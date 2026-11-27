@@ -1,7 +1,7 @@
 /**
  * @file 编排工作区外壳、布局面板与功能视图组合。
- * @implementation 组合导航、查询缓存、工作区面板、会话管理控制器与快捷键宿主，并将浏览器订阅下沉到面板边界、会话动作下沉到 SessionChat。
- * @updated 2026-11-27T19:25:00+08:00
+ * @implementation 组合导航、查询缓存、工作区面板与快捷键宿主，将会话头部、快捷键装配和弹窗抽屉委托给独立子模块。
+ * @updated 2026-11-27T12:48:00-06:00
  */
 import {
   lazy,
@@ -17,17 +17,9 @@ import { Activity, FileDiff, FileText, FolderOpen, MessagesSquare } from 'lucide
 import type { Run, Session } from '@shared/types';
 import type { WorkspaceLayout } from '@shared/workspace-layout';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { cn } from '@/components/ui/utils';
 import type { QuoteGitCode } from '@/features/git/git-code-selection';
-import { SessionWorktree } from '@/features/git/session-worktree';
-import { ShortcutHost, useShortcutCommandLabels, type ShortcutCommand } from '@/features/shortcuts';
+import { ShortcutHost } from '@/features/shortcuts';
 import { translateError, useUiTranslation } from '@/i18n';
 import { useCreateSession } from '@/use-query/sessions/use-create-session';
 import { useSessionSnapshot } from '@/use-query/sessions/use-session-snapshot';
@@ -42,19 +34,16 @@ import { appendFileQuote, lastSession } from './drafts';
 import { PanelHost } from './panels/panel-host';
 import { panels } from './panels/registry';
 import { useWorkspacePanel } from './panels/use-workspace-panel';
-import { ProjectsDialog } from './projects';
-import {
-  SessionManagementController,
-  type SessionActionRequest,
-} from './session-management-controller';
-import { adjacentSessionId, sessionSwitchItems } from './session-switcher-model';
+import type { SessionActionRequest } from './session-management-controller';
+import { sessionSwitchItems } from './session-switcher-model';
 import { Sidebar } from './sidebar';
 import { actions, useAppDispatch, useWorkspace } from './store';
 import type { SessionAction } from './types';
 import { useWorkspaceNavigation } from './use-workspace-navigation';
-import { WorkspaceNotice } from './workspace-notice';
+import { useWorkspaceShortcuts } from './use-workspace-shortcuts';
+import { WorkspaceOverlays } from './workspace-overlays';
 import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
-import { WorkspaceSessionSwitcher } from './workspace-session-switcher';
+import { WorkspaceSessionHeader } from './workspace-session-header';
 import {
   applyLayoutOverride,
   releaseLayoutOverride,
@@ -67,9 +56,6 @@ const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
 
-const SessionChanges = lazy(() =>
-  import('@/features/inspector').then(({ SessionChanges }) => ({ default: SessionChanges })),
-);
 const RunTrace = lazy(() =>
   import('@/features/inspector').then(({ RunTrace }) => ({ default: RunTrace })),
 );
@@ -136,7 +122,6 @@ export default function Workspace() {
   const previewProject = view === 'chat' ? project?.id : undefined;
   const desktop = Boolean(window.atelierDesktop);
 
-  const shortcutLabels = useShortcutCommandLabels();
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
   const { gitBoard, gitBusy, gitTrigger, openGit, browserTrigger, openBrowser } = panel;
@@ -375,84 +360,36 @@ export default function Workspace() {
     ) : null;
 
   const sessionTitle = snapshot?.session.title;
-  const upgradableAgent = snapshot?.agent?.canUpgrade ? snapshot.agent : undefined;
-  const previousSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, -1);
-  const nextSession = adjacentSessionId(ready.data?.sessions ?? [], sessionId, 1);
-
-  const shortcutActions: {
-    id: keyof typeof shortcutLabels;
-    available: boolean;
-    run: () => void;
-  }[] = [
-    {
-      id: 'layout.toggleLeft',
-      available: true,
-      run: () =>
-        showLeft
-          ? changeLayout({ ...layout, collapsed: !layout.collapsed })
-          : drawer === 'navigation'
-            ? dispatch(actions.setDrawer(undefined))
-            : openDrawer('navigation'),
+  const shortcutCommands = useWorkspaceShortcuts({
+    sessions: ready.data?.sessions ?? [],
+    sessionId,
+    project,
+    hasSnapshot: Boolean(snapshot),
+    showLeft,
+    layout,
+    drawer,
+    activePanel: panel.activePanel,
+    fullWindow: panel.fullWindow,
+    gitBusy,
+    terminalLoading: panel.terminalLoading,
+    canFocusComposer:
+      Boolean(inputTarget && inputTarget.status === 'active' && !inputTarget.creatingFork) &&
+      !inputSubmitting &&
+      !gitBusy,
+    changeLayout,
+    closeDrawer: () => dispatch(actions.setDrawer(undefined)),
+    openDrawer,
+    toggleRight: panel.toggleRight,
+    collapseRight: panel.collapseRight,
+    openSwitcher: () => setSwitcherOpen(true),
+    openShortcutSession,
+    openGit,
+    openTerminal: panel.openTerminal,
+    openBrowser,
+    focusComposer: () => {
+      void focusComposer();
     },
-    {
-      id: 'layout.toggleRight',
-      available: Boolean(panel.activePanel) && !gitBusy,
-      run: panel.toggleRight,
-    },
-    { id: 'sessions.switch', available: !gitBusy, run: () => setSwitcherOpen(true) },
-    {
-      id: 'sessions.previous',
-      available: Boolean(previousSession) && !gitBusy,
-      run: () => {
-        if (previousSession) openShortcutSession(previousSession);
-      },
-    },
-    {
-      id: 'sessions.next',
-      available: Boolean(nextSession) && !gitBusy,
-      run: () => {
-        if (nextSession) openShortcutSession(nextSession);
-      },
-    },
-    {
-      id: 'panels.git',
-      available: Boolean(project?.available) && !gitBusy,
-      run: () => {
-        if (project) openGit(project);
-      },
-    },
-    {
-      id: 'panels.terminal',
-      available: Boolean(sessionId && snapshot) && !gitBusy && !panel.terminalLoading,
-      run: panel.openTerminal,
-    },
-    {
-      id: 'panels.browser',
-      available: Boolean(sessionId && project?.available) && !gitBusy,
-      run: openBrowser,
-    },
-    {
-      id: 'composer.focus',
-      available:
-        Boolean(inputTarget && inputTarget.status === 'active' && !inputTarget.creatingFork) &&
-        !inputSubmitting &&
-        !gitBusy,
-      run: () => {
-        void focusComposer();
-      },
-    },
-    {
-      id: 'shortcuts.settings',
-      available: !gitBusy,
-      run: () => {
-        if (panel.fullWindow) panel.collapseRight(false);
-        nav.openSettingsSection('shortcuts');
-      },
-    },
-  ];
-  const shortcutCommands: ShortcutCommand[] = shortcutActions.flatMap((action) => {
-    const label = shortcutLabels[action.id];
-    return label ? [{ ...label, ...action }] : [];
+    openShortcutSettings: () => nav.openSettingsSection('shortcuts'),
   });
 
   return (
@@ -460,19 +397,6 @@ export default function Workspace() {
       <ShortcutHost
         commands={shortcutCommands}
         contextKey={`${pathname}:${project?.id ?? ''}:${gitBoard?.instance.instanceId ?? routePanel ?? ''}:${panel.rightCollapsed}`}
-      />
-      <WorkspaceSessionSwitcher
-        open={switcherOpen}
-        onOpenChange={setSwitcherOpen}
-        sessions={ready.data?.sessions ?? []}
-        projects={ready.data?.projects ?? []}
-        current={sessionId}
-        loading={ready.isPending}
-        failed={ready.isError}
-        onRetry={() => {
-          void ready.refetch();
-        }}
-        onSelect={openShortcutSession}
       />
       <WorkspacePanels
         layout={layout}
@@ -691,83 +615,26 @@ export default function Workspace() {
                     )}
                   >
                     {sessionId &&
-                    (snapshot?.agent || snapshot?.workspace || snapshot?.session.fork) ? (
-                      <header className="session-header">
-                        <div className="session-title-row">
-                          {upgradableAgent && snapshot ? (
-                            <Button
-                              size="sm"
-                              disabled={upgradeAgent.isPending}
-                              onClick={() =>
-                                upgradeAgent.mutate(
-                                  {
-                                    sessionId: snapshot.session.id,
-                                    revisionId: upgradableAgent.revisionId,
-                                  },
-                                  { onError: showSessionError },
-                                )
-                              }
-                            >
-                              {t('session.useNewVersion')}
-                            </Button>
-                          ) : null}
-                          {snapshot?.agent ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => nav.openView('agents')}
-                              title={t('session.manageAgent')}
-                            >
-                              {t('session.agentVersion', {
-                                name: snapshot.agent.name,
-                                version: snapshot.agent.version,
-                              })}
-                            </Button>
-                          ) : null}
-                        </div>
-                        {snapshot?.workspace ? (
-                          <SessionWorktree
-                            session={snapshot.session}
-                            workspace={snapshot.workspace}
-                            onShowTree={() => openGit(snapshot.project, 'worktrees')}
-                            onRefresh={async () => {
-                              await cache.revalidateSession(snapshot.session.id);
-                              void cache.invalidateBootstrap();
-                            }}
-                          />
-                        ) : null}
-                        {snapshot?.session.fork
-                          ? (() => {
-                              const origin = snapshot.session.fork;
-                              const label =
-                                origin.kind === 'rewind'
-                                  ? t('session.beforeRewind')
-                                  : t('session.source');
-                              const exists = ready.data?.sessions.some(
-                                (item) => item.id === origin.sourceSessionId,
-                              );
-                              return exists ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    nav.openMessage(origin.sourceSessionId, origin.sourceMessageId)
-                                  }
-                                >
-                                  {label} · {origin.sourceTitle}
-                                </Button>
-                              ) : (
-                                <p className="session-meta">
-                                  {t('session.sourceUnavailable', {
-                                    label,
-                                    title: origin.sourceTitle,
-                                  })}
-                                </p>
-                              );
-                            })()
-                          : null}
-                      </header>
+                    snapshot &&
+                    (snapshot.agent || snapshot.workspace || snapshot.session.fork) ? (
+                      <WorkspaceSessionHeader
+                        snapshot={snapshot}
+                        sessions={ready.data?.sessions ?? []}
+                        upgradePending={upgradeAgent.isPending}
+                        onUpgradeAgent={(targetSessionId, revisionId) =>
+                          upgradeAgent.mutate(
+                            { sessionId: targetSessionId, revisionId },
+                            { onError: showSessionError },
+                          )
+                        }
+                        onOpenAgents={() => nav.openView('agents')}
+                        onShowWorktree={() => openGit(snapshot.project, 'worktrees')}
+                        onRefreshWorktree={async () => {
+                          await cache.revalidateSession(snapshot.session.id);
+                          void cache.invalidateBootstrap();
+                        }}
+                        onOpenOriginMessage={nav.openMessage}
+                      />
                     ) : null}
                     <div
                       className="react-conversation-body"
@@ -859,69 +726,37 @@ export default function Workspace() {
           </main>
         }
       />
-      <Dialog
-        open={Boolean(drawer)}
-        onOpenChange={(open) => {
-          if (!open) dispatch(actions.setDrawer(undefined));
-        }}
-      >
-        <DialogContent
-          className={drawer === 'details' ? 'workspace-changes-dialog' : 'react-drawer'}
-          onCloseAutoFocus={(event) => {
-            const trigger = drawerTrigger.current;
-            if (trigger?.isConnected) {
-              event.preventDefault();
-              trigger.focus({ preventScroll: true });
-            }
-          }}
-        >
-          <DialogHeader className={drawer === 'details' ? undefined : 'sr-only'}>
-            <DialogTitle>
-              {drawer === 'details' ? t('changes.title') : t('drawer.navigation')}
-            </DialogTitle>
-            <DialogDescription>
-              {drawer === 'details' ? t('changes.description') : t('navigation.home')}
-            </DialogDescription>
-          </DialogHeader>
-          {drawer === 'navigation' ? <Sidebar {...sideProps} /> : null}
-          {drawer === 'details' ? (
-            session.isError ? (
-              <div role="alert">
-                <p>{translateError(session.error, t('session.loadFailed'))}</p>
-                <Button variant="secondary" onClick={() => void session.refetch()}>
-                  {t('retry')}
-                </Button>
-              </div>
-            ) : (
-              <Suspense fallback={loading}>
-                <SessionChanges snapshot={snapshot} />
-              </Suspense>
-            )
-          ) : null}
-        </DialogContent>
-      </Dialog>
-      {projectsOpen ? (
-        <ProjectsDialog
-          open
-          onOpenChange={setProjectsOpen}
-          projects={ready.data?.projects ?? []}
-          onChoose={async (id) => {
-            await createProjectSession(id);
-          }}
-          onGit={(project) => {
-            openGit(project);
-            setProjectsOpen(false);
-          }}
-        />
-      ) : null}
-      <SessionManagementController
-        request={sessionAction}
+      <WorkspaceOverlays
+        switcherOpen={switcherOpen}
+        onSwitcherOpenChange={setSwitcherOpen}
+        projectsOpen={projectsOpen}
+        onProjectsOpenChange={setProjectsOpen}
+        drawer={drawer}
+        drawerTrigger={drawerTrigger}
+        onCloseDrawer={() => dispatch(actions.setDrawer(undefined))}
         sessions={ready.data?.sessions ?? []}
+        projects={ready.data?.projects ?? []}
+        currentSessionId={sessionId}
+        bootstrapLoading={ready.isPending}
+        bootstrapFailed={ready.isError}
+        onRetryBootstrap={() => {
+          void ready.refetch();
+        }}
+        onSelectShortcutSession={openShortcutSession}
+        sideProps={sideProps}
+        snapshot={snapshot}
+        sessionError={session.error}
+        sessionFailed={session.isError}
+        onRetrySession={() => void session.refetch()}
+        loading={loading}
+        onCreateProjectSession={createProjectSession}
+        onOpenGit={openGit}
+        sessionAction={sessionAction}
         getCurrentPath={nav.getCurrentPath}
         onOpenSession={nav.openSession}
-        onClose={closeSessionAction}
+        onCloseSessionAction={closeSessionAction}
+        notice={notice}
       />
-      <WorkspaceNotice message={notice} />
     </div>
   );
 }
