@@ -1,7 +1,7 @@
 /**
  * @file 展示单次运行的执行轨迹。
- * @implementation 关联运行事件、工具、输出和审批，展示用量、请求计时、子任务与 Skill 来源，标注 SDK 重试通知与停止请求的先后并提供诊断下载。
- * @updated 2026-11-27T19:30:00+08:00
+ * @implementation 复用 run-trace-facts 单趟聚合事件摘要与自动审批集合，关联工具、输出、子任务与审批弹窗。
+ * @updated 2026-11-27T22:25:00+08:00
  */
 import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
@@ -16,6 +16,11 @@ import { SubagentProgress, groupRunWork } from './subagent-progress';
 import { ToolDetail, ToolDetailBody, toolCallSummary } from './tool-detail';
 import { RunInspectorDialogs } from './run-inspector-dialogs';
 import { RequestTimings } from './request-timings';
+import {
+  mergeRunTraceEvents,
+  scanRunTraceEvents,
+  summarizeAutomaticApprovals,
+} from './run-trace-facts';
 import type { Snapshot } from '@/api/types';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
 import {
@@ -34,16 +39,23 @@ import {
 const EVENT_PAGE_SIZE = 50;
 export type RunTraceProps = { snapshot: Snapshot; runId?: string; onSelect: (id: string) => void };
 
+const sourceLabels = {
+  atelier: 'inheritance.sourceAtelier',
+  workspace: 'inheritance.sourceWorkspace',
+  host: 'inheritance.sourceHost',
+} as const;
+
 export function RunTrace({ snapshot, runId, onSelect }: RunTraceProps) {
   const { t } = useUiTranslation('inspector');
   const run =
     (runId ? snapshot.runs.find((item) => item.id === runId) : undefined) ?? snapshot.runs.at(-1);
-  if (!run)
+  if (!run) {
     return (
       <EmptyState title={t('trace.empty')} icon={Activity}>
         {t('trace.emptyHint')}
       </EmptyState>
     );
+  }
   return (
     <TraceDetail
       key={`${snapshot.session.id}:${run.id}`}
@@ -65,26 +77,28 @@ function TraceDetail({
 }) {
   const { t, locale } = useUiTranslation('inspector');
   const { t: skillT } = useUiTranslation('extensions');
-  const sourceLabels = {
-    atelier: 'inheritance.sourceAtelier',
-    workspace: 'inheritance.sourceWorkspace',
-    host: 'inheritance.sourceHost',
-  } as const;
+
   function skillSource(value: unknown) {
     const source = skillInheritanceSourceSchema.safeParse(value);
     return source.success ? ` · ${skillT(sourceLabels[source.data])}` : '';
   }
+
   const [eventFilter, setEventFilter] = useState('');
   const [eventOffset, setEventOffset] = useState(0);
   const [outputTool, setOutputTool] = useState<ToolCall>();
   const [permissionId, setPermissionId] = useState<string>();
   const trace = useRunTrace(run.id);
+
   const work = useMemo(
     () => groupRunWork(snapshot, run),
     [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
   );
-  const permissions = snapshot.permissions.filter(
-    (permission) => permission.runId === run.id && permission.sessionId === run.sessionId,
+  const permissions = useMemo(
+    () =>
+      snapshot.permissions.filter(
+        (permission) => permission.runId === run.id && permission.sessionId === run.sessionId,
+      ),
+    [snapshot.permissions, run.id, run.sessionId],
   );
   const permission = permissions.find((item) => item.id === permissionId);
   const tools = work.tools;
@@ -98,39 +112,33 @@ function TraceDetail({
       ),
     [work],
   );
-  const automaticallyApproved = new Set(
-    permissions
-      .filter((item) => item.decisionSource === 'automatic')
-      .map((item) => item.toolCallId),
+  const automaticApprovals = useMemo(() => summarizeAutomaticApprovals(permissions), [permissions]);
+  const events = useMemo(
+    () => mergeRunTraceEvents(trace.data?.events, snapshot.events, run.id),
+    [trace.data?.events, snapshot.events, run.id],
   );
-  const events = useMemo(() => {
-    const records = new Map<number, RunEvent>();
-    for (const event of trace.data?.events ?? []) records.set(event.id, event);
-    for (const event of snapshot.events)
-      if (event.runId === run.id && event.type !== 'message.delta') records.set(event.id, event);
-    return [...records.values()].sort((a, b) => a.seq - b.seq).slice(-600);
-  }, [trace.data, snapshot.events, run.id]);
-  const filtered = eventFilter
-    ? events.filter((event) => event.type.startsWith(`${eventFilter}.`))
-    : events;
+  const eventSummary = useMemo(() => scanRunTraceEvents(events), [events]);
+
+  const filtered = useMemo(
+    () =>
+      eventFilter ? events.filter((event) => event.type.startsWith(`${eventFilter}.`)) : events,
+    [events, eventFilter],
+  );
   const offset = Math.min(
     eventOffset,
     Math.max(0, Math.ceil(filtered.length / EVENT_PAGE_SIZE) - 1) * EVENT_PAGE_SIZE,
   );
   const visibleEvents = filtered.slice(offset, offset + EVENT_PAGE_SIZE);
-  const stopSequence = events.find(
-    (event) => event.type === 'run.status_changed' && event.payload.status === 'stopping',
-  )?.seq;
-  const result = events.findLast((event) => event.type === 'sdk.result')?.payload;
-  const init = events.findLast((event) => event.type === 'sdk.initialized')?.payload;
-  const firstText = events.find((event) => event.type === 'sdk.first_text')?.payload;
-  const exit = events.findLast((event) => event.type === 'process.exited')?.payload;
+
   let gateway = '—';
   try {
     gateway = new URL(run.config.gateway).origin;
   } catch {
     /* Historic configuration may be invalid. */
   }
+
+  const { stopSequence, result, init, firstText, exit, retryCount, invokedPayloads, discovered } =
+    eventSummary;
   const facts: [string, unknown][] = [
     [t('trace.model'), init?.model ?? run.config.model],
     [t('trace.requestedEffort'), run.config.effort],
@@ -147,10 +155,7 @@ function TraceDetail({
           })
         : null,
     ],
-    [
-      t('trace.automaticApprovals'),
-      permissions.filter((permission) => permission.decisionSource === 'automatic').length,
-    ],
+    [t('trace.automaticApprovals'), automaticApprovals.count],
     ['SDK CLI', init?.version],
     [t('trace.started'), formatDate(run.startedAt)],
     [t('trace.ended'), formatDate(run.endedAt)],
@@ -172,7 +177,7 @@ function TraceDetail({
     [t('trace.httpStatus'), result?.httpStatus],
     [t('trace.stopReason'), result?.terminalReason || result?.stopReason || run.reason],
     [t('trace.processExit'), exit ? exit.signal || exit.code : null],
-    [t('trace.retries'), events.filter((event) => event.type === 'sdk.api_retry').length],
+    [t('trace.retries'), retryCount],
     [
       t('trace.tokens'),
       run.usage ? `${run.usage.inputTokens ?? '—'} / ${run.usage.outputTokens ?? '—'}` : null,
@@ -198,24 +203,23 @@ function TraceDetail({
       : []),
     [t('trace.runId'), run.id],
   ];
+
   const invoked = [
     ...new Set(
-      events
-        .filter((event) => event.type === 'skill.invoked')
-        .map(
-          ({ payload }) =>
-            `${String(payload.name ?? 'Skill')} · v${String(payload.version ?? '—')}${skillSource(payload.source ?? 'atelier')}`,
-        ),
+      invokedPayloads.map(
+        (payload) =>
+          `${String(payload.name ?? 'Skill')} · v${String(payload.version ?? '—')}${skillSource(payload.source ?? 'atelier')}`,
+      ),
     ),
   ];
-  const discovered = events.findLast((event) => event.type === 'skills.discovered')?.payload;
-  if (discovered)
+  if (discovered) {
     facts.push([
       t('trace.skillCandidates'),
       `${t('trace.skillAvailable', { count: typeof discovered.count === 'number' ? discovered.count : 0 })} · ${t('trace.skillMissing', { count: typeof discovered.missingCount === 'number' ? discovered.missingCount : 0 })}`,
     ]);
+  }
   if (invoked.length) facts.push([t('trace.invokedSkills'), invoked.join(' / ')]);
-  if (run.extensions?.length)
+  if (run.extensions?.length) {
     facts.push([
       t('trace.extensions'),
       run.extensions
@@ -225,6 +229,7 @@ function TraceDetail({
         )
         .join(' / '),
     ]);
+  }
 
   return (
     <section
@@ -289,10 +294,7 @@ function TraceDetail({
               <ToolDetail
                 key={tool.id}
                 tool={tool}
-                automaticallyApproved={permissions.some(
-                  (permission) =>
-                    permission.toolCallId === tool.id && permission.decisionSource === 'automatic',
-                )}
+                automaticallyApproved={automaticApprovals.toolIds.has(tool.id)}
                 onOutput={() => setOutputTool(tool)}
               />
             ))}
@@ -411,7 +413,7 @@ function TraceDetail({
                   event={event}
                   stopSequence={stopSequence}
                   tool={tool}
-                  automaticallyApproved={tool ? automaticallyApproved.has(tool.id) : false}
+                  automaticallyApproved={tool ? automaticApprovals.toolIds.has(tool.id) : false}
                   onOutput={setOutputTool}
                 />
               );
@@ -475,7 +477,10 @@ function TraceEvent({
   const name = eventName(event.type);
   let label = name;
   if (event.type === 'sdk.api_retry') {
-    if (event.payload.afterStopRequested === true || (stopSequence !== undefined && event.seq > stopSequence))
+    if (
+      event.payload.afterStopRequested === true ||
+      (stopSequence !== undefined && event.seq > stopSequence)
+    )
       label = `${name} · ${t('trace.retryAfterStop')}`;
     else if (stopSequence !== undefined) label = `${name} · ${t('trace.retryBeforeStop')}`;
   } else if (tool) label = `${name} · ${toolCallSummary(tool)}`;

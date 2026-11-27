@@ -65,7 +65,7 @@
     "reason": "网关 URL 格式的本机占位符"
   },
   {
-    "file": "frontend/src/features/inspector/settings-page.tsx",
+    "file": "frontend/src/features/inspector/settings-magpie-card.tsx",
     "fingerprint": "16a48c1fa89444de2c1e",
     "reason": "内置服务品牌在设置中固定拼写"
   }

@@ -2,6 +2,14 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C10-B：独立设置卡片、`RunTrace` 单趟 Facts 与记忆化 `Sidebar`（已验证）
+
+- **`SettingsPage` 独立提交解耦**：将即点即存的 `BundledAccountCard`（`settings-account-card.tsx`，76 行）与 `MagpieToggleCard`（`settings-magpie-card.tsx`，68 行）移出草稿 `<form>`，各自持有独立 mutation/lock 与错误状态，解除 4 个 `<fieldset>` 互锁；抽离纯校验模块 `settings-validation.ts`（86 行），`settings-page.tsx` 从 **899 行降至 790 行**，并在 `scripts/i18n-exceptions.json` 迁移 `Magpie` 品牌豁免文件路径。
+- **`RunTrace` 单趟扫描与 `Sidebar` 记忆化拆分**：抽离 `frontend/src/features/inspector/run-trace-facts.ts`（111 行，`mergeRunTraceEvents`、`scanRunTraceEvents`、`summarizeAutomaticApprovals`）在单趟遍历中提取全部关键轨迹事件和自动审批集合，`run-trace.tsx`（536→541 行）直接复用；将 `frontend/src/app/sidebar.tsx`（**566 行降至 364 行**）拆为 `React.memo` 包装的 `sidebar-search-bar.tsx`（56 行）、`sidebar-session-row.tsx`（176 行）与 `sidebar-project-group.tsx`（188 行），并在父组件记忆化 `Intl.NumberFormat`、`runStatus`、`bySession` 及交互回调。决策与回退见 `docs/decisions/2026-11-27-inspector-and-sidebar-simplification.md`。
+- **验证**：`npm run check`（`check:architecture`、`check:query`、`check:i18n`、`check:ui`、`tsc`、desktop、tools）、`npm run check:headers`（11 份 C10-B 源文件）与 `npm run build` / `npm run build:desktop` 全通过；新增 `frontend/src/features/inspector/inspector-simplification.test.ts` 与现行 `settings-page.test.ts`、`inspector.test.ts`、`sidebar-projects.test.ts`、`session-tree.test.ts` 定向合跑 **15/15 全通过**；主机 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 后端首轮 **891/898** 通过、6 跳过（1 个无关 Git 并行负载文件 `tests/git-multi-commit-api.test.ts` 单独串行重跑 **13/13** 全通过），`npm run test:frontend` **179/180** 通过、1 跳过、0 失败；隔离 Wayland 真实 Electron 烟测 `scripts/smoke-ordered-conversation.mts`（4 次回环 SDK 调用、507 文本片断、zh-CN/en 1280/1440/1920、新旧混排与 `RunTrace`）全通过（未用付费模型，未测系统包）。
+- **已知限制**：`sidebar-project-group.tsx` 按 `bySession` 与 `unseenOutcomes` 整体 Map 引用驱动更新；当全局活动态字典变动时会刷新有可见项目，行级已由 `React.memo` 隔离未改动子树。
+- **开发过程 review**：先读 `settings-page.test.ts` 与 `inspector.test.ts` 对照选择器与测试替身期望，未改动可访问命名即一次性通过全部 Chromium 用例；唯一小返工是 `RunEvent.type` 实为宽字符串、`Permission.status` 合法字面量为 `'allowed'` 及 `Magpie` 品牌豁免文件路径需迁至 `scripts/i18n-exceptions.json`，静态检查阶段立即暴露并修齐。下一轮完成最终机械护栏收紧（`query-legacy.json` 清零、`shared/` + `server/modules/` 循环检查与文件行数棘轮）。
+
 ## 2026-11-27 · C10-A：终端附件会话拆解、帧预序列化透传与 `search-skill-broker` 抽离（已验证）
 
 - **终端会话与实例拆解**：将 `server/modules/terminal/manager.ts`（**841 行降至 650 行**）中的单连接快照围栏、`512/384/192 KiB` 双水位流控、单调帧序/ACK 校验与单次 JSON 序列化拆入 `server/modules/terminal/attachment-session.ts`（218 行，`TerminalAttachmentSession`），将 `outputChunks`、顺序异步队列、`pauses` 集合及统一状态谓词（`isTerminalClosedOrClosing` / `isTerminalRetained` / `isTerminalClosing` / `isTerminalRunning`）拆入 `server/modules/terminal/terminal-instance.ts`（137 行，`TerminalInstance`）；扩展 `TerminalConnection.send(frame, encoded?)` 与 `server/modules/terminal/transport.ts`（163 行），直接发送已测字节的预序列化 JSON 字符串，消除快照校验和下行输出热路径上的重复序列化。
