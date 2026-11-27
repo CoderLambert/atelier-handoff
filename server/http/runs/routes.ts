@@ -1,7 +1,7 @@
 /**
  * @file 提供运行列表、执行轨迹、诊断和控制接口。
  * @implementation 校验运行子路径的请求格式，返回只读记录或将控制交给领域服务。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { z } from 'zod';
 import { bashControlSchema } from '../../../shared/bash-execution.js';
@@ -14,7 +14,7 @@ import { json, page } from '../response.js';
 import type { RouteHandler } from '../types.js';
 
 export function createRunRoutes(
-  store: Pick<Store, 'get' | 'list' | 'history' | 'runHistory'>,
+  store: Pick<Store, 'get' | 'list' | 'history' | 'runHistory' | 'repos'>,
   controls: RunControls,
 ): RouteHandler {
   return async ({ req, res, url, parts, method }) => {
@@ -40,15 +40,15 @@ export function createRunRoutes(
     if (parts.length === 3 && method === 'GET')
       return json(res, {
         run,
-        tools: store.list('tools').filter((t) => t.runId === run.id),
-        permissions: store.list('permissions').filter((p) => p.runId === run.id),
-        artifacts: store.list('artifacts').filter((a) => a.runId === run.id),
+        tools: store.repos.tools.listByRun(run.id),
+        permissions: store.repos.permissions.listByRun(run.id),
+        artifacts: store.repos.artifacts.listByRun(run.id),
         events: store.history(run.sessionId).filter((e) => e.runId === run.id),
       });
     if (parts.length === 4 && parts[3] === 'trace' && method === 'GET')
       return json(res, store.runHistory(run.id));
     if (parts.length === 4 && parts[3] === 'diagnostics.json' && method === 'GET') {
-      const tools = store.list('tools').filter((tool) => tool.runId === run.id);
+      const tools = store.repos.tools.listByRun(run.id);
       const diagnostics = buildRunDiagnostics(run, store.runHistory(run.id), tools);
       const filenameId = /^[a-f0-9-]{36}$/.test(run.id) ? `-${run.id}` : '';
       res.setHeader(

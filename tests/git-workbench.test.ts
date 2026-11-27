@@ -1,7 +1,7 @@
 /**
  * @file 验证本机 Git 看板、开发会话和暂存提交。
  * @implementation 用独立 SQLite、真实 Git 和回环模型验证工作树生命周期、文件与提交操作，以及工作树和共享引用变动通知。
- * @updated 2026-11-26T21:32:56+08:00
+ * @updated 2026-11-27T20:15:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type { Session, Run, Project } from '../shared/types.js';
@@ -18,6 +18,7 @@ import test from 'node:test';
 import { commandsAvailable, runCommand } from '../server/commands.js';
 import { migrateWorkspace } from '../server/data-migration.js';
 import { createApp } from '../server/app.js';
+import { dropV11Schema } from './fixtures/downgrade-v11.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const git = (cwd: string, ...args: string[]) =>
@@ -769,6 +770,7 @@ test('v7 databases retain old session drafts and continue reading the original c
       );
       const url = '/api/sessions/' + session.id;
       await request(url, 'PATCH', { draft: { ...session.draft, text: 'Legacy draft' } });
+      app.store.db.exec(dropV11Schema);
       app.store.db.exec(
         'DROP TABLE git_commit_operations; DROP TABLE git_session_worktrees; DROP TABLE git_worktree_operations; DROP TABLE git_worktrees; PRAGMA user_version=7;',
       );
@@ -778,7 +780,7 @@ test('v7 databases retain old session drafts and continue reading the original c
       const saved = await request<{ session: Session; workspace?: GitSessionWorkspace }>(url);
       assert.equal(saved.session.draft.text, 'Legacy draft');
       assert.equal(saved.workspace, undefined);
-      assert.equal(app.store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+      assert.equal(app.store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
       const file = await request<{ text: string }>(
         '/api/projects/' + project.id + '/file?path=same.txt&sessionId=' + session.id,
       );

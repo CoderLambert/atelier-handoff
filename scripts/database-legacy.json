@@ -4,30 +4,7 @@
     "sql:387fd27c84bea8f2",
     "sql:a3c147b985bf1a6e"
   ],
-  "server/data-owner.ts": [
-    "driver:09fdf6ba9fb1abd0",
-    "sql:60cb3ba8a74ea4d7"
-  ],
-  "server/message-queue.ts": [
-    "sql:1c66a4a85e5ae7b6",
-    "sql:44da5fd643e2f268",
-    "sql:46481f6bca39901d",
-    "sql:6078cb8c3eb30de6",
-    "sql:6080525ba77b0026",
-    "sql:6fa562160584a224",
-    "sql:771ca54d3a12f8cc",
-    "sql:7902975f7e822d73",
-    "sql:7ccd8cd46879f504",
-    "sql:7e50dc70964a1c60",
-    "sql:af51cfc9f5abe8d9",
-    "sql:b1ec4d20fa8f4bff",
-    "sql:b964d024abbefc06",
-    "sql:c432ee3b0f4d8cef",
-    "sql:c5a6822d46d0b27d",
-    "sql:d464bd310bd60513",
-    "sql:dc9b6dc50e65e587",
-    "sql:eea4ee772a3a6e55"
-  ],
+  "server/data-owner.ts": ["driver:09fdf6ba9fb1abd0", "sql:60cb3ba8a74ea4d7"],
   "server/skill-tool-bindings.ts": [
     "sql:36600144174613b3",
     "sql:68f9f7631fcc07dd",

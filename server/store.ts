@@ -1,19 +1,22 @@
 /**
  * @file 管理工作台 SQLite 数据和运行事件。
- * @implementation 持有会话、运行回执和 Git 仓储共享的连接及事件事务。恢复中断运行时关闭审批、更新工具并收尾对话顺序。
- * @updated 2026-11-26T01:17:56+08:00
+ * @implementation 持有 Drizzle 仓储共享的连接及事件事务，按注册表升级架构。运行中断恢复委托 recovery 用例在单事务内完成。
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
-import { openWorkbenchDatabase, type LegacyDatabase } from './db/connection.js';
-import type { SessionSnapshotRepository } from './modules/sessions/session-snapshot-repository.js';
-import type { SubagentRepository } from './modules/sessions/subagent-repository.js';
+import {
+  LATEST_SCHEMA_VERSION,
+  openWorkbenchDatabase,
+  type LegacyDatabase,
+  type SchemaMigration,
+  type WorkbenchRepositories,
+} from './db/connection.js';
+import { recoverInterruptedRuntime } from './modules/runs/recovery.js';
 import { subagentSchema, type Subagent } from '../shared/subagents.js';
-import { finalizeRunTranscript } from '../shared/ordered-transcript.js';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
-  activeStatuses,
   now,
   type Table,
   type Tables,
@@ -31,68 +34,67 @@ const tables: Table[] = [
   'artifacts',
   'attachments',
 ];
+export { LATEST_SCHEMA_VERSION, type WorkbenchRepositories };
 export class Store {
   readonly db: LegacyDatabase;
   readonly readTransaction: <T>(work: () => T) => T;
   readonly assertForeignKeyIntegrity: () => void;
-  readonly gitWorktrees: ReturnType<typeof openWorkbenchDatabase>['gitWorktrees'];
-  readonly gitCommitOperations: ReturnType<typeof openWorkbenchDatabase>['gitCommitOperations'];
-  readonly sessionSnapshots: SessionSnapshotRepository;
-  readonly sessionEvents: ReturnType<typeof openWorkbenchDatabase>['sessionEvents'];
-  readonly runReceipts: ReturnType<typeof openWorkbenchDatabase>['runReceipts'];
-  readonly workspaceLayout: ReturnType<typeof openWorkbenchDatabase>['workspaceLayout'];
-  readonly shortcutPreferences: ReturnType<typeof openWorkbenchDatabase>['shortcutPreferences'];
-  readonly gitMultiCommitPreferences: ReturnType<
-    typeof openWorkbenchDatabase
-  >['gitMultiCommitPreferences'];
-  readonly skillInheritance: ReturnType<typeof openWorkbenchDatabase>['skillInheritance'];
-  readonly githubPublicAuth: ReturnType<typeof openWorkbenchDatabase>['githubPublicAuth'];
-  readonly rtkSettings: ReturnType<typeof openWorkbenchDatabase>['rtkSettings'];
+  readonly repos: WorkbenchRepositories;
+  get gitWorktrees() {
+    return this.repos.gitWorktrees;
+  }
+  get gitCommitOperations() {
+    return this.repos.gitCommitOperations;
+  }
+  get sessionSnapshots() {
+    return this.repos.sessionSnapshots;
+  }
+  get sessionEvents() {
+    return this.repos.sessionEvents;
+  }
+  get runReceipts() {
+    return this.repos.runReceipts;
+  }
+  get workspaceLayout() {
+    return this.repos.workspaceLayout;
+  }
+  get shortcutPreferences() {
+    return this.repos.shortcutPreferences;
+  }
+  get gitMultiCommitPreferences() {
+    return this.repos.gitMultiCommitPreferences;
+  }
+  get skillInheritance() {
+    return this.repos.skillInheritance;
+  }
+  get githubPublicAuth() {
+    return this.repos.githubPublicAuth;
+  }
+  get rtkSettings() {
+    return this.repos.rtkSettings;
+  }
   readonly events = new EventEmitter();
-  private readonly subagents: SubagentRepository;
   private pendingEvents: RunEvent[] | undefined;
   constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     chmodSync(directory, 0o700);
     const connection = openWorkbenchDatabase(join(directory, 'atelier.sqlite'));
     this.db = connection.db;
-    this.gitWorktrees = connection.gitWorktrees;
-    this.gitCommitOperations = connection.gitCommitOperations;
-    this.sessionSnapshots = connection.sessionSnapshots;
-    this.sessionEvents = connection.sessionEvents;
-    this.runReceipts = connection.runReceipts;
-    this.workspaceLayout = connection.workspaceLayout;
-    this.shortcutPreferences = connection.shortcutPreferences;
-    this.gitMultiCommitPreferences = connection.gitMultiCommitPreferences;
-    this.skillInheritance = connection.skillInheritance;
-    this.rtkSettings = connection.rtkSettings;
-    this.githubPublicAuth = connection.githubPublicAuth;
     this.readTransaction = connection.readTransaction;
     this.assertForeignKeyIntegrity = connection.assertForeignKeyIntegrity;
-    this.subagents = connection.subagents;
+    this.repos = connection.repos;
     try {
-      this.initialize(
-        connection.applySnapshotIndexes,
-        connection.applySubagents,
-        connection.applyGitWorktrees,
-        connection.applyGitCommitOperations,
-        connection.applyGitCommitOperationLifecycle,
-      );
+      this.initialize(connection.migrations);
     } catch (error) {
       this.db.close();
       throw error;
     }
   }
-  private initialize(
-    applySnapshotIndexes: () => void,
-    applySubagents: () => void,
-    applyGitWorktrees: () => void,
-    applyGitCommitOperations: () => void,
-    applyGitCommitOperationLifecycle: () => void,
-  ): void {
+  private initialize(migrations: readonly SchemaMigration[]): void {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
     const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
-    if (version > 10) throw new Error('Database schema is newer than this application.');
+    if (version > LATEST_SCHEMA_VERSION)
+      throw new Error('Database schema is newer than this application.');
     if (version === 0)
       this.transaction(() => {
         for (const table of tables)
@@ -163,11 +165,8 @@ export class Store {
         PRAGMA user_version=5;
       `),
       );
-    if (version < 6) this.transaction(applySnapshotIndexes);
-    if (version < 7) this.transaction(applySubagents);
-    if (version < 8) this.transaction(applyGitWorktrees);
-    if (version < 9) this.transaction(applyGitCommitOperations);
-    if (version < 10) this.transaction(applyGitCommitOperationLifecycle);
+    for (const migration of migrations)
+      if (version < migration.version) this.transaction(migration.apply);
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {
@@ -317,7 +316,7 @@ export class Store {
     if (parsed.status !== 'running' || parsed.endedAt !== null)
       throw new AppError('INVALID_SUBAGENT_STATE', '子任务必须以运行中状态开始。', 409);
     this.transaction(() => {
-      if (this.subagents.start(parsed))
+      if (this.repos.subagents.start(parsed))
         this.event(parsed.runId, parsed.sessionId, 'subagent.started', { subagent: parsed });
     });
   }
@@ -330,77 +329,13 @@ export class Store {
     const terminal = subagentSchema.shape.status.exclude(['running']).parse(status);
     const result = subagentSchema.shape.summary.parse(summary);
     this.transaction(() => {
-      const subagent = this.subagents.finish(id, runId, terminal, result, now());
+      const subagent = this.repos.subagents.finish(id, runId, terminal, result, now());
       if (subagent)
         this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
     });
   }
   recover(): void {
-    this.transaction(() => {
-      for (const subagent of this.subagents.interruptRunning(now()))
-        this.event(subagent.runId, subagent.sessionId, 'subagent.finished', { subagent });
-      const runs = this.list('runs');
-      const orderedInterruptions = new Set(
-        runs
-          .filter((run) => run.transcript && activeStatuses.includes(run.status))
-          .map(({ id }) => id),
-      );
-      for (const tool of this.list('tools')) {
-        if (
-          orderedInterruptions.has(tool.runId) &&
-          tool.transcriptOrder === undefined &&
-          tool.transcriptHookOrder !== undefined
-        )
-          this.update('tools', tool.id, {
-            transcriptOrder: tool.transcriptHookOrder,
-            transcriptHookOrder: undefined,
-          });
-        const pending = tool.status === 'running' || tool.status === 'awaiting_permission';
-        const interruptedBash = tool.bashExecution && tool.status === 'running';
-        if (tool.endedAt || !pending || (!interruptedBash && !orderedInterruptions.has(tool.runId)))
-          continue;
-        this.update('tools', tool.id, {
-          status: 'canceled',
-          endedAt: now(),
-          ...(tool.bashExecution && {
-            bashExecution: { ...tool.bashExecution, phase: 'unknown', controllable: false },
-          }),
-        });
-        this.event(tool.runId, tool.sessionId, 'tool.finished', {
-          toolCallId: tool.id,
-          status: 'canceled',
-        });
-      }
-      for (const run of runs)
-        if (activeStatuses.includes(run.status)) {
-          this.update('runs', run.id, {
-            ...(run.transcript && {
-              transcript: finalizeRunTranscript(run.transcript),
-            }),
-            status: 'interrupted',
-            endedAt: now(),
-            reason: '服务已重启，之前的运行中断。已发生的文件修改不会自动撤销，请先检查记录。',
-          });
-          this.update('sessions', run.sessionId, { sdkConfigKey: undefined });
-          for (const permission of this.list('permissions').filter(
-            (item) => item.runId === run.id && item.status === 'pending',
-          ))
-            this.update('permissions', permission.id, {
-              status: 'canceled',
-              resolutionReason: '运行已中断，旧审批无效。',
-            });
-          for (const tool of this.list('tools').filter(
-            (item) =>
-              item.runId === run.id && ['running', 'awaiting_permission'].includes(item.status),
-          ))
-            this.update('tools', tool.id, {
-              status: 'canceled',
-              endedAt: now(),
-              output: '运行已中断，请检查此操作是否已产生结果。',
-            });
-          this.event(run.id, run.sessionId, 'run.finished', { status: 'interrupted' });
-        }
-    });
+    recoverInterruptedRuntime(this);
   }
   close(): void {
     this.db.close();

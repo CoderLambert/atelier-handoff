@@ -219,6 +219,7 @@ async function verifyResources(
     'resources/runtime/server/db/migrations/0008-git-worktrees.sql',
     'resources/runtime/server/db/migrations/0009-git-commit-operations.sql',
     'resources/runtime/server/db/migrations/0010-git-commit-operation-lifecycle.sql',
+    'resources/runtime/server/db/migrations/0011-runtime-hotpath-indexes.sql',
   ];
   assert.deepEqual(
     [...seen].filter(

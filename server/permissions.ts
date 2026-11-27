@@ -1,7 +1,7 @@
 /**
  * @file 管理文件和工具操作的审批。
  * @implementation 按运行策略裁决并记录审批，在允许和执行前核验所选工作树、文件基线和取消状态。
- * @updated 2026-11-24T03:39:03+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AppError, activeStatuses, now, type Permission, type Run } from '../shared/types.js';
@@ -164,7 +164,7 @@ export class PermissionService {
     const run = this.store.get('runs', permission.runId);
     if (
       run.status === 'awaiting_permission' &&
-      !this.store.list('permissions').some((p) => p.runId === run.id && p.status === 'pending')
+      !this.store.repos.permissions.hasPendingByRun(run.id)
     )
       this.store.update('runs', run.id, { status: 'running' });
     this.store.event(permission.runId, permission.sessionId, 'permission.resolved', {
@@ -228,9 +228,7 @@ export class PermissionService {
     return this.finish(id, desired);
   }
   cancelRun(id: string): void {
-    for (const permission of this.store
-      .list('permissions')
-      .filter((p) => p.runId === id && p.status === 'pending'))
+    for (const permission of this.store.repos.permissions.listPendingByRun(id))
       this.finish(permission.id, 'canceled', '运行已停止或结束。');
   }
 }

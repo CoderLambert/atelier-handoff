@@ -1,7 +1,7 @@
 /**
  * @file 将旧工作区迁入另一个本机数据目录。
  * @implementation 独占并备份来源，核对工作树和多提交操作及其恢复证据，阻止未完成或证据不一致的迁移，再验证并发布目标目录。
- * @updated 2026-11-24T16:13:10+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { createHash } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
@@ -22,7 +22,7 @@ import {
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 import { acquireDataOwner } from './data-owner.js';
-import { Store } from './store.js';
+import { LATEST_SCHEMA_VERSION, Store } from './store.js';
 import { fingerprint } from './files.js';
 import { AppError } from '../shared/types.js';
 import { WorktreeSnapshots } from './modules/git/worktree-snapshots.js';
@@ -389,7 +389,8 @@ export async function migrateWorkspace(oldPath: string, newPath: string) {
     try {
       integrity(db);
       version = Number(db.prepare('PRAGMA user_version').get()?.user_version);
-      if (version < 1 || version > 10) throw new Error('旧版工作台数据库版本不支持。');
+      if (version < 1 || version > LATEST_SCHEMA_VERSION)
+        throw new Error('旧版工作台数据库版本不支持。');
       const copy = join(backupPath, databases);
       await backup(db, copy);
       await chmod(copy, 0o600);

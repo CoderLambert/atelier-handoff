@@ -63,6 +63,7 @@ const RUNTIME_MIGRATIONS = [
   'server/db/migrations/0008-git-worktrees.sql',
   'server/db/migrations/0009-git-commit-operations.sql',
   'server/db/migrations/0010-git-commit-operation-lifecycle.sql',
+  'server/db/migrations/0011-runtime-hotpath-indexes.sql',
 ];
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';

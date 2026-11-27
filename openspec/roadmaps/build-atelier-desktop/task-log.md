@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C6：待处理消息迁入 Drizzle、统一中断恢复与热路径索引查询（已验证）
+
+- 新增 v11 迁移 `0011-runtime-hotpath-indexes.sql`（`runs.status`、`tools`/`permissions`/`artifacts` 的 `run_id` 与 `status` 派生列及 6 个 B-tree 索引），`MessageQueue` 全部 17 处手写 SQL 迁入 `server/db/repositories/message-queue.ts`（`database-legacy.json` 清除 `server/message-queue.ts`），新增 `server/db/repositories/runtime-records.ts` 具名查询并替换 `execution-slots`、队列调度/动作、`create-run`、`permissions`、运行详情路由与 `agent.ts` 收尾中的 `store.list(...).filter(...)`。`server/modules/runs/recovery.ts` 将子任务、队列、工具、审批与运行恢复并入同一事务；`Store` 改为 `repos` 组合加迁移注册表，`LATEST_SCHEMA_VERSION=11`。决策与回退见 `docs/decisions/2026-11-27-orm-queue-and-hotpath-queries.md`。
+- 验证：`npm run check`、`npm run check:headers`（27 份源文件）、`npm run build`、`npm run build:desktop` 通过；定向 7 组 149 项在修正 v9 迁移用例的目标版本后通过；新增 `tests/runtime-orm-queries.test.ts` 4 项（v10→v11 升级与失败回滚、9 条查询计划无 `SCAN`、恢复故障整体回滚且幂等、队列语义对照）通过；完整 `npm test` 运行时 868/877 通过、6 跳过，3 个并行负载失败（`builtin-rtk-packaging`、`gateway-models`、`git-multi-commit-api`）单独重跑 26/26 通过；前端 174/175、1 跳过、0 失败；隔离 Wayland 真实 Electron 烟测 `smoke-ordered-conversation.mts`、`smoke-subagents.mts` 通过（锁定 SDK + 回环模型，未用付费模型，未测系统包）。
+- 已知限制：未新增按会话复合索引（沿用 `runs_snapshot_session`）；`finalizeUnfinishedRunTools` 保持原语义，不改写非 Bash 之外的 `bashExecution`；升级后旧版程序会拒绝 v11 库，需用升级前备份回退。
+- **开发过程 review**：计划阶段先确认只改写 v1–v5 之外的 SQL，避免历史指纹漂移；查询计划测试提前发现冗余复合索引并删除。下一轮在改 schema 时先建共享降级夹具 `tests/fixtures/downgrade-v11.ts` 再改测试，避免逐文件补漏；全量测试先看并行负载失败是否可单独复现。
+
 ## 2026-11-27 · C8：消除 `SubagentRun` / `NativeBashTasks` / `agent.ts` 三方状态镜像（已验证）
 
 - 提取 `server/modules/runs/tool-invocation-gate.ts`（`ToolInvocationGate` + `callHash` + `ProjectWrites`，`subagent-run.ts` 保留 `ProjectWrites` 重导出），将主会话与子代理共用的 MCP 一次性票据和目录写锁移出 `SubagentRun`；将 `branchControllers` 收归 `SubagentRun`（`ensureBranchSignal` / `branchSignal` / `stop` 及 `finish`/`close` 自动中止），保持先 `sdk.stopTask` 再中止本地控制器的顺序；提取 `server/modules/runs/sdk-task-coordinator.ts` 统一 `local_agent` / `local_bash` SDK 任务帧 Zod schema 与单一 `runningTools` / `foregroundTools()` / `canBackground()` / `backgroundTool()` 视图，`LiveTurnCoordinator` 改为消费统一的 `SdkTaskCoordinationView`（保留测试构造兼容路径）；提取无状态 `server/tool-evidence.ts`，使 `server/session-checkpoint.ts` 不再依赖 `HarnessProgress` 状态机（`server/harness-progress.ts` 从 **743 行降至 509 行**，`server/agent.ts` 从 **1,497 行降至 1,467 行**，`server/subagent-run.ts` 从 **295 行降至 259 行**，`server/native-bash.ts` 从 **294 行降至 276 行**）。[决策、验证和回退](../../../docs/decisions/2026-11-27-subagent-task-coordination.md)

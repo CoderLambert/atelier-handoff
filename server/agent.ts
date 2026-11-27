@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
  * @implementation 协调 SDK 流、工具、子任务和会话续接，委托运行模块管理进程、启动资源、任务帧协调、票据门禁、实时输入和转录。将请求计时及运行终态写入本地存储。
- * @updated 2026-11-27T19:48:00+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -64,6 +64,7 @@ import {
   type AttachmentImages,
   type LiveInput,
 } from './modules/runs/live-turn-coordinator.js';
+import { finalizeUnfinishedRunTools } from './modules/runs/recovery.js';
 import { RunTranscriptLedger } from './modules/runs/run-transcript-ledger.js';
 import { buildInitialPrompt, RunEnvironment } from './modules/runs/run-environment.js';
 import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
@@ -1450,15 +1451,9 @@ export class AgentRunner implements Runner {
           reason,
           error,
         });
-        for (const item of this.store
-          .list('tools')
-          .filter(
-            (item) =>
-              item.runId === run.id && ['running', 'awaiting_permission'].includes(item.status),
-          )) {
-          if (item.bashExecution) finishTool(item.id, 'unknown', '');
-          else this.store.update('tools', item.id, { status: 'canceled', endedAt: now() });
-        }
+        finalizeUnfinishedRunTools(this.store, run.id, {
+          onBashTool: (item) => finishTool(item.id, 'unknown', ''),
+        });
         this.store.update('sessions', session.id, { updatedAt: now() });
         this.store.event(run.id, session.id, 'run.finished', { status, reason });
       });

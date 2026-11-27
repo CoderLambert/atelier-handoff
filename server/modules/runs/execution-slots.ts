@@ -1,9 +1,9 @@
 /**
  * @file 判定活动运行和目录占用。
  * @implementation 按会话、重叠目录和全局运行数检查执行槽，为工作树保留原运行、审批、队列与分支保护。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
-import { AppError, activeStatuses, type Session } from '../../../shared/types.js';
+import { AppError, type Session } from '../../../shared/types.js';
 import type { Store } from '../../store.js';
 import { directoriesOverlap } from '../git/development-worktrees.js';
 
@@ -14,18 +14,17 @@ export function createExecutionSlots({
   hasPending,
   usingForkSource,
 }: {
-  store: Pick<Store, 'list' | 'get'>;
+  store: Pick<Store, 'list' | 'get' | 'repos'>;
   directory(session: Session): string;
   assertUnlocked(path: string): void;
   hasPending(sessionId: string): boolean;
   usingForkSource(sessionId: string): boolean;
 }) {
-  const sameSessionRunning = (id: string) =>
-    store.list('runs').some((run) => run.sessionId === id && activeStatuses.includes(run.status));
+  const sameSessionRunning = (id: string) => store.repos.runs.hasActiveBySession(id);
 
   function assertExecutionSlot(sessionId: string, path: string) {
     assertUnlocked(path);
-    const active = store.list('runs').filter((run) => activeStatuses.includes(run.status));
+    const active = store.repos.runs.listActive();
     if (
       active.some((run) => {
         const other = run.workspacePath ?? store.get('projects', run.projectId).path;
@@ -49,21 +48,14 @@ export function createExecutionSlots({
         .map((session) => session.id),
     );
     return (
-      store
-        .list('runs')
-        .some(
-          (run) =>
-            activeStatuses.includes(run.status) &&
-            directoriesOverlap(
-              path,
-              run.workspacePath ?? store.get('projects', run.projectId).path,
-            ),
+      store.repos.runs
+        .listActive()
+        .some((run) =>
+          directoriesOverlap(path, run.workspacePath ?? store.get('projects', run.projectId).path),
         ) ||
-      store
-        .list('permissions')
-        .some(
-          (permission) => permission.status === 'pending' && sessions.has(permission.sessionId),
-        ) ||
+      store.repos.permissions
+        .listPending()
+        .some((permission) => sessions.has(permission.sessionId)) ||
       [...sessions].some((id) => hasPending(id) || usingForkSource(id))
     );
   }

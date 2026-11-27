@@ -1,7 +1,7 @@
 /**
  * @file 验证多提交 SQLite 仓储的迁移、领取、CAS、授权范围和重启恢复。
  * @implementation 仅使用临时数据根和独立 Node 写进程，核对真实 SQLite 竞争、WAL 重启与旧库回滚；不执行 Git。
- * @updated 2026-11-24T14:57:15+08:00
+ * @updated 2026-11-27T20:15:00+08:00
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -14,6 +14,7 @@ import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Store } from '../server/store.js';
+import { dropV11Schema } from './fixtures/downgrade-v11.js';
 import { fileIdentity } from '../server/modules/git/git-cli.js';
 import {
   commitOperationClaim,
@@ -129,6 +130,7 @@ async function seedV9(directory: string, variant: 'legacy' | 'current') {
       );
     }
     store.db.prepare('UPDATE git_commit_operations SET rowid=rowid*10').run();
+    store.db.exec(dropV11Schema);
   });
   let ddl = await readFile(
     new URL('../server/db/migrations/0009-git-commit-operations.sql', import.meta.url),
@@ -277,7 +279,7 @@ test('v10 empty database stores ordered OIDs, only file references, and revision
     const value = request();
     withStore(directory, (store) => {
       seed(store);
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
       const claimed = store.gitCommitOperations.claim(value);
       assert.equal(claimed.outcome, 'claimed');
       first = claimed.operation;
@@ -967,6 +969,7 @@ test('v8 upgrade preserves old rows and backup bytes; interrupted v9 DDL rolls b
         retained: null,
         rebuildable: [],
       });
+      store.db.exec(dropV11Schema);
       store.db.exec('DROP TABLE git_commit_operations; PRAGMA user_version=8;');
     });
     const path = join(directory, 'atelier.sqlite');
@@ -993,7 +996,7 @@ test('v8 upgrade preserves old rows and backup bytes; interrupted v9 DDL rolls b
     );
     old.close();
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
       assert.deepEqual(
         store.db
           .prepare('SELECT rowid,* FROM git_worktrees')
@@ -1045,7 +1048,7 @@ for (const variant of ['legacy', 'current'] as const) {
         assert.equal(tableSql.includes("'aborting'"), variant === 'current');
         assert.equal(rows.length, variant === 'legacy' ? 5 : 7);
         withStore(directory, (store) => {
-          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
           assert.deepEqual(operationRows(store.db), rows);
           store.assertForeignKeyIntegrity();
           assert.equal(store.db.prepare('PRAGMA quick_check').get()?.quick_check, 'ok');
@@ -1076,10 +1079,10 @@ for (const variant of ['legacy', 'current'] as const) {
         assert.deepEqual(operationRows(reader), rows);
         assert.deepEqual(operationSchema(reader), schema);
         reader.exec('COMMIT');
-        assert.equal(reader.prepare('PRAGMA user_version').get()?.user_version, 10);
+        assert.equal(reader.prepare('PRAGMA user_version').get()?.user_version, 11);
         const upgradedSchema = operationSchema(reader);
         withStore(directory, (store) => {
-          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
           assert.deepEqual(operationRows(store.db), rows);
           assert.deepEqual(operationSchema(store.db), upgradedSchema);
           const prepared = store.gitCommitOperations.get(
@@ -1146,7 +1149,7 @@ test('v10 rebuild rolls back original v9 DDL, rowids and indexes after a failure
       database.close();
     }
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
       assert.deepEqual(operationRows(store.db), rows);
       store.assertForeignKeyIntegrity();
     });
@@ -1184,7 +1187,7 @@ test('v10 copy rejects orphan v9 evidence and Store rollback preserves the origi
       retained.close();
     }
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
       assert.deepEqual(operationRows(store.db), validRows);
       store.assertForeignKeyIntegrity();
     });

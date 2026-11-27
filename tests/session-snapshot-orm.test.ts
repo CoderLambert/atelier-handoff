@@ -1,7 +1,7 @@
 /**
  * @file 验证会话快照的 ORM 查询、旧库升级和事务一致性。
  * @implementation 使用隔离 SQLite、真实 HTTP 与独立 v5 查询基线核对内容、插入顺序、查询计划和同连接回滚。
- * @updated 2026-11-21T00:58:16+08:00
+ * @updated 2026-11-27T20:15:00+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -522,7 +522,7 @@ test('a genuine v5 database migrates without changing JSON, rowids or snapshots 
     for (let opening = 0; opening < 2; opening++) {
       const store = new Store(data);
       try {
-        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 10);
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 11);
         for (const table of jsonTables)
           assert.deepEqual(
             rows(store.db, `SELECT rowid,id,data FROM ${table} ORDER BY rowid`),
@@ -945,7 +945,7 @@ test('v7 subagent migration upgrades v6, preserves records and enforces cascades
     for (let opening = 0; opening < 2; opening++) {
       const store = new Store(data);
       try {
-        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 10);
+        assert.equal(rows(store.db, 'PRAGMA user_version')[0]?.user_version, 11);
         assert.deepEqual(
           store.sessionSnapshots.read(fixture.first.id),
           legacySnapshot(store.db, fixture.first.id),

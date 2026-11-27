@@ -1,7 +1,7 @@
 /**
  * @file 接收消息并创建会话运行。
  * @implementation 保存排队时的授权指纹与 Skill 范围。自动续跑比较范围，显式复核时校验待处理消息，并在短事务提交前再次复核范围后启动 runner。
- * @updated 2026-11-27T02:25:28+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import {
@@ -45,7 +45,15 @@ type InsertionMode = 'live' | 'priority';
 interface CreateRunOptions {
   store: Pick<
     Store,
-    'get' | 'list' | 'update' | 'put' | 'event' | 'transaction' | 'gitWorktrees' | 'runReceipts'
+    | 'get'
+    | 'list'
+    | 'update'
+    | 'put'
+    | 'event'
+    | 'transaction'
+    | 'gitWorktrees'
+    | 'runReceipts'
+    | 'repos'
   >;
   worktrees: Pick<DevelopmentWorktrees, 'resolveSession' | 'assertUnlocked'>;
   files: Pick<FileRecords, 'attachmentFile' | 'attachmentContent'>;
@@ -59,7 +67,10 @@ interface CreateRunOptions {
     GatewayService,
     'effectiveConfig' | 'connection' | 'magpie' | 'requireMagpieEnabled'
   >;
-  messageQueue: Pick<MessageQueue, 'receipt' | 'enqueue' | 'hasPending' | 'pending' | 'consume' | 'resume'>;
+  messageQueue: Pick<
+    MessageQueue,
+    'receipt' | 'enqueue' | 'hasPending' | 'pending' | 'consume' | 'resume'
+  >;
   nativeExecution: boolean;
   probeGateway: boolean;
   isShuttingDown(): boolean;
@@ -225,12 +236,11 @@ export function createRunStarter({
         },
       );
       accepted(latest);
-      const active = store
-        .list('runs')
-        .find(
-          (run) =>
-            run.sessionId === sessionId && ['running', 'awaiting_permission'].includes(run.status),
-        );
+      const candidate = store.repos.runs.findActiveBySession(sessionId);
+      const active =
+        candidate && ['running', 'awaiting_permission'].includes(candidate.status)
+          ? candidate
+          : undefined;
       const pendingItem = active && messageQueue.pending(sessionId, queuedMessage.id);
       const insertion = pendingItem && active && insertionAction(pendingItem, active);
       return { queuedMessage: { ...queuedMessage, ...(insertion && { insertion }) } };
@@ -244,11 +254,7 @@ export function createRunStarter({
       return result;
     }
     if (intent && !reviewScope && planned.scope !== intent.scope)
-      throw new AppError(
-        queueScopeChanged,
-        '排队时的授权范围已变化，请复核后继续。',
-        409,
-      );
+      throw new AppError(queueScopeChanged, '排队时的授权范围已变化，请复核后继续。', 409);
     if (probeGateway && !(await connection(selectedConfig, usingMagpie)).available)
       throw new AppError(
         'SDK_UNAVAILABLE',
@@ -304,11 +310,7 @@ export function createRunStarter({
       const latest = validateSession();
       const currentScope = recheckScope();
       if (currentScope.scope !== planned.scope)
-        throw new AppError(
-          queueScopeChanged,
-          '智能体、扩展或浏览器授权已变化。请重新发送。',
-          409,
-        );
+        throw new AppError(queueScopeChanged, '智能体、扩展或浏览器授权已变化。请重新发送。', 409);
       if (shouldQueue()) return sendToQueue(latest);
       assertExecutionSlot(sessionId, workspacePath);
       if (pending) {

@@ -1,7 +1,7 @@
 /**
  * @file 验证停机迁入、保留旧数据与运行时写者保护。
  * @implementation 用隔离 SQLite 和真实文件记录重建工作区并核对回退副本。
- * @updated 2026-11-20T02:00+08:00
+ * @updated 2026-11-27T20:15:00+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -34,6 +34,7 @@ import {
   type CommitJournalPrepare,
 } from '../server/modules/git/commit-journal.js';
 import { commitPlanCoordinator } from '../server/modules/git/commit-plan-coordinator.js';
+import { dropV11Schema } from './fixtures/downgrade-v11.js';
 import { emptyDraft, now, type Run } from '../shared/types.js';
 
 await test('migrate real application records and files while preserving the rollback copy', async () => {
@@ -350,7 +351,7 @@ await test('v10 migration keeps completed and aborted receipts replayable with a
             );
             assert.deepEqual(await coordinator.read(fixture.value.operationId), fixture.evidence);
             assert.deepEqual(await coordinator.unfinished(), []);
-            assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+            assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
             assert.deepEqual(store.db.prepare('PRAGMA foreign_key_check').all(), []);
           } finally {
             store.close();
@@ -605,6 +606,7 @@ await test('migration rejects links anywhere in journal evidence and preserves e
 });
 
 async function downgradeFixture(db: DatabaseSync, version: number) {
+  if (version < 11) db.exec(dropV11Schema);
   if (version < 9) db.exec('DROP TABLE git_commit_operations');
   if (version === 9) {
     db.exec('DROP TABLE git_commit_operations');
@@ -638,8 +640,8 @@ async function downgradeFixture(db: DatabaseSync, version: number) {
   db.exec(`PRAGMA user_version=${version};`);
 }
 
-await test('versions 1 through 10 migrate real old schemas while rollback copies retain their original version', async (t) => {
-  for (let version = 1; version <= 10; version++)
+await test('versions 1 through 11 migrate real old schemas while rollback copies retain their original version', async (t) => {
+  for (let version = 1; version <= 11; version++)
     await t.test('v' + version, async (t) => {
       const fixture = await migrationFixture(t);
       const database = join(fixture.source, 'atelier.sqlite');
@@ -665,7 +667,7 @@ await test('versions 1 through 10 migrate real old schemas while rollback copies
       }
       const migrated = new Store(result.target);
       try {
-        assert.equal(migrated.db.prepare('PRAGMA user_version').get()?.user_version, 10);
+        assert.equal(migrated.db.prepare('PRAGMA user_version').get()?.user_version, 11);
         assert.equal(migrated.get('sessions', fixture.sessionId).draft.text, 'retained draft');
         assert.deepEqual(migrated.db.prepare('PRAGMA foreign_key_check').all(), []);
       } finally {
@@ -708,7 +710,7 @@ await test('an original four-state v9 database upgrades only the published copy 
   assert.deepEqual(await readFile(database), originalBytes);
   for (const [directory, version] of [
     [result.backupPath, 9],
-    [result.target, 10],
+    [result.target, 11],
   ] as const) {
     const copy = new DatabaseSync(join(directory, 'atelier.sqlite'), { readOnly: true });
     try {
@@ -748,7 +750,7 @@ await test('an original four-state v9 database upgrades only the published copy 
 });
 
 await test('unknown database versions are refused with no destination', async (t) => {
-  for (const version of [0, 11])
+  for (const version of [0, 12])
     await t.test('v' + version, async (t) => {
       const fixture = await migrationFixture(t);
       const database = new DatabaseSync(join(fixture.source, 'atelier.sqlite'));

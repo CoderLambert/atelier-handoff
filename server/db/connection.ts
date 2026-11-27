@@ -1,7 +1,7 @@
 /**
  * @file 打开工作台 SQLite 连接并装配 Drizzle 仓储。
- * @implementation 让旧 Store、会话快照、运行回执和 Git 仓储共用数据库句柄，提供读取事务并装配版本迁移入口。
- * @updated 2026-11-24T16:14:33+08:00
+ * @implementation 让旧 Store 与全部 Drizzle 仓储共用数据库句柄，以 repos 组合暴露仓储，提供读取事务并按版本顺序登记迁移。
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import SQLite from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
@@ -20,6 +20,9 @@ import { rtkSettingsRepository } from './repositories/rtk-settings.js';
 
 import { applyGitWorktrees } from './migrations/apply-git-worktrees.js';
 import { gitWorktreeRepository } from './repositories/git-worktrees.js';
+import { messageQueueRepository } from './repositories/message-queue.js';
+import { runtimeRecordRepositories } from './repositories/runtime-records.js';
+import { applyRuntimeHotpathIndexes } from './migrations/apply-runtime-hotpath-indexes.js';
 import { applyGitCommitOperations } from './migrations/apply-git-commit-operations.js';
 import { applyGitCommitOperationLifecycle } from './migrations/apply-git-commit-operation-lifecycle.js';
 import { gitCommitOperationRepository } from './repositories/git-commit-operations.js';
@@ -37,30 +40,44 @@ export interface LegacyDatabase {
   close(): void;
 }
 
+export const LATEST_SCHEMA_VERSION = 11;
+export type SchemaMigration = { version: number; apply: () => void };
+
 export function openWorkbenchDatabase(path: string) {
   const native = new SQLite(path);
   const db: LegacyDatabase = native;
   const orm = drizzle({ client: native });
-  return {
-    db,
-    readTransaction: <T>(work: () => T): T => native.transaction(work).deferred(),
-    assertForeignKeyIntegrity: () => assertForeignKeyIntegrity(db),
+  const migrations: readonly SchemaMigration[] = [
+    { version: 6, apply: () => applySnapshotIndexes(db) },
+    { version: 7, apply: () => applySubagents(db) },
+    { version: 8, apply: () => applyGitWorktrees(db) },
+    { version: 9, apply: () => applyGitCommitOperations(db) },
+    { version: 10, apply: () => applyGitCommitOperationLifecycle(db) },
+    { version: 11, apply: () => applyRuntimeHotpathIndexes(db) },
+  ];
+  const repos = {
     sessionSnapshots: sessionSnapshotRepository(orm),
     sessionEvents: sessionEventRepository(orm),
     runReceipts: runReceiptRepository(orm),
     subagents: subagentRepository(orm),
+    messageQueue: messageQueueRepository(orm),
+    ...runtimeRecordRepositories(orm),
     workspaceLayout: workspaceLayoutRepository(orm),
     gitMultiCommitPreferences: gitMultiCommitPreferencesRepository(orm),
     shortcutPreferences: shortcutPreferencesRepository(orm),
     skillInheritance: skillInheritanceRepository(orm),
     rtkSettings: rtkSettingsRepository(orm),
     githubPublicAuth: githubPublicAuthRepository(orm),
-    applySnapshotIndexes: () => applySnapshotIndexes(db),
-    applySubagents: () => applySubagents(db),
     gitWorktrees: gitWorktreeRepository(orm),
-    applyGitWorktrees: () => applyGitWorktrees(db),
     gitCommitOperations: gitCommitOperationRepository(orm),
-    applyGitCommitOperations: () => applyGitCommitOperations(db),
-    applyGitCommitOperationLifecycle: () => applyGitCommitOperationLifecycle(db),
+  };
+  return {
+    db,
+    readTransaction: <T>(work: () => T): T => native.transaction(work).deferred(),
+    assertForeignKeyIntegrity: () => assertForeignKeyIntegrity(db),
+    repos,
+    migrations,
   };
 }
+
+export type WorkbenchRepositories = ReturnType<typeof openWorkbenchDatabase>['repos'];

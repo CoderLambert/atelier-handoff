@@ -1,7 +1,7 @@
 /**
  * @file 执行会话待处理消息的插入、撤回与恢复。
  * @implementation 复核运行和投递状态。恢复时校验待复核消息仍是授权变化的队首，确认后启动该消息，否则普通恢复并请求调度。
- * @updated 2026-11-27T02:25:28+08:00
+ * @updated 2026-11-27T20:10:00+08:00
  */
 import { AppError, type Session } from '../../../shared/types.js';
 import type { Runner } from '../../agent.js';
@@ -21,7 +21,7 @@ export function createQueueActions({
   queueChanged,
   wakeQueue,
 }: {
-  store: Pick<Store, 'get' | 'list' | 'gitWorktrees'>;
+  store: Pick<Store, 'get' | 'gitWorktrees' | 'repos'>;
   messageQueue: Pick<MessageQueue, 'pending' | 'prioritize' | 'withdraw' | 'resume' | 'snapshot'>;
   runner: Pick<Runner, 'stop'>;
   liveInsertion: Pick<LiveInsertion, 'insertionAction' | 'insertLive'>;
@@ -41,11 +41,7 @@ export function createQueueActions({
       if (active.sessionId !== id)
         throw new AppError('QUEUE_CHANGED', '消息和当前运行不属于同一会话。', 409);
       const item = messageQueue.pending(id, itemId);
-      if (
-        !item &&
-        store.list('messages').some((message) => message.id === itemId && message.runId === runId)
-      )
-        return;
+      if (!item && store.repos.messages.existsInRun(itemId, runId)) return;
       if (
         item?.target_run_id === runId &&
         (item.delivery === 'waiting' || item.delivery === 'sending')

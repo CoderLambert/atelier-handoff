@@ -1,7 +1,7 @@
 /**
  * @file 绑定运行启动、消息队列和快照所需的执行状态。
  * @implementation 注入统一唤醒和事件通知，连接启动、实时插入、调度与队列读模型而不接触 HTTP。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T20:20:00+08:00
  */
 import type { Run, Session } from '../../shared/types.js';
 import type { Runner } from '../agent.js';
@@ -52,6 +52,7 @@ export function createMessageRuntime({
     | 'transaction'
     | 'gitWorktrees'
     | 'runReceipts'
+    | 'repos'
     | 'skillInheritance'
   >;
   worktrees: Pick<DevelopmentWorktrees, 'directory' | 'resolveSession' | 'assertUnlocked'>;

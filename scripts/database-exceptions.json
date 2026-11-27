@@ -34,5 +34,11 @@
     "key": "driver-call:add172deab3d920c",
     "decision": "docs/decisions/2026-11-24-ai-multi-commit.md",
     "test": "tests/git-commit-operations.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-runtime-hotpath-indexes.ts",
+    "key": "driver-call:6b6d6c89e9578ea9",
+    "decision": "docs/decisions/2026-11-27-orm-queue-and-hotpath-queries.md",
+    "test": "tests/runtime-orm-queries.test.ts"
   }
 ]
