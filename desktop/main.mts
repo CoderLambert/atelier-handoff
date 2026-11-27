@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
  * @implementation 装配窗口、快捷键与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
@@ -39,6 +39,7 @@ import { bindUiTheme } from './host/ui-theme-ipc.mjs';
 import { DesktopUiNotificationsPreferences } from './host/ui-notifications.mjs';
 import { bindUiNotifications } from './host/ui-notifications-ipc.mjs';
 import { bindDesktopGit } from './host/git-ipc.mjs';
+import { createTrustedSenderPredicate } from './host/trusted-ipc.mjs';
 import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -78,6 +79,11 @@ const nativeFiles = createNativeFileActions(
 const desktopShortcuts = createDesktopShortcuts(windowHost);
 const browser = createBrowserController({
   ...windowHost,
+  isTrustedSender: createTrustedSenderPredicate(
+    windowHost.getWindow,
+    windowHost.getOrigin,
+    windowHost.isStopping,
+  ),
   onShortcutInput: desktopShortcuts.handleGuestInput,
 });
 
@@ -280,12 +286,14 @@ else {
           () => stopping,
         );
         const unbindDesktopShortcutIpc = desktopShortcuts.bindIpc();
+        const unbindBrowserIpc = browser.bindIpc();
         app.once('will-quit', () => {
           unbindUiLanguage();
           unbindUiTheme();
           unbindUiNotifications();
           unbindDesktopGit();
           unbindDesktopShortcutIpc();
+          unbindBrowserIpc();
         });
         return start();
       }

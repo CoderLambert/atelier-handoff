@@ -1,7 +1,7 @@
 /**
- * @file 管理项目浏览器的原生标签、控制权、工具执行和下载接入。
- * @implementation 校验 IPC 和项目隔离边界，仲裁人工、Agent 与工作台输入，管理下载归属、操作超时和标签恢复。
- * @updated 2026-11-27T21:25:00+08:00
+ * @file 管理项目浏览器的原生标签、控制权、视图布局与下载接入。
+ * @implementation 编排 WebContentsView 与人工/Agent 边界，委托 operation-lifecycle 与 cdp-driver 执行工具，并提供显式 bindIpc 绑定/解绑句柄。
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import {
   BrowserWindow,
@@ -16,7 +16,6 @@ import {
   type WebContents,
 } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
-import { z } from 'zod';
 import {
   desktopBrowserChannels,
   desktopBrowserCommandSchema,
@@ -29,17 +28,24 @@ import {
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
 } from '../../shared/desktop-browser.js';
-import { AppError } from '../../shared/errors.js';
+import {
+  executeCdpClick,
+  executeCdpType,
+  snapshotAccessibilityTree,
+  type BrowserRefTarget,
+} from './cdp-driver.mjs';
 import { createBrowserDownloads } from './downloads.mjs';
+import {
+  createRendererGoneError,
+  runBrowserOperation,
+  type BrowserOperationHandle,
+} from './operation-lifecycle.mjs';
 
-const stopGraceMs = 1_000;
-const rendererGone = () =>
-  new AppError('DESKTOP_BROWSER_RENDERER_GONE', '网页进程已退出，已替换受影响的标签。', 502);
-
-interface BrowserHost {
+export interface BrowserHost {
   getWindow(): BrowserWindow | undefined;
   getOrigin(): string | undefined;
   isStopping(): boolean;
+  isTrustedSender?: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
   onShortcutInput?(event: Event, input: Input): void;
 }
 
@@ -50,13 +56,8 @@ export function createBrowserController(host: BrowserHost) {
     owner: BrowserWindow;
     view: WebContentsView;
     busy: boolean;
-    refs: Map<string, { id: number; editable: boolean }>;
-    operation?: {
-      id: string;
-      abort: AbortController;
-      done: Promise<void>;
-      retire: (error?: Error) => void;
-    };
+    refs: Map<string, BrowserRefTarget>;
+    operation?: BrowserOperationHandle;
     allowedOrigins?: string[];
     expectedKey?: (input: Input) => boolean;
     expectedMouse?: (input: MouseInputEvent) => boolean;
@@ -69,11 +70,13 @@ export function createBrowserController(host: BrowserHost) {
   const agentTarget = new Map<string, string>();
   const human = new Set<string>();
   const transferring = new Set<string>();
+  const tabs = new Map<string, BrowserTab>();
+  const contentsOwners = new WeakMap<WebContents, BrowserTab>();
+
   const projectTabs = (projectId: string) =>
     [...tabs.values()].filter((tab) => tab.projectId === projectId);
   const current = (projectId: string) => tabs.get(selected.get(projectId) ?? '');
-  const tabs = new Map<string, BrowserTab>();
-  const contentsOwners = new WeakMap<WebContents, BrowserTab>();
+
   const downloads = createBrowserDownloads(state, (contents, url) => {
     const tab = contentsOwners.get(contents);
     if (!tab || !ownsTab(tab) || !human.has(tab.projectId)) return undefined;
@@ -104,32 +107,6 @@ export function createBrowserController(host: BrowserHost) {
     } catch {
       return undefined;
     }
-  });
-
-  const accessibilityTreeSchema = z.object({
-    nodes: z.array(
-      z.object({
-        ignored: z.boolean().optional(),
-        backendDOMNodeId: z.int().positive().optional(),
-        name: z.object({ value: z.unknown() }).optional(),
-        role: z.object({ value: z.string() }).optional(),
-      }),
-    ),
-  });
-  const coordinate = z.number().finite();
-  const boxModelSchema = z.object({
-    model: z.object({
-      content: z.tuple([
-        coordinate,
-        coordinate,
-        coordinate,
-        coordinate,
-        coordinate,
-        coordinate,
-        coordinate,
-        coordinate,
-      ]),
-    }),
   });
 
   function hostWindow(): BrowserWindow {
@@ -313,7 +290,7 @@ export function createBrowserController(host: BrowserHost) {
     wc.on('did-finish-load', () => state(projectId, tab));
     wc.on('render-process-gone', () => {
       tab.refs.clear();
-      if (tab.operation && ownsTab(tab)) replaceTab(tab, rendererGone());
+      if (tab.operation && ownsTab(tab)) replaceTab(tab, createRendererGoneError());
     });
     wc.on('destroyed', () => {
       contentsOwners.delete(wc);
@@ -425,7 +402,7 @@ export function createBrowserController(host: BrowserHost) {
     }
   }
 
-  function trusted(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  function defaultTrustedSender(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
     const origin = host.getOrigin();
     const window = host.getWindow();
     if (
@@ -445,345 +422,235 @@ export function createBrowserController(host: BrowserHost) {
     );
   }
 
-  ipcMain.on(desktopBrowserChannels.layout, (event, value: unknown) => {
-    if (!trusted(event)) return;
-    const request = desktopBrowserLayoutSchema.safeParse(value);
-    if (!request.success) return;
-    try {
-      show(request.data);
-    } catch {
-      state(request.data.projectId);
-    }
-  });
+  const isTrustedSender = (event: IpcMainEvent | IpcMainInvokeEvent) =>
+    host.isTrustedSender ? host.isTrustedSender(event) : defaultTrustedSender(event);
 
-  ipcMain.handle(desktopBrowserChannels.readDownload, async (event, value: unknown) => {
-    if (!trusted(event)) throw new Error('下载读取来源无效。');
-    const { projectId, downloadId } = desktopBrowserReadDownloadSchema.parse(value);
-    return downloads.read(projectId, downloadId);
-  });
-
-  ipcMain.handle(desktopBrowserChannels.command, async (event, value: unknown): Promise<void> => {
-    if (!trusted(event)) throw new Error('浏览器控制来源无效。');
-    const request = desktopBrowserCommandSchema.parse(value);
-    const { projectId, action } = request;
-    if (action === 'state') {
-      state(projectId);
-      return;
-    }
-    if (request.action === 'open-download-directory') {
-      await downloads.openDirectory();
-      return;
-    }
-    if (request.action === 'open-download') {
-      await downloads.openFile(projectId, request.downloadId);
-      return;
-    }
-    if (request.action === 'cancel-download' || request.action === 'reveal-download') {
-      if (request.action === 'cancel-download') downloads.cancel(projectId, request.downloadId);
-      else await downloads.reveal(projectId, request.downloadId);
-      return;
-    }
-    if (request.action === 'open-external') {
-      await shell.openExternal(siteUrl(request.url));
-      return;
-    }
-    if (request.action === 'open-tab') {
-      const destination = siteUrl(request.url);
-      const opened = createTab(projectId);
+  function bindIpc(): () => void {
+    const onLayout = (event: IpcMainEvent, value: unknown) => {
+      if (!isTrustedSender(event)) return;
+      const request = desktopBrowserLayoutSchema.safeParse(value);
+      if (!request.success) return;
       try {
-        if (!human.has(projectId)) await takeControl(projectId);
-      } catch (error) {
-        removeTab(opened);
-        repaint(projectId);
-        throw error;
+        show(request.data);
+      } catch {
+        state(request.data.projectId);
       }
-      selected.set(projectId, opened.id);
-      repaint(projectId);
-      await tabContents(opened).loadURL(destination);
-      return;
-    }
-    if (request.action === 'new-tab') {
-      selected.set(projectId, createTab(projectId).id);
-      repaint(projectId);
-      return;
-    }
-    if (request.action === 'select-tab' || request.action === 'close-tab') {
-      const selectedTab = tabs.get(request.tabId);
-      if (!selectedTab || selectedTab.projectId !== projectId)
-        throw new Error('该标签不属于当前项目。');
-      if (request.action === 'select-tab') selected.set(projectId, selectedTab.id);
-      else removeTab(selectedTab);
-      repaint(projectId);
-      return;
-    }
-    const tab = getTab(projectId);
-    const wc = tabContents(tab);
-    if (action === 'take') {
-      await takeControl(projectId);
-    } else if (action === 'release') {
-      human.delete(projectId);
-      agentTarget.set(projectId, tab.id);
-      for (const item of projectTabs(projectId)) item.refs.clear();
-      hostWindow().webContents.focus();
-    } else if (request.action === 'navigate') {
-      const destination = siteUrl(request.url);
-      if (!human.has(projectId)) await takeControl(projectId);
-      await tabContents(getTab(projectId)).loadURL(destination);
-    } else {
-      if (!human.has(projectId)) throw new Error('请先接管浏览器。');
-      if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
-      if (action === 'forward' && wc.navigationHistory.canGoForward())
-        wc.navigationHistory.goForward();
-      if (action === 'reload') wc.reload();
-    }
-    state(projectId, tab);
-  });
+    };
 
-  async function runTool(request: DesktopBrowserCall) {
+    ipcMain.on(desktopBrowserChannels.layout, onLayout);
+
+    ipcMain.handle(desktopBrowserChannels.readDownload, async (event, value: unknown) => {
+      if (!isTrustedSender(event)) throw new Error('下载读取来源无效。');
+      const { projectId, downloadId } = desktopBrowserReadDownloadSchema.parse(value);
+      return downloads.read(projectId, downloadId);
+    });
+
+    ipcMain.handle(desktopBrowserChannels.command, async (event, value: unknown): Promise<void> => {
+      if (!isTrustedSender(event)) throw new Error('浏览器控制来源无效。');
+      const request = desktopBrowserCommandSchema.parse(value);
+      const { projectId, action } = request;
+      if (action === 'state') {
+        state(projectId);
+        return;
+      }
+      if (request.action === 'open-download-directory') {
+        await downloads.openDirectory();
+        return;
+      }
+      if (request.action === 'open-download') {
+        await downloads.openFile(projectId, request.downloadId);
+        return;
+      }
+      if (request.action === 'cancel-download' || request.action === 'reveal-download') {
+        if (request.action === 'cancel-download') downloads.cancel(projectId, request.downloadId);
+        else await downloads.reveal(projectId, request.downloadId);
+        return;
+      }
+      if (request.action === 'open-external') {
+        await shell.openExternal(siteUrl(request.url));
+        return;
+      }
+      if (request.action === 'open-tab') {
+        const destination = siteUrl(request.url);
+        const opened = createTab(projectId);
+        try {
+          if (!human.has(projectId)) await takeControl(projectId);
+        } catch (error) {
+          removeTab(opened);
+          repaint(projectId);
+          throw error;
+        }
+        selected.set(projectId, opened.id);
+        repaint(projectId);
+        await tabContents(opened).loadURL(destination);
+        return;
+      }
+      if (request.action === 'new-tab') {
+        selected.set(projectId, createTab(projectId).id);
+        repaint(projectId);
+        return;
+      }
+      if (request.action === 'select-tab' || request.action === 'close-tab') {
+        const selectedTab = tabs.get(request.tabId);
+        if (!selectedTab || selectedTab.projectId !== projectId)
+          throw new Error('该标签不属于当前项目。');
+        if (request.action === 'select-tab') selected.set(projectId, selectedTab.id);
+        else removeTab(selectedTab);
+        repaint(projectId);
+        return;
+      }
+      const tab = getTab(projectId);
+      const wc = tabContents(tab);
+      if (action === 'take') {
+        await takeControl(projectId);
+      } else if (action === 'release') {
+        human.delete(projectId);
+        agentTarget.set(projectId, tab.id);
+        for (const item of projectTabs(projectId)) item.refs.clear();
+        hostWindow().webContents.focus();
+      } else if (request.action === 'navigate') {
+        const destination = siteUrl(request.url);
+        if (!human.has(projectId)) await takeControl(projectId);
+        await tabContents(getTab(projectId)).loadURL(destination);
+      } else {
+        if (!human.has(projectId)) throw new Error('请先接管浏览器。');
+        if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
+        if (action === 'forward' && wc.navigationHistory.canGoForward())
+          wc.navigationHistory.goForward();
+        if (action === 'reload') wc.reload();
+      }
+      state(projectId, tab);
+    });
+
+    return () => {
+      ipcMain.removeListener(desktopBrowserChannels.layout, onLayout);
+      ipcMain.removeHandler(desktopBrowserChannels.readDownload);
+      ipcMain.removeHandler(desktopBrowserChannels.command);
+    };
+  }
+
+  async function runTool(
+    request: DesktopBrowserCall,
+  ): Promise<{ text: string; png?: undefined } | { png: string; text?: undefined }> {
     const { projectId, allowedOrigins } = request;
     if (human.has(projectId) || transferring.has(projectId)) throw new Error('浏览器由用户控制。');
     const tab = getTab(projectId, 'agent');
     if (tab.busy) throw new Error('该浏览器标签正在处理上一条操作，请稍后重试。');
     const wc = tabContents(tab);
     const cdp = wc.debugger;
-    const abort = new AbortController();
-    let finish = () => {};
-    const done = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    let viewFailure: Error | undefined;
-    let release = () => {};
-    const released = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const retire = (error?: Error) => {
-      viewFailure = error;
-      release();
-    };
-    const waitForNative = <T,>(pending: Promise<T>): Promise<T> =>
-      Promise.race([
-        pending,
-        released.then(() => {
-          throw viewFailure ?? new Error('已结束对网页操作的等待。');
-        }),
-      ]);
-    const timeoutMs = desktopBrowserTimeoutMs(request.name);
-    const timeoutReason = new Error('Browser tool deadline exceeded');
     const readOnly =
       request.name === 'browser_snapshot' || request.name === 'browser_take_screenshot';
-    let inputDispatched = false;
-    let replaced = false;
-    tab.operation = { id: request.id, abort, done, retire };
-    tab.busy = true;
-    tab.allowedOrigins = allowedOrigins;
-    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
-    const stop = () => {
-      tab.refs.clear();
-      tab.expectedKey = undefined;
-      tab.expectedMouse = undefined;
-      if (!ownsTab(tab)) return;
-      if (readOnly) {
-        // Reads can be abandoned without reloading the page or stopping its navigation.
-        release();
-        if (request.name === 'browser_snapshot' && cdp.isAttached()) cdp.detach();
-        return;
-      }
-      cleanupTimer = setTimeout(() => {
-        if (tab.operation?.id !== request.id || !ownsTab(tab)) return;
-        replaced = true;
-        replaceTab(tab);
-      }, stopGraceMs);
-      if (request.name === 'browser_navigate') wc.stop();
-    };
-    abort.signal.addEventListener('abort', stop, { once: true });
-    const deadline = setTimeout(() => abort.abort(timeoutReason), timeoutMs);
-    const send = async (name: string, params?: object): Promise<unknown> => {
-      abort.signal.throwIfAborted();
-      if (name.startsWith('Input.')) inputDispatched = true;
-      const result: unknown = await waitForNative(cdp.sendCommand(name, params));
-      abort.signal.throwIfAborted();
-      return result;
-    };
-    try {
-      state(projectId, tab);
-      if (request.name === 'browser_navigate') {
-        const destination = siteUrl(request.args.url);
-        if (allowedOrigins && !allowedOrigins.includes(new URL(destination).origin))
-          throw new Error('站点未在项目的浏览器授权范围内。');
-        await waitForNative(wc.loadURL(destination));
-        abort.signal.throwIfAborted();
-        tabContents(tab);
-        return { text: `已打开 ${wc.getURL()}\n页面标题：${wc.getTitle()}` };
-      }
-      const url = wc.getURL();
-      if (!url || url === 'about:blank') throw new Error('当前标签尚未打开网页，请先打开网址。');
-      if (allowedOrigins && !allowedOrigins.includes(new URL(url).origin))
-        throw new Error('当前页面未在项目的浏览器授权范围内。');
-      if (request.name === 'browser_take_screenshot') {
-        const detached = !tab.owner.contentView.children.includes(tab.view);
-        if (detached) {
-          tab.view.setBounds({ x: 0, y: 0, width: 960, height: 640 });
-          tab.owner.contentView.addChildView(tab.view, 0);
-        }
-        try {
-          const capture = await waitForNative(wc.capturePage(undefined, { stayHidden: false }));
-          abort.signal.throwIfAborted();
-          tabContents(tab);
-          return { png: capture.toPNG().toString('base64') };
-        } finally {
-          if (
-            detached &&
-            visible !== tab &&
-            !tab.owner.isDestroyed() &&
-            tab.owner.contentView.children.includes(tab.view)
-          )
-            tab.owner.contentView.removeChildView(tab.view);
-        }
-      }
-      if (!cdp.isAttached()) cdp.attach('1.3');
-      if (request.name === 'browser_snapshot') {
-        const { nodes } = accessibilityTreeSchema.parse(await send('Accessibility.getFullAXTree'));
-        tabContents(tab);
+
+    return runBrowserOperation({
+      id: request.id,
+      timeoutMs: desktopBrowserTimeoutMs(request.name),
+      readOnly,
+      isNavigate: request.name === 'browser_navigate',
+      attachHandle: (handle) => {
+        tab.operation = handle;
+        tab.busy = true;
+        tab.allowedOrigins = allowedOrigins;
+      },
+      isCurrentOperation: () => tab.operation?.id === request.id,
+      canAct: () => ownsTab(tab),
+      isRendererCrashed: () => ownsTab(tab) && wc.isCrashed(),
+      onAbortCleanup: () => {
         tab.refs.clear();
-        const revision = ++generation;
-        const interactive = ['button', 'link', 'textbox', 'searchbox', 'checkbox', 'combobox'];
-        const rows = nodes
-          .filter(
-            (node) =>
-              !node.ignored &&
-              (node.name?.value ||
-                (node.backendDOMNodeId &&
-                  ['textbox', 'searchbox'].includes(node.role?.value ?? ''))),
-          )
-          .sort(
-            (a, b) =>
-              Number(interactive.includes(b.role?.value ?? '')) -
-              Number(interactive.includes(a.role?.value ?? '')),
-          )
-          .slice(0, 200)
-          .map((node, index) => {
-            const ref = `r${revision}-${index + 1}`;
-            const role = node.role?.value || '';
-            if (node.backendDOMNodeId)
-              tab.refs.set(ref, {
-                id: node.backendDOMNodeId,
-                editable: ['textbox', 'searchbox'].includes(role),
-              });
-            return {
-              ref: node.backendDOMNodeId ? ref : undefined,
-              role,
-              name: String(node.name?.value ?? '').slice(0, 300),
-            };
-          });
-        return { text: JSON.stringify({ url: wc.getURL(), title: wc.getTitle(), elements: rows }) };
-      }
-      const target = tab.refs.get(request.args.target ?? request.args.ref ?? '');
-      if (!target) throw new Error('该页面引用已失效，请重新读取页面。');
-      // Electron's before-input hooks also receive CDP events. Permit a single
-      // matching event while the controller sends each approved input command.
-      const sendKey = async (
-        type: 'rawKeyDown' | 'keyDown' | 'keyUp',
-        key: string,
-        code: string,
-        windowsVirtualKeyCode: number,
-        modifiers = 0,
-        text?: string,
-      ) => {
-        tab.expectedKey = (event) =>
-          event.type === (type === 'keyUp' ? 'keyUp' : 'keyDown') &&
-          event.key === key &&
-          event.code === code &&
-          event.control === (modifiers === 2);
-        try {
-          await send('Input.dispatchKeyEvent', {
-            type,
-            key,
-            code,
-            windowsVirtualKeyCode,
-            modifiers,
-            text,
-          });
-        } finally {
-          tab.expectedKey = undefined;
+        tab.expectedKey = undefined;
+        tab.expectedMouse = undefined;
+      },
+      onStopReadOnly: () => {
+        if (request.name === 'browser_snapshot' && cdp.isAttached()) cdp.detach();
+      },
+      onStopNavigate: () => wc.stop(),
+      onReplaceStuckTab: () => replaceTab(tab),
+      onRendererCrashed: (error) => replaceTab(tab, error),
+      onBeforeRun: () => state(projectId, tab),
+      onFinally: () => {
+        tab.operation = undefined;
+        tab.busy = false;
+        tab.allowedOrigins = undefined;
+        state(projectId, tab);
+      },
+      execute: async ({ signal, waitForNative, markInputDispatched }) => {
+        const send = async (name: string, params?: object): Promise<unknown> => {
+          signal.throwIfAborted();
+          if (name.startsWith('Input.')) markInputDispatched();
+          const result: unknown = await waitForNative(cdp.sendCommand(name, params));
+          signal.throwIfAborted();
+          return result;
+        };
+
+        if (request.name === 'browser_navigate') {
+          const destination = siteUrl(request.args.url);
+          if (allowedOrigins && !allowedOrigins.includes(new URL(destination).origin))
+            throw new Error('站点未在项目的浏览器授权范围内。');
+          await waitForNative(wc.loadURL(destination));
+          signal.throwIfAborted();
+          tabContents(tab);
+          return { text: `已打开 ${wc.getURL()}\n页面标题：${wc.getTitle()}` };
         }
-      };
-      if (request.name === 'browser_type') {
-        if (!target.editable) throw new Error('请输入有效的文本。');
-        await send('DOM.focus', { backendNodeId: target.id });
-        await sendKey('rawKeyDown', 'a', 'KeyA', 65, 2);
-        await sendKey('keyUp', 'a', 'KeyA', 65, 2);
-        await send('Input.insertText', { text: request.args.text });
-        if (request.args.submit) {
-          await sendKey('keyDown', 'Enter', 'Enter', 13, 0, '\r');
-          await sendKey('keyUp', 'Enter', 'Enter', 13);
-        }
-      } else {
-        await send('DOM.scrollIntoViewIfNeeded', { backendNodeId: target.id });
-        const { model } = boxModelSchema.parse(
-          await send('DOM.getBoxModel', { backendNodeId: target.id }),
-        );
-        const [x1, y1, , , x3, y3] = model.content;
-        const x = (x1 + x3) / 2;
-        const y = (y1 + y3) / 2;
-        const clicks = request.args.doubleClick ? 2 : 1;
-        for (let clickCount = 1; clickCount <= clicks; clickCount++) {
-          for (const type of ['mousePressed', 'mouseReleased'] as const) {
-            tab.expectedMouse = (event) =>
-              event.type === (type === 'mousePressed' ? 'mouseDown' : 'mouseUp') &&
-              event.button === 'left' &&
-              Math.abs(event.x - x) < 1 &&
-              Math.abs(event.y - y) < 1;
-            try {
-              await send('Input.dispatchMouseEvent', {
-                type,
-                x,
-                y,
-                button: 'left',
-                clickCount,
-                buttons: type === 'mousePressed' ? 1 : 0,
-              });
-            } finally {
-              tab.expectedMouse = undefined;
-            }
+
+        const url = wc.getURL();
+        if (!url || url === 'about:blank') throw new Error('当前标签尚未打开网页，请先打开网址。');
+        if (allowedOrigins && !allowedOrigins.includes(new URL(url).origin))
+          throw new Error('当前页面未在项目的浏览器授权范围内。');
+
+        if (request.name === 'browser_take_screenshot') {
+          const detached = !tab.owner.contentView.children.includes(tab.view);
+          if (detached) {
+            tab.view.setBounds({ x: 0, y: 0, width: 960, height: 640 });
+            tab.owner.contentView.addChildView(tab.view, 0);
+          }
+          try {
+            const capture = await waitForNative(wc.capturePage(undefined, { stayHidden: false }));
+            signal.throwIfAborted();
+            tabContents(tab);
+            return { png: capture.toPNG().toString('base64') };
+          } finally {
+            if (
+              detached &&
+              visible !== tab &&
+              !tab.owner.isDestroyed() &&
+              tab.owner.contentView.children.includes(tab.view)
+            )
+              tab.owner.contentView.removeChildView(tab.view);
           }
         }
-      }
-      tabContents(tab);
-      tab.refs.clear();
-      return { text: '网页操作已执行。请重新读取页面确认结果。' };
-    } catch (error) {
-      if (ownsTab(tab) && wc.isCrashed()) replaceTab(tab, rendererGone());
-      const verifyInput = inputDispatched ? '网站可能已收到操作。请先核对结果，勿直接重试。' : '';
-      if (viewFailure instanceof AppError)
-        throw new AppError(viewFailure.code, viewFailure.message + verifyInput, viewFailure.status);
-      const recovery = replaced
-        ? '旧标签未响应，已换成空白标签。请重新打开网页。'
-        : '原标签已保留。';
-      if (abort.signal.reason === timeoutReason)
-        throw new AppError(
-          'DESKTOP_BROWSER_TIMEOUT',
-          `网页操作在 ${timeoutMs / 1000} 秒内未完成。${recovery}${verifyInput}`,
-          504,
-        );
-      if (abort.signal.aborted) throw new Error(`网页操作已取消。${verifyInput}`);
-      if (verifyInput && error instanceof Error) throw new Error(error.message + verifyInput);
-      throw error;
-    } finally {
-      clearTimeout(deadline);
-      clearTimeout(cleanupTimer);
-      abort.signal.removeEventListener('abort', stop);
-      tab.operation = undefined;
-      tab.busy = false;
-      tab.allowedOrigins = undefined;
-      finish();
-      state(projectId, tab);
-    }
-  }
 
-  function cancel(callId: string): void {
-    for (const tab of tabs.values()) {
-      if (tab.operation?.id === callId) tab.operation.abort.abort();
-    }
+        if (!cdp.isAttached()) cdp.attach('1.3');
+        if (request.name === 'browser_snapshot') {
+          return snapshotAccessibilityTree({
+            send,
+            refs: tab.refs,
+            revision: ++generation,
+            url: wc.getURL(),
+            title: wc.getTitle(),
+            assertTabOwned: () => tabContents(tab),
+          });
+        }
+
+        const cdpSession = { refs: tab.refs, hooks: tab, send };
+        if (request.name === 'browser_type') {
+          await executeCdpType(
+            cdpSession,
+            request.args.target ?? request.args.ref,
+            request.args.text,
+            request.args.submit,
+          );
+        } else {
+          await executeCdpClick(
+            cdpSession,
+            request.args.target ?? request.args.ref,
+            request.args.doubleClick,
+          );
+        }
+
+        tabContents(tab);
+        tab.refs.clear();
+        return { text: '网页操作已执行。请重新读取页面确认结果。' };
+      },
+    });
   }
 
   function reset(): void {
@@ -797,5 +664,11 @@ export function createBrowserController(host: BrowserHost) {
     transferring.clear();
   }
 
-  return { runTool, reset, cancel };
+  return { bindIpc, runTool, reset, cancel };
+
+  function cancel(callId: string): void {
+    for (const tab of tabs.values()) {
+      if (tab.operation?.id === callId) tab.operation.abort.abort();
+    }
+  }
 }

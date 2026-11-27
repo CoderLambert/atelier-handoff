@@ -1,7 +1,7 @@
 /**
  * @file 绑定桌面通知偏好与窗口唤醒 IPC。
- * @implementation 通过共享来源守卫校验窗口、连接和关停状态，处理通知偏好读写与焦点恢复。
- * @updated 2026-11-27T16:55:43+08:00
+ * @implementation 复用统一的可信偏好绑定器处理通知偏好读写，并绑定窗口激活通道及对称清理函数。
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import { ipcMain, type BrowserWindow } from 'electron';
 import {
@@ -13,7 +13,7 @@ import {
 } from '../../shared/desktop-ui-notifications.js';
 import { focusWindow } from './window.mjs';
 import type { DesktopUiNotificationsPreferences } from './ui-notifications.mjs';
-import { createTrustedIpcGuard } from './trusted-ipc.mjs';
+import { bindTrustedPreferenceIpc } from './trusted-ipc.mjs';
 
 type Connection = { origin: string };
 
@@ -23,28 +23,19 @@ export function bindUiNotifications(
   getConnection: () => Connection | undefined,
   isStopping: () => boolean,
 ): () => void {
-  const assertTrustedIpc = createTrustedIpcGuard(
+  const { assertTrustedIpc, unbind } = bindTrustedPreferenceIpc({
+    channels: desktopUiNotificationChannels,
+    getSchema: desktopUiNotificationGetSchema,
+    setSchema: desktopUiNotificationSetSchema,
+    resultSchema: desktopUiNotificationResultSchema,
+    preferences,
     getWindow,
     getConnection,
     isStopping,
-    () => 'Untrusted UI notifications request.',
-  );
-
-  ipcMain.handle(desktopUiNotificationChannels.get, (event, input: unknown) => {
-    assertTrustedIpc(event);
-    desktopUiNotificationGetSchema.parse(input);
-    return desktopUiNotificationResultSchema.parse(preferences.get());
-  });
-
-  ipcMain.handle(desktopUiNotificationChannels.set, async (event, input: unknown) => {
-    const { connection } = assertTrustedIpc(event);
-    const notifications = desktopUiNotificationSetSchema.parse(input);
-    const result = await preferences.set(notifications, () => {
-      if (assertTrustedIpc(event).connection !== connection)
-        throw new Error('UI notifications request connection changed.');
-    });
-    assertTrustedIpc(event);
-    return desktopUiNotificationResultSchema.parse(result);
+    messages: {
+      invalidSource: 'Untrusted UI notifications request.',
+      connectionChanged: 'UI notifications request connection changed.',
+    },
   });
 
   ipcMain.handle(desktopUiNotificationChannels.focusWindow, (event) => {
@@ -55,8 +46,7 @@ export function bindUiNotifications(
   });
 
   return () => {
-    ipcMain.removeHandler(desktopUiNotificationChannels.get);
-    ipcMain.removeHandler(desktopUiNotificationChannels.set);
+    unbind();
     ipcMain.removeHandler(desktopUiNotificationChannels.focusWindow);
   };
 }

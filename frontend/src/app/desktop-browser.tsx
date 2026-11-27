@@ -1,7 +1,7 @@
 /**
  * @file 提供桌面浏览器控件与网页显示区域。
- * @implementation 以两行组织标签、下载、布局与导航操作；结合项目授权和人工控制同步原生网页视图，只在相关布局变化后测量并去重槽位坐标。
- * @updated 2026-11-27T16:57:10+08:00
+ * @implementation 以两行组织标签、下载、布局与导航操作；结合项目授权和人工控制同步原生网页视图，并将槽位观测与状态推导拆出到独立模块。
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -17,121 +17,13 @@ import { translateError, useUiTranslation } from '@/i18n';
 import { useDesktopBrowserAccess } from '@/use-query/browser/use-desktop-browser-access';
 import { useUpdateDesktopBrowserAccess } from '@/use-query/browser/use-update-desktop-browser-access';
 import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, Settings, X } from 'lucide-react';
-
 import { BrowserDownloads } from './browser-downloads';
-import { workspaceLayoutEvent } from './workspace-panels';
-
+import { deriveDesktopBrowserStatus } from './desktop-browser-status';
+import { useNativeBrowserSlot } from './use-native-browser-slot';
 import type {
   DesktopBrowserAction as BrowserAction,
-  DesktopBrowserLayout,
   DesktopBrowserState as DesktopState,
 } from '@shared/desktop-browser';
-
-const dialogSelector = '[role="dialog"]';
-type BrowserBounds = DesktopBrowserLayout['bounds'];
-
-function observeNativeBrowserSlot(
-  slot: HTMLDivElement,
-  send: (bounds: BrowserBounds) => void,
-): () => void {
-  let lastBounds: BrowserBounds | undefined;
-  let frame: number | undefined;
-  let dialogs = new Set<Element>();
-
-  function publish(bounds: BrowserBounds) {
-    const previous = lastBounds;
-    if (
-      previous === bounds ||
-      (previous &&
-        bounds &&
-        previous.x === bounds.x &&
-        previous.y === bounds.y &&
-        previous.width === bounds.width &&
-        previous.height === bounds.height)
-    )
-      return;
-    lastBounds = bounds;
-    send(bounds);
-  }
-  function schedule() {
-    if (frame !== undefined) return;
-    frame = requestAnimationFrame(() => {
-      frame = undefined;
-      if (
-        document.hidden ||
-        [...dialogs].some((dialog) => dialog.getBoundingClientRect().width > 0)
-      ) {
-        publish(null);
-        return;
-      }
-      const { x, y, width, height } = slot.getBoundingClientRect();
-      publish(width > 0 && height > 0 ? { x, y, width, height } : null);
-    });
-  }
-
-  const sizes = new ResizeObserver(schedule);
-  sizes.observe(slot);
-  if (slot.parentElement) sizes.observe(slot.parentElement);
-  function updateDialogs() {
-    const next = new Set(
-      [...document.querySelectorAll(dialogSelector)].filter((dialog) => !dialog.contains(slot)),
-    );
-    for (const dialog of dialogs) if (!next.has(dialog)) sizes.unobserve(dialog);
-    for (const dialog of next) if (!dialogs.has(dialog)) sizes.observe(dialog);
-    dialogs = next;
-    schedule();
-  }
-  function containsDialog(node: Node) {
-    return (
-      node instanceof Element &&
-      (node.matches(dialogSelector) || node.querySelector(dialogSelector))
-    );
-  }
-  const mutations = new MutationObserver((records) => {
-    if (
-      records.some((record) =>
-        record.type === 'childList'
-          ? [...record.addedNodes, ...record.removedNodes].some(containsDialog)
-          : record.target instanceof Element &&
-            (record.target.matches(dialogSelector) ||
-              (record.attributeName === 'role' && record.oldValue === 'dialog')),
-      )
-    )
-      updateDialogs();
-  });
-  mutations.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['role', 'data-state'],
-    attributeOldValue: true,
-  });
-  function onScroll(event: Event) {
-    const target = event.target;
-    if (target === window || (target instanceof Node && target.contains(slot))) schedule();
-  }
-
-  function onVisibilityChange() {
-    if (document.hidden) publish(null);
-    else schedule();
-  }
-
-  window.addEventListener(workspaceLayoutEvent, schedule);
-  window.addEventListener('resize', schedule);
-  window.addEventListener('scroll', onScroll, true);
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  updateDialogs();
-  return () => {
-    if (frame !== undefined) cancelAnimationFrame(frame);
-    sizes.disconnect();
-    mutations.disconnect();
-    window.removeEventListener(workspaceLayoutEvent, schedule);
-    window.removeEventListener('resize', schedule);
-    window.removeEventListener('scroll', onScroll, true);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    if (lastBounds) publish(null);
-  };
-}
 
 export function useDesktopBrowser(projectId: string | undefined) {
   const [state, setState] = useState<DesktopState>();
@@ -174,8 +66,8 @@ export function DesktopBrowser({
   const agentAvailable = access.data?.available === true && !access.isError;
   const activeTab = state?.tabs.find((tab) => tab.id === state.activeTabId);
   const agentTab = state?.tabs.find((tab) => tab.id === state.agentTabId);
-  const differentAgentTab = agentTab && agentTab.id !== state?.activeTabId;
-  const transferring = state?.transferring || pending === 'take' || pending === 'release';
+  const differentAgentTab = Boolean(agentTab && agentTab.id !== state?.activeTabId);
+  const transferring = Boolean(state?.transferring) || pending === 'take' || pending === 'release';
   const disabled = !state || Boolean(pending) || transferring;
   const address = activeTab ? (addresses[activeTab.id] ?? state?.url ?? '') : '';
   const accessFailure = access.error || accessError;
@@ -184,42 +76,19 @@ export function DesktopBrowser({
     : accessFailure
       ? translateError(accessFailure, t('errors.accessFailed'))
       : '';
-  const status = statusError
-    ? statusError
-    : transferring
-      ? t('status.transferring')
-      : !state
-        ? t('status.connecting')
-        : state.control
-          ? t('status.paused')
-          : access.isPending
-            ? t('status.readingAccess')
-            : !agentAvailable
-              ? t('status.unavailable')
-              : !agentEnabled
-                ? t('status.disabled')
-                : state.tabs.length === 0
-                  ? t('status.noTabs')
-                  : differentAgentTab
-                    ? t('status.otherTab')
-                    : state.busy
-                      ? t('status.busy')
-                      : agentTab
-                        ? t('status.agentTab')
-                        : t('status.waiting');
-  const showAgentTarget = differentAgentTab && !state?.control && !transferring && !statusError;
-
-  const statusTone = statusError
-    ? 'error'
-    : transferring
-      ? 'busy'
-      : state?.control
-        ? 'control'
-        : state?.busy
-          ? 'busy'
-          : !agentAvailable || !agentEnabled || showAgentTarget
-            ? 'notice'
-            : 'idle';
+  const derivedStatus = deriveDesktopBrowserStatus({
+    state,
+    hasError: Boolean(statusError),
+    transferring,
+    accessPending: access.isPending,
+    agentAvailable,
+    agentEnabled,
+    hasAgentTab: Boolean(agentTab),
+    differentAgentTab,
+  });
+  const status = derivedStatus.key ? t(derivedStatus.key) : statusError;
+  const statusTone = derivedStatus.tone;
+  const showAgentTarget = derivedStatus.showAgentTarget && Boolean(agentTab);
 
   useEffect(() => {
     selectedTab.current
@@ -231,11 +100,7 @@ export function DesktopBrowser({
     }
   }, [state?.activeTabId, state?.tabs]);
 
-  useEffect(() => {
-    const element = slot.current;
-    if (!bridge || !element) return;
-    return observeNativeBrowserSlot(element, (bounds) => bridge.layout(projectId, bounds));
-  }, [bridge, projectId]);
+  useNativeBrowserSlot(slot, projectId, bridge);
 
   async function command(action: BrowserAction, value?: string) {
     if (!bridge || disabled) return;
@@ -510,7 +375,7 @@ export function DesktopBrowser({
         {statusTone === 'busy' ? (
           <span className="desktop-browser-status-dot" aria-hidden="true" />
         ) : null}
-        {showAgentTarget ? (
+        {showAgentTarget && agentTab ? (
           <Button
             type="button"
             size="xs"

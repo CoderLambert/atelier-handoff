@@ -1,7 +1,7 @@
 /**
  * @file 在隔离 Electron 中验证工作台快捷键与网页控制权。
  * @implementation 使用实际主进程、preload 和本地网页，核对信道、焦点、注册生命周期、网页键盘事件及 Agent 输入。
- * @updated 2026-11-26T21:45:00+08:00
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import assert from 'node:assert/strict';
 import {
@@ -79,6 +79,7 @@ app
       ...host,
       onShortcutInput: nativeShortcuts.handleGuestInput,
     });
+    const unbindBrowser = browser.bindIpc();
     const projectId = randomUUID();
     const project = JSON.stringify(projectId);
     const read = (source: string): Promise<unknown> => owner.webContents.executeJavaScript(source);
@@ -252,6 +253,7 @@ app
     await owner.loadURL(website);
     await assert.rejects(read(register('wrong-origin')));
     browser.reset();
+    unbindBrowser();
     detach();
     unbind();
     owner.destroy();

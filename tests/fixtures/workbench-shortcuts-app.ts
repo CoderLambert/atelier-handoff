@@ -1,7 +1,7 @@
 /**
  * @file 为快捷键烟测启动隔离的真实桌面工作台与 Node 运行时。
  * @implementation 复用生产窗口、配对、浏览器和快捷键桥接，避开测试环境不支持的单实例锁。
- * @updated 2026-11-26T21:52:00+08:00
+ * @updated 2026-11-27T22:00:00+08:00
  */
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
@@ -122,6 +122,7 @@ void app
       bindUiNotifications(uiNotifications, getWindow, getConnection, isStopping),
       bindDesktopGit(getWindow, getConnection, isStopping),
       shortcuts.bindIpc(),
+      browser.bindIpc(),
     );
     connection = await supervisor.start();
     if (isStopping()) return;
