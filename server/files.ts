@@ -24,7 +24,7 @@ import { AppError } from '../shared/errors.js';
 export const fingerprint = (value: Buffer | string) =>
   createHash('sha256').update(value).digest('hex');
 export const MAX_TEXT = 256 * 1024;
-export const blockedNames = new Set([
+export const credentialNames = new Set([
   '.git',
   '.claude',
   '.codex',
@@ -36,15 +36,14 @@ export const blockedNames = new Set([
   '.npmrc',
   '.netrc',
   '.pypirc',
-  'node_modules',
-  'dist',
-  '.cache',
   '.gemini',
 ]);
-const sensitive = (part: string) =>
-  blockedNames.has(part) ||
+export const blockedNames = new Set([...credentialNames, 'node_modules', 'dist', '.cache']);
+export const isSensitiveCredentialName = (part: string) =>
+  credentialNames.has(part) ||
   /^\.env(?:\.|$)/i.test(part) ||
   /^(id_rsa|id_ed25519)$|\.(pem|key|p12)$/i.test(part);
+const sensitive = (part: string) => blockedNames.has(part) || isSensitiveCredentialName(part);
 export const sensitiveProjectPath = (path: string) => path.split(/[\\/]/u).some(sensitive);
 export function inside(root: string, target: string): boolean {
   const part = relative(root, target);
@@ -160,7 +159,12 @@ export async function listProjectFiles(root: string, input = '') {
     )
       continue;
     const full = join(target, entry.name);
-    const stat = await lstat(full);
+    let stat;
+    try {
+      stat = await lstat(full);
+    } catch {
+      continue;
+    }
     if (stat.isFile() && stat.nlink !== 1) continue;
     items.push({
       name: entry.name,
@@ -236,16 +240,18 @@ export async function findProjectFiles(root: string, query = '', limit = 50) {
       }
     } else if (entry.isFile()) {
       if (isMatch) {
-        let size = 0;
+        let stat;
         try {
-          const stat = await lstat(join(root, rel));
-          if (stat.isFile() && stat.nlink === 1) size = stat.size;
-        } catch {}
+          stat = await lstat(join(root, rel));
+        } catch {
+          continue;
+        }
+        if (!stat.isFile() || stat.nlink !== 1) continue;
         directFiles.push({
           name: entry.name,
           path: rel,
           isDirectory: false,
-          size,
+          size: stat.size,
         });
       }
     }
@@ -294,16 +300,18 @@ export async function findProjectFiles(root: string, query = '', limit = 50) {
         if (directDirs.length + directFiles.length + nestedMatches.length >= limit) return;
       } else if (entry.isFile()) {
         if (isMatch) {
-          let size = 0;
+          let stat;
           try {
-            const stat = await lstat(join(root, rel));
-            if (stat.isFile() && stat.nlink === 1) size = stat.size;
-          } catch {}
+            stat = await lstat(join(root, rel));
+          } catch {
+            continue;
+          }
+          if (!stat.isFile() || stat.nlink !== 1) continue;
           nestedMatches.push({
             name: entry.name,
             path: rel,
             isDirectory: false,
-            size,
+            size: stat.size,
           });
           if (directDirs.length + directFiles.length + nestedMatches.length >= limit) return;
         }

@@ -28,18 +28,34 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       const host = req.headers.host;
       if (!host || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
         throw new AppError('ORIGIN_DENIED', '仅接受本机访问。', 403);
-      const url = new URL(req.url || '/', 'http://' + host);
+      const expectedOrigin = 'http://' + host;
       if (
-        (req.headers.origin && req.headers.origin !== url.origin) ||
+        (req.headers.origin && req.headers.origin !== expectedOrigin) ||
         req.headers['sec-fetch-site'] === 'cross-site'
       )
         throw new AppError('ORIGIN_DENIED', '拒绝跨站请求。', 403);
+      const rawUrl = req.url || '/';
+      if (!rawUrl.startsWith('/') || rawUrl.startsWith('//'))
+        throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
+      let url: URL;
+      try {
+        url = new URL(rawUrl, expectedOrigin);
+      } catch {
+        throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
+      }
+      if (url.origin !== expectedOrigin)
+        throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
       if (
         !['GET', 'HEAD'].includes(req.method || '') &&
         req.headers['x-atelier-token'] !== options.csrfToken
       )
         throw new AppError('TOKEN_REQUIRED', '本机应用令牌已更新，请刷新页面后重试。', 403);
-      const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      let parts: string[];
+      try {
+        parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      } catch {
+        throw new AppError('INVALID_INPUT', '请求路径编码无效。', 400);
+      }
       const method = req.method || 'GET';
       if (
         parts[0] === 'api' &&
