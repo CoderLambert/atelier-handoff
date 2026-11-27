@@ -227,16 +227,7 @@ app
     await command('release');
     const result = await snapshot();
     assert.ok(result.text);
-    const { elements } = z
-      .object({
-        elements: z.array(
-          z.object({ role: z.string(), name: z.string(), ref: z.string().optional() }),
-        ),
-      })
-      .parse(JSON.parse(result.text));
-    const target = elements.find(
-      (element) => element.role === 'textbox' && element.name === 'Input',
-    )?.ref;
+    const target = /-\s+textbox\s+"Input"\s+\[ref=(r[1-9]\d*-[1-9]\d*)\]/.exec(result.text)?.[1];
     assert.ok(target);
     await browser.runTool({
       ...request,

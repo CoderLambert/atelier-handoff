@@ -32,6 +32,28 @@ export function browserSnapshot(value: unknown): {
   title: string;
   elements: { ref?: string; role: string; name: string }[];
 } {
+  if (typeof value === 'string') {
+    const lines = value.split('\n');
+    const urlLine = lines[0] ?? '';
+    const titleLine = lines[1] ?? '';
+    assert.ok(urlLine.startsWith('url: '), 'snapshot URL header missing');
+    assert.ok(titleLine.startsWith('title: '), 'snapshot title header missing');
+    const elements: { ref?: string; role: string; name: string }[] = [];
+    for (const line of lines.slice(2)) {
+      const match = /^\s*-\s+([A-Za-z0-9_-]+)(?:\s+("(?:\\.|[^"\\])*"))?(.*)$/.exec(line);
+      if (!match) continue;
+      const role = match[1] ?? '';
+      const name = match[2] ? (JSON.parse(match[2]) as string) : '';
+      const rest = match[3] ?? '';
+      const ref = /\[ref=(r[1-9]\d*-[1-9]\d*)\]/.exec(rest)?.[1];
+      elements.push({ ...(ref === undefined ? {} : { ref }), role, name });
+    }
+    return {
+      url: urlLine.slice('url: '.length),
+      title: titleLine.slice('title: '.length),
+      elements,
+    };
+  }
   const input = record(value, 'native browser snapshot');
   return {
     url: string(input.url, 'snapshot URL'),

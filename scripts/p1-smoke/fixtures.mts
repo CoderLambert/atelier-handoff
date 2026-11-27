@@ -112,14 +112,15 @@ function toolResultText(messages: Record<string, unknown>[], id: string): string
 }
 
 function snapshotButton(messages: Record<string, unknown>[], id: string, url: string) {
-  const snapshot = browserSnapshot(JSON.parse(toolResultText(messages, id)) as unknown);
+  const raw = toolResultText(messages, id);
+  const snapshot = browserSnapshot(raw);
   assert.equal(snapshot.url, url);
   assert.equal(snapshot.title, browserTitle);
   const button = snapshot.elements.find(
     (element) => element.role === 'button' && element.name === browserClickLabel,
   );
   assert.ok(button?.ref, 'Browser snapshot must contain a real clickable ref');
-  return { snapshot, ref: button.ref };
+  return { snapshot: raw, ref: button.ref };
 }
 
 function browserMessage(

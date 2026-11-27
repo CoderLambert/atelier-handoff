@@ -25,21 +25,18 @@ import {
   desktopBrowserStateSchema,
   desktopBrowserTimeoutMs,
   desktopBrowserUrlSchema,
+  isDesktopBrowserReadOnlyTool,
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
 } from '../../shared/desktop-browser.js';
-import {
-  executeCdpClick,
-  executeCdpType,
-  snapshotAccessibilityTree,
-  type BrowserRefTarget,
-} from './cdp-driver.mjs';
+import type { BrowserRefTarget, PendingBrowserDialog } from './cdp-driver.mjs';
 import { createBrowserDownloads } from './downloads.mjs';
 import {
   createRendererGoneError,
   runBrowserOperation,
   type BrowserOperationHandle,
 } from './operation-lifecycle.mjs';
+import { executeBrowserTool, type BrowserToolResult } from './tool-executor.mjs';
 
 export interface BrowserHost {
   getWindow(): BrowserWindow | undefined;
@@ -61,6 +58,10 @@ export function createBrowserController(host: BrowserHost) {
     allowedOrigins?: string[];
     expectedKey?: (input: Input) => boolean;
     expectedMouse?: (input: MouseInputEvent) => boolean;
+    cdpBound?: boolean;
+    pageEnabled?: boolean;
+    pendingDialog?: PendingBrowserDialog;
+    onDialogOpened?: (dialog: PendingBrowserDialog) => void;
   }
 
   let visible: BrowserTab | undefined;
@@ -219,19 +220,29 @@ export function createBrowserController(host: BrowserHost) {
     wc.session.setPermissionCheckHandler(() => false);
     downloads.observe(wc.session);
     wc.setWindowOpenHandler((details) => {
-      if (
+      const humanAllowed =
         visible === tab &&
-        ownsTab(tab) &&
         human.has(projectId) &&
         current(projectId) === tab &&
+        !details.features;
+      const agentAllowed = !human.has(projectId) && agentTarget.get(projectId) === tab.id;
+      if (
+        ownsTab(tab) &&
+        (humanAllowed || agentAllowed) &&
         !details.postBody &&
-        !details.features &&
         ['default', 'foreground-tab', 'background-tab'].includes(details.disposition)
       ) {
-        // Keep the initiating view alive while Chromium handles an attachment response.
+        // Keep the initiating view alive while Chromium handles an attachment or navigation.
         queueMicrotask(() => {
           try {
             const destination = siteUrl(details.url);
+            if (
+              agentAllowed &&
+              tab.allowedOrigins &&
+              !tab.allowedOrigins.includes(new URL(destination).origin)
+            ) {
+              return;
+            }
             void tabContents(tab)
               .loadURL(destination, { httpReferrer: details.referrer })
               .catch(() => state(projectId, tab));
@@ -283,7 +294,9 @@ export function createBrowserController(host: BrowserHost) {
     };
     wc.on('will-navigate', guard);
     wc.on('will-redirect', guard);
-    wc.on('did-start-navigation', () => tab.refs.clear());
+    wc.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) tab.refs.clear();
+    });
     wc.on('did-navigate', () => state(projectId, tab));
     wc.on('did-navigate-in-page', () => state(projectId, tab));
     wc.on('page-title-updated', () => state(projectId, tab));
@@ -529,23 +542,21 @@ export function createBrowserController(host: BrowserHost) {
     };
   }
 
-  async function runTool(
-    request: DesktopBrowserCall,
-  ): Promise<{ text: string; png?: undefined } | { png: string; text?: undefined }> {
+  async function runTool(request: DesktopBrowserCall): Promise<BrowserToolResult> {
     const { projectId, allowedOrigins } = request;
     if (human.has(projectId) || transferring.has(projectId)) throw new Error('浏览器由用户控制。');
     const tab = getTab(projectId, 'agent');
     if (tab.busy) throw new Error('该浏览器标签正在处理上一条操作，请稍后重试。');
     const wc = tabContents(tab);
     const cdp = wc.debugger;
-    const readOnly =
-      request.name === 'browser_snapshot' || request.name === 'browser_take_screenshot';
+    const readOnly = isDesktopBrowserReadOnlyTool(request.name);
 
     return runBrowserOperation({
       id: request.id,
       timeoutMs: desktopBrowserTimeoutMs(request.name),
       readOnly,
-      isNavigate: request.name === 'browser_navigate',
+      isNavigate:
+        request.name === 'browser_navigate' || request.name === 'browser_navigate_history',
       attachHandle: (handle) => {
         tab.operation = handle;
         tab.busy = true;
@@ -558,9 +569,14 @@ export function createBrowserController(host: BrowserHost) {
         tab.refs.clear();
         tab.expectedKey = undefined;
         tab.expectedMouse = undefined;
+        tab.onDialogOpened = undefined;
       },
       onStopReadOnly: () => {
-        if (request.name === 'browser_snapshot' && cdp.isAttached()) cdp.detach();
+        if (
+          (request.name === 'browser_snapshot' || request.name === 'browser_take_screenshot') &&
+          cdp.isAttached()
+        )
+          cdp.detach();
       },
       onStopNavigate: () => wc.stop(),
       onReplaceStuckTab: () => replaceTab(tab),
@@ -570,86 +586,22 @@ export function createBrowserController(host: BrowserHost) {
         tab.operation = undefined;
         tab.busy = false;
         tab.allowedOrigins = undefined;
+        tab.onDialogOpened = undefined;
         state(projectId, tab);
       },
-      execute: async ({ signal, waitForNative, markInputDispatched }) => {
-        const send = async (name: string, params?: object): Promise<unknown> => {
-          signal.throwIfAborted();
-          if (name.startsWith('Input.')) markInputDispatched();
-          const result: unknown = await waitForNative(cdp.sendCommand(name, params));
-          signal.throwIfAborted();
-          return result;
-        };
-
-        if (request.name === 'browser_navigate') {
-          const destination = siteUrl(request.args.url);
-          if (allowedOrigins && !allowedOrigins.includes(new URL(destination).origin))
-            throw new Error('站点未在项目的浏览器授权范围内。');
-          await waitForNative(wc.loadURL(destination));
-          signal.throwIfAborted();
-          tabContents(tab);
-          return { text: `已打开 ${wc.getURL()}\n页面标题：${wc.getTitle()}` };
-        }
-
-        const url = wc.getURL();
-        if (!url || url === 'about:blank') throw new Error('当前标签尚未打开网页，请先打开网址。');
-        if (allowedOrigins && !allowedOrigins.includes(new URL(url).origin))
-          throw new Error('当前页面未在项目的浏览器授权范围内。');
-
-        if (request.name === 'browser_take_screenshot') {
-          const detached = !tab.owner.contentView.children.includes(tab.view);
-          if (detached) {
-            tab.view.setBounds({ x: 0, y: 0, width: 960, height: 640 });
-            tab.owner.contentView.addChildView(tab.view, 0);
-          }
-          try {
-            const capture = await waitForNative(wc.capturePage(undefined, { stayHidden: false }));
-            signal.throwIfAborted();
+      execute: (context) =>
+        executeBrowserTool({
+          tab,
+          wc,
+          request,
+          context,
+          siteUrl,
+          isVisible: () => visible === tab,
+          assertOwned: () => {
             tabContents(tab);
-            return { png: capture.toPNG().toString('base64') };
-          } finally {
-            if (
-              detached &&
-              visible !== tab &&
-              !tab.owner.isDestroyed() &&
-              tab.owner.contentView.children.includes(tab.view)
-            )
-              tab.owner.contentView.removeChildView(tab.view);
-          }
-        }
-
-        if (!cdp.isAttached()) cdp.attach('1.3');
-        if (request.name === 'browser_snapshot') {
-          return snapshotAccessibilityTree({
-            send,
-            refs: tab.refs,
-            revision: ++generation,
-            url: wc.getURL(),
-            title: wc.getTitle(),
-            assertTabOwned: () => tabContents(tab),
-          });
-        }
-
-        const cdpSession = { refs: tab.refs, hooks: tab, send };
-        if (request.name === 'browser_type') {
-          await executeCdpType(
-            cdpSession,
-            request.args.target ?? request.args.ref,
-            request.args.text,
-            request.args.submit,
-          );
-        } else {
-          await executeCdpClick(
-            cdpSession,
-            request.args.target ?? request.args.ref,
-            request.args.doubleClick,
-          );
-        }
-
-        tabContents(tab);
-        tab.refs.clear();
-        return { text: '网页操作已执行。请重新读取页面确认结果。' };
-      },
+          },
+          nextRevision: () => ++generation,
+        }),
     });
   }
 

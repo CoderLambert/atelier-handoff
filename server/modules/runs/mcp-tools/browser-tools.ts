@@ -62,31 +62,75 @@ export function registerBrowserTools(
     };
     registerBrowser(
       'browser_navigate',
-      'Open an HTTP or HTTPS URL in the native desktop browser tab.',
+      'Open an HTTP or HTTPS URL in the native desktop browser tab. Defaults to waitUntil="domcontentloaded" for fast loading on heavy sites; pass includeSnapshot=true to receive the updated accessibility tree immediately.',
       desktopBrowserArgs.browser_navigate.shape,
     );
     registerBrowser(
+      'browser_navigate_history',
+      'Navigate back, forward, or reload the native desktop browser tab.',
+      desktopBrowserArgs.browser_navigate_history.shape,
+    );
+    registerBrowser(
       'browser_snapshot',
-      'Read the native browser page title, URL and visible accessibility elements. Use the returned refs in click or type calls.',
+      'Read the native browser page title, URL, and hierarchical accessibility tree with element states. Use the returned refs in subsequent actions.',
       desktopBrowserArgs.browser_snapshot.shape,
+    );
+    registerBrowser(
+      'browser_scroll',
+      'Scroll the native browser viewport or a specific scrollable container ref.',
+      desktopBrowserArgs.browser_scroll.shape,
+    );
+    registerBrowser(
+      'browser_hover',
+      'Move the pointer over a ref from the native browser snapshot to reveal hover menus or tooltips.',
+      desktopBrowserArgs.browser_hover.shape,
+    );
+    registerBrowser(
+      'browser_wait_for',
+      'Wait until specified text appears or disappears on the native browser page, or wait for a short duration.',
+      desktopBrowserArgs.browser_wait_for.shape,
     );
     if (publishScreenshot)
       registerBrowser(
         'browser_take_screenshot',
-        'Save a PNG screenshot of the native browser page to the current session artifacts.',
+        'Save a PNG screenshot (viewport or fullPage) of the native browser page to the current session artifacts.',
         desktopBrowserArgs.browser_take_screenshot.shape,
       );
     if (run.mode === 'edit') {
       registerBrowser(
         'browser_click',
-        'Click a ref from the latest native browser snapshot. The run approval policy applies.',
+        'Click a ref from the native browser snapshot. Supports left/right/middle click and double click. The run approval policy applies.',
         desktopBrowserArgs.browser_click.shape,
         true,
       );
       registerBrowser(
         'browser_type',
-        'Enter text in a ref from the latest native browser snapshot. The run approval policy applies. Ask the user to enter credentials manually.',
+        'Enter text in an editable ref from the native browser snapshot. Set clear=false to append without clearing. Ask the user to enter credentials manually. The run approval policy applies.',
         desktopBrowserArgs.browser_type.shape,
+        true,
+      );
+      registerBrowser(
+        'browser_fill_form',
+        'Fill multiple form fields (inputs or native <select> elements) in a single approved call using refs from the latest snapshot. Ask the user to enter credentials manually. The run approval policy applies.',
+        desktopBrowserArgs.browser_fill_form.shape,
+        true,
+      );
+      registerBrowser(
+        'browser_press_key',
+        'Press a keyboard key or shortcut (e.g. Escape, Tab, Enter, ArrowDown, Backspace) in the native browser tab. The run approval policy applies.',
+        desktopBrowserArgs.browser_press_key.shape,
+        true,
+      );
+      registerBrowser(
+        'browser_select_option',
+        'Select an option by value or visible label in a native <select> element ref. The run approval policy applies.',
+        desktopBrowserArgs.browser_select_option.shape,
+        true,
+      );
+      registerBrowser(
+        'browser_handle_dialog',
+        'Accept or dismiss an open JavaScript alert, confirm, prompt, or beforeunload dialog on the native browser page. The run approval policy applies.',
+        desktopBrowserArgs.browser_handle_dialog.shape,
         true,
       );
     }

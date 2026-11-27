@@ -25,10 +25,18 @@ const toolLabels: Readonly<
     | 'tool.plan'
     | 'tool.publish'
     | 'tool.navigate'
+    | 'tool.navigateHistory'
     | 'tool.snapshot'
     | 'tool.screenshot'
     | 'tool.click'
     | 'tool.type'
+    | 'tool.fillForm'
+    | 'tool.hover'
+    | 'tool.scroll'
+    | 'tool.pressKey'
+    | 'tool.selectOption'
+    | 'tool.waitFor'
+    | 'tool.handleDialog'
   >
 > = {
   Read: 'tool.read',
@@ -43,10 +51,18 @@ const toolLabels: Readonly<
   update_plan: 'tool.plan',
   publish_artifact: 'tool.publish',
   browser_navigate: 'tool.navigate',
+  browser_navigate_history: 'tool.navigateHistory',
   browser_snapshot: 'tool.snapshot',
   browser_take_screenshot: 'tool.screenshot',
   browser_click: 'tool.click',
   browser_type: 'tool.type',
+  browser_fill_form: 'tool.fillForm',
+  browser_hover: 'tool.hover',
+  browser_scroll: 'tool.scroll',
+  browser_press_key: 'tool.pressKey',
+  browser_select_option: 'tool.selectOption',
+  browser_wait_for: 'tool.waitFor',
+  browser_handle_dialog: 'tool.handleDialog',
 };
 const modelEvents = new Set([
   'sdk.initialized',

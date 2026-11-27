@@ -169,33 +169,133 @@ const hasTarget = (value: z.infer<typeof targetSchema>) =>
   Boolean(value.target || value.ref) && (!value.target || !value.ref || value.target === value.ref);
 
 export const desktopBrowserArgs = {
-  browser_navigate: z.strictObject({ url: desktopBrowserUrlSchema }),
-  browser_snapshot: z.strictObject({}),
+  browser_navigate: z.strictObject({
+    url: desktopBrowserUrlSchema,
+    waitUntil: z.enum(['domcontentloaded', 'load']).optional(),
+    includeSnapshot: z.boolean().optional(),
+  }),
+  browser_navigate_history: z.strictObject({
+    action: z.enum(['back', 'forward', 'reload']),
+    includeSnapshot: z.boolean().optional(),
+  }),
+  browser_snapshot: z.strictObject({
+    rootRef: reference.optional(),
+    maxNodes: z.int().min(10).max(600).optional(),
+  }),
   browser_take_screenshot: z.strictObject({
     type: z.literal('png').optional(),
     filename: z.string().max(512).optional(),
-    fullPage: z.literal(false).optional(),
+    fullPage: z.boolean().optional(),
   }),
   browser_click: z
     .strictObject({
       ...targetSchema.shape,
       doubleClick: z.boolean().optional(),
-      button: z.literal('left').optional(),
+      button: z.enum(['left', 'right', 'middle']).optional(),
+      includeSnapshot: z.boolean().optional(),
     })
     .refine(hasTarget, '请提供当前页面的有效引用。'),
   browser_type: z
     .strictObject({
       ...targetSchema.shape,
       text: z.string().max(4_000),
+      clear: z.boolean().optional(),
       submit: z.boolean().optional(),
       slowly: z.literal(false).optional(),
+      includeSnapshot: z.boolean().optional(),
     })
     .refine(hasTarget, '请提供当前页面的有效引用。'),
+  browser_fill_form: z.strictObject({
+    fields: z
+      .array(
+        z
+          .strictObject({
+            target: reference.optional(),
+            ref: reference.optional(),
+            value: z.string().max(4_000),
+            clear: z.boolean().optional(),
+          })
+          .refine(hasTarget, '请提供当前页面的有效引用。'),
+      )
+      .min(1)
+      .max(30),
+    includeSnapshot: z.boolean().optional(),
+  }),
+  browser_hover: z
+    .strictObject({
+      ...targetSchema.shape,
+      includeSnapshot: z.boolean().optional(),
+    })
+    .refine(hasTarget, '请提供当前页面的有效引用。'),
+  browser_scroll: z.strictObject({
+    direction: z.enum(['up', 'down', 'left', 'right']).optional(),
+    amount: z.number().finite().min(1).max(10_000).optional(),
+    target: reference.optional(),
+    ref: reference.optional(),
+    includeSnapshot: z.boolean().optional(),
+  }),
+  browser_press_key: z.strictObject({
+    key: z.string().min(1).max(64),
+    modifiers: z.array(z.enum(['Control', 'Shift', 'Alt', 'Meta'])).max(4).optional(),
+    includeSnapshot: z.boolean().optional(),
+  }),
+  browser_select_option: z
+    .strictObject({
+      ...targetSchema.shape,
+      value: z.string().max(1_000).optional(),
+      label: z.string().max(1_000).optional(),
+      includeSnapshot: z.boolean().optional(),
+    })
+    .refine(hasTarget, '请提供当前页面的有效引用。')
+    .refine(
+      (value) => value.value !== undefined || value.label !== undefined,
+      '请提供要选中的选项值或文本。',
+    ),
+  browser_wait_for: z
+    .strictObject({
+      text: z.string().min(1).max(500).optional(),
+      textGone: z.string().min(1).max(500).optional(),
+      timeoutMs: z.int().min(100).max(25_000).optional(),
+      includeSnapshot: z.boolean().optional(),
+    })
+    .refine(
+      (value) =>
+        value.text !== undefined || value.textGone !== undefined || value.timeoutMs !== undefined,
+      '请提供等待的文本条件或等待时长。',
+    ),
+  browser_handle_dialog: z.strictObject({
+    accept: z.boolean(),
+    promptText: z.string().max(4_000).optional(),
+    includeSnapshot: z.boolean().optional(),
+  }),
 };
 export type DesktopBrowserToolName = keyof typeof desktopBrowserArgs;
 
+const desktopBrowserReadOnlyTools = new Set<DesktopBrowserToolName>([
+  'browser_snapshot',
+  'browser_take_screenshot',
+  'browser_scroll',
+  'browser_hover',
+  'browser_wait_for',
+]);
+
+const desktopBrowserInputTools = new Set<DesktopBrowserToolName>([
+  'browser_click',
+  'browser_type',
+  'browser_fill_form',
+  'browser_press_key',
+  'browser_select_option',
+  'browser_handle_dialog',
+]);
+
+export const isDesktopBrowserReadOnlyTool = (name: DesktopBrowserToolName): boolean =>
+  desktopBrowserReadOnlyTools.has(name);
+
+export const isDesktopBrowserInputTool = (name: DesktopBrowserToolName): boolean =>
+  desktopBrowserInputTools.has(name);
+
 export const desktopBrowserTimeoutMs = (name: DesktopBrowserToolName) =>
-  name === 'browser_navigate' ? 60_000 : 30_000;
+  name === 'browser_navigate' || name === 'browser_navigate_history' ? 60_000 : 30_000;
 export const desktopBrowserIpcGraceMs = 5_000;
 export const desktopBrowserErrorCodeSchema = z.enum([
   'DESKTOP_BROWSER_TIMEOUT',
@@ -207,6 +307,11 @@ export const desktopBrowserCallSchema = z.discriminatedUnion('name', [
     ...callHeader,
     name: z.literal('browser_navigate'),
     args: desktopBrowserArgs.browser_navigate,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_navigate_history'),
+    args: desktopBrowserArgs.browser_navigate_history,
   }),
   z.strictObject({
     ...callHeader,
@@ -227,6 +332,41 @@ export const desktopBrowserCallSchema = z.discriminatedUnion('name', [
     ...callHeader,
     name: z.literal('browser_type'),
     args: desktopBrowserArgs.browser_type,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_fill_form'),
+    args: desktopBrowserArgs.browser_fill_form,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_hover'),
+    args: desktopBrowserArgs.browser_hover,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_scroll'),
+    args: desktopBrowserArgs.browser_scroll,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_press_key'),
+    args: desktopBrowserArgs.browser_press_key,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_select_option'),
+    args: desktopBrowserArgs.browser_select_option,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_wait_for'),
+    args: desktopBrowserArgs.browser_wait_for,
+  }),
+  z.strictObject({
+    ...callHeader,
+    name: z.literal('browser_handle_dialog'),
+    args: desktopBrowserArgs.browser_handle_dialog,
   }),
 ]);
 

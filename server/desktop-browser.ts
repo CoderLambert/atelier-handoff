@@ -13,6 +13,7 @@ import {
   desktopBrowserResultIdentitySchema,
   desktopBrowserResultSchema,
   desktopBrowserTimeoutMs,
+  isDesktopBrowserInputTool,
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
 
@@ -96,7 +97,7 @@ export async function callDesktopBrowser(
         process.send(message, () => {});
       }
       if (deadline.reason === ipcTimeout.reason) {
-        const input = request.name === 'browser_click' || request.name === 'browser_type';
+        const input = isDesktopBrowserInputTool(request.name);
         fail(
           new AppError(
             'DESKTOP_BROWSER_TIMEOUT',
