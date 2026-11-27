@@ -1,12 +1,12 @@
 /**
  * @file 在当前对话轮次末尾展示运行状态与耗时。
  * @implementation 使用共用阶段模型显示当前状态，并根据运行开始时间与最近活动显示耗时。
- * @updated 2026-11-27T16:59:48+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { useEffect, useState } from 'react';
 import { LoaderCircle, Shield } from 'lucide-react';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
-import type { Snapshot } from '@/api/types';
+import type { Subagent } from '@shared/subagents';
 import { useUiTranslation } from '@/i18n';
 import { formatDate, formatDuration } from '@/utils/format';
 import { deriveRunStage } from './run-stage';
@@ -19,9 +19,9 @@ export function RunLiveStatus({
   stopPending,
 }: {
   run: Run;
-  tools: ToolCall[];
-  events: RunEvent[];
-  subagents: Snapshot['subagents'];
+  tools: readonly ToolCall[];
+  events: readonly RunEvent[];
+  subagents?: readonly Subagent[];
   stopPending?: boolean;
 }) {
   const { t, locale } = useUiTranslation('chat');

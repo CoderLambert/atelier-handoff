@@ -1,19 +1,29 @@
 /**
  * @file 按运行时到达顺序展示正文、工具和可见通知。
- * @implementation 使用有序对话投影展示消息和通知；工具按稳定标识原位更新，审批与子任务随工具显示，相邻成功只读调用可折叠。
- * @updated 2026-11-27T14:21:24+08:00
+ * @implementation 从单轮切片投影正文、工具和通知，复用对话页脚与摘要，并比较实体引用以隔离历史渲染。
+ * @updated 2026-11-27T19:30:00+08:00
  */
-import { useId, useMemo, useState, type ReactNode } from 'react';
-import type { Message, Permission, Run, ToolCall } from '@shared/types';
-import type { Snapshot } from '@/api/types';
+import { memo, useId, useMemo, useState, type ReactNode } from 'react';
+import type { Permission, ToolCall } from '@shared/types';
+import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { ToolDetail } from '@/features/inspector/tool-detail';
 import { toolDisplayStatus, toolOutputView } from '@/features/inspector/tool-detail-format';
 import { SubagentProgress, groupRunWork } from '@/features/inspector';
+import {
+  ChatApproval,
+  MessageFooter,
+  RunEndSummary,
+  UserMessageBubble,
+} from './conversation-turn-parts';
+import { areOrderedTurnPropsEqual, isActive, type OrderedTurnProps } from './conversation-turns';
+import { Markdown } from './markdown';
 import { orderedTranscriptRows, type TranscriptRow } from './ordered-transcript-model';
 
-function TranscriptNoticeRow({ notice }: Pick<Extract<TranscriptRow, { kind: 'notice' }>, 'notice'>) {
+function TranscriptNoticeRow({
+  notice,
+}: Pick<Extract<TranscriptRow, { kind: 'notice' }>, 'notice'>) {
   const { t } = useUiTranslation('chat');
   return (
     <p
@@ -69,6 +79,7 @@ function TranscriptTools({
           type="button"
           variant="ghost"
           size="xs"
+          data-preserve-scroll
           aria-expanded={open}
           aria-controls={id}
           onClick={() => {
@@ -118,30 +129,21 @@ function TranscriptTools({
   );
 }
 
-export function OrderedRun({
-  snapshot,
-  run,
-  renderMessage,
-  renderPermission,
-  onPermission,
-  onOutput,
-  onTrace,
-  summary,
-}: {
-  snapshot: Snapshot;
-  run: Run;
-  renderMessage: (row: Extract<TranscriptRow, { message: Message }>, latest: boolean) => ReactNode;
-  renderPermission: (permission: Permission) => ReactNode;
-  onPermission: (permission: Permission) => void;
-  onOutput: (tool: ToolCall) => void;
-  onTrace: () => void;
-  summary: ReactNode;
-}) {
-  const rows = useMemo(
-    () => orderedTranscriptRows(run, snapshot.messages, snapshot.tools),
-    [run, snapshot.messages, snapshot.tools],
+export const OrderedRun = memo(function OrderedRun(props: OrderedTurnProps) {
+  const { t } = useUiTranslation('chat');
+  const { turn, sessionId, actions, hasFork } = props;
+  const { slice, hasGlobalLastMessage, lastRealMessageId } = turn;
+  const { run, messages, tools, permissions, subagents, attachments, contextRestarted } = slice;
+  const { onPermission, onOutput, onLinkClick } = actions;
+  const onTrace = () => actions.onTrace(run.id);
+  const renderPermission = (item: Permission) => (
+    <ChatApproval permission={item} onPermission={onPermission} />
   );
-  const work = useMemo(() => groupRunWork(snapshot, run), [snapshot, run]);
+  const rows = useMemo(() => orderedTranscriptRows(run, messages, tools), [run, messages, tools]);
+  const work = useMemo(
+    () => groupRunWork({ session: { id: sessionId }, tools, permissions, subagents }, run),
+    [sessionId, tools, permissions, subagents, run],
+  );
   const childProgress = (groups: typeof work.subagents) => (
     <SubagentProgress
       groups={groups}
@@ -173,7 +175,43 @@ export function OrderedRun({
           ) : row.kind === 'notice' ? (
             <TranscriptNoticeRow notice={row.notice} />
           ) : (
-            renderMessage(row, row.order === latestContentOrder)
+            <article
+              className={cn('message', row.kind === 'text' ? 'assistant-message' : 'user-message')}
+              aria-label={t(row.kind === 'text' ? 'conversation.assistant' : 'conversation.you')}
+              data-message-id={row.message.id}
+              data-run-id={run.id}
+              data-transcript-kind={row.kind}
+              data-last-message={
+                (row.order === latestContentOrder && hasGlobalLastMessage) || undefined
+              }
+              data-transcript-order={row.order}
+              data-transcript-part-id={row.kind === 'text' ? row.key : undefined}
+            >
+              <div className="message-body">
+                {row.kind === 'text' ? (
+                  <Markdown
+                    text={row.text}
+                    streaming={isActive(run) && row.footer}
+                    onLinkClick={onLinkClick}
+                  />
+                ) : (
+                  <UserMessageBubble
+                    text={row.text}
+                    run={run}
+                    attachments={attachments}
+                    contextRestarted={hasFork && contextRestarted}
+                  />
+                )}
+                {row.footer ? (
+                  <MessageFooter
+                    message={row.message}
+                    at={row.at}
+                    hasSubsequent={row.message.id !== lastRealMessageId}
+                    state={props}
+                  />
+                ) : null}
+              </div>
+            </article>
           )}
         </div>
       ))}
@@ -187,7 +225,7 @@ export function OrderedRun({
         .map((permission) => (
           <div key={permission.id}>{renderPermission(permission)}</div>
         ))}
-      {summary}
+      <RunEndSummary slice={slice} state={props} />
     </section>
   );
-}
+}, areOrderedTurnPropsEqual);

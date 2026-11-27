@@ -1,7 +1,7 @@
 /**
  * @file 按会话和轮次展示子代理任务、工具结果与审批入口。
  * @implementation 按分组展示状态、耗时及各分支最近的工具活动，提供单独停止、审批和工具详情入口。
- * @updated 2026-11-26T23:08:48+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useEffect, useState } from 'react';
@@ -110,7 +110,7 @@ export function SubagentProgress({
             className="group/subagent rounded-xl border border-border bg-card text-card-foreground"
             data-subagent-id={id}
           >
-            <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary data-preserve-scroll className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <ChevronRight
                 aria-hidden="true"
                 className="size-4 shrink-0 text-muted-foreground group-open/subagent:rotate-90"

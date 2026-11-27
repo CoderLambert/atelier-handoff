@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C3：`Conversation` 双轨收口与流式热路径优化（已验证）
+
+- 提取 `conversation-turns.ts`（`buildConversationTurns` 单趟 `O(N)` 按运行线性归并快照与轮次比较器）、`use-auto-follow-scroll.ts`（以 `data-preserve-scroll` 替代硬编码 CSS 选择器）、`conversation-turn-parts.tsx` / `legacy-message-turn.tsx` / `run-progress.tsx`（统一 Ordered 与 Legacy 的用户气泡、消息页脚、`BrowserToolNotice`/`RunResult`/交付物）及 `features/inspector/run-inspector-dialogs.tsx`（对话与执行轨迹共用弹窗宿主）；窄化 `OrderedRun`、`LegacyMessageTurn`、`groupRunWork` 与 `permissionSubagentSource` 的数据切片并用 `React.memo` 隔离历史轮次，消息操作改为消费稳定布尔 `hasSubsequent` 避免末条外历史消息被新增消息击穿，`conversation.tsx` 从 **1,042 行降至 266 行**，继续沿用 `run-stage.ts` 的 `deriveRunStage` 与 `toolLabel`。[决策、验证和回退](../../../docs/decisions/2026-11-27-conversation-turns-and-hot-path.md)
+- `npm run check`、`npm run check:headers`、`npm run build`、`npm run build:desktop` 全通过；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 全通过：运行时 **875 通过、6 跳过、0 失败**（881 项），前端 **169 通过、1 跳过、0 失败**（170 项，含新增 `conversation-turns.test.ts` 5 项纯内存用例及真实 Chromium `ordered-transcript.test.ts` / `inspector.test.ts` / `subagents.test.ts`）。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-ordered-conversation.mts`（锁定 SDK、隔离回环模型、反序工具完成、507 文本片段、SSE 断线重连、停止恢复、新旧对话混排与双语 1280/1440/1920）通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：Codex（`gpt-6.2-sol` + `medium`）在明确沙箱限制的精简 brief 下一次完成拆分与纯内存比较器单测，主会话仅串行执行一轮完整 check/build/test 与真实 Electron 烟测即一次性全绿通过，无返工；下一轮按同一分工继续推进 **C4（`Workspace` 瘦身、下沉浏览器状态与清退 `query-legacy`）**。
+
 ## 2026-11-27 · C2：`Composer` 与 `ExtensionPicker` 键盘归主与策略统一（已验证）
 
 - 提取 `use-composer-keymap.ts`、`composer-policy.ts` 与 `composer-context.tsx`，将 `Enter` 提交、`Ctrl/Alt+Enter` 快捷插话与 IME 50 ms 保护归还 `Composer` 的 textarea，移除 `ExtensionPicker` 的原生捕获劫持、`onSubmit`/`onQuickInsert` props、无依赖 `useLayoutEffect` 与 `mode` 降级还原补丁；统一 `composer.tsx`、`session-chat.tsx`、`features/chat/index.tsx`、`message-queue.tsx` 的目录/模式/插话判定，并将 `drafts.ts` 与 `chat/index.tsx` 的引用去重/长度校验收敛进 `appendDraftQuote`。`composer.tsx` 从 688 行降至 587 行，`picker.tsx` 从 793 行降至 700 行。[决策与回退](../../../docs/decisions/2026-11-27-composer-picker-decoupling.md)

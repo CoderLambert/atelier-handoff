@@ -1,526 +1,40 @@
 /**
- * @file 展示会话消息、运行进度与历史，以及审批和恢复入口。
- * @implementation 按运行选择有序对话或旧历史，通过共用阶段模型优先显示停止反馈，为未完成结果提供只读续接入口，并复用相同 props 的渲染结果。
- * @updated 2026-11-27T16:59:48+08:00
+ * @file 组合会话对话、历史轮次和审批与输出弹窗。
+ * @implementation 将运行切片分派给两类记忆化轮次，由独立 hook 管理滚动并为轮次提供稳定的消息操作。
+ * @updated 2026-11-27T19:30:00+08:00
  */
-import { useUiTranslation } from '@/i18n';
 import {
-  lazy,
   memo,
-  Suspense,
   useCallback,
-  useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type MouseEvent,
 } from 'react';
-import type {
-  Artifact,
-  Attachment,
-  Message,
-  Permission,
-  Run,
-  RunEvent,
-  ToolCall,
-} from '@shared/types';
-import { Activity, ArrowDown, ChevronRight, File, Folder, RotateCcw, Shield } from 'lucide-react';
-import { activeStatuses } from '@shared/types';
-import { cn } from '@/components/ui/utils';
+import { ArrowDown } from 'lucide-react';
+import type { Permission, ToolCall } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
-import {
-  ArtifactAction,
-  SubagentProgress,
-  groupRunWork,
-  permissionSubagentSource,
-} from '@/features/inspector';
-import { permissionOperation, StatusBadge, statusLabel } from '@/features/inspector/shared';
-import { formatDate, formatDuration } from '@/utils/format';
-import { AttachmentPreview } from './attachment-preview';
+import { RunInspectorDialogs } from '@/features/inspector';
+import { useUiTranslation } from '@/i18n';
 import { ChatWebLinkDialog, type ChatLinkOpener } from './chat-web-link-dialog';
+import { formatMessageTime } from './conversation-turn-parts';
+import {
+  buildConversationTurns,
+  isActive,
+  recoverable,
+  type TurnActions,
+  type TurnState,
+} from './conversation-turns';
+import { LegacyMessageTurn } from './legacy-message-turn';
 import { Markdown } from './markdown';
-import { hasMessageForkAnchor, MessageActions, type MessageDraftAction } from './message-actions';
-import { RunToolActivity } from './run-tool-activity';
+import type { MessageDraftAction } from './message-actions';
 import { OrderedRun } from './ordered-run';
-import { RunLiveStatus } from './run-live-status';
-import { deriveRunStage, receivingWindowMs, toolLabel } from './run-stage';
 import { SelectionQuote, type QuoteSelectionAction } from './selection-quote';
-import { TaskPlan } from './task-plan';
-const ToolOutputDialog = lazy(() => import('@/features/inspector/tool-output-dialog'));
+import { useAutoFollowScroll } from './use-auto-follow-scroll';
 
-const PermissionDialog = lazy(() => import('@/features/inspector/permission-dialog'));
-
-export const isActive = (run: Run) => activeStatuses.includes(run.status);
-const recoverable = (run: Run) => ['failed', 'stopped', 'interrupted'].includes(run.status);
-const EMPTY_TOOLS: ToolCall[] = [];
-const EMPTY_EVENTS: RunEvent[] = [];
-const EMPTY_ARTIFACTS: Artifact[] = [];
-
-function date(value: string, timeFormat: Intl.DateTimeFormat) {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : timeFormat.format(parsed);
-}
-function groupByRun<T extends { runId: string }>(items: T[]) {
-  const groups = new Map<string, T[]>();
-  for (const item of items) {
-    const group = groups.get(item.runId);
-    if (group) group.push(item);
-    else groups.set(item.runId, [item]);
-  }
-  return groups;
-}
-
-function ModelLoadingIndicator({ label }: { label: string }) {
-  return (
-    <div className="model-loading-indicator" role="status" aria-live="polite" aria-label={label}>
-      <span className="model-loading-dot" />
-      <span className="model-loading-dot" />
-      <span className="model-loading-dot" />
-      <span className="sr-only">{label}</span>
-    </div>
-  );
-}
-
-function RunSummary({
-  run,
-  tools,
-  history,
-  onTrace,
-}: {
-  run: Run;
-  tools: ToolCall[];
-  history?: { open: boolean; contentId: string; onToggle: () => void };
-  onTrace: () => void;
-}) {
-  const { t, locale } = useUiTranslation('chat');
-  const duration =
-    run.startedAt && run.endedAt ? Date.parse(run.endedAt) - Date.parse(run.startedAt) : NaN;
-  const status = statusLabel(run.status);
-  const summary =
-    Number.isFinite(duration) && duration >= 0
-      ? t('progress.historyDuration', { status, duration: formatDuration(duration, locale) })
-      : status;
-  const completed = tools.filter((tool) => tool.status === 'succeeded').length;
-  const content = (
-    <>
-      <span>{summary}</span>
-      {tools.length ? (
-        <span
-          className="run-summary-tools"
-          title={t('conversation.toolsCompleted', { completed, count: tools.length })}
-        >
-          {t('conversation.toolSummary', { completed, count: tools.length })}
-        </span>
-      ) : null}
-    </>
-  );
-  return (
-    <div className="run-summary" data-status={run.status}>
-      {history ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="run-history-toggle"
-          title={t('progress.history')}
-          aria-expanded={history.open}
-          aria-controls={history.contentId}
-          onClick={history.onToggle}
-        >
-          {content}
-          <ChevronRight data-icon="inline-end" aria-hidden="true" />
-        </Button>
-      ) : (
-        <span className="run-history-status">{content}</span>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label={t('conversation.viewTrace')}
-        title={t('conversation.viewTrace')}
-        onClick={onTrace}
-      >
-        <Activity aria-hidden="true" />
-      </Button>
-    </div>
-  );
-}
-
-function RunProgress({
-  run,
-  tools,
-  events,
-  hasText,
-  snapshot,
-  showPlan,
-  onPermission,
-  onOutput,
-  onTrace,
-  stopPending,
-}: {
-  run: Run;
-  tools: ToolCall[];
-  events: RunEvent[];
-  hasText: boolean;
-  snapshot: Snapshot;
-  showPlan: boolean;
-  onPermission: (permission: Permission) => void;
-  onOutput: (tool: ToolCall) => void;
-  onTrace: () => void;
-  stopPending?: boolean;
-}) {
-  const { t, locale } = useUiTranslation('chat');
-  const historyId = useId();
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const work = useMemo(
-    () => groupRunWork(snapshot, run),
-    [snapshot.session.id, snapshot.subagents, snapshot.tools, snapshot.permissions, run],
-  );
-  const active = isActive(run);
-  const now = Date.now();
-  const {
-    key,
-    label: stage,
-    status,
-    activity,
-  } = deriveRunStage(
-    {
-      run,
-      tools,
-      events,
-      notices: run.transcript?.notices,
-      subagents: snapshot.subagents,
-      stopPending,
-      now,
-    },
-    t,
-  );
-  const [, refreshStage] = useState(0);
-  useEffect(() => {
-    if (!active || key !== 'progress.receiving' || !activity) return;
-    const delay = Math.max(0, Date.parse(activity.at) + receivingWindowMs - Date.now());
-    const timer = window.setTimeout(() => refreshStage((value) => value + 1), delay);
-    return () => window.clearTimeout(timer);
-  }, [active, key, activity]);
-  const approved = useMemo(
-    () =>
-      new Set(
-        work.permissions.filter((p) => p.decisionSource === 'automatic').map((p) => p.toolCallId),
-      ),
-    [work],
-  );
-  const hasDetails = work.tools.length > 0 || work.subagents.length > 0 || showPlan;
-  const isPureModelWaiting =
-    !hasDetails &&
-    (key === 'progress.waitingModel' ||
-      key === 'progress.starting' ||
-      key === 'progress.receiving');
-  if (active && isPureModelWaiting) {
-    if (hasText) return null;
-    return <ModelLoadingIndicator label={t('progress.waitingModel')} />;
-  }
-  const lastTool = tools.at(-1);
-  const lastActivityAt =
-    events.at(-1)?.at ?? lastTool?.endedAt ?? lastTool?.startedAt ?? run.startedAt ?? run.createdAt;
-  const liveHeading = active ? (
-    <div
-      className="run-progress-head"
-      title={t('progress.lastActivity', { time: formatDate(lastActivityAt, locale) })}
-    >
-      {key === 'progress.waitingModel' ? (
-        <div className="run-progress-loading-inline" role="status" aria-label={stage}>
-          <span className="model-loading-dot" />
-          <span className="model-loading-dot" />
-          <span className="model-loading-dot" />
-          <span className="sr-only">{stage}</span>
-        </div>
-      ) : (
-        <strong role="status">{stage}</strong>
-      )}
-    </div>
-  ) : null;
-  return (
-    <section
-      className="run-progress"
-      data-status={status}
-      data-active={active}
-      aria-label={active ? t('progress.label') : t('progress.history')}
-    >
-      {!active ? (
-        <RunSummary
-          run={run}
-          tools={tools}
-          history={
-            hasDetails
-              ? {
-                  open: historyOpen,
-                  contentId: historyId,
-                  onToggle: () => setHistoryOpen(!historyOpen),
-                }
-              : undefined
-          }
-          onTrace={onTrace}
-        />
-      ) : null}
-      {work.tools.length ? null : liveHeading}
-      {hasDetails ? (
-        <div
-          className="run-progress-content"
-          id={historyId}
-          hidden={!active && !historyOpen}
-          onFocusCapture={() => {
-            if (active) setHistoryOpen(true);
-          }}
-        >
-          {work.tools.length ? (
-            <RunToolActivity
-              tools={work.tools}
-              active={active}
-              liveHeading={liveHeading}
-              historyOpen={historyOpen}
-              approved={approved}
-              onOutput={onOutput}
-            />
-          ) : null}
-          {showPlan && (active || historyOpen) ? (
-            <TaskPlan steps={run.plan} embedded={!active} />
-          ) : null}
-          <SubagentProgress
-            groups={work.subagents}
-            run={status === run.status ? run : { ...run, status }}
-            onPermission={onPermission}
-            onToolOutput={onOutput}
-            onTrace={onTrace}
-          />
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function BrowserToolNotice({ tools, onTrace }: { tools: ToolCall[]; onTrace: () => void }) {
-  const { t } = useUiTranslation('chat');
-  const browserTools = tools.filter((tool) => tool.name.startsWith('mcp__atelier__browser_'));
-  const last = browserTools.findLast((tool) => tool.status === 'failed');
-  if (!last) return null;
-  const continued = browserTools.some(
-    (tool) => tool.status === 'succeeded' && last.endedAt && tool.startedAt >= last.endedAt,
-  );
-  return (
-    <section
-      className="run-recovery"
-      data-status="failed"
-      aria-label={t('conversation.browserIssue')}
-    >
-      <div role="status">
-        <strong>{t('conversation.toolFailed', { name: toolLabel(last.name, t) })}</strong>
-        <p className="break-words">{last.output.slice(0, 550) || t('conversation.traceHelp')}</p>
-        {continued ? <p>{t('conversation.browserContinued')}</p> : null}
-      </div>
-      <div className="run-recovery-actions">
-        <Button type="button" variant="outline" size="sm" onClick={onTrace}>
-          <Activity data-icon="inline-start" aria-hidden="true" />
-          {t('conversation.browserTrace')}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function RunResult({
-  run,
-  hasText,
-  retryDisabled,
-  onRetry,
-  onTrace,
-}: {
-  run: Run;
-  hasText: boolean;
-  retryDisabled: boolean;
-  onRetry: (id: string) => void;
-  onTrace: (id: string) => void;
-}) {
-  const { t } = useUiTranslation('chat');
-  if (isActive(run)) return null;
-  const canRetry = recoverable(run);
-  const detail =
-    run.status === 'stopped' ? t('conversation.stoppedReason') : run.error || run.reason;
-  if (!canRetry && !run.error && !run.reason) return null;
-  const title = canRetry
-    ? hasText
-      ? t('conversation.partialReply')
-      : t('conversation.incompleteReply')
-    : t('conversation.executionResult');
-  return (
-    <section
-      className="run-recovery"
-      data-status={run.status}
-      aria-label={t('conversation.runResult')}
-    >
-      <div className="run-recovery-heading">
-        <strong>{title}</strong>
-        <div className="run-recovery-actions">
-          <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
-            <Activity data-icon="inline-start" aria-hidden="true" />
-            {t('conversation.viewTrace')}
-          </Button>
-          {canRetry ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={retryDisabled}
-              onClick={() => onRetry(run.id)}
-            >
-              <RotateCcw data-icon="inline-start" aria-hidden="true" />
-              {t('conversation.resumeReadOnly')}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {detail ? <p>{detail}</p> : null}
-      {canRetry ? <p>{t('conversation.retryHelp')}</p> : null}
-    </section>
-  );
-}
-
-function FormattedUserMessage({ text }: { text: string }) {
-  const parts = useMemo(() => {
-    const regex = /(?:^|(?<=[\s(\["']))@([a-zA-Z0-9_\-./]+)(?=[,.;:!?)\]"'\s]|$)/g;
-    const nodes: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(text)) !== null) {
-      const fullMatch = match[0];
-      const rawPath = match[1];
-      if (!rawPath) continue;
-
-      if (match.index > lastIndex) {
-        nodes.push(text.slice(lastIndex, match.index));
-      }
-
-      const isDir = rawPath.endsWith('/');
-      const cleanPath = isDir ? rawPath.slice(0, -1) : rawPath;
-      const lastSlash = cleanPath.lastIndexOf('/');
-      const dir = lastSlash >= 0 ? cleanPath.slice(0, lastSlash + 1) : '';
-      const name =
-        (lastSlash >= 0 ? cleanPath.slice(lastSlash + 1) : cleanPath) + (isDir ? '/' : '');
-
-      nodes.push(
-        <span key={match.index} className="composer-file-mention-badge" title={rawPath}>
-          {isDir ? (
-            <Folder className="file-mention-icon" aria-hidden="true" />
-          ) : (
-            <File className="file-mention-icon" aria-hidden="true" />
-          )}
-          <span className="file-mention-at">@</span>
-          {dir ? <span className="file-mention-dir">{dir}</span> : null}
-          <strong className="file-mention-name">{name}</strong>
-        </span>,
-      );
-
-      lastIndex = match.index + fullMatch.length;
-    }
-
-    if (lastIndex < text.length) {
-      nodes.push(text.slice(lastIndex));
-    }
-
-    return nodes.length ? nodes : [text];
-  }, [text]);
-
-  return <>{parts}</>;
-}
-
-function MessageContext({ run, attachments }: { run: Run; attachments: Map<string, Attachment> }) {
-  const { t } = useUiTranslation('chat');
-  const references = [
-    ...run.contextPaths.map((path) => ({
-      key: `file:${path}`,
-      label: t('conversation.readProjectFile', { path }),
-    })),
-    ...(run.extensions || []).map((extension) => ({
-      key: `extension:${extension.id}`,
-      label: t('conversation.extension', {
-        kind: extension.kind === 'mcp' ? 'MCP' : extension.kind === 'skill' ? 'Skill' : 'Command',
-        name: extension.name,
-      }),
-    })),
-  ];
-  return references.length || run.attachmentIds.length ? (
-    <ul className="message-context" aria-label={t('conversation.context')}>
-      {run.attachmentIds.map((id) => {
-        const item = attachments.get(id);
-        return item && !item.removed ? (
-          <li key={`attachment:${id}`} className="message-attachment">
-            <AttachmentPreview attachment={item}>
-              {t('conversation.attachment', { name: item.name })}
-            </AttachmentPreview>
-          </li>
-        ) : (
-          <li key={`attachment:${id}`}>
-            {t('conversation.attachmentUnavailable', { name: item?.name ?? id })}
-          </li>
-        );
-      })}
-      {references.map((reference) => (
-        <li key={reference.key}>{reference.label}</li>
-      ))}
-    </ul>
-  ) : null;
-}
-
-function ChatApproval({ permission, onOpen }: { permission: Permission; onOpen: () => void }) {
-  const { t } = useUiTranslation('chat');
-  const pending = permission.status === 'pending';
-  return (
-    <section className="chat-approval" data-pending={pending}>
-      <div className="chat-approval-copy">
-        <div className="chat-approval-title" role="status">
-          <strong>
-            <Shield data-icon="inline-start" aria-hidden="true" />
-            {pending ? t('conversation.approvalRequired') : permissionOperation(permission)}
-          </strong>
-          {pending ? (
-            <span>{permissionOperation(permission)}</span>
-          ) : (
-            <StatusBadge status={permission.status} />
-          )}
-        </div>
-        {permission.path || permission.command ? (
-          <p className="chat-approval-target">{permission.path || permission.command}</p>
-        ) : null}
-        {pending && permission.reason ? (
-          <p className="chat-approval-reason">{permission.reason}</p>
-        ) : null}
-      </div>
-      <Button type="button" size="sm" variant={pending ? 'default' : 'outline'} onClick={onOpen}>
-        {pending ? t('conversation.reviewApproval') : t('conversation.approvalHistory')}
-      </Button>
-    </section>
-  );
-}
-
-export const Conversation = memo(function Conversation({
-  snapshot,
-  composerPlanRunId,
-  stopPendingRunId,
-  onRetry,
-  onTrace,
-  onOpenLink,
-  onEditMessage,
-  onQuoteMessage,
-  onQuoteSelection,
-  onForkMessage,
-  onRewindMessage,
-  rewindDisabledReason,
-  forkingMessageId,
-  submitting,
-}: {
+interface ConversationProps {
   snapshot: Snapshot;
   composerPlanRunId?: string;
   stopPendingRunId?: string;
@@ -535,127 +49,117 @@ export const Conversation = memo(function Conversation({
   rewindDisabledReason?: string;
   forkingMessageId?: string;
   submitting: boolean;
-}) {
+}
+
+function useTurnActions(
+  props: ConversationProps,
+  onPermission: TurnActions['onPermission'],
+  onOutput: TurnActions['onOutput'],
+  chooseWebLink: NonNullable<TurnActions['onLinkClick']>,
+): TurnActions {
+  // Parent handlers can close over the latest snapshot, especially the rewind head check.
+  // Read the committed handlers at click time while exposing their availability as props.
+  const current = useRef(props);
+  useLayoutEffect(() => {
+    current.current = props;
+  }, [props]);
+  const canEdit = Boolean(props.onEditMessage);
+  const canQuote = Boolean(props.onQuoteMessage);
+  const canFork = Boolean(props.onForkMessage);
+  const canRewind = Boolean(props.onRewindMessage);
+  const canOpenLink = Boolean(props.onOpenLink);
+  return useMemo<TurnActions>(
+    () => ({
+      onRetry: (id) => current.current.onRetry(id),
+      onTrace: (id) => current.current.onTrace(id),
+      onEditMessage: canEdit ? (...args) => current.current.onEditMessage?.(...args) : undefined,
+      onQuoteMessage: canQuote ? (...args) => current.current.onQuoteMessage?.(...args) : undefined,
+      onForkMessage: canFork ? (id) => current.current.onForkMessage?.(id) : undefined,
+      onRewindMessage: canRewind
+        ? (...args) => current.current.onRewindMessage?.(...args)
+        : undefined,
+      onLinkClick: canOpenLink ? chooseWebLink : undefined,
+      onPermission,
+      onOutput,
+    }),
+    [canEdit, canQuote, canFork, canRewind, canOpenLink, chooseWebLink, onPermission, onOutput],
+  );
+}
+
+export const Conversation = memo(function Conversation(props: ConversationProps) {
+  const {
+    snapshot,
+    composerPlanRunId,
+    stopPendingRunId,
+    onOpenLink,
+    onQuoteSelection,
+    rewindDisabledReason,
+    forkingMessageId,
+    submitting,
+  } = props;
   const { t, locale } = useUiTranslation('chat');
-  const timeFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }),
+  const messageTime = useMemo(
+    () => ({
+      full: new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }),
+      short: new Intl.DateTimeFormat(locale, { timeStyle: 'short' }),
+    }),
     [locale],
   );
-  const shortTimeFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, { timeStyle: 'short' }),
-    [locale],
-  );
-  const viewport = useRef<HTMLDivElement>(null);
-  const thread = useRef<HTMLDivElement>(null);
-  const nearBottom = useRef(true);
-  const [unseen, setUnseen] = useState(false);
+  const { viewport, thread, unseen, scrollToBottom, handleScroll, handleClickCapture } =
+    useAutoFollowScroll(snapshot);
   const [permissionId, setPermissionId] = useState<string>();
   const [outputToolId, setOutputToolId] = useState<string>();
-  const outputTool = outputToolId
-    ? snapshot.tools.find(
-        (tool) => tool.sessionId === snapshot.session.id && tool.id === outputToolId,
-      )
-    : undefined;
   const [webLink, setWebLink] = useState<{ url: string; trigger: HTMLAnchorElement }>();
+  const onPermission = useCallback((permission: Permission) => setPermissionId(permission.id), []);
+  const onOutput = useCallback((tool: ToolCall) => setOutputToolId(tool.id), []);
   const chooseWebLink = useCallback((url: string, event: MouseEvent<HTMLAnchorElement>) => {
     setWebLink({ url, trigger: event.currentTarget });
   }, []);
-  const permission = snapshot.permissions.find((item) => item.id === permissionId);
-  const hasPendingApproval = snapshot.permissions.some((item) => item.status === 'pending');
-  const indexes = useMemo(
-    () => ({
-      runs: new Map(snapshot.runs.map((run) => [run.id, run])),
-      tools: groupByRun(snapshot.tools),
-      events: groupByRun(snapshot.events),
-      artifacts: groupByRun(snapshot.artifacts),
-      permissions: groupByRun(snapshot.permissions),
-      attachments: new Map(snapshot.attachments.map((attachment) => [attachment.id, attachment])),
-    }),
-    [
-      snapshot.runs,
-      snapshot.tools,
-      snapshot.events,
-      snapshot.artifacts,
-      snapshot.attachments,
-      snapshot.permissions,
-    ],
-  );
-  const messages = useMemo(() => {
-    const replies = new Set(
-      snapshot.messages
-        .filter((message) => message.role === 'assistant')
-        .map((message) => message.runId),
-    );
-    const missing = new Map(
-      snapshot.runs.filter((run) => !replies.has(run.id)).map((run) => [run.id, run]),
-    );
-    const result: Message[] = [];
-    const placeholder = (run: Run): Message => ({
-      id: `run-reply:${run.id}`,
-      sessionId: run.sessionId,
-      runId: run.id,
-      role: 'assistant',
-      text: '',
-      createdAt: run.createdAt,
-    });
-    for (const message of snapshot.messages) {
-      result.push(message);
-      const run = missing.get(message.runId);
-      if (message.role === 'user' && run) {
-        result.push(placeholder(run));
-        missing.delete(run.id);
-      }
-    }
-    for (const run of missing.values()) result.push(placeholder(run));
-    return result;
-  }, [snapshot.messages, snapshot.runs]);
-  const subsequentMessageCounts = useMemo(
+  const actions = useTurnActions(props, onPermission, onOutput, chooseWebLink);
+  const {
+    session,
+    inheritedMessages,
+    messages,
+    runs,
+    tools,
+    events,
+    artifacts,
+    permissions,
+    subagents,
+    attachments,
+  } = snapshot;
+  const turns = useMemo(
     () =>
-      new Map(
-        snapshot.messages.map((message, index) => [
-          message.id,
-          snapshot.messages.length - index - 1,
-        ]),
-      ),
-    [snapshot.messages],
+      buildConversationTurns({
+        messages,
+        runs,
+        tools,
+        events,
+        artifacts,
+        permissions,
+        subagents,
+        attachments,
+      }),
+    [messages, runs, tools, events, artifacts, permissions, subagents, attachments],
   );
-  const runFooterOwners = useMemo(
-    () =>
-      new Map(
-        messages
-          .filter((message) => message.role === 'assistant')
-          .map((message) => [message.runId, message.id]),
-      ),
-    [messages],
-  );
-  const retryDisabled =
-    submitting || snapshot.session.status === 'archived' || snapshot.runs.some(isActive);
-
-  // Keep following only while the reader is near the bottom. Native details state
-  // and text selection survive event updates because each message keeps its key.
-  useLayoutEffect(() => {
-    const element = viewport.current;
-    if (!element) return;
-    if (nearBottom.current) element.scrollTop = element.scrollHeight;
-    else setUnseen(true);
-  }, [
-    snapshot.messages,
-    snapshot.runs,
-    snapshot.tools,
-    snapshot.subagents,
-    snapshot.artifacts,
-    snapshot.permissions,
-  ]);
-  useEffect(() => {
-    const element = viewport.current;
-    if (!element || !thread.current || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => {
-      if (nearBottom.current) element.scrollTop = element.scrollHeight;
-    });
-    observer.observe(thread.current);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+  const outputTool = outputToolId
+    ? tools.find((tool) => tool.sessionId === session.id && tool.id === outputToolId)
+    : undefined;
+  const permission = permissionId
+    ? permissions.find((item) => item.id === permissionId)
+    : undefined;
+  const archived = session.status === 'archived';
+  const retryDisabled = submitting || archived || runs.some(isActive);
+  const turnState = {
+    sessionId: session.id,
+    hasFork: Boolean(session.fork),
+    submitting,
+    archived,
+    forkingMessageId,
+    rewindDisabledReason,
+    actions,
+    messageTime,
+  };
 
   return (
     <div
@@ -665,46 +169,32 @@ export const Conversation = memo(function Conversation({
       role="region"
       aria-label={t('conversation.label')}
       tabIndex={0}
-      onClickCapture={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest(
-            '.run-progress summary, .run-history-toggle, .run-tool-activity button, .chat-task-plan-toggle',
-          )
-        )
-          nearBottom.current = false;
-      }}
-      onScroll={() => {
-        const element = viewport.current;
-        if (!element) return;
-        nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-        if (nearBottom.current) setUnseen(false);
-      }}
+      onClickCapture={handleClickCapture}
+      onScroll={handleScroll}
     >
-      <div ref={thread} className="message-thread" data-session-id={snapshot.session.id}>
-        {snapshot.inheritedMessages?.length ? (
+      <div ref={thread} className="message-thread" data-session-id={session.id}>
+        {inheritedMessages?.length ? (
           <section className="inherited-messages" aria-label={t('conversation.inheritedLabel')}>
             <header>
               <h3>{t('conversation.inheritedTitle')}</h3>
               <p>
                 {t('conversation.inheritedDescription', {
-                  title: snapshot.session.fork?.sourceTitle ?? t('conversation.sourceSession'),
+                  title: session.fork?.sourceTitle ?? t('conversation.sourceSession'),
                 })}
               </p>
             </header>
-            {snapshot.inheritedMessages.map((message) => (
+            {inheritedMessages.map((message) => (
               <article key={message.id} className="inherited-message">
                 <div className="message-meta">
                   <strong>
                     {message.role === 'assistant' ? 'atelier' : t('conversation.you')}
                   </strong>
-                  <time dateTime={message.createdAt}>{date(message.createdAt, timeFormat)}</time>
+                  <time dateTime={message.createdAt}>
+                    {formatMessageTime(message.createdAt, messageTime.full)}
+                  </time>
                 </div>
                 {message.role === 'assistant' ? (
-                  <Markdown
-                    text={message.text}
-                    onLinkClick={onOpenLink ? chooseWebLink : undefined}
-                  />
+                  <Markdown text={message.text} onLinkClick={actions.onLinkClick} />
                 ) : (
                   <div className="message-text">{message.text}</div>
                 )}
@@ -712,280 +202,30 @@ export const Conversation = memo(function Conversation({
             ))}
           </section>
         ) : null}
-        {messages.length ? (
-          messages.map((message, index) => {
-            const orderedRun = indexes.runs.get(message.runId);
-            if (orderedRun?.transcript?.version === 1) {
-              if (messages.findIndex((item) => item.runId === message.runId) !== index) return null;
-              const run = orderedRun;
-              const tools = indexes.tools.get(run.id) || EMPTY_TOOLS;
-              const artifacts = indexes.artifacts.get(run.id) || EMPTY_ARTIFACTS;
-              const hasText = snapshot.messages.some(
-                (item) => item.runId === run.id && item.role === 'assistant' && item.text.trim(),
-              );
-              return (
-                <OrderedRun
-                  key={`ordered:${run.id}`}
-                  snapshot={snapshot}
-                  run={run}
-                  onPermission={(item) => setPermissionId(item.id)}
-                  onOutput={(tool) => setOutputToolId(tool.id)}
-                  onTrace={() => onTrace(run.id)}
-                  renderPermission={(item) => (
-                    <ChatApproval permission={item} onOpen={() => setPermissionId(item.id)} />
-                  )}
-                  renderMessage={(row, latest) => {
-                    const original = row.message;
-                    const assistant = row.kind === 'text';
-                    return (
-                      <article
-                        className={cn('message', assistant ? 'assistant-message' : 'user-message')}
-                        aria-label={t(assistant ? 'conversation.assistant' : 'conversation.you')}
-                        data-message-id={original.id}
-                        data-run-id={run.id}
-                        data-transcript-kind={row.kind}
-                        data-last-message={
-                          (latest && messages.at(-1)?.runId === run.id) || undefined
-                        }
-                        data-transcript-order={row.order}
-                        data-transcript-part-id={assistant ? row.key : undefined}
-                      >
-                        <div className="message-body">
-                          {assistant ? (
-                            <Markdown
-                              text={row.text}
-                              streaming={isActive(run) && row.footer}
-                              onLinkClick={onOpenLink ? chooseWebLink : undefined}
-                            />
-                          ) : (
-                            <div className="user-message-bubble">
-                              <div className="message-text">
-                                <FormattedUserMessage text={row.text} />
-                              </div>
-                              <MessageContext run={run} attachments={indexes.attachments} />
-                              {snapshot.session.fork &&
-                              indexes.events
-                                .get(run.id)
-                                ?.some((event) => event.type === 'sdk.context_restarted') ? (
-                                <p className="message-placeholder">
-                                  {t('conversation.branchRestored')}
-                                </p>
-                              ) : null}
-                            </div>
-                          )}
-                          {row.footer ? (
-                            <footer className="message-footer">
-                              <time dateTime={row.at} title={date(row.at, timeFormat)}>
-                                {date(row.at, shortTimeFormat)}
-                              </time>
-                              <MessageActions
-                                message={original}
-                                disabled={submitting || snapshot.session.status === 'archived'}
-                                onEdit={onEditMessage}
-                                onQuote={onQuoteMessage}
-                                onFork={onForkMessage}
-                                onRewind={onRewindMessage}
-                                subsequentMessageCount={subsequentMessageCounts.get(original.id)}
-                                rewindDisabledReason={rewindDisabledReason}
-                                forking={forkingMessageId === original.id}
-                                forkDisabled={submitting || Boolean(forkingMessageId)}
-                              />
-                            </footer>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-                  }}
-                  summary={
-                    <div
-                      className="transcript-run-end"
-                      data-transcript-kind={!isActive(run) ? 'summary' : undefined}
-                      data-run-id={run.id}
-                    >
-                      {run.id !== composerPlanRunId && run.plan.length > 0 ? (
-                        <TaskPlan steps={run.plan} embedded={!isActive(run)} />
-                      ) : null}
-                      <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
-                      {!isActive(run) ? (
-                        <RunSummary run={run} tools={tools} onTrace={() => onTrace(run.id)} />
-                      ) : null}
-                      <RunResult
-                        run={run}
-                        hasText={hasText}
-                        retryDisabled={retryDisabled}
-                        onRetry={onRetry}
-                        onTrace={onTrace}
-                      />
-                      {!isActive(run) && artifacts.length ? (
-                        <section
-                          className="chat-deliverables"
-                          aria-label={t('conversation.deliverables')}
-                        >
-                          <h3 className="sr-only">{t('conversation.deliverables')}</h3>
-                          <ul>
-                            {artifacts.map((artifact) => (
-                              <li key={artifact.id}>
-                                <ArtifactAction
-                                  artifact={artifact}
-                                  showDownload
-                                  variant="compact"
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      ) : null}
-                      {isActive(run) ? (
-                        <RunLiveStatus
-                          run={run}
-                          tools={tools}
-                          events={indexes.events.get(run.id) || EMPTY_EVENTS}
-                          subagents={snapshot.subagents}
-                          stopPending={stopPendingRunId === run.id}
-                        />
-                      ) : null}
-                    </div>
-                  }
-                />
-              );
-            }
-            const assistant = message.role === 'assistant';
-            const run = indexes.runs.get(message.runId);
-            const tools = indexes.tools.get(message.runId) || EMPTY_TOOLS;
-            const events = indexes.events.get(message.runId) || EMPTY_EVENTS;
-            const artifacts = indexes.artifacts.get(message.runId) || EMPTY_ARTIFACTS;
-            const hasText = Boolean(message.text.trim());
-            return (
-              <article
-                key={message.id}
-                className={cn('message', assistant ? 'assistant-message' : 'user-message')}
-                aria-label={t(assistant ? 'conversation.assistant' : 'conversation.you')}
-                data-message-id={message.id}
-                data-run-id={message.runId}
-                data-last-message={index === messages.length - 1 || undefined}
-              >
-                <div className="message-body">
-                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
-                    <RunProgress
-                      run={run}
-                      stopPending={stopPendingRunId === run.id && isActive(run)}
-                      tools={tools}
-                      events={events}
-                      hasText={hasText}
-                      snapshot={snapshot}
-                      showPlan={run.id !== composerPlanRunId && run.plan.length > 0}
-                      onPermission={(item) => setPermissionId(item.id)}
-                      onOutput={(tool) => setOutputToolId(tool.id)}
-                      onTrace={() => onTrace(run.id)}
-                    />
-                  ) : null}
-                  {assistant && runFooterOwners.get(message.runId) === message.id
-                    ? indexes.permissions
-                        .get(message.runId)
-                        ?.filter(
-                          (item) =>
-                            item.decisionSource !== 'automatic' &&
-                            !permissionSubagentSource(snapshot, item),
-                        )
-                        .map((item) => (
-                          <ChatApproval
-                            key={item.id}
-                            permission={item}
-                            onOpen={() => setPermissionId(item.id)}
-                          />
-                        ))
-                    : null}
-                  {assistant ? (
-                    hasText ? (
-                      <Markdown
-                        text={message.text}
-                        streaming={run ? isActive(run) : false}
-                        onLinkClick={onOpenLink ? chooseWebLink : undefined}
-                      />
-                    ) : run && isActive(run) ? null : (
-                      <p className="message-placeholder">{t('conversation.noReply')}</p>
-                    )
-                  ) : (
-                    <div className="user-message-bubble">
-                      <div className="message-text">
-                        <FormattedUserMessage text={message.text} />
-                      </div>
-                      {run ? <MessageContext run={run} attachments={indexes.attachments} /> : null}
-                      {snapshot.session.fork &&
-                      events.some((event) => event.type === 'sdk.context_restarted') ? (
-                        <p className="message-placeholder">{t('conversation.branchRestored')}</p>
-                      ) : null}
-                    </div>
-                  )}
-                  <footer className="message-footer">
-                    <time dateTime={message.createdAt} title={date(message.createdAt, timeFormat)}>
-                      {date(message.createdAt, shortTimeFormat)}
-                    </time>
-                    {hasText ||
-                    (hasMessageForkAnchor(message) && (onForkMessage || onRewindMessage)) ? (
-                      <MessageActions
-                        key={`${snapshot.session.id}:${message.id}`}
-                        message={message}
-                        disabled={submitting || snapshot.session.status === 'archived'}
-                        onEdit={onEditMessage}
-                        onQuote={onQuoteMessage}
-                        onFork={onForkMessage}
-                        onRewind={onRewindMessage}
-                        subsequentMessageCount={subsequentMessageCounts.get(message.id)}
-                        rewindDisabledReason={rewindDisabledReason}
-                        forking={forkingMessageId === message.id}
-                        forkDisabled={submitting || Boolean(forkingMessageId)}
-                      />
-                    ) : null}
-                  </footer>
-                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
-                    <BrowserToolNotice tools={tools} onTrace={() => onTrace(run.id)} />
-                  ) : null}
-                  {assistant && run && runFooterOwners.get(message.runId) === message.id ? (
-                    <RunResult
-                      run={run}
-                      hasText={hasText}
-                      retryDisabled={retryDisabled}
-                      onRetry={onRetry}
-                      onTrace={onTrace}
-                    />
-                  ) : null}
-                  {assistant &&
-                  run &&
-                  !isActive(run) &&
-                  runFooterOwners.get(message.runId) === message.id &&
-                  artifacts.length > 0 ? (
-                    <section
-                      className="chat-deliverables"
-                      aria-label={t('conversation.deliverables')}
-                    >
-                      <h3 className="sr-only">{t('conversation.deliverables')}</h3>
-                      <ul>
-                        {artifacts.map((artifact) => (
-                          <li key={artifact.id}>
-                            <ArtifactAction artifact={artifact} showDownload variant="compact" />
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                </div>
-              </article>
+        {turns.length ? (
+          turns.map((turn) => {
+            const { run } = turn.slice;
+            const ownsRunStatus = turn.kind === 'ordered' || turn.isFooterOwner;
+            const state: TurnState = {
+              ...turnState,
+              isComposerPlanOwner: ownsRunStatus && Boolean(run && run.id === composerPlanRunId),
+              stopPending: ownsRunStatus && Boolean(run && run.id === stopPendingRunId),
+              retryDisabled: retryDisabled && ownsRunStatus && Boolean(run && recoverable(run)),
+            };
+            return turn.kind === 'ordered' ? (
+              <OrderedRun key={`ordered:${turn.slice.run.id}`} turn={turn} {...state} />
+            ) : (
+              <LegacyMessageTurn key={turn.message.id} turn={turn} {...state} />
             );
           })
-        ) : !snapshot.inheritedMessages?.length ? (
+        ) : !inheritedMessages?.length ? (
           <div className="welcome">
             <h2>{t('conversation.welcomeTitle')}</h2>
             <p>{t('conversation.welcomeHelp')}</p>
           </div>
         ) : null}
       </div>
-      {onQuoteSelection &&
-      !submitting &&
-      snapshot.session.status !== 'archived' &&
-      !webLink &&
-      !outputTool &&
-      !permission ? (
+      {onQuoteSelection && !submitting && !archived && !webLink && !outputTool && !permission ? (
         <SelectionQuote viewport={viewport} onQuote={onQuoteSelection} />
       ) : null}
       {unseen ? (
@@ -994,15 +234,12 @@ export const Conversation = memo(function Conversation({
           variant="outline"
           size="sm"
           className="new-messages"
-          onClick={() => {
-            const element = viewport.current;
-            nearBottom.current = true;
-            if (element) element.scrollTop = element.scrollHeight;
-            setUnseen(false);
-          }}
+          onClick={scrollToBottom}
         >
           <ArrowDown data-icon="inline-start" aria-hidden="true" />
-          {hasPendingApproval ? t('conversation.pendingApproval') : t('conversation.newMessages')}
+          {permissions.some((item) => item.status === 'pending')
+            ? t('conversation.pendingApproval')
+            : t('conversation.newMessages')}
         </Button>
       ) : null}
       {webLink && onOpenLink ? (
@@ -1014,29 +251,16 @@ export const Conversation = memo(function Conversation({
           onClose={() => setWebLink(undefined)}
         />
       ) : null}
-      {outputTool ? (
-        <Suspense fallback={<p role="status">{t('conversation.openingOutput')}</p>}>
-          <ToolOutputDialog
-            key={outputTool.id}
-            tool={outputTool}
-            onOpenChange={(open) => {
-              if (!open) setOutputToolId(undefined);
-            }}
-          />
-        </Suspense>
-      ) : null}
-      {permission ? (
-        <Suspense fallback={<p role="status">{t('conversation.openingApproval')}</p>}>
-          <PermissionDialog
-            key={permission.id}
-            permission={permission}
-            subagent={permissionSubagentSource(snapshot, permission)}
-            onOpenChange={(open) => {
-              if (!open) setPermissionId(undefined);
-            }}
-          />
-        </Suspense>
-      ) : null}
+      <RunInspectorDialogs
+        source={snapshot}
+        outputTool={outputTool}
+        permission={permission}
+        outputFallback={<p role="status">{t('conversation.openingOutput')}</p>}
+        approvalFallback={<p role="status">{t('conversation.openingApproval')}</p>}
+        onCloseOutput={() => setOutputToolId(undefined)}
+        onCloseApproval={() => setPermissionId(undefined)}
+        outputFirst
+      />
     </div>
   );
 });

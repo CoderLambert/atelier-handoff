@@ -1,11 +1,17 @@
 /**
  * @file 子任务执行记录归组与审批来源解析。
- * @implementation 按快照聚合运行关联的子任务工具调用与权限，解析审批对应的子任务来源。
- * @updated 2026-11-23T18:25:00+08:00
+ * @implementation 按会话和运行切片聚合运行关联的子任务工具调用与权限，解析审批对应的子任务来源。
+ * @updated 2026-11-27T19:30:00+08:00
  */
-import type { Snapshot } from '@/api/types';
 import type { Subagent } from '@shared/subagents';
 import type { Permission, Run, ToolCall } from '@shared/types';
+
+interface RunWorkInput {
+  session: { id: string };
+  tools: readonly ToolCall[];
+  permissions?: readonly Permission[];
+  subagents?: readonly Subagent[];
+}
 
 export type SubagentSource = Pick<Subagent, 'id' | 'title'>;
 
@@ -17,7 +23,7 @@ export interface SubagentWork {
 }
 
 export function permissionSubagentSource(
-  snapshot: Snapshot,
+  snapshot: RunWorkInput,
   permission: Permission,
 ): SubagentSource | undefined {
   if (permission.sessionId !== snapshot.session.id) return;
@@ -37,7 +43,7 @@ export function permissionSubagentSource(
   return { id, title: subagent?.title || id };
 }
 
-export function groupRunWork(snapshot: Snapshot, run: Run) {
+export function groupRunWork(snapshot: RunWorkInput, run: Run) {
   const tools: ToolCall[] = [];
   const permissions: Permission[] = [];
   const groups = new Map<string, SubagentWork>();
@@ -64,7 +70,7 @@ export function groupRunWork(snapshot: Snapshot, run: Run) {
       toolOwners.set(tool.id, tool.subagentId);
     } else tools.push(tool);
   }
-  for (const permission of snapshot.permissions) {
+  for (const permission of snapshot.permissions ?? []) {
     if (!inRun(permission)) continue;
     const id = permission.subagentId || toolOwners.get(permission.toolCallId);
     if (id) group(id).permissions.push(permission);

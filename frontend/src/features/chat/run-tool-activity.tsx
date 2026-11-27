@@ -1,7 +1,7 @@
 /**
  * @file 在助手消息里展示本轮主助手执行的操作。
  * @implementation 运行中默认展开明细，历史明细随所在运行展开。按需显示更早调用和完整输出，并保留当前阅读位置。
- * @updated 2026-11-25T18:35:00+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useState, type ReactNode } from 'react';
@@ -65,6 +65,7 @@ export function RunToolActivity({
           {liveHeading}
           <Button
             className="run-activity-toggle"
+            data-preserve-scroll
             type="button"
             variant="ghost"
             size="xs"
@@ -98,6 +99,7 @@ export function RunToolActivity({
                 {nextStart === undefined ? null : (
                   <Button
                     type="button"
+                    data-preserve-scroll
                     variant="link"
                     size="xs"
                     onClick={() => {

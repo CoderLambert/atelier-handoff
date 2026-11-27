@@ -1,7 +1,7 @@
 /**
  * @file 展示当前运行及历史消息中的任务清单。
  * @implementation 根据传入步骤展示完成数量和任务状态。输入区用按钮展开清单，历史清单随运行摘要展开。
- * @updated 2026-11-25T18:35:00+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { useId, useState } from 'react';
 import { Check, ChevronDown, Circle, CircleDot, ListChecks } from 'lucide-react';
@@ -41,6 +41,7 @@ export function TaskPlan({
       ) : (
         <Button
           className="chat-task-plan-toggle"
+          data-preserve-scroll
           type="button"
           variant="ghost"
           size="sm"

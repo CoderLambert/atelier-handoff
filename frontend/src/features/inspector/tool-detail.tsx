@@ -1,7 +1,7 @@
 /**
  * @file 在会话消息、子任务和执行轨迹中展示工具调用详情。
  * @implementation 展示命令、参数和回执，为可控的原生 Bash 提供转后台和停止操作，并通过回调打开完整日志。
- * @updated 2026-11-25T22:48:09+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useId, useRef, useState } from 'react';
@@ -118,6 +118,7 @@ function ToolText({
           type="button"
           variant="ghost"
           size="sm"
+          data-preserve-scroll
           aria-expanded={expanded}
           aria-controls={id}
           onClick={() => setExpanded((value) => !value)}
@@ -213,7 +214,7 @@ export function ToolDetailBody({
         ) : null}
         {input.rawInput && input.command ? (
           <details className="tool-detail__raw">
-            <summary>{t('tool.rawParameters')}</summary>
+            <summary data-preserve-scroll>{t('tool.rawParameters')}</summary>
             <p className="tool-detail__notice">{t('tool.invalidJson')}</p>
             <ToolText label={t('tool.parameters')} text={input.parameters} />
           </details>
@@ -283,7 +284,7 @@ export function ToolDetailBody({
           ))}
         {output.sections.some((section) => section.label === t('tool.otherFields')) ? (
           <details className="tool-detail__raw">
-            <summary>{t('tool.rawReceipt')}</summary>
+            <summary data-preserve-scroll>{t('tool.rawReceipt')}</summary>
             <ToolText
               label={t('tool.rawReceipt')}
               text={tool.output}
@@ -335,7 +336,7 @@ export function ToolDetail({
       : undefined;
   return (
     <details className="tool-detail" data-tool-id={tool.id} data-variant={variant}>
-      <summary className="tool-detail__summary">
+      <summary className="tool-detail__summary" data-preserve-scroll>
         <ChevronRight aria-hidden="true" className="tool-detail__chevron" />
         <span className="tool-detail__identity">
           <span className="tool-detail__heading">

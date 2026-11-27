@@ -1,19 +1,20 @@
 /**
  * @file 展示单次运行的执行轨迹。
  * @implementation 关联运行事件、工具、输出和审批，展示用量、请求计时、子任务与 Skill 来源，标注 SDK 重试通知与停止请求的先后并提供诊断下载。
- * @updated 2026-11-27T14:21:24+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { skillInheritanceSourceSchema } from '@shared/skill-inheritance';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Activity, Download, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRunTrace } from '@/use-query/runs/use-run-trace';
 import { runModeLabel } from '@/features/chat/run-mode';
-import { SubagentProgress, groupRunWork, permissionSubagentSource } from './subagent-progress';
+import { SubagentProgress, groupRunWork } from './subagent-progress';
 import { ToolDetail, ToolDetailBody, toolCallSummary } from './tool-detail';
+import { RunInspectorDialogs } from './run-inspector-dialogs';
 import { RequestTimings } from './request-timings';
 import type { Snapshot } from '@/api/types';
 import type { Run, RunEvent, ToolCall } from '@shared/types';
@@ -30,8 +31,6 @@ import {
   preClass,
 } from './shared';
 
-const ToolOutputDialog = lazy(() => import('./tool-output-dialog'));
-const PermissionDialog = lazy(() => import('./permission-dialog'));
 const EVENT_PAGE_SIZE = 50;
 export type RunTraceProps = { snapshot: Snapshot; runId?: string; onSelect: (id: string) => void };
 
@@ -445,28 +444,15 @@ function TraceDetail({
           </div>
         ) : null}
       </section>
-      {permission ? (
-        <Suspense fallback={<Loading>{t('common.openingApproval')}</Loading>}>
-          <PermissionDialog
-            key={permission.id}
-            permission={permission}
-            subagent={permissionSubagentSource(snapshot, permission)}
-            onOpenChange={(open) => {
-              if (!open) setPermissionId(undefined);
-            }}
-          />
-        </Suspense>
-      ) : null}
-      {outputTool ? (
-        <Suspense fallback={<Loading>{t('trace.openingOutput')}</Loading>}>
-          <ToolOutputDialog
-            tool={outputTool}
-            onOpenChange={(open) => {
-              if (!open) setOutputTool(undefined);
-            }}
-          />
-        </Suspense>
-      ) : null}
+      <RunInspectorDialogs
+        source={snapshot}
+        permission={permission}
+        outputTool={outputTool}
+        approvalFallback={<Loading>{t('common.openingApproval')}</Loading>}
+        outputFallback={<Loading>{t('trace.openingOutput')}</Loading>}
+        onCloseApproval={() => setPermissionId(undefined)}
+        onCloseOutput={() => setOutputTool(undefined)}
+      />
     </section>
   );
 }

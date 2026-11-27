@@ -1,7 +1,7 @@
 /**
  * @file 将新运行的权威顺序投影为对话行。
  * @implementation 保留原消息身份及 UTF-16 文本区间，过滤历史 SDK 重试通知，只合并相邻的只读工具展示组。
- * @updated 2026-11-27T14:21:24+08:00
+ * @updated 2026-11-27T19:30:00+08:00
  */
 import type { Message, Run, ToolCall } from '@shared/types';
 import type { TranscriptNotice } from '@shared/ordered-transcript';
@@ -29,8 +29,8 @@ export function isReadOnlyTranscriptTool(tool: ToolCall): boolean {
 
 export function orderedTranscriptRows(
   run: Run,
-  messages: Message[],
-  tools: ToolCall[],
+  messages: readonly Message[],
+  tools: readonly ToolCall[],
 ): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   for (const message of messages) {
