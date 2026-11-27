@@ -27,8 +27,10 @@
 - 产品和发行工具的可执行源码使用严格 TypeScript。React 使用 `.tsx`，模块按运行时选 `.ts`、`.mts`、`.cts`。发行目录里的 `.js`、`.mjs`、`.cjs` 由构建生成。平台规定的清单、桌面入口、样式及 PKGBUILD 使用各自格式。
 - 桌面、打包和安装态测试都纳入 `npm run check`，开启 `strict` 和 `noUncheckedIndexedAccess`。新边界从 `unknown` 解析，JSON、IPC、模型工具参数和子进程消息均做运行时校验。核心契约从一份 schema 推导。类型断言只用于已经收窄且可说明的事实。禁止用 `any`、`@ts-nocheck`、无依据的 `!` 或关闭编译选项使检查变绿。
 - 新功能的应用自有界面文案使用类型化 i18n 词条，同一改动补齐简体中文和英文，覆盖可见提示、无障碍名称和原生对话框。`npm run check` 会运行 `check:i18n`。验收受影响的交互时，在两种语言下核对操作提示和错误状态，特别检查由服务端数据或第三方控件决定的文案。具体规则见[前端](.claude/rules/frontend.md)和[桌面端](.claude/rules/desktop.md)。
-- React 服务端状态统一走 TanStack Query。按 API 操作在 `frontend/src/use-query/<领域>/` 建立独立 hook，复杂交互编排归同域业务 hook，组件消费数据与动作。
+- React 服务端状态统一走 TanStack Query（`scripts/query-legacy.json` 已清零，不得新增豁免）。按 API 操作在 `frontend/src/use-query/<领域>/` 建立独立 hook，复杂交互编排归同域业务 hook，组件消费数据与动作。
 - 把一次用户操作追到真正拥有状态的层。跨边界传 ID 和数据，不传框架对象、任意频道或未验证路径。废弃实现随经过验证的替代一起清理。
+- 局部高频状态（浏览器 Tab/URL、表单编辑态、局部弹窗与筛选）就近留在消费面板或子控制器内，不挂回 `Workspace` 等顶层外壳；传给 `memo` 子树的回调与派生对象保持引用稳定，交互信号（如输入框聚焦）只保留单一权威通道，乐观或本地覆盖态在确认后显式释放。
+- 遵循无环与职责分层：共享类型独立放 `types.ts`（子模块禁止反向导入同目录 `index.ts`），不在同域保留重复协调器，遵守 `scripts/check-import-boundaries.mts` 的循环检查与热点文件行数上限；桌面 IPC 复用 `desktop/host/trusted-ipc.mts` 并在组合入口显式绑定，Git 持久状态与 Worktree 变更走安全原子 I/O 与租约包装，高吞吐流式通道明确背压水位。
 - Agent 执行行为以 Claude CLI 与项目锁定的原生 Claude Agent SDK 为对齐基准，包括同批前台子代理的调度。任何偏离原生行为的限制或语义变更，都必须先向用户说明差异并获得明确确认；不得自行决定，也不得从已有例外推定后续偏离已获授权。
 - 使用隔离项目和临时数据根测试，桌面测试另隔离 `userData`。实施结束运行 `npm run check`、`npm test`、`npm run build`。桌面改动从真实 Electron 窗口验证，发行改动从实际安装件验证。报告明确区分替身、真实 SDK、实际模型和系统包测试，有失败则留下复现步骤。
 
