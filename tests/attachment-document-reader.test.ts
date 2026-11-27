@@ -1,7 +1,7 @@
 /**
  * @file 验证隔离文档解析、完整文本文件与失败清理。
  * @implementation 使用临时 Office/PDF 夹具覆盖工作表索引、段落、扫描和加密错误、ZIP 预算、取消，以及无 tsx 的编译 worker。
- * @updated 2026-11-21T15:30:00+08:00
+ * @updated 2026-11-27T21:33:00+08:00
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -415,7 +415,7 @@ test('compiled .js worker works from a package closure with no tsx or optional c
       'server/attachment-document-reader.ts',
       'server/attachment-document-worker.ts',
       'server/attachment-document-protocol.ts',
-      'shared/types.ts',
+      'shared/errors.ts',
     ],
     outdir: runtime,
     outbase: project,
@@ -508,7 +508,7 @@ test('worker supervisor handles invalid messages, crashes, time and heap exhaust
     entryPoints: [
       'server/attachment-document-reader.ts',
       'server/attachment-document-protocol.ts',
-      'shared/types.ts',
+      'shared/errors.ts',
     ],
     outdir: runtime,
     outbase: project,

@@ -1,12 +1,12 @@
 /**
  * @file 管理项目绑定和目录可用性。
  * @implementation 重新核对项目根目录，拒绝私有数据目录并保留已绑定路径的回执与通知。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { AppError, now } from '../../../shared/types.js';
+import { AppError, now } from '../../../shared/errors.js';
 import { authorizeRoot, inside } from '../../files.js';
 import type { Store } from '../../store.js';
 import { branchFor } from './branch.js';

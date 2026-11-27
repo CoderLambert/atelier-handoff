@@ -20,26 +20,6 @@
     "useMutation:f7621d86c147723c",
     "useQueryClient:88aaac3e2e5480e1"
   ],
-  "features/extensions/api.ts": [
-    "api:44337d7061ec39b7",
-    "api:7115ee278194b822",
-    "api:86a55c0f6be0506f",
-    "api:d2d7a564a384dc8e",
-    "queryOptions:218370ea48ebcfc1",
-    "useMutation:81e31baceaa1dd6b",
-    "useMutation:f53856b9a4686fb2",
-    "useQuery:d7e866e38eccf9b7",
-    "useQuery:ecf3173277d3e7a0",
-    "useQueryClient:88aaac3e2e5480e1",
-    "useQueryClient:88aaac3e2e5480e1"
-  ],
-  "features/extensions/editor.tsx": ["useQueryClient:88aaac3e2e5480e1"],
-  "features/extensions/picker.tsx": ["useQueryClient:88aaac3e2e5480e1"],
-  "features/extensions/skillhub-market.tsx": [
-    "api:160d6c5696fd9022",
-    "useQuery:1449319b96798a08",
-    "useQuery:f8c0c5cb5a40d270"
-  ],
   "features/inspector/permission-dialog.tsx": [
     "api:2dd9882cbc4f4ee1",
     "api:6536fe7af65a3ac7",

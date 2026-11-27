@@ -1,7 +1,12 @@
+/**
+ * @file 提供 Linux 桌面端本机目录选择器适配器。
+ * @implementation 在可用图形会话中调用 zenity 选择项目目录并返回经校验的绝对路径。
+ * @updated 2026-11-27T21:30:00+08:00
+ */
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { isAbsolute, sep } from 'node:path';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 export function pickProjectDirectory(signal: AbortSignal): Promise<string | null> {
   if (process.platform !== 'linux' || !(process.env.DISPLAY || process.env.WAYLAND_DISPLAY)) {

@@ -1,12 +1,12 @@
 /**
  * @file 提供工作台 renderer 入口和打包静态资源。
  * @implementation 按资源白名单读取静态文件，并为受信工作台页面设置内容安全策略。
- * @updated 2026-11-20T20:10:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { readFile, realpath } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative } from 'node:path';
 import type { ServerResponse } from 'node:http';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 const sharedHeaders = {
   'Content-Security-Policy':

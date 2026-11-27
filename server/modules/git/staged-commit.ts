@@ -1,7 +1,7 @@
 /**
  * @file 核对暂存区并执行用户确认的 Git 提交。
  * @implementation 使用临时索引副本确定树，持有检出索引锁并按预期旧引用推进分支。
- * @updated 2026-11-24T04:33:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { copyFile, lstat, mkdtemp, open, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ import {
   type GitCommitRequest,
   type GitStagedFile,
 } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { fingerprint } from '../../files.js';
 import { assertIdleGit } from './development-worktrees.js';
 import { fileIdentity, gitError, gitText, type LocalGit } from './git-cli.js';

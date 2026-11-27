@@ -1,10 +1,10 @@
 /**
  * @file 解析和更新内置 RTK 的有效设置。
  * @implementation 由运行时 Store 保存全局默认与项目覆盖，逐次读取设置并验证项目身份，能力状态与用户偏好分别返回。
- * @updated 2026-11-26T01:39:35+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { RtkSettingsPatch, RtkSettingsView } from '../shared/rtk-settings.js';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import type { Store } from './store.js';
 
 export class RtkSettings {

@@ -1,13 +1,13 @@
 /**
  * @file 接入人工终端的 WebSocket 数据流。
  * @implementation 在现有 HTTP server 上验证单次票据与 Origin，限制入站帧、维持心跳并显式释放升级连接。
- * @updated 2026-11-26T01:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { terminalLimits, terminalProtocol, terminalStreamPath } from '../../../shared/terminal.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { TerminalAttachment, TerminalConnection, TerminalManager } from './manager.js';
 
 export function registerTerminalTransport(

@@ -1,9 +1,9 @@
 /**
  * @file 协调同一会话的删除与附件上传状态。
  * @implementation 通过具名操作持有两种互斥任务的内存标记，供运行、终端和会话用例复核。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 
 export function createSessionOperations() {
   const deleting = new Set<string>();

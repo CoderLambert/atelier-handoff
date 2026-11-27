@@ -1,9 +1,9 @@
 /**
  * @file 读取 Git 差异所对应的完整文本版本。
  * @implementation 用项目路径策略限制范围，从工作树、索引或指定提交读取有界的普通 UTF-8 文件。
- * @updated 2026-11-25T16:50:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { gitOid, type GitWorkingFileSource } from '../../../shared/git-workbench.js';
 import { MAX_TEXT, readProjectText, sensitiveProjectPath } from '../../files.js';
 import { gitError, type LocalGit } from './git-cli.js';

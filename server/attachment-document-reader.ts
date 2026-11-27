@@ -1,12 +1,12 @@
 /**
  * @file 为附件准备可分段读取的本地纯文本视图。
  * @implementation 在有堆预算和超时的独立 worker 中校验、解析文档；取消或失败后终止 worker 并删除本次临时输出。
- * @updated 2026-11-21T15:30:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { access, lstat, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import {
   documentMimeSchema,
   documentParserLimits,

@@ -1,10 +1,10 @@
 /**
  * @file 在升级终端 WebSocket 前校验本机来源。
  * @implementation 要求请求对应当前监听端口及同源页面，关停后不接受新升级。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { IncomingMessage, Server } from 'node:http';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 
 export function validateTerminalUpgrade(
   server: Server,

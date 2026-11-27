@@ -1,6 +1,11 @@
+/**
+ * @file 对接 SkillHub 公开市场检索、元数据读取与安装包导入。
+ * @implementation 限制请求来源与 CDN 域名、校验 ZIP 清单并转换为统一的 PublicEntry 预览结果。
+ * @updated 2026-11-27T21:30:00+08:00
+ */
 import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import { fingerprint } from './files.js';
 import { inspectMarkdown } from './extensions.js';
 import type { PublicEntry } from './public-extensions.js';

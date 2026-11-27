@@ -1,7 +1,7 @@
 /**
  * @file 在隔离 Electron 中验证浏览器取消、超时和状态恢复。
  * @implementation 用本地页面和调试响应故障验证慢速导航、原页面与未提交输入的保留、超时标签替换、旧请求隔离以及网页进程退出后的恢复。
- * @updated 2026-11-20T22:16:28+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -16,7 +16,7 @@ import {
   type DesktopBrowserCall,
   type DesktopBrowserState,
 } from '../../shared/desktop-browser.js';
-import { AppError } from '../../shared/types.js';
+import { AppError } from '../../shared/errors.js';
 
 function deferred<T>() {
   let resolve = (_value: T): void => {

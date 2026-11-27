@@ -1,5 +1,10 @@
+/**
+ * @file 查询地点当前天气的辅助适配器。
+ * @implementation 校验地点参数后请求外部天气接口，过滤并规范化返回字段。
+ * @updated 2026-11-27T21:30:00+08:00
+ */
 import { z } from 'zod';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 export const weatherLocation = z
   .string()

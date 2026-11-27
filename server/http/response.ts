@@ -1,11 +1,11 @@
 /**
  * @file 写入运行时 JSON 响应和统一错误。
  * @implementation 保留缓存头、校验错误格式和流已开始后的关闭语义。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { AppError } from '../../shared/types.js';
+import { AppError } from '../../shared/errors.js';
 
 export function json(res: ServerResponse, data: unknown, status = 200): true {
   res.writeHead(status, {

@@ -1,13 +1,13 @@
 /**
  * @file 提供宿主管理的 Shunt 账户文件状态与显式 ChatGPT 登录。
  * @implementation 只检查账户文件是否存在；以固定二进制启动单个有时限的登录命令，丢弃输出并在取消或关闭时终止。
- * @updated 2026-11-20T19:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, readdir, realpath, stat } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 export interface ManagedGatewayStatus {
   configPath: string;

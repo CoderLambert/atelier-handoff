@@ -1,13 +1,13 @@
 /**
  * @file 创建人工终端的本机 PTY 进程。
  * @implementation 选择可执行用户 shell、剔除运行时私有环境，并封装 node-pty 的读写和实际退出事件。
- * @updated 2026-11-26T01:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { accessSync, constants } from 'node:fs';
 import { userInfo } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 
 export interface TerminalProcessExit {
   exitCode: number;

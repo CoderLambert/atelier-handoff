@@ -1,7 +1,7 @@
 /**
  * @file 冻结 AI 多提交规划的 HEAD、索引、工作区及完整候选单元。
  * @implementation 只读 Git 和受保护的本机文件，内存计算索引树；双次采集拒绝竞态，导出可校验的三态和依赖契约。
- * @updated 2026-11-24T14:50:51+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { applyPatch, structuredPatch } from 'diff';
 import { createHash } from 'node:crypto';
@@ -10,7 +10,7 @@ import { lstat, open } from 'node:fs/promises';
 import { isAbsolute, join, sep } from 'node:path';
 import { z } from 'zod';
 import { gitOid, gitPath } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { fingerprint, MAX_TEXT, resolveProjectPath } from '../../files.js';
 import { fileIdentity, gitError, gitText, type LocalGit } from './git-cli.js';
 import { readGitStatus } from './git-reader.js';

@@ -1,10 +1,10 @@
 /**
  * @file 提供工具审批详情、Diff 与裁决接口。
  * @implementation 解析决定与版本号，将实际授权复核交给审批服务。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { PermissionService } from '../../permissions.js';
 import type { Store } from '../../store.js';
 import { body } from '../body.js';

@@ -1,33 +1,22 @@
 /**
  * @file 提供 SkillHub 市场的搜索、预览与安装界面。
  * @implementation 按关键词和类别展示结果，预览公开来源并安装技能；已安装技能可通过回调启动。
- * @updated 2026-11-23T04:52:50+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { getTranslator, useUiTranslation } from '@/i18n';
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/api/client';
 import { usePublicExtensionPreview } from '@/use-query/extensions/use-public-extension-preview';
 import { useImportPublicExtension } from '@/use-query/extensions/use-import-public-extension';
 import {
-  endpoint,
   extensionDetail,
-  extensionsQuery,
   messageOf,
+  useExtensions,
+  useSkillHubSearch,
+  type SkillHubItem,
   type StartSkill,
 } from './api';
 import { ActionButton, ErrorMessage, MarketCategoryIcon, MarkdownPreview } from './components';
-
-interface SkillHubItem {
-  source: string;
-  coordinate: string;
-  title: string;
-  version: string;
-  description: string;
-  publisher?: string;
-  category?: string;
-}
 
 const categoryLabels: Record<string, string> = {
   get 'dev-programming'() {
@@ -87,16 +76,12 @@ export function SkillHubMarket({
   const [message, setMessage] = useState('');
   const [starting, setStarting] = useState(false);
   const install = useImportPublicExtension(projectId);
-  const extensions = useQuery(extensionsQuery(projectId));
-  const results = useQuery({
-    queryKey: ['extensions', projectId, 'skillhub-search', query],
-    queryFn: ({ signal }) =>
-      api<{ items: SkillHubItem[] }>(
-        `${endpoint(projectId, 'skillhub-search')}?q=${encodeURIComponent(query)}`,
-        { signal },
-      ),
+  const extensions = useExtensions(projectId);
+  const results = useSkillHubSearch(projectId, query);
+  const preview = usePublicExtensionPreview(projectId, {
+    source: selected?.source ?? '',
+    kind: 'skill',
   });
-  const preview = usePublicExtensionPreview(projectId, { source: selected?.source ?? '', kind: 'skill' });
   const entry = preview.data?.[0];
   const installed =
     entry &&

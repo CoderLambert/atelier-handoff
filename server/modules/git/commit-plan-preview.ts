@@ -1,7 +1,7 @@
 /**
  * @file 校验多提交计划并生成用户确认前的逐组差异。
  * @implementation 从已编译的冻结提交树生成预览和摘要，在单元及实际提交差异上复核新增凭据。
- * @updated 2026-11-24T14:41:22+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { formatPatch, structuredPatch } from 'diff';
 import {
@@ -10,7 +10,7 @@ import {
   type MultiCommitCredential,
   type MultiCommitValidate,
 } from '../../../shared/git-multi-commit.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { fingerprint } from '../../files.js';
 import { compileCommitPlan, type GitCommitPlanCompiledState } from './commit-plan-compiler.js';
 import type { GitCommitPlanFileState, GitCommitPlanSnapshot } from './commit-plan-snapshot.js';

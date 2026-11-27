@@ -1,14 +1,14 @@
 /**
  * @file 调用系统 Git 并识别已授权的仓库和检出目录。
  * @implementation 使用参数数组与受限环境。提交时按需读取本机 Git 身份和签名偏好，限制外部程序和访网。
- * @updated 2026-11-24T04:50:56+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { execFile } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
 import { devNull, homedir } from 'node:os';
 import { join, normalize } from 'node:path';
 import { gitOid, type GitStartPoint } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { resolveProjectPath } from '../../files.js';
 
 const config = [

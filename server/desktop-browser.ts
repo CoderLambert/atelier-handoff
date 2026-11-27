@@ -1,10 +1,10 @@
 /**
  * @file 将运行时浏览器操作转发给桌面进程并管理请求生命周期。
  * @implementation 按请求标识关联 IPC 响应，在桌面操作时限外预留恢复时间，并处理取消、超时和断连。
- * @updated 2026-11-20T22:16:28+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomUUID } from 'node:crypto';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import {
   desktopBrowserCallSchema,
   desktopBrowserCancelSchema,

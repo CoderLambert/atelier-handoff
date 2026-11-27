@@ -1,7 +1,7 @@
 /**
  * @file 提供智能体、项目扩展与项目选择界面的双语词条。
  * @implementation 以语义键定义简体中文和英文文案、插值变量及数量复数分支。
- * @updated 2026-11-22T12:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 export const extensions = {
   'common.cancel': ['取消', 'Cancel'],
@@ -527,26 +527,57 @@ export const extensions = {
     'The connection test response is invalid.',
   ],
   'extensionEditor.invalidName': [
-    '名称请使用字母、数字、短横线、下划线或冒号；MCP 名称也可以包含句点。',
-    'Use letters, numbers, hyphens, underscores, or colons in names. MCP names may also contain periods.',
+    '名称仅可使用小写字母、数字、短横线或下划线，且以小写字母或数字开头（最多 64 个字符）。',
+    'Use up to 64 lowercase letters, numbers, hyphens, or underscores, starting with a letter or number.',
+  ],
+  'extensionEditor.descriptionTooLong': [
+    '描述不能超过 500 个字符。',
+    'Description cannot exceed 500 characters.',
+  ],
+  'extensionEditor.sourceTooLong': [
+    '来源说明不能超过 4096 个字符。',
+    'Source cannot exceed 4096 characters.',
+  ],
+  'extensionEditor.bodyRequired': [
+    '请填写扩展指令正文。',
+    'Enter the extension instruction body.',
+  ],
+  'extensionEditor.bodyTooLong': [
+    '扩展指令正文不能超过 65000 个字符。',
+    'Instruction body cannot exceed 65000 characters.',
   ],
   'extensionEditor.invalidUrl': [
-    '请输入完整的 HTTP 或 HTTPS 服务 URL。',
-    'Enter a complete HTTP or HTTPS service URL.',
+    '请输入完整的 HTTPS 或本机 HTTP 服务 URL。',
+    'Enter a complete HTTPS or localhost HTTP service URL.',
   ],
   'extensionEditor.unsafeUrl': [
-    '服务 URL 需使用 HTTP 或 HTTPS，且不能包含用户名或密码。',
-    'The service URL must use HTTP or HTTPS and cannot contain a username or password.',
+    '服务 URL 仅支持 HTTPS 或本机 HTTP，且不能包含用户名、密码、查询参数或片段；凭据请使用环境变量。',
+    'The service URL must use HTTPS or localhost HTTP without username, password, query, or hash; provide credentials via environment variables.',
   ],
   'extensionEditor.invalidToken': [
-    '请填写有效的令牌环境变量名。',
-    'Enter a valid token environment variable name.',
+    '令牌环境变量名只能包含大写字母、数字和下划线，且不能以数字开头。',
+    'Token environment variable names may contain uppercase letters, numbers, and underscores, and cannot start with a number.',
   ],
   'extensionEditor.invalidEnv': [
-    '环境变量名只能包含字母、数字和下划线，且不能以数字开头。',
-    'Environment variable names may contain letters, numbers, and underscores, and cannot start with a number.',
+    '环境变量名只能包含大写字母、数字和下划线，且不能以数字开头。',
+    'Environment variable names may contain uppercase letters, numbers, and underscores, and cannot start with a number.',
   ],
-  'extensionEditor.commandRequired': ['请填写可执行命令。', 'Enter an executable command.'],
+  'extensionEditor.tooManyEnvNames': [
+    '环境变量名最多填写 20 个。',
+    'Specify at most 20 environment variable names.',
+  ],
+  'extensionEditor.tooManyArgs': [
+    '命令参数最多填写 40 项。',
+    'Specify at most 40 command arguments.',
+  ],
+  'extensionEditor.invalidInput': [
+    '扩展配置格式无效，请检查输入项。',
+    'Extension configuration is invalid. Check your inputs.',
+  ],
+  'extensionEditor.commandRequired': [
+    '请输入可执行文件的绝对路径。',
+    'Enter the absolute path to an executable command.',
+  ],
   'extensionEditor.saved': ['扩展已保存', 'Extension saved'],
   'extensionEditor.unknownSavedId': [
     '扩展已保存，但无法确认可用于测试的扩展 ID。请关闭编辑器并重新加载列表。',
@@ -574,12 +605,12 @@ export const extensions = {
   ],
   'extensionEditor.new': ['新建', 'New'],
   'extensionEditor.mcpNameHelp': [
-    '在 # 菜单中显示的服务名称',
-    'Service name displayed in the # menu',
+    '在 # 菜单中显示；仅支持小写字母、数字、短横线或下划线（最多 64 个字符）',
+    'Displayed in the # menu; use up to 64 lowercase letters, numbers, hyphens, or underscores',
   ],
   'extensionEditor.markdownNameHelp': [
-    '在 / 菜单中显示；使用字母、数字、短横线、下划线或冒号',
-    'Displayed in the / menu; use letters, numbers, hyphens, underscores, or colons',
+    '在 / 菜单中显示；仅支持小写字母、数字、短横线或下划线（最多 64 个字符）',
+    'Displayed in the / menu; use up to 64 lowercase letters, numbers, hyphens, or underscores',
   ],
   'extensionEditor.enable': ['启用此扩展', 'Enable this extension'],
   'extensionEditor.bindingsLabel': ['Skill 工具绑定', 'Skill tool bindings'],

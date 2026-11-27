@@ -1,16 +1,19 @@
 /**
  * @file 提供扩展界面的显示辅助方法和数据访问入口。
- * @implementation 重导出扩展目录的查询层接口，保留技能工具绑定的遗留操作，并按扩展详情或 GitHub 预览场景本地化诊断。
- * @updated 2026-11-27T17:02:57+08:00
+ * @implementation 重导出 use-query 扩展查询与变更接口，并基于共享诊断分类码将扩展详情与 GitHub 预览场景本地化。
+ * @updated 2026-11-27T21:25:00+08:00
  */
+import { ApiError } from '@/api/client';
 import { getTranslator, translateError } from '@/i18n';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Extension, ExtensionSelection, SkillToolBinding } from '@shared/types';
-import { api, ApiError } from '@/api/client';
-import { endpoint, extensionKeys } from '@/use-query/extensions/keys';
+import { classifyExtensionDiagnostic, type ExtensionDiagnosticCode } from '@shared/extensions';
+import type { Extension, ExtensionSelection } from '@shared/types';
 
 export { endpoint, extensionKeys, extensionPickerKeys } from '@/use-query/extensions/keys';
-export { extensionsQuery, useExtensions } from '@/use-query/extensions/use-extensions';
+export {
+  extensionsQuery,
+  useExtensionPickerCatalog,
+  useExtensions,
+} from '@/use-query/extensions/use-extensions';
 export {
   invalidateExtensionPickers,
   pickerCatalogItems,
@@ -22,6 +25,14 @@ export {
   useExtensionMutation,
   type ItemResponse,
 } from '@/use-query/extensions/use-extension-mutation';
+export { useSkillToolBindings } from '@/use-query/extensions/use-skill-tool-bindings';
+export { useSaveSkillToolBindings } from '@/use-query/extensions/use-save-skill-tool-bindings';
+export {
+  useExtensionCache,
+  useTestMcpExtension,
+  type TestResult,
+} from '@/use-query/extensions/use-test-mcp-extension';
+export { useSkillHubSearch, type SkillHubItem } from '@/use-query/extensions/use-skillhub-search';
 
 export type ExtensionKind = Extension['kind'];
 export type McpExtension = Extract<Extension, { kind: 'mcp' }>;
@@ -32,13 +43,6 @@ export type StartSkill = (
   editable: boolean,
 ) => Promise<void>;
 export type { PublicEntry } from '@shared/public-extensions';
-export interface TestResult {
-  status: 'connected' | 'needs-auth' | 'failed';
-  tools: McpExtension['tools'];
-  message?: string;
-  statusMessage?: string;
-  item?: Extension;
-}
 
 export const kinds: Record<ExtensionKind, string> = {
   get skill() {
@@ -104,31 +108,26 @@ export function messageOf(error: unknown) {
   }
   return translateError(error, t('common.operationFailed'));
 }
-const extensionDiagnostics = [
-  ['Markdown frontmatter 格式无效。', 'extensionDetail.invalidFrontmatter'],
-  ['Markdown frontmatter 缺少结束标记。', 'extensionDetail.unclosedFrontmatter'],
-  ['请填写扩展说明正文。', 'extensionDetail.emptyBody'],
-  [
-    '此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。',
-    'extensionDetail.unsupportedPackage',
-  ],
-  [
-    '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。',
-    'extensionDetail.unsupportedMarkdown',
-  ],
-  ['SKILL.md 必须使用 UTF-8 编码。', 'publicImport.manifestEncoding'],
-  ['SKILL.md 超过读取上限。', 'publicImport.manifestTooLarge'],
-  ['MCP 服务要求有效的凭据。', 'extensionDetail.authRequired'],
-  ['MCP 连接或调用失败。请检查地址、进程参数和服务端日志。', 'extensionDetail.connectionFailed'],
-  ['已打开 8 个常驻 MCP。停用不再使用的服务后重试。', 'extensionDetail.processLimit'],
-  ['MCP 会话已关闭，请重新发起工具调用。', 'extensionDetail.sessionClosedRetry'],
-  ['MCP 会话已关闭。', 'extensionDetail.sessionClosed'],
-  ['请使用桌面内置浏览器工具。', 'extensionDetail.nativeBrowser'],
-  ['MCP 工具描述包含配置中的凭据，请修改服务端工具定义。', 'extensionDetail.secretMetadata'],
-] as const;
-const extensionMessages = new Map<string, (typeof extensionDiagnostics)[number][1]>(
-  extensionDiagnostics,
-);
+
+const staticDiagnosticKeys = {
+  invalid_frontmatter: 'extensionDetail.invalidFrontmatter',
+  unclosed_frontmatter: 'extensionDetail.unclosedFrontmatter',
+  empty_body: 'extensionDetail.emptyBody',
+  unsupported_package: 'extensionDetail.unsupportedPackage',
+  unsupported_markdown: 'extensionDetail.unsupportedMarkdown',
+  manifest_encoding: 'publicImport.manifestEncoding',
+  manifest_too_large: 'publicImport.manifestTooLarge',
+  auth_required: 'extensionDetail.authRequired',
+  connection_failed: 'extensionDetail.connectionFailed',
+  process_limit: 'extensionDetail.processLimit',
+  session_closed_retry: 'extensionDetail.sessionClosedRetry',
+  session_closed: 'extensionDetail.sessionClosed',
+  native_browser: 'extensionDetail.nativeBrowser',
+  secret_metadata: 'extensionDetail.secretMetadata',
+} as const satisfies Record<
+  Exclude<ExtensionDiagnosticCode, 'discovered_tools' | 'environment_required'>,
+  string
+>;
 
 /** Translate known application diagnostics; leave upstream text and identifiers intact. */
 export function extensionDetail(
@@ -136,16 +135,16 @@ export function extensionDetail(
   context: 'detail' | 'github-preview' = 'detail',
 ): string {
   if (!message) return '';
+  const classified = classifyExtensionDiagnostic(message);
+  if (!classified) return message;
   const t = getTranslator('extensions');
-  const key = extensionMessages.get(message);
-  if (key === 'extensionDetail.unsupportedPackage' && context === 'github-preview')
+  if (classified.code === 'discovered_tools')
+    return t('extensionDetail.discovered', { count: classified.count });
+  if (classified.code === 'environment_required')
+    return t('extensionDetail.environmentRequired', { name: classified.name });
+  if (classified.code === 'unsupported_package' && context === 'github-preview')
     return t('publicImport.githubCompatibility');
-  if (key) return t(key);
-  const discovered = /^已发现 (\d+) 项工具。$/.exec(message);
-  if (discovered) return t('extensionDetail.discovered', { count: Number(discovered[1]) });
-  const environment = /^请在本机服务环境中设置 ([A-Za-z_][A-Za-z0-9_]*)。$/.exec(message);
-  if (environment?.[1]) return t('extensionDetail.environmentRequired', { name: environment[1] });
-  return message;
+  return t(staticDiagnosticKeys[classified.code]);
 }
 
 export const isConflict = (error: unknown) =>
@@ -153,46 +152,3 @@ export const isConflict = (error: unknown) =>
 export const allowsAuto = (item?: MarkdownExtension) => item?.modelInvocable !== false;
 export const autoEnabled = (item?: MarkdownExtension) =>
   allowsAuto(item) && item?.autoInvoke !== false;
-
-interface ToolBindingsResponse {
-  bindings: SkillToolBinding[];
-}
-function bindingsOf(result: ToolBindingsResponse) {
-  const t = getTranslator('extensions');
-  if (!Array.isArray(result?.bindings)) throw new Error(t('extensions.missingBindings'));
-  return result.bindings;
-}
-const toolBindingsEndpoint = (projectId: string, skillId: string) =>
-  endpoint(projectId, `${encodeURIComponent(skillId)}/tool-bindings`);
-export function useSkillToolBindings(projectId: string, skillId: string) {
-  return useQuery({
-    queryKey: extensionKeys.toolBindings(projectId, skillId),
-    queryFn: async ({ signal }) =>
-      bindingsOf(
-        await api<ToolBindingsResponse>(toolBindingsEndpoint(projectId, skillId), { signal }),
-      ),
-    enabled: Boolean(projectId && skillId),
-  });
-}
-export function useSaveSkillToolBindings(projectId: string, skillId: string) {
-  const client = useQueryClient();
-  const queryKey = extensionKeys.toolBindings(projectId, skillId);
-  return useMutation({
-    mutationKey: extensionKeys.mutations(projectId),
-    scope: { id: `extensions:${projectId}` },
-    mutationFn: async (bindings: SkillToolBinding[]) =>
-      bindingsOf(
-        await api<ToolBindingsResponse>(toolBindingsEndpoint(projectId, skillId), {
-          method: 'PUT',
-          body: { bindings },
-        }),
-      ),
-    onMutate: async () => {
-      await client.cancelQueries({ queryKey });
-    },
-    onSuccess: async (bindings) => {
-      client.setQueryData(queryKey, bindings);
-      await client.invalidateQueries({ queryKey: extensionKeys.list(projectId) });
-    },
-  });
-}

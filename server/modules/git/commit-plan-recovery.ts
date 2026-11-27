@@ -1,13 +1,13 @@
 /**
  * @file 按持久证据恢复已推进引用的多提交操作，或安全放弃尚未推进引用的操作。
  * @implementation 在外层授权与检出租约内对账日志、权威状态、目录、HEAD、索引和锁身份；恢复时仅发布经确认的自有索引，放弃时仅移除经确认的自有锁，证据不一致时保留现场。
- * @updated 2026-11-24T15:58:07+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { constants, type BigIntStats } from 'node:fs';
 import { lstat, open, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import {
   hashCommitJournalIndex,
   MAX_COMMIT_JOURNAL_INDEX_BYTES,

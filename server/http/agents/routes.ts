@@ -1,10 +1,10 @@
 /**
  * @file 提供项目智能体的配置和版本操作 HTTP 接口。
  * @implementation 按项目与智能体路径匹配，复用领域服务校验配置，归档和复制前解析基准版本。
- * @updated 2026-11-26T22:26:22+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { AgentProfiles } from '../../agent-profiles.js';
 import { body } from '../body.js';
 import { json } from '../response.js';

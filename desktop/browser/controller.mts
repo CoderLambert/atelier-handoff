@@ -1,7 +1,7 @@
 /**
  * @file 管理项目浏览器的原生标签、控制权、工具执行和下载接入。
  * @implementation 校验 IPC 和项目隔离边界，仲裁人工、Agent 与工作台输入，管理下载归属、操作超时和标签恢复。
- * @updated 2026-11-26T21:40:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import {
   BrowserWindow,
@@ -29,7 +29,7 @@ import {
   type DesktopBrowserCall,
   type DesktopBrowserLayout,
 } from '../../shared/desktop-browser.js';
-import { AppError } from '../../shared/types.js';
+import { AppError } from '../../shared/errors.js';
 import { createBrowserDownloads } from './downloads.mjs';
 
 const stopGraceMs = 1_000;

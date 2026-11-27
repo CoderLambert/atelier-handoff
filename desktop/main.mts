@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
  * @implementation 装配窗口、快捷键与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
- * @updated 2026-11-26T21:40:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { app, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
@@ -31,7 +31,7 @@ import {
   desktopBrowserResultSchema,
   type DesktopBrowserResult,
 } from '../shared/desktop-browser.js';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import { DesktopUiLanguagePreferences } from './host/ui-language.mjs';
 import { bindUiLanguage } from './host/ui-language-ipc.mjs';
 import { DesktopUiThemePreferences } from './host/ui-theme.mjs';

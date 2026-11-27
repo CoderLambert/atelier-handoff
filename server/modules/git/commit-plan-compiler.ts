@@ -1,12 +1,12 @@
 /**
  * @file 将已确认的变更分组编译成有序提交树和保留暂存语义的索引覆盖。
  * @implementation 只在内存按冻结的两层基线重建精确内容，严格核对分组、依赖和块坐标；输出不可变覆盖，不读取文件或执行 Git。
- * @updated 2026-11-24T17:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { gitCommitMessage } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import {
   gitCommitPlanSnapshotSchema,
   type GitCommitPlanFile,

@@ -1,12 +1,12 @@
 /**
  * @file 使用 Drizzle 保存并终结会话子任务。
  * @implementation 通过唯一标识、运行归属与状态谓词实现幂等写入，恢复时一次终结遗留运行中任务。
- * @updated 2026-11-21T12:00:00+00:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { and, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { subagentSchema, type Subagent } from '../../../shared/subagents.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { SubagentRepository } from '../../modules/sessions/subagent-repository.js';
 import { subagents } from '../schema/subagents.js';
 

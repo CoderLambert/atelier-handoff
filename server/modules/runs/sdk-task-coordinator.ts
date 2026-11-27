@@ -1,11 +1,11 @@
 /**
  * @file 统一解析 SDK 任务帧并维护单一前台工具与后台交接协调视图。
  * @implementation 共享 local_agent 与 local_bash 的 task_started/task_updated/task_notification 帧校验，集中持有活跃工具表与前台/后台判定。
- * @updated 2026-11-27T19:48:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { BashTaskReceipt, NativeBashTasks } from '../../native-bash.js';
 import type { SubagentRun } from '../../subagent-run.js';
 

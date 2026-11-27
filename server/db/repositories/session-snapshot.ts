@@ -1,11 +1,11 @@
 /**
  * @file 使用 Drizzle 按会话读取完整快照所需的数据库记录。
  * @implementation 按会话索引实现恢复读取并在完整快照中复用，另处理可见附件、审批、最近事件和游标。
- * @updated 2026-11-22T18:15:39+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { SessionSnapshotRepository } from '../../modules/sessions/session-snapshot-repository.js';
 import { decodePayload, decodeRecord, records } from '../mappers/session-records.js';
 import * as schema from '../schema/session-snapshot.js';

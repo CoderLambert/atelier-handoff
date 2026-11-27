@@ -1,17 +1,16 @@
 /**
  * @file 定义公开来源预览和导入版本契约。
  * @implementation 共享项目安装请求、GitHub 固定版本及不含文件数据的预览清单。
- * @updated 2026-11-26T12:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
-import type { McpTransport } from './types.js';
+import {
+  githubSkillVersionSchema,
+  type GithubSkillVersion,
+  type McpTransport,
+} from './extensions.js';
 
-export const githubSkillVersionSchema = z.object({
-  commit: z.string().regex(/^[a-f0-9]{40}$/),
-  ref: z.string().min(1).max(1024),
-  path: z.string().max(1024),
-});
-export type GithubSkillVersion = z.infer<typeof githubSkillVersionSchema>;
+export { githubSkillVersionSchema, type GithubSkillVersion };
 
 const publicSource = {
   source: z.string().trim().min(1).max(4096),

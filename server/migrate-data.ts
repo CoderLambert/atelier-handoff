@@ -1,9 +1,9 @@
 /**
  * @file 提供迁入旧工作台数据的离线命令入口。
  * @implementation 解析来源和目标，输出校验通过后的记录数和回退副本位置。
- * @updated 2026-11-20T02:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import { migrateWorkspace } from './data-migration.js';
 
 const [source, target, ...rest] = process.argv.slice(2);

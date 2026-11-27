@@ -1,7 +1,7 @@
 /**
  * @file 管理单轮 SDK 流的实时插话与输入排空。
  * @implementation 维护输入槽、消费统一 SdkTaskCoordinationView 前后台视图与回执，按执行模式等待空闲或结算；通过运行宿主回调写入消息与发布事件。
- * @updated 2026-11-27T19:48:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import type {
@@ -9,7 +9,7 @@ import type {
   SDKSessionStateChangedMessage,
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { NativeBashTasks } from '../../native-bash.js';
 import type { SubagentRun } from '../../subagent-run.js';
 import {

@@ -1,10 +1,15 @@
+/**
+ * @file 在受限 bwrap 沙箱中运行 Skill 包内 Python 脚本。
+ * @implementation 隔离文件系统与网络，按需经 Unix socket 代理搜索技能请求并采集受限输出。
+ * @updated 2026-11-27T21:30:00+08:00
+ */
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, chmod, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 const searchOrigin = 'https://skill.zhaopintong.com';
 // gateway.py persists a hash of its base URL. This logical address must stay stable

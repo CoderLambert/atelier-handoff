@@ -1,11 +1,11 @@
 /**
  * @file 提供项目绑定、目录选择和项目文件查询。
  * @implementation 保留取目录窗口的互斥和断连取消，并在读取前核对会话的项目归属。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
 import { desktopBrowserAccessUpdateSchema } from '../../../shared/desktop-browser.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { DesktopBrowserAccess } from '../../desktop-browser-access.js';
 import { findProjectFiles, listProjectFiles, readProjectText } from '../../files.js';
 import type { DevelopmentWorktrees } from '../../modules/git/development-worktrees.js';

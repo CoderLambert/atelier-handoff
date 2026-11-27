@@ -1,12 +1,12 @@
 /**
  * @file 在 Linux 隔离目录中执行受控命令。
  * @implementation 探测 bubblewrap，以传入目录挂载工作区，遮蔽凭据和 Git 元数据并限制网络、时间及输出。
- * @updated 2026-11-24T03:39:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 let supported: boolean | undefined;
 export function commandsAvailable(): boolean {

@@ -1,13 +1,13 @@
 /**
  * @file 注册 Skill 工具绑定、包脚本和运行选中的 MCP 工具。
  * @implementation 在调用期间重新解析项目授权和扩展版本，通过统一 MCP 执行器接入绑定与外部工具。
- * @updated 2026-11-27T17:26:33+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { existsSync } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
-import { AppError } from '../../../../shared/types.js';
+import { AppError } from '../../../../shared/errors.js';
 import { commandsAvailable, runCommand } from '../../../commands.js';
 import { isLegacyDesktopPlaywright } from '../../../extension-mcp.js';
 import { isSharedMcp } from '../../../extensions.js';

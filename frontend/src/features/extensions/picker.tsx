@@ -1,7 +1,7 @@
 /**
  * @file 提供输入区扩展和文件补全。
  * @implementation 随宿主输入节点同步光标和无障碍状态，只处理补全按键，并返回候选影响的草稿字段。
- * @updated 2026-11-27T18:34:46+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import {
@@ -18,22 +18,17 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentSessionInfo, Draft, Extension } from '@shared/types';
-import { useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronRight, File, Folder, X } from 'lucide-react';
 import { formatBytes } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { ExtensionKindIcon } from './components';
-import {
-  extensionPickerKeys,
-  invalidateExtensionPickers,
-  messageOf,
-  pickerCatalogItems,
-  useExtensions,
-} from './api';
+import { messageOf, useExtensionPickerCatalog } from './api';
 import { useSearchProjectFiles } from '@/use-query/projects/use-search-project-files';
-import { skillInheritanceKeys, type SessionSkillScope } from '@/use-query/skill-inheritance/keys';
-import { useSkillInheritance } from '@/use-query/skill-inheritance/use-skill-inheritance';
-import type { SkillInheritanceView } from '@shared/skill-inheritance';
+import type { SessionSkillScope } from '@/use-query/skill-inheritance/keys';
+import {
+  useReadCachedSkillInheritance,
+  useSkillInheritance,
+} from '@/use-query/skill-inheritance/use-skill-inheritance';
 import { skillSources } from './inheritance-controls';
 import {
   allowedTools,
@@ -132,8 +127,14 @@ export function ExtensionPicker({
   keyHandlerRef,
 }: ExtensionPickerProps) {
   const { t } = useUiTranslation('extensions');
-  const query = useExtensions(projectId, 'picker');
-  const client = useQueryClient();
+  const {
+    query,
+    pickerLoading,
+    items: pickerItems,
+    readCachedItems,
+    invalidate: invalidatePickers,
+  } = useExtensionPickerCatalog(projectId);
+  const readCachedSkills = useReadCachedSkillInheritance(skillScope);
   const id = useId();
   const [cursor, setCursor] = useState(emptyCursor);
   const [index, setIndex] = useState(0);
@@ -142,9 +143,7 @@ export function ExtensionPicker({
   const menuRef = useRef<HTMLDivElement>(null);
   const selectionFrame = useRef<number | undefined>(undefined);
   const committedDraftText = useRef(draft.text);
-  const catalog = client.getQueryState<Extension[]>(extensionPickerKeys.list(projectId ?? ''));
-  const pickerLoading = query.isPending || (query.isFetching && Boolean(catalog?.isInvalidated));
-  const items = scopeExtensions(pickerCatalogItems(projectId, query.data, catalog), agent);
+  const items = scopeExtensions(pickerItems, agent);
   const trigger = triggerAt(cursor.text, cursor.start, cursor.end);
   const cursorKey = (text: string, start: number, end: number) =>
     JSON.stringify([projectId, skillScope.sessionId, skillScope.mode, text, start, end]);
@@ -282,15 +281,11 @@ export function ExtensionPicker({
     if (!row) return;
     const latest = (() => {
       if ('effective' in row.item) {
-        const cached = client.getQueryState<SkillInheritanceView>(
-          skillInheritanceKeys.view(skillScope),
-        );
-        if (cached?.status !== 'success' || cached.fetchStatus !== 'idle' || cached.isInvalidated)
-          return;
-        return completionSkills(cached.data?.items ?? []).find(({ id }) => id === row.item.id);
+        const cached = readCachedSkills();
+        if (!cached) return;
+        return completionSkills(cached).find(({ id }) => id === row.item.id);
       }
-      const cached = client.getQueryState<Extension[]>(extensionPickerKeys.list(projectId));
-      return scopeExtensions(pickerCatalogItems(projectId, cached?.data, cached), agent).find(
+      return scopeExtensions(readCachedItems(projectId), agent).find(
         (item) => item.id === row.item.id,
       );
     })();
@@ -657,7 +652,7 @@ export function ExtensionPicker({
                       size="sm"
                       onClick={() => {
                         if (previewError) void preview.refetch();
-                        if (query.isError) void invalidateExtensionPickers(client);
+                        if (query.isError) void invalidatePickers();
                       }}
                     >
                       {t('common.reload')}
@@ -671,7 +666,7 @@ export function ExtensionPicker({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => void invalidateExtensionPickers(client)}
+                          onClick={() => void invalidatePickers()}
                         >
                           {t('common.reload')}
                         </Button>

@@ -1,10 +1,10 @@
 /**
  * @file 提供网关配置、模型目录与托管网关登录 HTTP 接口。
  * @implementation 用精确路径处理模型和登录请求，保留 config 前缀的读写契约，并将解析后的配置交给网关服务。
- * @updated 2026-11-26T22:26:22+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { GatewayService } from '../../modules/gateway/service.js';
 import { body } from '../body.js';
 import { json } from '../response.js';

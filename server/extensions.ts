@@ -1,20 +1,25 @@
 /**
  * @file 管理项目扩展配置及运行时选择。
- * @implementation 校验和保存扩展，解析 Skill 与 MCP 选择及工具授权，并识别桌面端不可用的旧版浏览器扩展。
- * @updated 2026-11-20T12:10:16+08:00
+ * @implementation 复用共享扩展输入与诊断契约校验并保存扩展，解析 Skill 与 MCP 选择及工具授权，并识别桌面端不可用的旧版浏览器扩展。
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomUUID } from 'node:crypto';
-import { isAbsolute, posix } from 'node:path';
+import { posix } from 'node:path';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { AppError } from '../shared/errors.js';
+import type { Mode } from '../shared/agents.js';
 import {
-  AppError,
+  EXTENSION_DESCRIPTION_MAX,
+  extensionDiagnosticMessages,
+  extensionInputSchema,
+  extensionSelectionsSchema,
+  extensionVersionSchema,
   type Extension,
   type ExtensionSelection,
-  type Mode,
   type SkillPackage,
   type UsedExtension,
-} from '../shared/types.js';
+} from '../shared/extensions.js';
 import { Store } from './store.js';
 import type { PublicEntry } from './public-extensions.js';
 import type { PublicImportInput } from '../shared/public-extensions.js';
@@ -33,74 +38,8 @@ export function isSharedMcp(item: Extension): item is McpExtension {
     item.allowedTools.some(({ name }) => item.tools.some((tool) => tool.name === name))
   );
 }
-const name = z
-  .string()
-  .trim()
-  .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
-const envName = z.string().regex(/^[A-Z_][A-Z0-9_]{0,127}$/);
-const toolName = z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/);
-const version = z.number().int().positive();
-export const extensionSelections = z
-  .array(z.object({ id: z.string().uuid(), version, tools: z.array(toolName).max(40).optional() }))
-  .max(12);
-const shared = {
-  name,
-  description: z.string().trim().max(500).default(''),
-  enabled: z.boolean().default(false),
-};
-const http = z
-  .object({
-    type: z.literal('http'),
-    url: z.string().url().max(2048),
-    tokenEnv: envName.optional(),
-  })
-  .superRefine(({ url }, ctx) => {
-    const endpoint = new URL(url);
-    const local = ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
-    if (
-      (endpoint.protocol !== 'https:' && !(local && endpoint.protocol === 'http:')) ||
-      endpoint.username ||
-      endpoint.password ||
-      endpoint.hash ||
-      endpoint.search
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: '请输入 HTTPS 或本机 HTTP 地址，凭据使用环境变量。',
-      });
-    }
-  });
-const stdio = z.object({
-  type: z.literal('stdio'),
-  command: z
-    .string()
-    .max(4096)
-    .refine((path) => isAbsolute(path) && !path.includes('\0'), '请输入可执行文件的绝对路径。'),
-  args: z.array(z.string().max(2048)).max(40),
-  envNames: z.array(envName).max(20),
-  keepAlive: z.boolean().optional(),
-});
-const extensionInput = z.union([
-  z.object({
-    ...shared,
-    kind: z.enum(['command', 'skill']),
-    source: z.string().max(4096).default('本机'),
-    body: z.string().min(1).max(65000),
-    autoInvoke: z.boolean().optional(),
-  }),
-  z.object({
-    ...shared,
-    kind: z.literal('mcp'),
-    autoUseInChat: z.boolean().optional(),
-    shareAcrossProjects: z.boolean().optional(),
-    transport: z.union([http, stdio]),
-    allowedTools: z
-      .array(z.object({ name: toolName, access: z.enum(['read', 'approval']) }))
-      .max(40)
-      .default([]),
-  }),
-]);
+export const extensionSelections = extensionSelectionsSchema;
+const extensionInput = extensionInputSchema;
 
 function packagedReference(reference: string, files: ReadonlySet<string>): boolean {
   try {
@@ -119,7 +58,11 @@ function packagedReference(reference: string, files: ReadonlySet<string>): boole
   }
 }
 
-export function inspectMarkdown(body: string, skillPackage?: SkillPackage, localReferences = false) {
+export function inspectMarkdown(
+  body: string,
+  skillPackage?: SkillPackage,
+  localReferences = false,
+) {
   const normalized = body.replace(/^﻿/, '').replaceAll('\r\n', '\n');
   const frontmatter = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   let metadata: Record<string, unknown> = {};
@@ -132,11 +75,12 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage, local
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
       metadata = parsed as Record<string, unknown>;
     } catch {
-      compatibility = 'Markdown frontmatter 格式无效。';
+      compatibility = extensionDiagnosticMessages.invalidFrontmatter;
     }
-  } else if (normalized.startsWith('---\n')) compatibility = 'Markdown frontmatter 缺少结束标记。';
+  } else if (normalized.startsWith('---\n'))
+    compatibility = extensionDiagnosticMessages.unclosedFrontmatter;
   const text = (frontmatter ? normalized.slice(frontmatter[0].length) : normalized).trim();
-  if (!text) compatibility ??= '请填写扩展说明正文。';
+  if (!text) compatibility ??= extensionDiagnosticMessages.emptyBody;
   let unsupportedReference = false;
   if (skillPackage) {
     const files = new Set(skillPackage.files.map((file) => file.path));
@@ -163,8 +107,8 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage, local
     metadata['allowed-tools'] !== undefined
   ) {
     compatibility ??= skillPackage
-      ? '此扩展包含动态命令、钩子、专用权限配置或包中不存在的附属文件。'
-      : '此扩展依赖 Claude Code 的动态命令、脚本、附属文件或专用工具配置。当前支持独立 Markdown 说明。';
+      ? extensionDiagnosticMessages.unsupportedPackage
+      : extensionDiagnosticMessages.unsupportedMarkdown;
   }
   return {
     text,
@@ -173,7 +117,10 @@ export function inspectMarkdown(body: string, skillPackage?: SkillPackage, local
     userInvocable: metadata['user-invocable'] !== false,
     modelInvocable: metadata['disable-model-invocation'] !== true,
     name: typeof metadata.name === 'string' ? metadata.name : undefined,
-    description: typeof metadata.description === 'string' ? metadata.description.slice(0, 500) : '',
+    description:
+      typeof metadata.description === 'string'
+        ? metadata.description.slice(0, EXTENSION_DESCRIPTION_MAX)
+        : '',
   };
 }
 
@@ -248,7 +195,7 @@ export class ProjectExtensions {
     const catalog = this.list(projectId);
     const previous = id ? this.get(projectId, id) : undefined;
     if (previous) {
-      const update = z.object({ version }).passthrough().parse(raw);
+      const update = z.object({ version: extensionVersionSchema }).passthrough().parse(raw);
       if (update.version !== previous.version)
         throw new AppError('EXTENSION_CHANGED', '配置已更新，请刷新后重新编辑。', 409);
     }
@@ -308,16 +255,20 @@ export class ProjectExtensions {
         input.kind === 'skill'
           ? (importedPackage ?? (previous?.kind === 'skill' ? previous.package : undefined))
           : undefined;
-      const skillPackage = savedPackage && !importedPackage && previous?.kind === 'skill' && previous.body !== input.body
-        ? {
-            ...savedPackage,
-            files: savedPackage.files.map((file) =>
-              file.path === 'SKILL.md'
-                ? { ...file, data: Buffer.from(input.body).toString('base64') }
-                : file,
-            ),
-          }
-        : savedPackage;
+      const skillPackage =
+        savedPackage &&
+        !importedPackage &&
+        previous?.kind === 'skill' &&
+        previous.body !== input.body
+          ? {
+              ...savedPackage,
+              files: savedPackage.files.map((file) =>
+                file.path === 'SKILL.md'
+                  ? { ...file, data: Buffer.from(input.body).toString('base64') }
+                  : file,
+              ),
+            }
+          : savedPackage;
       const meta = inspectMarkdown(input.body, skillPackage);
       record = {
         ...base,
@@ -341,25 +292,35 @@ export class ProjectExtensions {
   private assertPublicUnedited(item: Extension, checkLegacyMetadata = false) {
     if (item.kind === 'mcp' || !item.origin) return;
     const origin = item.origin;
-    if ((/^[a-f0-9]{64}$/.test(origin.revision) && fingerprint(item.body) !== origin.revision) ||
-        (origin.importedName !== undefined && item.name !== origin.importedName) ||
-        (origin.importedDescription !== undefined && item.description !== origin.importedDescription) ||
-        (checkLegacyMetadata && !origin.github && item.description !== inspectMarkdown(item.body).description.trim()))
-      throw new AppError('PUBLIC_LOCAL_MODIFIED', '此扩展包含本地修改，请保留副本后恢复来源内容，或移除原条目后再导入。', 409);
+    if (
+      (/^[a-f0-9]{64}$/.test(origin.revision) && fingerprint(item.body) !== origin.revision) ||
+      (origin.importedName !== undefined && item.name !== origin.importedName) ||
+      (origin.importedDescription !== undefined &&
+        item.description !== origin.importedDescription) ||
+      (checkLegacyMetadata &&
+        !origin.github &&
+        item.description !== inspectMarkdown(item.body).description.trim())
+    )
+      throw new AppError(
+        'PUBLIC_LOCAL_MODIFIED',
+        '此扩展包含本地修改，请保留副本后恢复来源内容，或移除原条目后再导入。',
+        409,
+      );
   }
 
   installedGithubVersion(projectId: string, input: PublicImportInput) {
     if (input.update || !input.github || !input.packageDigest || input.kind !== 'skill') return;
     const pin = input.github;
-    const existing = this.list(projectId).find((item) =>
-      item.kind === 'skill' &&
-      item.origin?.location === input.source &&
-      item.origin.key === input.key &&
-      item.origin.revision === input.revision &&
-      item.origin.github?.commit === pin.commit &&
-      item.origin.github.ref === pin.ref &&
-      item.origin.github.path === pin.path &&
-      item.package?.digest === input.packageDigest,
+    const existing = this.list(projectId).find(
+      (item) =>
+        item.kind === 'skill' &&
+        item.origin?.location === input.source &&
+        item.origin.key === input.key &&
+        item.origin.revision === input.revision &&
+        item.origin.github?.commit === pin.commit &&
+        item.origin.github.ref === pin.ref &&
+        item.origin.github.path === pin.path &&
+        item.package?.digest === input.packageDigest,
     );
     if (existing) this.assertPublicUnedited(existing);
     return existing;
@@ -394,16 +355,22 @@ export class ProjectExtensions {
       }
       if (!previous) {
         const existing = this.list(projectId).find(
-          (item) => item.kind === entry.kind && item.origin?.location === entry.location && item.origin.key === entry.key,
+          (item) =>
+            item.kind === entry.kind &&
+            item.origin?.location === entry.location &&
+            item.origin.key === entry.key,
         );
-        const identicalGithubVersion = entry.github && this.list(projectId).find((item) =>
-          item.kind === 'skill' &&
-          item.origin?.key === entry.key &&
-          item.origin.github?.commit === entry.github?.commit &&
-          item.origin.location.split('/').slice(0, 5).join('/').toLowerCase() ===
-            entry.location.split('/').slice(0, 5).join('/').toLowerCase() &&
-          sameContent(item),
-        );
+        const identicalGithubVersion =
+          entry.github &&
+          this.list(projectId).find(
+            (item) =>
+              item.kind === 'skill' &&
+              item.origin?.key === entry.key &&
+              item.origin.github?.commit === entry.github?.commit &&
+              item.origin.location.split('/').slice(0, 5).join('/').toLowerCase() ===
+                entry.location.split('/').slice(0, 5).join('/').toLowerCase() &&
+              sameContent(item),
+          );
         if (identicalGithubVersion) {
           this.assertPublicUnedited(identicalGithubVersion);
           return { item: identicalGithubVersion, changed: false };
@@ -413,7 +380,11 @@ export class ProjectExtensions {
             this.assertPublicUnedited(existing);
             return { item: existing, changed: false };
           }
-          throw new AppError('PUBLIC_SOURCE_EXISTS', '当前项目已导入此条目，请从对应卡片同步。', 409);
+          throw new AppError(
+            'PUBLIC_SOURCE_EXISTS',
+            '当前项目已导入此条目，请从对应卡片同步。',
+            409,
+          );
         }
       }
       const fields = {
@@ -437,7 +408,9 @@ export class ProjectExtensions {
               kind: entry.kind,
               body: entry.body,
               enabled: previous?.enabled ?? true,
-              ...(!previous && (entry.github || entry.location.startsWith('skillhub:')) ? { autoInvoke: false } : {}),
+              ...(!previous && (entry.github || entry.location.startsWith('skillhub:'))
+                ? { autoInvoke: false }
+                : {}),
             };
       const item = this.saveRecord(projectId, payload, previous?.id, entry.package);
       return {
@@ -450,7 +423,14 @@ export class ProjectExtensions {
             revision: entry.revision!,
             sha256: entry.sha256,
             upstreamVersion: entry.upstreamVersion,
-            ...(entry.github ? { github: entry.github, packageDigest: entry.package?.digest, importedName: item.name, importedDescription: item.description } : {}),
+            ...(entry.github
+              ? {
+                  github: entry.github,
+                  packageDigest: entry.package?.digest,
+                  importedName: item.name,
+                  importedDescription: item.description,
+                }
+              : {}),
           },
         }),
         changed: true,

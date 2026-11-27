@@ -1,16 +1,22 @@
 /**
- * @file 定义工作台共享业务类型和基础辅助方法。
- * @implementation 描述项目、会话、运行、扩展及文件等数据结构，并提供状态、错误和常用数据处理方法。
- * @updated 2026-11-20T03:13:21+08:00
+ * @file 定义工作台核心业务类型并重导出分域契约。
+ * @implementation 描述项目、会话、运行、消息及核心记录表结构，同时保留分域后的错误、模型、扩展和智能体兼容导出。
+ * @updated 2026-11-27T21:25:00+08:00
  */
-import { z } from 'zod';
-import type { GithubSkillVersion } from './public-extensions.js';
-import type { MessageQuote } from './message-quotes.js';
-import type { ContextUsage } from './context-usage.js';
-import type { RunRequestTiming } from './request-timing.js';
+import type { AgentProfile, AgentRevision, AgentRunInfo, Mode } from './agents.js';
 import type { BashExecution } from './bash-execution.js';
-import type { RtkTrace } from './rtk-trace.js';
+import type { ContextUsage } from './context-usage.js';
+import type { Extension, ExtensionSelection, UsedExtension } from './extensions.js';
+import type { MessageQuote } from './message-quotes.js';
+import type { AppConfig, ReasoningEffort } from './models.js';
 import type { RunTranscript, TranscriptPart } from './ordered-transcript.js';
+import type { RunRequestTiming } from './request-timing.js';
+import type { RtkTrace } from './rtk-trace.js';
+
+export * from './errors.js';
+export * from './models.js';
+export * from './extensions.js';
+export * from './agents.js';
 
 export type RunStatus =
   | 'queued'
@@ -21,8 +27,8 @@ export type RunStatus =
   | 'stopped'
   | 'failed'
   | 'interrupted';
-export type Mode = 'readonly' | 'edit';
 export const activeStatuses: RunStatus[] = ['queued', 'running', 'awaiting_permission', 'stopping'];
+
 export interface Project {
   desktopBrowser?: { enabled: boolean; revision: string };
   id: string;
@@ -32,170 +38,6 @@ export interface Project {
   available: boolean;
   createdAt: string;
 }
-export interface ExtensionSelection {
-  id: string;
-  version: number;
-  tools?: string[];
-}
-export interface DiscoveredTool {
-  name: string;
-  description: string;
-  inputSchema?: Record<string, unknown>;
-}
-export interface AllowedMcpTool {
-  name: string;
-  access: 'read' | 'approval';
-}
-export type McpTransport =
-  | { type: 'http'; url: string; tokenEnv?: string }
-  | { type: 'stdio'; command: string; args: string[]; envNames: string[]; keepAlive?: boolean };
-export interface ExtensionOrigin {
-  location: string;
-  key: string;
-  revision: string;
-  sha256?: string;
-  upstreamVersion?: string;
-  github?: GithubSkillVersion;
-  packageDigest?: string;
-  importedName?: string;
-  importedDescription?: string;
-}
-export interface ExtensionBase {
-  id: string;
-  projectId: string;
-  name: string;
-  description: string;
-  source: string;
-  enabled: boolean;
-  version: number;
-  origin?: ExtensionOrigin;
-}
-export interface SkillPackage {
-  digest: string;
-  files: { path: string; data: string; executable?: boolean }[];
-}
-export type Extension = ExtensionBase &
-  (
-    | {
-        kind: 'command' | 'skill';
-        body: string;
-        supported: boolean;
-        compatibility?: string;
-        userInvocable: boolean;
-        modelInvocable?: boolean;
-        autoInvoke?: boolean;
-        package?: SkillPackage;
-      }
-    | {
-        kind: 'mcp';
-        provider?: 'mcp' | 'playwright-browser';
-        browserOrigins?: string[];
-        autoUseInChat?: boolean;
-        shareAcrossProjects?: boolean;
-        transport: McpTransport;
-        allowedTools: AllowedMcpTool[];
-        tools: DiscoveredTool[];
-        status?: 'connected' | 'needs-auth' | 'failed';
-        statusMessage?: string;
-      }
-  );
-export type SkillToolBinding =
-  | { name: string; kind: 'builtin'; tool: 'list_files' | 'search_files' | 'publish_artifact' }
-  | { name: string; kind: 'mcp'; extensionId: string; tool: string }
-  | { name: string; kind: 'http'; url: string; parameter: string; description: string }
-  | { name: string; kind: 'command'; preset: 'pdftotext' };
-
-export interface UsedExtension {
-  id: string;
-  kind: Extension['kind'];
-  name: string;
-  version: number;
-  source?: 'atelier' | 'workspace' | 'host';
-  tools?: string[];
-}
-export function retainedSkillSelections(
-  extensions: UsedExtension[] | undefined,
-): ExtensionSelection[] {
-  return (extensions ?? [])
-    .filter(({ kind }) => kind === 'skill')
-    .map(({ id, version }) => ({ id, version }));
-}
-export const agentCapabilities = [
-  'read',
-  'search',
-  'context',
-  'attachments',
-  'plan',
-  'artifact',
-  'browser',
-  'write',
-  'command',
-] as const;
-export type AgentCapability = (typeof agentCapabilities)[number];
-export interface AgentSkillRef {
-  id: string;
-  version: number;
-  activation: 'auto' | 'manual';
-}
-export interface AgentMcpRef {
-  id: string;
-  version: number;
-  tools: string[];
-}
-export interface AgentConfig {
-  name: string;
-  description: string;
-  instructions: string;
-  starters: string[];
-  mode: Mode;
-  capabilities: AgentCapability[];
-  skills: AgentSkillRef[];
-  mcp: AgentMcpRef[];
-}
-export interface AgentProfile {
-  id: string;
-  projectId: string;
-  revisionId: string;
-  archived: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-export interface AgentRevision {
-  id: string;
-  agentId: string;
-  projectId: string;
-  version: number;
-  config: AgentConfig;
-  createdAt: string;
-  dependencies: unknown;
-}
-export interface AgentCard {
-  id: string;
-  projectId: string;
-  revisionId: string;
-  archived: boolean;
-  version: number;
-  config: AgentConfig;
-  issues: string[];
-}
-export interface AgentRunInfo {
-  id: string;
-  revisionId: string;
-  name: string;
-  version: number;
-  capabilities: AgentCapability[];
-}
-export interface AgentSessionInfo extends AgentRunInfo {
-  canUpgrade?: boolean;
-  mode: Mode;
-  starters: string[];
-  skills: AgentSkillRef[];
-  mcp: AgentMcpRef[];
-  issues: string[];
-}
-
-export const reasoningEfforts = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
-export type ReasoningEffort = (typeof reasoningEfforts)[number];
 
 export interface Draft {
   text: string;
@@ -209,12 +51,14 @@ export interface Draft {
   effort?: ReasoningEffort;
   extensionSelections?: ExtensionSelection[];
 }
+
 export interface SessionForkOrigin {
   sourceSessionId: string;
   sourceMessageId: string;
   sourceTitle: string;
   kind?: 'rewind';
 }
+
 export interface Session {
   id: string;
   projectId: string;
@@ -232,10 +76,12 @@ export interface Session {
   updatedAt: string;
   draft: Draft;
 }
+
 export interface Step {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
 }
+
 export interface Usage {
   model: string;
   inputTokens: number | null;
@@ -247,6 +93,7 @@ export interface Usage {
   pricingBasis: 'unknown';
   complete: boolean;
 }
+
 export interface Run {
   transcript?: RunTranscript;
   workspacePath?: string;
@@ -277,6 +124,7 @@ export interface Run {
   extensions?: UsedExtension[];
   agent?: AgentRunInfo;
 }
+
 export interface QueuedSessionMessage {
   id: string;
   text: string;
@@ -287,10 +135,12 @@ export interface QueuedSessionMessage {
   insertion?: 'live' | 'priority';
   delivery?: 'waiting' | 'sending' | 'unknown';
 }
+
 export interface SessionMessageQueue {
   items: QueuedSessionMessage[];
   paused: boolean;
 }
+
 export type SendSessionMessageResult =
   { run: Run; queuedMessage?: never } | { queuedMessage: QueuedSessionMessage; run?: never };
 
@@ -305,7 +155,9 @@ export interface Message {
   createdAt: string;
   forkAnchor?: { sdkSessionId: string; messageId: string; configKey?: string };
 }
+
 export type InheritedMessage = Pick<Message, 'id' | 'role' | 'text' | 'createdAt'>;
+
 export interface ToolCall {
   transcriptOrder?: number;
   /** Promoted if the run closes before consuming the native call frame. */
@@ -335,6 +187,7 @@ export interface ToolCall {
   endedAt: string | null;
   permissionId?: string;
 }
+
 export interface Permission {
   id: string;
   runId: string;
@@ -356,6 +209,7 @@ export interface Permission {
   resolutionReason?: string;
   decisionSource?: 'automatic';
 }
+
 export interface Artifact {
   id: string;
   runId: string;
@@ -368,6 +222,7 @@ export interface Artifact {
   availability: 'available' | 'unavailable';
   createdAt: string;
 }
+
 export const maxImageAttachmentBytes = 5 * 1024 * 1024;
 export type AttachmentImageMime = 'image/png' | 'image/jpeg';
 export function attachmentImageMime(name: string): AttachmentImageMime | undefined {
@@ -385,6 +240,7 @@ export interface Attachment {
   createdAt: string;
   removed?: boolean;
 }
+
 export interface RunEvent {
   id: number;
   runId: string;
@@ -394,54 +250,7 @@ export interface RunEvent {
   at: string;
   payload: Record<string, unknown>;
 }
-export const magpieModelPrefix = 'magpie:';
 
-export const gatewayModelSchema = z.object({
-  id: z.string().trim().max(200).regex(/^\S+$/u),
-  displayName: z.string().min(1).max(200).optional(),
-  supportedEfforts: z.array(z.enum(reasoningEfforts)).optional(),
-  source: z.literal('magpie').optional(),
-  provider: z.string().max(200).optional(),
-  effort: z.string().max(40).optional(),
-  serviceTier: z.string().max(40).optional(),
-});
-export const modelDiscoverySourceSchema = z.object({
-  status: z.enum(['ready', 'partial', 'unavailable', 'stale', 'skipped']),
-  reason: z
-    .enum([
-      'timeout',
-      'process',
-      'protocol',
-      'http',
-      'identity',
-      'pagination-limit',
-      'not-applicable',
-    ])
-    .optional(),
-  modelCount: z.number().int().nonnegative(),
-  rejectedCount: z.number().int().nonnegative().optional(),
-});
-export const gatewayModelCatalogSchema = z.object({
-  defaultModel: gatewayModelSchema.shape.id,
-  routesAvailable: z.boolean(),
-  models: z.array(gatewayModelSchema),
-  discovery: z.object({
-    routes: modelDiscoverySourceSchema,
-    codex: modelDiscoverySourceSchema,
-    magpie: modelDiscoverySourceSchema.optional(),
-  }),
-});
-export type GatewayModelCatalog = z.infer<typeof gatewayModelCatalogSchema>;
-export interface AppConfig {
-  gateway: string;
-  managedGateway?: boolean;
-  magpieEnabled?: boolean;
-  model: string;
-  effort?: ReasoningEffort;
-  limitExecution?: boolean;
-  maxTurns: number;
-  timeoutMs: number;
-}
 export interface Tables {
   projects: Project;
   sessions: Session;
@@ -456,17 +265,7 @@ export interface Tables {
   agentRevisions: AgentRevision;
 }
 export type Table = keyof Tables;
-export class AppError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly status = 400,
-    readonly retryable = false,
-  ) {
-    super(message);
-  }
-}
-export const now = () => new Date().toISOString();
+
 export const emptyDraft = (): Draft => ({
   text: '',
   contextPaths: [],

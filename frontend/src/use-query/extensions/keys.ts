@@ -1,7 +1,7 @@
 /**
  * @file 定义扩展与 GitHub 连接的 API 地址和缓存键。
- * @implementation 按项目生成目录、预览和工具绑定的键，单独维护 picker 目录与全局 GitHub 连接的键。
- * @updated 2026-11-27T00:00:00+08:00
+ * @implementation 按项目生成目录、预览、SkillHub 搜索和工具绑定的键，单独维护 picker 目录与全局 GitHub 连接的键。
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { PublicPreviewInput } from '@shared/public-extensions';
 
@@ -13,6 +13,8 @@ export const extensionKeys = {
   mutations: (projectId: string) => ['extensions', projectId, 'mutation'] as const,
   publicPreview: (projectId: string, input: PublicPreviewInput) =>
     ['extensions', projectId, 'public-preview', input] as const,
+  skillHubSearch: (projectId: string, query: string) =>
+    ['extensions', projectId, 'skillhub-search', query] as const,
   toolBindings: (projectId: string, skillId: string) =>
     ['extensions', projectId, 'tool-bindings', skillId] as const,
 };

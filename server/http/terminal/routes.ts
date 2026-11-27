@@ -1,14 +1,14 @@
 /**
  * @file 提供人工终端生命周期和连接票据的 HTTP 接口。
  * @implementation 使用应用的公共请求边界，解析会话及 runtime 身份，向终端服务申请同源一次性票据。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { z } from 'zod';
 import {
   terminalCreateRequestSchema,
   terminalRuntimeRequestSchema,
 } from '../../../shared/terminal.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { TerminalManager } from '../../modules/terminal/manager.js';
 import { body } from '../body.js';
 import { json } from '../response.js';

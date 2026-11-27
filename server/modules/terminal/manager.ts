@@ -1,7 +1,7 @@
 /**
  * @file 管理人工终端的会话归属和生命周期。
  * @implementation 在首次连接就绪后启动 PTY，以独立目录保留、屏幕顺序队列、快照确认和高低水位流控处理重连与清理。
- * @updated 2026-11-26T01:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
@@ -19,7 +19,7 @@ import {
   type TerminalServerFrame,
   type TerminalTicketResponse,
 } from '../../../shared/terminal.js';
-import { AppError, now } from '../../../shared/types.js';
+import { AppError, now } from '../../../shared/errors.js';
 import type { Store } from '../../store.js';
 import type {
   DevelopmentWorktrees,

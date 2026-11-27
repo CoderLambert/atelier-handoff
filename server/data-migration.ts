@@ -1,7 +1,7 @@
 /**
  * @file 将旧工作区迁入另一个本机数据目录。
  * @implementation 独占并备份来源，核对工作树和多提交操作及其恢复证据，阻止未完成或证据不一致的迁移，再验证并发布目标目录。
- * @updated 2026-11-27T20:10:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { createHash } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
@@ -24,7 +24,7 @@ import { backup, DatabaseSync } from 'node:sqlite';
 import { acquireDataOwner } from './data-owner.js';
 import { LATEST_SCHEMA_VERSION, Store } from './store.js';
 import { fingerprint } from './files.js';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import { WorktreeSnapshots } from './modules/git/worktree-snapshots.js';
 import { readCapturedBashLog } from './bash-log-capture.js';
 import { CommitJournal, type CommitJournalRecord } from './modules/git/commit-journal.js';

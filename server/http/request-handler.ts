@@ -1,11 +1,11 @@
 /**
  * @file 执行 HTTP 公共检查并分发领域路由。
  * @implementation 在任何领域操作前校验本机来源、写入令牌和桌面配对，分发后统一处理静态资源和错误。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { desktopPairingHeader } from '../../shared/desktop-host.js';
-import { AppError } from '../../shared/types.js';
+import { AppError } from '../../shared/errors.js';
 import { serveClient } from '../client-assets.js';
 import { sendRequestError } from './response.js';
 import type { RouteHandler } from './types.js';

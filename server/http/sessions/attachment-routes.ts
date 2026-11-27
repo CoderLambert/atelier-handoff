@@ -1,7 +1,7 @@
 /**
  * @file 提供会话附件上传、预览、下载和移除。
  * @implementation 在已校验会话下收发附件，负责流式响应及文档预览的断连和临时目录清理。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { createReadStream } from 'node:fs';
 import { lstat, mkdtemp, rm } from 'node:fs/promises';
@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import { isDocumentAttachmentMime } from '../../../shared/document-attachments.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { FileRecords } from '../../artifacts.js';
 import { prepareDocumentView } from '../../attachment-document-reader.js';
 import type { SessionAttachments } from '../../modules/sessions/attachments.js';

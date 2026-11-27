@@ -1,7 +1,7 @@
 /**
  * @file 管理授权项目内的文件访问、检索与文本修改。
  * @implementation 限制路径及敏感文件访问，检查文件类型、大小和编码，提供目录浏览、搜索、文本差异与安全写入能力。
- * @updated 2026-11-25T16:53:09+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { constants } from 'node:fs';
 import {
@@ -19,7 +19,7 @@ import { createTwoFilesPatch } from 'diff';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve, relative, isAbsolute, sep, dirname, basename, join, extname } from 'node:path';
 import { homedir } from 'node:os';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 export const fingerprint = (value: Buffer | string) =>
   createHash('sha256').update(value).digest('hex');

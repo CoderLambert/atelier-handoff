@@ -1,10 +1,10 @@
 /**
  * @file 管理项目范围的原生浏览器授权。
  * @implementation 存储授权版本并撤销引用过期版本的在途调用。
- * @updated 2026-11-20T12:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { randomUUID } from 'node:crypto';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 import type {
   DesktopBrowserAccessState,
   DesktopBrowserAccessUpdate,

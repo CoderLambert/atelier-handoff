@@ -1,12 +1,12 @@
 /**
  * @file 关联单次 SDK 运行的 Bash 调用与原生命令任务。
  * @implementation 复用统一 SDK 任务帧 schema 根据所属会话回执更新状态，并串行处理同一命令的后台和停止请求。
- * @updated 2026-11-27T19:48:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { BashControl, BashExecution } from '../shared/bash-execution.js';
-import { AppError, now } from '../shared/types.js';
+import { AppError, now } from '../shared/errors.js';
 import { bashTaskFrames, sdkTaskIdentifierSchema } from './modules/runs/sdk-task-coordinator.js';
 
 const handoff = z.object({

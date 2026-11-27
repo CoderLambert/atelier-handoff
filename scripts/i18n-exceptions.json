@@ -25,7 +25,7 @@
     "reason": "历史消息中缺少客户端名称时显示应用品牌"
   },
   {
-    "file": "frontend/src/features/extensions/editor.tsx",
+    "file": "frontend/src/features/extensions/mcp-extension-form.tsx",
     "fingerprint": "9e9d9d4bdf068e5c2369",
     "reason": "URL 协议格式的技术占位符"
   },

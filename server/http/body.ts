@@ -1,10 +1,10 @@
 /**
  * @file 读取和限制运行时的 JSON 请求体。
  * @implementation 逐块计量字节，以 unknown 返回解码结果，字段由领域路由校验。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import type { IncomingMessage } from 'node:http';
-import { AppError } from '../../shared/types.js';
+import { AppError } from '../../shared/errors.js';
 
 export async function body(req: IncomingMessage, maxBytes = 1_500_000): Promise<unknown> {
   if (!req.headers['content-type']?.startsWith('application/json'))

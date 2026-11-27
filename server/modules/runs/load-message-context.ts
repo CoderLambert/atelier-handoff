@@ -1,10 +1,10 @@
 /**
  * @file 加载本轮运行的项目上下文和附件。
  * @implementation 读取授权范围内的去重路径与附件，保留图片和文本的独立大小限制及上下文标记。
- * @updated 2026-11-26T23:20:03+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { isDocumentAttachmentMime } from '../../../shared/document-attachments.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import type { AttachmentImages } from '../../agent.js';
 import type { FileRecords } from '../../artifacts.js';
 import { readProjectText } from '../../files.js';

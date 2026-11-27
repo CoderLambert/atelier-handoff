@@ -1,7 +1,7 @@
 /**
  * @file 读取 Git 工作树、分支、文件变化和提交历史。
  * @implementation 解析 Git 的 NUL 分隔协议，并在工作树实际状态中定位单个差异。
- * @updated 2026-11-25T02:48:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { createTwoFilesPatch } from 'diff';
 import { normalize } from 'node:path';
@@ -17,7 +17,7 @@ import {
   type GitHistoryQuery,
   type GitOverview,
 } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { fingerprint, readProjectText } from '../../files.js';
 import { gitError, LocalGit } from './git-cli.js';
 

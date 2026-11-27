@@ -1,7 +1,7 @@
 /**
  * @file 在已授权的检出租约内执行冻结的多提交计划。
  * @implementation 临时索引构造提交链和目标索引；注入的权威状态协调器先保存恢复证据，再以 Git 协作锁、引用 CAS 和原子重命名发布。
- * @updated 2026-11-24T18:00:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { createHash } from 'node:crypto';
 import { constants, type BigIntStats } from 'node:fs';
@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { gitOid } from '../../../shared/git-workbench.js';
-import { AppError } from '../../../shared/types.js';
+import { AppError } from '../../../shared/errors.js';
 import { fingerprint, resolveProjectPath } from '../../files.js';
 import {
   hashCommitJournalIndex,

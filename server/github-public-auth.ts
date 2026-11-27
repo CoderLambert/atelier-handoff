@@ -1,13 +1,13 @@
 /**
  * @file 使用本机 GitHub CLI 访问公开仓库的 Git 元数据。
  * @implementation 限制到只读 GitHub API 与公开仓库，CLI 保有凭据，raw 文件使用匿名传输。
- * @updated 2026-11-26T15:40:00+08:00
+ * @updated 2026-11-27T21:25:00+08:00
  */
 import { execFile } from 'node:child_process';
 import { delimiter, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { githubLogin } from '../shared/github-public-auth.js';
-import { AppError } from '../shared/types.js';
+import { AppError } from '../shared/errors.js';
 
 const ghError = () =>
   new AppError('GITHUB_LOGIN_REQUIRED', '请先通过 GitHub CLI 登录 github.com，再连接。', 401);
