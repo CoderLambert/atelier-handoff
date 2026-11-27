@@ -44,7 +44,7 @@ function rawGet(
   });
 }
 
-test('HTTP handler rejects protocol-relative paths and malformed percent-encoding with 400', async () => {
+test('HTTP handler rejects protocol-relative paths and bad percent-encoding', async () => {
   const root = await mkdtemp(join(tmpdir(), 'atelier-http-boundary-'));
   const server = createServer(
     createRequestHandler({
@@ -114,7 +114,7 @@ test('findProjectFiles and listProjectFiles skip multi-hardlink files', async ()
   }
 });
 
-test('isolated commands mask nested credentials and truncate multibyte UTF-8 cleanly', async (t) => {
+test('isolated commands mask nested credentials and truncate UTF-8 cleanly', async (t) => {
   if (!commandsAvailable()) {
     t.skip('bubblewrap is unavailable on this machine');
     return;
