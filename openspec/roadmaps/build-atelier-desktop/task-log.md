@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · C1 第 3 步：转录账本与通知补位拆分（已验证）
+
+- 提取 `RunTranscriptLedger`（`server/modules/runs/run-transcript-ledger.ts`），将原外泄在 `server/agent.ts` 闭包中的 `RunTranscript`、`transcriptNotices`、`recordedNotices`、`pendingDenials`、`seenTools`、`unpositionedTools` 及 80 ms 节流刷盘收敛为单一不变量所有者，`server/agent.ts` 从 1,872 行降至 1,763 行（净减 109 行）。收尾保留原有时序，`Runner` 接口与构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-run-transcript-ledger.md)
+- `npm run check`、`npm run check:headers`、`npm run build`、`npm run build:desktop` 及 Prettier 全通过；`ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 运行时 838 通过、5 跳过（含新增 `tests/run-transcript-ledger.test.ts` 7 项纯内存用例与真实 SDK 0.3.332 回环测试），两处无关并行抖动项（`builtin-rtk-sdk.test.ts`、`git-multi-commit-api.test.ts`）单独复跑 36/36 通过；前端 155 通过、1 跳过。
+- 隔离 Wayland 真实 Electron 烟测 `node --import tsx scripts/smoke-ordered-conversation.mts`（锁定 SDK + 隔离回环模型、反序工具完成、507 文本片段、重连重开及双语 1280/1440/1920）通过。未使用付费模型验证，未验收系统安装包，未切换日用桌面实例。
+- **开发过程 review**：账本与持久化通过窄宿主接口解耦后，Hook 先于流帧补位、`pendingDenials` 转正和 80 ms 节流刷盘均可纯内存单测，配合真实 Electron 有序对话烟测一次通过；下一步进入 C1 收官第 4 步（`RunEnvironment` + `RunProcessOwner` + `resolveRunOutcome()`）。
+
 ## 2026-11-27 · C1 第 2 步：实时插话与输入排空拆分（已验证）
 
 - `LiveTurnCoordinator`（`server/modules/runs/live-turn-coordinator.ts`）接管 SDK 输入队列、插话槽、前台 Agent/Bash 后台交接、SDK 回执与 120 秒空闲结算，运行宿主负责原有消息持久化、助手占位和事件。原生模式继续等待同一 SDK 会话的 `idle`，受控模式沿用模型状态判定。`server/agent.ts` 从 2,102 行减至 1,872 行（净减 230 行），`Runner` 和 `AgentRunner` 构造签名不变。[决策与回退](../../../docs/decisions/2026-11-27-live-turn-coordinator.md)

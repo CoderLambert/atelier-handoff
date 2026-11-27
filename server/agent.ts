@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
- * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，委托运行模块装配 MCP 工具及管理实时输入。通过托管 Shunt 补齐响应标识并关联请求计时；SDK 重试仅记运行事件，停止后的通知附带标记，诊断文本统一脱敏。
- * @updated 2026-11-27T17:49:36+08:00
+ * @implementation 协调 SDK 子任务、工作树、后台 Bash 和 RTK，委托运行模块装配 MCP 工具、管理实时输入和记录转录。通过托管 Shunt 补齐响应标识并关联请求计时，SDK 重试记录为运行事件，诊断文本统一脱敏。
+ * @updated 2026-11-27T18:02:17+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -38,8 +38,6 @@ import {
   type ToolCall,
 } from '../shared/types.js';
 import { Store } from './store.js';
-import { RunTranscript } from './run-transcript.js';
-import { finalizeRunTranscript, type TranscriptNotice } from '../shared/ordered-transcript.js';
 import { PermissionService } from './permissions.js';
 import { FileRecords } from './artifacts.js';
 import { fingerprint, readProjectText, resolveProjectPath } from './files.js';
@@ -89,6 +87,7 @@ import {
   type AttachmentImages,
   type LiveInput,
 } from './modules/runs/live-turn-coordinator.js';
+import { RunTranscriptLedger } from './modules/runs/run-transcript-ledger.js';
 import { buildRunMcpTools } from './modules/runs/mcp-tools/index.js';
 import { hasSkillToolBindingConfig, readSkillToolBindings } from './skill-tool-bindings.js';
 
@@ -434,44 +433,21 @@ export class AgentRunner implements Runner {
         text: '',
         createdAt: now(),
       }).id;
-    const transcript = new RunTranscript();
-    const transcriptNotices: TranscriptNotice[] = [];
-    const recordedNotices = new Set<string>();
-    const pendingDenials = new Map<string, Extract<TranscriptNotice, { kind: 'tool_blocked' }>>();
-    const transcriptState = () => ({
-      version: 1 as const,
-      notices: transcriptNotices,
-      pendingDenials: pendingDenials.size ? [...pendingDenials.values()] : undefined,
+    const ledger = new RunTranscriptLedger({
+      transaction: (write) => this.store.transaction(write),
+      saveTranscript: (transcript) => this.store.update('runs', run.id, { transcript }),
+      updateMessage: (id, changes) => this.store.update('messages', id, changes),
+      insertTool: (value) => this.store.put('tools', value),
+      updateToolPosition: (id, position) => this.store.update('tools', id, position),
+      emitMessageDelta: (id) =>
+        this.store.event(run.id, run.sessionId, 'message.delta', { messageId: id }),
+      emitToolAnnounced: (id, name) =>
+        this.store.event(run.id, session.id, 'tool.announced', { toolCallId: id, tool: name }),
+      now,
     });
-    const saveTranscript = () =>
-      this.store.update('runs', run.id, { transcript: transcriptState() });
-    const initialOrder = transcript.nextOrder();
-    this.store.transaction(() => {
-      saveTranscript();
-      if (promptMessageId)
-        this.store.update('messages', promptMessageId, { transcriptOrder: initialOrder });
-    });
-    let assistantId = createAssistant();
-    transcript.associateInput(promptMessageId, assistantId);
+    let assistantId = ledger.initialize(promptMessageId, createAssistant);
     let assistantAnchor: string | undefined;
     let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
-    const flush = () => {
-      const changes = transcript.takeChanges();
-      if (!changes.length) return;
-      this.store.transaction(() => {
-        for (const { id, text, transcriptParts } of changes) {
-          this.store.update('messages', id, { text, transcriptParts });
-          this.store.event(run.id, run.sessionId, 'message.delta', { messageId: id });
-        }
-      });
-    };
-    const recordNotice = (key: string, notice: TranscriptNotice) => {
-      if (recordedNotices.has(key)) return;
-      flush();
-      recordedNotices.add(key);
-      transcriptNotices.push(notice);
-      saveTranscript();
-    };
     const turn = new LiveTurnCoordinator({
       native,
       sdkSessionId,
@@ -487,91 +463,29 @@ export class AgentRunner implements Runner {
         this.store.get('runs', run.id).status === 'awaiting_permission',
       onInputCheckpoint: () => this.onInputCheckpoint?.(session.id),
       persistInput: (message) => {
-        flush();
-        this.store.put('messages', {
-          id: message.id,
-          runId: run.id,
-          sessionId: session.id,
-          role: 'user',
-          text: message.text,
-          createdAt: now(),
-          transcriptOrder: transcript.nextOrder(),
+        assistantId = ledger.recordUserInput(message.id, (transcriptOrder) => {
+          this.store.put('messages', {
+            id: message.id,
+            runId: run.id,
+            sessionId: session.id,
+            role: 'user',
+            text: message.text,
+            createdAt: now(),
+            transcriptOrder,
+          });
+          return createAssistant();
         });
-        assistantId = createAssistant();
-        transcript.associateInput(message.id, assistantId);
         assistantAnchor = undefined;
       },
       publishInput: (messageId) =>
         this.store.event(run.id, session.id, 'message.delta', { messageId }),
-      acknowledgeTranscriptInput: (messageId) => transcript.acknowledgeInput(messageId),
+      acknowledgeTranscriptInput: (messageId) => ledger.acknowledgeInput(messageId),
       event: (type, payload) => this.store.event(run.id, run.sessionId, type, payload),
     });
     live.hasLiveInputSlot = () => turn.hasLiveInputSlot();
-    const flushTimer = setInterval(flush, 80);
+    ledger.startFlushing();
     const appToolId = (id: string, agentId?: string) =>
       agentId ? `${run.id}:${agentId}:${id}` : `${run.id}:${id}`;
-    const seenTools = new Set<string>();
-    const unpositionedTools = new Map<string, number>();
-    const toolNoticeIndex = (id: string) =>
-      transcriptNotices.findIndex((notice) => 'toolCallId' in notice && notice.toolCallId === id);
-    const placeToolNotice = (
-      id: string,
-      name: string,
-      order: number,
-      at: string,
-      kind: 'tool_preparing' | 'tool_blocked',
-    ) => {
-      const notice = { kind, order, at, toolCallId: id, toolName: name };
-      const index = toolNoticeIndex(id);
-      if (index === -1) transcriptNotices.push(notice);
-      else transcriptNotices[index] = notice;
-    };
-    const recordBlockedTool = (id: string, name: string) => {
-      if (seenTools.has(id) || pendingDenials.has(id)) return;
-      if (transcriptNotices[toolNoticeIndex(id)]?.kind === 'tool_blocked') return;
-      const at = now();
-      const position = transcript.toolPosition(id);
-      if (!position) {
-        pendingDenials.set(id, {
-          kind: 'tool_blocked',
-          toolCallId: id,
-          toolName: name,
-          order: transcript.nextOrder(),
-          at,
-        });
-        saveTranscript();
-        return;
-      }
-      placeToolNotice(id, name, position.order, at, 'tool_blocked');
-      saveTranscript();
-    };
-    const publishToolPositions = () => {
-      const observed = transcript.takeObservedTools();
-      if (!observed.length) return;
-      flush();
-      this.store.transaction(() => {
-        for (const { id, name, order, at } of observed) {
-          if (unpositionedTools.delete(id)) {
-            this.store.update('tools', id, {
-              transcriptOrder: order,
-              transcriptHookOrder: undefined,
-            });
-          } else {
-            const blocked = pendingDenials.get(id);
-            pendingDenials.delete(id);
-            placeToolNotice(
-              id,
-              name,
-              order,
-              blocked?.at ?? at,
-              blocked ? 'tool_blocked' : 'tool_preparing',
-            );
-          }
-          this.store.event(run.id, session.id, 'tool.announced', { toolCallId: id, tool: name });
-        }
-        saveTranscript();
-      });
-    };
     const createTool = (
       id: string,
       name: string,
@@ -580,8 +494,8 @@ export class AgentRunner implements Runner {
       useId?: string,
       sdkActorId?: string,
     ) => {
-      if (seenTools.has(id)) return this.store.get('tools', id);
-      flush();
+      if (ledger.hasSeenTool(id)) return this.store.get('tools', id);
+      ledger.flush();
       const input = JSON.stringify(args);
       const command =
         (name === 'Bash' || name === 'mcp__atelier__run_command') &&
@@ -593,17 +507,13 @@ export class AgentRunner implements Runner {
           ? args.command
           : undefined;
       const topLevel = !subagentId && !sdkActorId;
-      const position = topLevel ? transcript.toolPosition(id) : undefined;
-      const hookOrder = topLevel && !position ? transcript.nextOrder() : undefined;
-      if (hookOrder !== undefined) unpositionedTools.set(id, hookOrder);
-      const value: ToolCall = {
+      const value = ledger.createTool(id, topLevel, (orders) => ({
         id,
         runId: run.id,
         sessionId: run.sessionId,
         name,
         ...(subagentId ? { subagentId } : {}),
-        ...(position ? { transcriptOrder: position.order } : {}),
-        ...(hookOrder !== undefined ? { transcriptHookOrder: hookOrder } : {}),
+        ...orders,
         inputSummary: input.slice(0, 4000),
         ...(command === undefined ? {} : { command }),
         ...(name === 'Bash' &&
@@ -615,15 +525,7 @@ export class AgentRunner implements Runner {
         output: '',
         startedAt: now(),
         endedAt: null,
-      };
-      const noticeIndex = toolNoticeIndex(id);
-      this.store.transaction(() => {
-        this.store.put('tools', value);
-        const removedDenial = pendingDenials.delete(id);
-        if (noticeIndex !== -1) transcriptNotices.splice(noticeIndex, 1);
-        if (noticeIndex !== -1 || removedDenial) saveTranscript();
-      });
-      seenTools.add(id);
+      }));
       runningTools.set(id, { useId, subagentId });
       progress.started(value);
       this.store.event(run.id, run.sessionId, 'tool.started', { toolCallId: id });
@@ -930,7 +832,7 @@ export class AgentRunner implements Runner {
       } catch (error) {
         if (event.hook_event_name === 'PreToolUse' && !signal.aborted) {
           const id = appToolId(event.tool_use_id, event.agent_id);
-          if (!event.agent_id) recordBlockedTool(id, event.tool_name);
+          if (!event.agent_id) ledger.recordBlockedTool(id, event.tool_name);
           this.store.event(run.id, session.id, 'tool.blocked', {
             tool: event.tool_name,
             toolCallId: id,
@@ -956,7 +858,7 @@ export class AgentRunner implements Runner {
         hookSession: string,
         outcome: true | 'stopped',
       ) => {
-        if (!seenTools.has(id) || capturing.has(id) || turn.isClosing) return;
+        if (!ledger.hasSeenTool(id) || capturing.has(id) || turn.isClosing) return;
         const call = this.store.get('tools', id);
         if (call.name !== 'Bash' || call.endedAt) return;
         capturing.add(id);
@@ -1529,8 +1431,7 @@ ${JSON.stringify(nativePackagePaths)}
           if (message.parent_tool_use_id) continue;
           const event = message.event;
           turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
-          transcript.acceptStream(message, assistantId, appToolId);
-          publishToolPositions();
+          ledger.acceptStream(message, assistantId, appToolId);
           if (event.type === 'message_start') turn.onModelStarted();
           if (
             firstText &&
@@ -1572,7 +1473,7 @@ ${JSON.stringify(nativePackagePaths)}
           }
         } else if (message.type === 'system' && message.subtype === 'permission_denied') {
           const id = appToolId(message.tool_use_id, message.agent_id);
-          if (!message.agent_id) recordBlockedTool(id, message.tool_name);
+          if (!message.agent_id) ledger.recordBlockedTool(id, message.tool_name);
           this.store.event(run.id, session.id, 'sdk.notice', {
             type: message.type,
             subtype: message.subtype,
@@ -1592,23 +1493,22 @@ ${JSON.stringify(nativePackagePaths)}
           if (message.parent_tool_use_id || message.agent_id) continue;
           if (!message.error)
             turn.acknowledgeInsertion(message.session_id, sdkInputIds(message), 'reply');
-          const owner = transcript.acceptAssistant(message, assistantId, appToolId);
-          publishToolPositions();
+          const owner = ledger.acceptAssistant(message, assistantId, appToolId);
           if (owner === assistantId)
             assistantAnchor =
               !message.error && !message.message.content.some((block) => block.type === 'tool_use')
                 ? message.uuid
                 : undefined;
-          if (message.error) {
-            recordNotice(message.uuid, {
+          const { error } = message;
+          if (error) {
+            ledger.recordNotice(message.uuid, (position) => ({
+              ...position,
               kind: 'api_error',
-              order: transcript.nextOrder(),
-              at: now(),
-              code: message.error,
-            });
+              code: error,
+            }));
             this.store.event(run.id, session.id, 'sdk.error', {
               stage: 'assistant',
-              code: message.error,
+              code: error,
             });
           }
         } else if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
@@ -1628,10 +1528,9 @@ ${JSON.stringify(nativePackagePaths)}
                 record = this.store.get('tools', id);
               } catch {
                 // The SDK can reject an unavailable tool before invoking the hook.
-                const name =
-                  !actor && block.is_error ? transcript.toolPosition(id)?.name : undefined;
+                const name = !actor && block.is_error ? ledger.toolPosition(id)?.name : undefined;
                 if (name) {
-                  recordBlockedTool(id, name);
+                  ledger.recordBlockedTool(id, name);
                   this.store.event(run.id, session.id, 'tool.blocked', {
                     toolCallId: id,
                     tool: name,
@@ -1656,10 +1555,10 @@ ${JSON.stringify(nativePackagePaths)}
           const continuingInsertion = turn.onFinalResult(message);
           for (const denied of message.permission_denials) {
             const id = appToolId(denied.tool_use_id);
-            if (transcript.toolPosition(id)?.name) recordBlockedTool(id, denied.tool_name);
+            if (ledger.toolPosition(id)?.name) ledger.recordBlockedTool(id, denied.tool_name);
           }
           if (!continuingInsertion && message.subtype === 'success')
-            transcript.fallback(assistantId, message.result);
+            ledger.fallback(assistantId, message.result);
           const { usage, cumulativeCost } = readRunUsage(message, observedModel, previousCost);
           previousCost = cumulativeCost ?? previousCost;
           this.store.update('sessions', session.id, { sdkCostTotal: cumulativeCost ?? undefined });
@@ -1685,7 +1584,7 @@ ${JSON.stringify(nativePackagePaths)}
             deniedTools: message.permission_denials?.length ?? null,
           });
           this.store.event(run.id, session.id, 'usage.updated', {});
-          const action = turn.afterResultRecorded(flush);
+          const action = turn.afterResultRecorded(() => ledger.flush());
           if (action === 'unfinished-subagents') {
             failure = '主会话结束时仍有未收尾的子任务。';
             live.cancellation.abort();
@@ -1714,12 +1613,11 @@ ${JSON.stringify(nativePackagePaths)}
       failure = this.clean(error);
       if (!signal.aborted) {
         if (connection)
-          recordNotice('sdk-stream-error', {
+          ledger.recordNotice('sdk-stream-error', (position) => ({
+            ...position,
             kind: 'api_error',
-            order: transcript.nextOrder(),
-            at: now(),
             code: 'stream_error',
-          });
+          }));
         this.store.event(run.id, session.id, 'sdk.error', {
           stage: connection ? 'stream' : 'startup',
           code: (error as NodeJS.ErrnoException)?.code ?? null,
@@ -1746,8 +1644,7 @@ ${JSON.stringify(nativePackagePaths)}
       turn.releaseUnconfirmedInput();
       clearTimeout(timer);
       this.permissions.cancelRun(run.id);
-      clearInterval(flushTimer);
-      flush();
+      ledger.dispose();
       turn.dispose();
       connection?.close();
       if (processOwner) {
@@ -1841,14 +1738,8 @@ ${JSON.stringify(nativePackagePaths)}
           saveAnchor(assistantId, assistantAnchor);
       }
       this.store.transaction(() => {
-        // A hook whose native frame was lost still has its actual observed position.
-        for (const [id, order] of unpositionedTools)
-          this.store.update('tools', id, {
-            transcriptOrder: order,
-            transcriptHookOrder: undefined,
-          });
         this.store.update('runs', run.id, {
-          transcript: finalizeRunTranscript(transcriptState()),
+          transcript: ledger.finalize(),
           ...(timing.records.length > 0 && { requestTiming: timing }),
           status,
           endedAt: now(),
