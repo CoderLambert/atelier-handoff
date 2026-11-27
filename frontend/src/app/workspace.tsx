@@ -32,6 +32,7 @@ import { useWorkspaceCache } from '@/use-query/workspace/use-workspace-cache';
 import { useWorkspaceEvents } from '@/use-query/workspace/use-workspace-events';
 import { appendFileQuote, lastSession } from './drafts';
 import { PanelHost } from './panels/panel-host';
+import { WorkspaceRightPanel } from './panels/workspace-right-panel';
 import { panels } from './panels/registry';
 import { useWorkspacePanel } from './panels/use-workspace-panel';
 import type { SessionActionRequest } from './session-management-controller';
@@ -425,43 +426,23 @@ export default function Workspace() {
           />
         }
         right={
-          gitBoard ? (
-            <PanelHost
-              definition={panels.git}
-              view={{
-                instance: gitBoard.instance,
-                visible: true,
-                ...panelActions,
-                board: {
-                  project: gitBoard.project,
-                  initialTree: gitBoard.tree,
-                  initialTab: gitBoard.tab,
-                  busy: gitBusy,
-                  onBusy: (busy) => panel.reportGitBusy(gitBoard.instance.instanceId, busy),
-                  onQuoteCode: canQuoteGit ? quoteGitCode : undefined,
-                  onCreated: (id) => {
-                    panel.clearGit();
-                    nav.openSession(id);
-                    cache.invalidateSessionLists();
-                  },
-                },
-              }}
-            />
-          ) : schedulePanel ? (
-            <PanelHost
-              definition={panels.schedule}
-              view={panel.buildScheduleView(
-                panelActions,
-                ready.data?.projects ?? [],
-                ready.data?.sessions ?? [],
-                nav.openSession,
-              )}
-            />
-          ) : terminalActive ? (
-            terminalPanel
-          ) : (
-            browserPanel
-          )
+          <WorkspaceRightPanel
+            panel={panel}
+            panelActions={panelActions}
+            projects={ready.data?.projects ?? []}
+            sessions={ready.data?.sessions ?? []}
+            canQuoteGit={canQuoteGit}
+            onQuoteGitCode={quoteGitCode}
+            onOpenSession={nav.openSession}
+            onGitSessionCreated={(id) => {
+              panel.clearGit();
+              nav.openSession(id);
+              cache.invalidateSessionLists();
+            }}
+            terminalActive={terminalActive}
+            terminalPanel={terminalPanel}
+            browserPanel={browserPanel}
+          />
         }
         center={
           <main className="main">
