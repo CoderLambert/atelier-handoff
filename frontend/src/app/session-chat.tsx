@@ -26,6 +26,7 @@ export default function SessionChat({
   onSent,
   onError,
   onTrace,
+  onOpenSchedule,
   onOpenSession,
   getLocationPath,
   onStop,
@@ -42,6 +43,7 @@ export default function SessionChat({
   onSent: (id: string) => Promise<void>;
   onError: (message: string) => void;
   onTrace: (id: string) => void;
+  onOpenSchedule?: (taskId: string) => void;
   onOpenSession?: (sessionId: string) => void;
   getLocationPath?: () => string;
   onStop?: (runId: string) => void;
@@ -298,6 +300,7 @@ export default function SessionChat({
       onStop={handleStop}
       onRetry={handleRetry}
       onTrace={onTrace}
+      onOpenSchedule={onOpenSchedule}
       onForkMessage={handleForkMessage}
       onRewindMessage={handleRewindMessage}
       forkingMessageId={activeForkingMessageId}

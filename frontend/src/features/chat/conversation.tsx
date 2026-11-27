@@ -40,6 +40,7 @@ interface ConversationProps {
   stopPendingRunId?: string;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
+  onOpenSchedule?: (taskId: string) => void;
   onOpenLink?: ChatLinkOpener;
   onEditMessage?: MessageDraftAction;
   onQuoteMessage?: MessageDraftAction;
@@ -72,6 +73,7 @@ function useTurnActions(
     () => ({
       onRetry: (id) => current.current.onRetry(id),
       onTrace: (id) => current.current.onTrace(id),
+      onOpenSchedule: (taskId) => current.current.onOpenSchedule?.(taskId),
       onEditMessage: canEdit ? (...args) => current.current.onEditMessage?.(...args) : undefined,
       onQuoteMessage: canQuote ? (...args) => current.current.onQuoteMessage?.(...args) : undefined,
       onForkMessage: canFork ? (id) => current.current.onForkMessage?.(id) : undefined,

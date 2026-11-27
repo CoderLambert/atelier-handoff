@@ -110,6 +110,12 @@ export function useRunEvents(client: QueryClient, cursor?: number, viewedSession
       }
       if (event.type === 'artifact.created') schedule(keys.artifacts);
       if (event.type.startsWith('schedule.')) schedule(keys.schedules);
+      if (event.type === 'schedule.run.updated' && event.payload?.notify === true) {
+        notifyRunFinished(
+          (event.payload as { status?: RunStatus } | undefined)?.status,
+          event.sessionId,
+        );
+      }
       if (event.type === 'run.finished') {
         markUnseenOutcome(event);
         notifyRunFinished(

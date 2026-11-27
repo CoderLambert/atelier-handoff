@@ -5,9 +5,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import type { Project } from '@shared/types';
+import type { Project, Session } from '@shared/types';
 import type { Snapshot } from '@/api/types';
-import type { PanelInstance, ProjectPanelTarget } from '@/panel-sdk';
+import type { PanelInstance, PanelViewProps, ProjectPanelTarget } from '@/panel-sdk';
 import type { TerminalLaunchIntent } from '@/features/terminal';
 import { activateTerminalRuntime } from '@/features/terminal/terminal-client';
 import { useTerminalCapabilities } from '@/use-query/terminal/use-terminal-capabilities';
@@ -20,6 +20,11 @@ interface GitPanelRequest {
   project: Project;
   tree?: string;
   tab?: 'files' | 'worktrees';
+}
+interface SchedulePanelRequest {
+  instance: PanelInstance<'atelier.schedule', ProjectPanelTarget>;
+  projectId: string;
+  taskId?: string;
 }
 export function useWorkspacePanel({
   sessionId,
@@ -35,6 +40,7 @@ export function useWorkspacePanel({
   const dispatch = useAppDispatch();
   const route = panelLocation(location.pathname, sessionId, location.state);
   const [gitBoard, setGitBoard] = useState<GitPanelRequest>();
+  const [schedulePanel, setSchedulePanel] = useState<SchedulePanelRequest>();
   const [gitBusy, setGitBusy] = useState(false);
   const busyRef = useRef(false);
   const gitInstance = useRef<string | undefined>(undefined);
@@ -51,8 +57,11 @@ export function useWorkspacePanel({
   useEffect(() => {
     setTerminalLaunch(undefined);
   }, [sessionId]);
-  const activePanel = gitBoard ? 'git' : route.routePanel;
-  const panelKey = gitBoard?.instance.instanceId ?? (activePanel ? location.href : undefined);
+  const activePanel = gitBoard ? 'git' : schedulePanel ? 'schedule' : route.routePanel;
+  const panelKey =
+    gitBoard?.instance.instanceId ??
+    schedulePanel?.instance.instanceId ??
+    (activePanel ? location.href : undefined);
   const rightCollapsed = panelKey !== undefined && collapsedPanel === panelKey;
   const canDock = width >= 1120;
   const fullWindow = Boolean(panelKey && (!canDock || expandedPanel === panelKey));
@@ -64,6 +73,7 @@ export function useWorkspacePanel({
   function openGit(target: Project, tab?: 'files' | 'worktrees') {
     if (busyRef.current) return;
     setCollapsedPanel(undefined);
+    setSchedulePanel(undefined);
     if (gitBoard?.project.id === target.id && !tab) return;
     setExpandedPanel(undefined);
     const instanceId = crypto.randomUUID();
@@ -95,11 +105,59 @@ export function useWorkspacePanel({
     setExpandedPanel(undefined);
     setCollapsedPanel(undefined);
   }
+  function openSchedule(projectId: string, taskId?: string) {
+    if (busyRef.current) return;
+    setCollapsedPanel(undefined);
+    if (gitBoard) clearGit();
+    if (schedulePanel?.projectId === projectId) {
+      setSchedulePanel({ ...schedulePanel, taskId });
+      return;
+    }
+    setExpandedPanel(undefined);
+    setSchedulePanel({
+      instance: {
+        instanceId: crypto.randomUUID(),
+        panelId: 'atelier.schedule',
+        target: { scope: 'project', projectId },
+      },
+      projectId,
+      taskId,
+    });
+  }
+  function clearSchedule() {
+    setSchedulePanel(undefined);
+    setExpandedPanel(undefined);
+    setCollapsedPanel(undefined);
+  }
+  function buildScheduleView(
+    layoutActions: Pick<
+      PanelViewProps,
+      'expanded' | 'expandable' | 'onRequestHide' | 'onRequestExpand'
+    >,
+    projects: readonly Project[],
+    sessions: readonly Session[],
+    onOpenSession: (id: string) => void,
+  ) {
+    return {
+      instance: schedulePanel!.instance,
+      visible: true,
+      ...layoutActions,
+      panel: {
+        projectId: schedulePanel!.projectId,
+        initialTaskId: schedulePanel!.taskId,
+        projects,
+        sessions,
+        onOpenSession,
+        onDeleted: clearSchedule,
+      },
+    };
+  }
   function openRoute(panel: RoutePanel) {
     if (!sessionId || busyRef.current) return;
     setCollapsedPanel(undefined);
     dispatch(actions.setDrawer(undefined));
     if (gitBoard) clearGit();
+    if (schedulePanel) setSchedulePanel(undefined);
     if (route.routePanel === panel) return;
     setExpandedPanel(undefined);
     void navigate({
@@ -164,6 +222,10 @@ export function useWorkspacePanel({
     openGit,
     clearGit,
     reportGitBusy,
+    schedulePanel,
+    openSchedule,
+    clearSchedule,
+    buildScheduleView,
     browserTrigger,
     openBrowser: () => openRoute('browser'),
     toggleBrowser: () => (activePanel === 'browser' ? toggleRight() : openRoute('browser')),

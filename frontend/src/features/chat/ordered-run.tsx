@@ -12,6 +12,11 @@ import { ToolDetail } from '@/features/inspector/tool-detail';
 import { toolDisplayStatus, toolOutputView } from '@/features/inspector/tool-detail-format';
 import { SubagentProgress, groupRunWork } from '@/features/inspector';
 import {
+  parseScheduledTaskFromTool,
+  ScheduledRunBanner,
+  ScheduledTaskCard,
+} from '@/features/schedules/schedule-card';
+import {
   ChatApproval,
   MessageFooter,
   RunEndSummary,
@@ -134,7 +139,7 @@ export const OrderedRun = memo(function OrderedRun(props: OrderedTurnProps) {
   const { turn, sessionId, actions, hasFork } = props;
   const { slice, hasGlobalLastMessage, lastRealMessageId } = turn;
   const { run, messages, tools, permissions, subagents, attachments, contextRestarted } = slice;
-  const { onPermission, onOutput, onLinkClick } = actions;
+  const { onPermission, onOutput, onOpenSchedule, onLinkClick } = actions;
   const onTrace = () => actions.onTrace(run.id);
   const renderPermission = (item: Permission) => (
     <ChatApproval permission={item} onPermission={onPermission} />
@@ -159,8 +164,18 @@ export const OrderedRun = memo(function OrderedRun(props: OrderedTurnProps) {
   const latestContentOrder = rows.findLast(
     (row) => row.kind === 'text' || row.kind === 'user',
   )?.order;
+  const scheduleCards = useMemo(
+    () =>
+      tools
+        .map((tool) => parseScheduledTaskFromTool(tool))
+        .filter((task): task is NonNullable<typeof task> => task !== undefined),
+    [tools],
+  );
   return (
     <section className="ordered-run" data-run-id={run.id}>
+      {run.scheduleMeta ? (
+        <ScheduledRunBanner meta={run.scheduleMeta} onOpen={onOpenSchedule} />
+      ) : null}
       {rows.map((row) => (
         <div key={row.key}>
           {row.kind === 'tool' ? (
@@ -225,6 +240,9 @@ export const OrderedRun = memo(function OrderedRun(props: OrderedTurnProps) {
         .map((permission) => (
           <div key={permission.id}>{renderPermission(permission)}</div>
         ))}
+      {scheduleCards.map((task) => (
+        <ScheduledTaskCard key={task.id} task={task} onOpen={onOpenSchedule} />
+      ))}
       <RunEndSummary slice={slice} state={props} />
     </section>
   );

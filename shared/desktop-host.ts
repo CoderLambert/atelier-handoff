@@ -30,5 +30,10 @@ export const desktopHostReplySchema = z.discriminatedUnion('type', [
   }),
 ]);
 export type DesktopHostHello = z.infer<typeof desktopHostHelloSchema>;
+export const desktopHostSystemResumeSchema = z.strictObject({
+  protocolVersion: z.literal(desktopHostVersion),
+  type: z.literal('atelier-host:system-resume'),
+});
 export type DesktopHostReply = z.infer<typeof desktopHostReplySchema>;
+export type DesktopHostSystemResume = z.infer<typeof desktopHostSystemResumeSchema>;
 export type DesktopHostFailure = Extract<DesktopHostReply, { type: 'atelier-host:failed' }>['code'];

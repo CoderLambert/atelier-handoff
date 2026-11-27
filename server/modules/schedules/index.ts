@@ -11,7 +11,7 @@ import { createScheduleScheduler } from './scheduler.js';
 import { createScheduleService } from './service.js';
 
 export function createSchedulesRuntime(options: {
-  store: Pick<Store, 'get' | 'update' | 'transaction' | 'event' | 'events' | 'repos'>;
+  store: Pick<Store, 'get' | 'list' | 'update' | 'transaction' | 'event' | 'events' | 'repos'>;
   agents: Pick<AgentProfiles, 'requireReady'>;
   sameSessionRunning(sessionId: string): boolean;
   isShuttingDown(): boolean;

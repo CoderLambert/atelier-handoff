@@ -3,11 +3,12 @@
  * @implementation 三个静态定义分离元数据和组件加载，不执行注册副作用或加载外部代码。
  * @updated 2026-11-26T01:00:00+08:00
  */
-import { GitBranch, Globe, TerminalSquare } from 'lucide-react';
+import { Clock, GitBranch, Globe, TerminalSquare } from 'lucide-react';
 import type { PanelDefinition } from '@/panel-sdk';
 import type { TerminalPanelProps } from '@/features/terminal';
 import type { GitPanelProps } from './git-panel';
 import type { BrowserPanelProps } from './browser-panel';
+import type { SchedulePanelProps } from './schedule-panel';
 
 export const panels = {
   browser: {
@@ -43,4 +44,15 @@ export const panels = {
     icon: TerminalSquare,
     load: () => import('@/features/terminal'),
   } satisfies PanelDefinition<TerminalPanelProps>,
+  schedule: {
+    manifest: {
+      apiVersion: 1,
+      id: 'atelier.schedule',
+      titleKey: 'schedules:title',
+      scope: 'project',
+      slot: 'right',
+    },
+    icon: Clock,
+    load: () => import('./schedule-panel'),
+  } satisfies PanelDefinition<SchedulePanelProps>,
 };

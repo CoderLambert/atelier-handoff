@@ -9,6 +9,7 @@ import {
   SCHEDULE_CONSECUTIVE_FAILURE_LIMIT,
   type ScheduledTask,
   type ScheduledTaskRun,
+  type ScheduleNotifyPolicy,
   type ScheduleRunTriggerKind,
 } from '../../../shared/schedules.js';
 import { activeStatuses, type RunEvent, type Session } from '../../../shared/types.js';
@@ -22,6 +23,23 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 // Reserve 1 of the 3 global execution slots for interactive user sessions.
 const SCHEDULE_CONCURRENCY_CAP = 2;
 
+export function shouldNotifyScheduledRun(
+  policy: ScheduleNotifyPolicy,
+  succeeded: boolean,
+  assistantText?: string,
+): boolean {
+  switch (policy) {
+    case 'never':
+      return false;
+    case 'always':
+      return true;
+    case 'on_error':
+      return !succeeded;
+    case 'on_attention':
+      return !succeeded || /(?:^|\n)ATTENTION:/m.test(assistantText ?? '');
+  }
+}
+
 function deterministicUuid(seed: string): string {
   const bytes = createHash('sha256').update(seed).digest().subarray(0, 16);
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
@@ -31,7 +49,7 @@ function deterministicUuid(seed: string): string {
 }
 
 export interface ScheduleSchedulerOptions {
-  store: Pick<Store, 'get' | 'update' | 'transaction' | 'event' | 'events' | 'repos'>;
+  store: Pick<Store, 'get' | 'list' | 'update' | 'transaction' | 'event' | 'events' | 'repos'>;
   createSession(input: {
     projectId: string;
     agentRevisionId?: string;
@@ -429,8 +447,25 @@ export function createScheduleScheduler({
         pauseReason: autoPaused ? 'consecutive_failures' : task.pauseReason,
         updatedAt: finishedAt,
       });
+      const assistantText = store
+        .list('messages')
+        .filter((msg) => msg.runId === runId && msg.role === 'assistant')
+        .map((msg) => msg.text)
+        .join('\n');
+      const notify = shouldNotifyScheduledRun(task.notifyPolicy, succeeded, assistantText);
       emitTaskEvent(task, 'schedule.updated');
-      emitTaskEvent(task, 'schedule.run.updated');
+      store.event(
+        `schedule-${task.id}`,
+        task.targetSessionId ?? `schedule:${task.projectId}`,
+        'schedule.run.updated',
+        {
+          taskId: task.id,
+          projectId: task.projectId,
+          runId,
+          status: succeeded ? 'completed' : 'failed',
+          notify,
+        },
+      );
     }
     return updated;
   }

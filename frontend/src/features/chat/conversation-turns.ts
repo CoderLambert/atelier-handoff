@@ -179,6 +179,7 @@ export function buildConversationTurns(
 export interface TurnActions {
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
+  onOpenSchedule?: (taskId: string) => void;
   onPermission: (permission: Permission) => void;
   onOutput: (tool: ToolCall) => void;
   onLinkClick?: (url: string, event: MouseEvent<HTMLAnchorElement>) => void;
@@ -214,6 +215,7 @@ function areTurnActionsEqual(a: TurnActions, b: TurnActions) {
     a === b ||
     (a.onRetry === b.onRetry &&
       a.onTrace === b.onTrace &&
+      a.onOpenSchedule === b.onOpenSchedule &&
       a.onPermission === b.onPermission &&
       a.onOutput === b.onOutput &&
       a.onLinkClick === b.onLinkClick &&

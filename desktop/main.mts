@@ -3,7 +3,7 @@
  * @implementation 装配窗口、快捷键与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
  * @updated 2026-11-27T22:00:00+08:00
  */
-import { app, type BrowserWindow } from 'electron';
+import { app, powerMonitor, type BrowserWindow } from 'electron';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { importWorkspace } from './host/migration.mjs';
@@ -287,7 +287,10 @@ else {
         );
         const unbindDesktopShortcutIpc = desktopShortcuts.bindIpc();
         const unbindBrowserIpc = browser.bindIpc();
+        const onSystemResume = () => supervisor.notifySystemResume();
+        powerMonitor.on('resume', onSystemResume);
         app.once('will-quit', () => {
+          powerMonitor.off('resume', onSystemResume);
           unbindUiLanguage();
           unbindUiTheme();
           unbindUiNotifications();

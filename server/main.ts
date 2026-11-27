@@ -11,7 +11,7 @@ import { createApp } from './app.js';
 import { acquireDataOwner, DataOwnerError } from './data-owner.js';
 import { desktopBrowserEnabled } from './desktop-browser.js';
 import { receiveDesktopHost, sendDesktopHost } from './desktop-host.js';
-import { desktopHostDeadlines } from '../shared/desktop-host.js';
+import { desktopHostDeadlines, desktopHostSystemResumeSchema } from '../shared/desktop-host.js';
 
 // Startup argv is supplied by the private desktop supervisor. Environment files
 // and inherited shell variables cannot select RTK resources or its writable state.
@@ -79,6 +79,11 @@ try {
   process.once('SIGTERM', exit);
   if (host) {
     process.once('disconnect', exit);
+    process.on('message', (message: unknown) => {
+      if (desktopHostSystemResumeSchema.safeParse(message).success) {
+        app.scheduleScheduler.wakeFromSuspend();
+      }
+    });
     if (!process.connected) throw new Error('Desktop IPC disconnected before startup.');
   }
   await new Promise<void>((resolve, reject) => {

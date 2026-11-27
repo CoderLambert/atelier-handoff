@@ -102,4 +102,7 @@ export const schedules = {
   'weekday.6': ['周六', 'Sat'],
   'weekday.7': ['周日', 'Sun'],
   'chat.triggeredBadge': ['自动化任务', 'Scheduled task'],
+  'panel.expand': ['全屏查看定时任务', 'Expand scheduled tasks panel'],
+  'panel.dock': ['恢复停靠', 'Restore docked width'],
+  'panel.collapse': ['收起定时任务面板', 'Collapse scheduled tasks panel'],
 } as const;

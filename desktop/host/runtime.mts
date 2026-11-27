@@ -14,6 +14,7 @@ import {
   desktopHostVersion,
   type DesktopHostFailure,
   type DesktopHostHello,
+  type DesktopHostSystemResume,
 } from '../../shared/desktop-host.js';
 
 import { DesktopHostError, type DesktopFailureKey } from './i18n.mjs';
@@ -65,6 +66,16 @@ export class RuntimeSupervisor {
 
   owns(child: ChildProcess): boolean {
     return this.current?.child === child && this.current.ready && !this.current.retired;
+  }
+
+  notifySystemResume(): void {
+    const active = this.current;
+    if (!active || !active.ready || active.retired || !active.child.connected) return;
+    const message: DesktopHostSystemResume = {
+      type: 'atelier-host:system-resume',
+      protocolVersion: desktopHostVersion,
+    };
+    active.child.send(message, () => undefined);
   }
 
   async start(gateway?: ManagedShuntConnection): Promise<{ origin: string; pairing: string }> {

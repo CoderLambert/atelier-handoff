@@ -23,7 +23,11 @@ import { createApp } from '../server/app.js';
 import { ProjectExtensions } from '../server/extensions.js';
 import { buildRunMcpTools } from '../server/modules/runs/mcp-tools/index.js';
 import type { RequestedOperation } from '../server/permissions.js';
-import { createScheduleScheduler } from '../server/modules/schedules/scheduler.js';
+import { desktopHostSystemResumeSchema, desktopHostVersion } from '../shared/desktop-host.js';
+import {
+  createScheduleScheduler,
+  shouldNotifyScheduledRun,
+} from '../server/modules/schedules/scheduler.js';
 import { createScheduleService } from '../server/modules/schedules/service.js';
 import { computeNextRunAt, normalizeTiming } from '../server/modules/schedules/timing.js';
 import { Store } from '../server/store.js';
@@ -451,4 +455,32 @@ test('http routes: full CRUD + runNow + history flow on live local server', asyn
     await app.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('notifications and system-resume IPC: respects notifyPolicy and validates resume schema', () => {
+  assert.equal(shouldNotifyScheduledRun('never', false, 'ATTENTION: disk full'), false);
+  assert.equal(shouldNotifyScheduledRun('always', true, 'all good'), true);
+  assert.equal(shouldNotifyScheduledRun('on_error', true, 'ATTENTION: ignored'), false);
+  assert.equal(shouldNotifyScheduledRun('on_error', false, 'failed'), true);
+  assert.equal(shouldNotifyScheduledRun('on_attention', true, 'HEARTBEAT_OK'), false);
+  assert.equal(
+    shouldNotifyScheduledRun('on_attention', true, 'Summary\nATTENTION: behind by 3 commits'),
+    true,
+  );
+  assert.equal(shouldNotifyScheduledRun('on_attention', false, 'error'), true);
+
+  assert.equal(
+    desktopHostSystemResumeSchema.safeParse({
+      protocolVersion: desktopHostVersion,
+      type: 'atelier-host:system-resume',
+    }).success,
+    true,
+  );
+  assert.equal(
+    desktopHostSystemResumeSchema.safeParse({
+      protocolVersion: desktopHostVersion,
+      type: 'atelier-host:unknown',
+    }).success,
+    false,
+  );
 });

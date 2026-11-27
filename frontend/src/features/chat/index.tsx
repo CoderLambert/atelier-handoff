@@ -41,6 +41,7 @@ export interface ChatProps {
   onStop: (runId: string) => void;
   onRetry: (runId: string) => void;
   onTrace: (runId: string) => void;
+  onOpenSchedule?: (taskId: string) => void;
   onForkMessage?: (messageId: string) => void;
   onRewindMessage?: (messageId: string, expectedHeadId: string) => Promise<void>;
   forkingMessageId?: string;
@@ -55,8 +56,17 @@ export default function Chat(props: ChatProps) {
 function SessionChat(props: ChatProps) {
   const { t } = useUiTranslation('chat');
   const dispatch = useAppDispatch();
-  const { snapshot, draft, getDraft, onDraftChange, onRetry, onTrace, onOpenLink, submitting } =
-    props;
+  const {
+    snapshot,
+    draft,
+    getDraft,
+    onDraftChange,
+    onRetry,
+    onTrace,
+    onOpenSchedule,
+    onOpenLink,
+    submitting,
+  } = props;
   const sessionId = snapshot.session.id;
   const { onRewindMessage } = props;
   const composerFocus = useWorkspace((state) =>
@@ -227,6 +237,7 @@ function SessionChat(props: ChatProps) {
         stopPendingRunId={stopPendingRunId}
         onRetry={onRetry}
         onTrace={onTrace}
+        onOpenSchedule={onOpenSchedule}
         onOpenLink={onOpenLink}
         onEditMessage={editMessage}
         onQuoteMessage={quoteReply}

@@ -141,7 +141,16 @@ export default function Workspace() {
   const shortcutLabels = useShortcutCommandLabels();
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
-  const { gitBoard, gitBusy, gitTrigger, openGit, browserTrigger, openBrowser } = panel;
+  const {
+    gitBoard,
+    gitBusy,
+    gitTrigger,
+    openGit,
+    schedulePanel,
+    openSchedule,
+    browserTrigger,
+    openBrowser,
+  } = panel;
   const browserActive = panel.activePanel === 'browser';
   const terminalActive = panel.activePanel === 'terminal';
 
@@ -461,7 +470,7 @@ export default function Workspace() {
     <div className={cn('app react-workspace', desktop && 'desktop-workspace')}>
       <ShortcutHost
         commands={shortcutCommands}
-        contextKey={`${pathname}:${project?.id ?? ''}:${gitBoard?.instance.instanceId ?? routePanel ?? ''}:${panel.rightCollapsed}`}
+        contextKey={`${pathname}:${project?.id ?? ''}:${gitBoard?.instance.instanceId ?? schedulePanel?.instance.instanceId ?? routePanel ?? ''}:${panel.rightCollapsed}`}
       />
       <WorkspaceSessionSwitcher
         open={switcherOpen}
@@ -513,6 +522,16 @@ export default function Workspace() {
                   },
                 },
               }}
+            />
+          ) : schedulePanel ? (
+            <PanelHost
+              definition={panels.schedule}
+              view={panel.buildScheduleView(
+                panelActions,
+                ready.data?.projects ?? [],
+                ready.data?.sessions ?? [],
+                nav.openSession,
+              )}
             />
           ) : terminalActive ? (
             terminalPanel
@@ -651,16 +670,16 @@ export default function Workspace() {
                     />
                   </div>
                 ) : null}
-                {view === 'schedules' ? (
+                {view === 'schedules' && (
                   <div className="react-collections">
                     <SchedulesPage
                       projects={ready.data?.projects ?? []}
                       sessions={ready.data?.sessions ?? []}
                       projectId={project?.id}
-                      onOpenSession={(id) => nav.openSession(id)}
+                      onOpenSession={nav.openSession}
                     />
                   </div>
-                ) : null}
+                )}
                 {view === 'extensions' ? (
                   <div className="react-collections">
                     <ExtensionsPage
@@ -816,6 +835,7 @@ export default function Workspace() {
                             onSent={cache.revalidateSession}
                             onError={setNotice}
                             onTrace={nav.openTrace}
+                            onOpenSchedule={(taskId) => openSchedule(snapshot.project.id, taskId)}
                             onOpenSession={nav.openSession}
                             getLocationPath={nav.getCurrentPath}
                           />
