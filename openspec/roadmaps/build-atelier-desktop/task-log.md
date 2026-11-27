@@ -2,6 +2,13 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-27 · 机械护栏收紧与 `query-legacy.json` 清零（已验证）
+
+- **`query-legacy.json` 彻底清零**：将最后 3 个遗留文件（`frontend/src/features/agents/{api,editor,index}.tsx`）的数据请求与强刷逻辑迁入 `frontend/src/use-query/agents/`（`keys.ts`、`use-agents.ts`、`use-agent-mutation.ts`、`use-start-agent-session.ts`），并在 `frontend/src/use-query/extensions/use-extensions.ts` 增加 `useFetchFreshExtensions`；将 `scripts/query-legacy.json` 清空为 `{}`，`npm run check:query` 确认 **0 legacy files tracked for migration**。
+- **打破 `mcp-tools` 环并扩展模块无环与行数棘轮**：抽离 `server/modules/runs/mcp-tools/types.ts`（`RunMcpToolHost`、`ToolRegistration`）消除 `mcp-tools/index.ts <-> {checked-mcp,browser,builtin,extension}-tools.ts` 仅类型循环；扩展 `scripts/check-import-boundaries.mts` 的循环检查至 `desktop/host`、`shared` 与 `server/modules` 三个作用域，并为 C1–C10 重构的 13 个关键文件设置 `FILE_LINE_LIMITS` 行数棘轮（含 `server/app.ts <= 300`、`shared/types.ts <= 300`、`server/agent.ts <= 1500`、`workspace.tsx <= 960`、`conversation.tsx <= 300`、`editor.tsx <= 80` 等）；在 `tests/architecture-boundaries.test.ts` 新增 `shared`/`server/modules` 循环和行数棘轮 2 组用例。决策与回退见 `docs/decisions/2026-11-27-architecture-guardrails-and-query-zero.md`。
+- **验证**：`npm run check`（`check:query` 打印 `0 legacy files tracked for migration`、`check:architecture` 全绿、`check:i18n`、`check:ui`、`tsc`、desktop、tools）、`npm run check:headers`（16 份源文件）与 `npm run build` / `npm run build:desktop` 全通过；`tests/architecture-boundaries.test.ts` **36/36** 全通过；主机 `ATELIER_TEST_CHROMIUM=/usr/bin/chromium npm test` 后端 **904/910** 通过、6 跳过、**0 失败**，前端首轮 **178/180** 通过、1 跳过（仅无关 `public-import-browser.test.ts` Chromium 启动竞争，单独串行复跑 **1/1** 通过）。未再重复运行桌面 Electron UI 烟测（本批未改动桌面浏览器宿主与 UI 布局），未用付费模型，未测系统包。
+- **开发过程 review**：先以短小临时 AST 探测 `shared/` 与 `server/modules/` 现存环，精准发现仅存的 4 条 `mcp-tools` 桶循环后再加护栏，避免了规则上线后的全仓返工。至此架构评审清单中的 C1–C10 及配套机械护栏全部按计划收口并提交 `main`。
+
 ## 2026-11-27 · C10-B：独立设置卡片、`RunTrace` 单趟 Facts 与记忆化 `Sidebar`（已验证）
 
 - **`SettingsPage` 独立提交解耦**：将即点即存的 `BundledAccountCard`（`settings-account-card.tsx`，76 行）与 `MagpieToggleCard`（`settings-magpie-card.tsx`，68 行）移出草稿 `<form>`，各自持有独立 mutation/lock 与错误状态，解除 4 个 `<fieldset>` 互锁；抽离纯校验模块 `settings-validation.ts`（86 行），`settings-page.tsx` 从 **899 行降至 790 行**，并在 `scripts/i18n-exceptions.json` 迁移 `Magpie` 品牌豁免文件路径。

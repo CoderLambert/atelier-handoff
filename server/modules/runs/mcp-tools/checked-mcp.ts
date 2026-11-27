@@ -1,12 +1,12 @@
 /**
  * @file 执行经过授权复核的绑定及外部 MCP 调用。
  * @implementation 统一参数上限、审批及派发前复核，保持两种来源的审批显示、取消及外部调用事件约定。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { AppError } from '../../../../shared/errors.js';
 import type { callMcp } from '../../../extension-mcp.js';
 import type { EnabledMcp } from '../../../extensions.js';
-import type { RunMcpToolHost } from './index.js';
+import type { RunMcpToolHost } from './types.js';
 
 export interface CheckedMcpHost extends Pick<
   RunMcpToolHost,

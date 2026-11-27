@@ -1,7 +1,7 @@
 /**
  * @file 验证跨层导入、宿主循环和运行时入口边界。
- * @implementation 在临时源码树中覆盖解析规则、允许的依赖方向及组合入口和 HTTP 文件的行数限制。
- * @updated 2026-11-27T00:10:00+08:00
+ * @implementation 在临时源码树中覆盖解析规则、允许的依赖方向、循环检查扩展与热点文件行数上限。
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -251,5 +251,41 @@ test('source text, property names and import.meta URLs are not import edges', as
       'desktop/host/runtime.mts': `new URL('../../server/main.js', import.meta.url);`,
     }),
     [],
+  );
+});
+
+test('shared and server/modules reject circular imports across files', async () => {
+  const errors = await check({
+    'shared/a.ts': `import type { B } from './b.js'; export interface A { b?: B }`,
+    'shared/b.ts': `import type { A } from './a.js'; export interface B { a?: A }`,
+    'server/modules/runs/alpha.ts': `import './beta.js'; export const alpha = 1;`,
+    'server/modules/runs/beta.ts': `import './alpha.js'; export const beta = 2;`,
+  });
+  assert.ok(
+    errors.some((error) => error.includes('shared dependency cycle:')),
+    errors.join('\n'),
+  );
+  assert.ok(
+    errors.some((error) => error.includes('server/modules dependency cycle:')),
+    errors.join('\n'),
+  );
+});
+
+test('refactored hotspot ratchets reject oversized files', async () => {
+  const lines = (count: number) => 'export {};\n' + '// line\n'.repeat(count - 1);
+  assert.deepEqual(
+    await check({
+      'shared/types.ts': lines(300),
+      'frontend/src/features/extensions/editor.tsx': lines(80),
+    }),
+    [],
+  );
+  const errors = await check({
+    'shared/types.ts': lines(301),
+    'frontend/src/features/extensions/editor.tsx': lines(81),
+  });
+  assert.ok(errors.some((error) => error.includes('shared/types.ts: 301 lines')));
+  assert.ok(
+    errors.some((error) => error.includes('frontend/src/features/extensions/editor.tsx: 81 lines')),
   );
 });

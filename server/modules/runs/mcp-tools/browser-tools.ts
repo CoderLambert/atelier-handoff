@@ -1,7 +1,7 @@
 /**
  * @file 注册桌面原生浏览器的运行工具。
  * @implementation 以固定浏览器修订和取消信号复核控制权，按运行模式审批交互，通过宿主能力保存 PNG 截图。
- * @updated 2026-11-27T17:26:33+08:00
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import type { z } from 'zod';
 import {
@@ -9,7 +9,7 @@ import {
   type DesktopBrowserToolName,
 } from '../../../../shared/desktop-browser.js';
 import { callDesktopBrowser } from '../../../desktop-browser.js';
-import type { RunMcpToolHost, ToolRegistration } from './index.js';
+import type { RunMcpToolHost, ToolRegistration } from './types.js';
 
 export function registerBrowserTools(
   host: RunMcpToolHost,

@@ -1,7 +1,7 @@
 /**
  * @file 检查桌面宿主、运行时及共享契约的静态模块边界。
- * @implementation 解析导入与重导出，报告宿主循环和 HTTP/领域反向依赖，并限制运行时入口与路由文件的行数。
- * @updated 2026-11-27T00:10:00+08:00
+ * @implementation 解析导入与重导出，报告 desktop/host、shared、server/modules 循环依赖及反向依赖，并限制关键文件行数棘轮上限。
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
@@ -34,6 +34,24 @@ const runtimeModule = (specifier: string) =>
   specifier.startsWith('node:') ||
   isBuiltin(specifier) ||
   /^(?:electron|@electron\/remote)(?:\/|$)/.test(specifier);
+
+const FILE_LINE_LIMITS: Readonly<Record<string, number>> = {
+  'server/app.ts': 300,
+  'shared/types.ts': 300,
+  'server/agent.ts': 1500,
+  'server/skill-package-execution.ts': 320,
+  'server/modules/terminal/manager.ts': 680,
+  'desktop/browser/controller.mts': 700,
+  'frontend/src/app/workspace.tsx': 960,
+  'frontend/src/app/desktop-browser.tsx': 430,
+  'frontend/src/app/sidebar.tsx': 400,
+  'frontend/src/features/chat/composer.tsx': 610,
+  'frontend/src/features/chat/conversation.tsx': 300,
+  'frontend/src/features/extensions/editor.tsx': 80,
+  'frontend/src/features/git/git-multi-commit-editor.tsx': 410,
+};
+
+const CYCLE_SCOPES = ['desktop/host', 'shared', 'server/modules'] as const;
 
 function literal(node: t.Node | null | undefined): string | undefined {
   if (t.isStringLiteral(node)) return node.value;
@@ -144,12 +162,16 @@ export async function checkImportBoundaries(root: string): Promise<string[]> {
   }
 
   const errors: string[] = [];
-  const graph = new Map<string, Set<string>>();
+  const graphs = new Map<string, Map<string, Set<string>>>(
+    CYCLE_SCOPES.map((scope) => [scope, new Map()]),
+  );
   for (const [path, file] of files) {
-    if (isHost(file)) graph.set(file, new Set());
+    const scope = !isTest(file)
+      ? CYCLE_SCOPES.find((candidate) => inDirectory(file, candidate))
+      : undefined;
+    if (scope) graphs.get(scope)?.set(file, new Set());
     const source = await readFile(path, 'utf8');
-    const limit =
-      file === 'server/app.ts' ? 300 : inDirectory(file, 'server/http') ? 350 : undefined;
+    const limit = FILE_LINE_LIMITS[file] ?? (inDirectory(file, 'server/http') ? 350 : undefined);
     if (limit !== undefined) {
       const lines = source.replace(/\r?\n$/, '').split(/\r?\n/).length;
       if (lines > limit) errors.push(`${file}: ${lines} lines exceeds the ${limit}-line boundary.`);
@@ -198,28 +220,32 @@ export async function checkImportBoundaries(root: string): Promise<string[]> {
         errors.push(
           `${location}: private desktop/host modules are only exposed to desktop/main.mts.`,
         );
-      if (isHost(file) && target && isHost(target)) graph.get(file)?.add(target);
+      if (scope && target && !isTest(target) && inDirectory(target, scope)) {
+        graphs.get(scope)?.get(file)?.add(target);
+      }
     }
   }
 
-  const visited = new Set<string>();
-  const active = new Set<string>();
-  const stack: string[] = [];
-  function visit(file: string): void {
-    if (active.has(file)) {
-      errors.push(
-        `desktop/host dependency cycle: ${[...stack.slice(stack.indexOf(file)), file].join(' -> ')}`,
-      );
-      return;
-    }
-    if (visited.has(file)) return;
-    active.add(file);
-    stack.push(file);
-    for (const target of graph.get(file) ?? []) visit(target);
-    stack.pop();
-    active.delete(file);
-    visited.add(file);
+  for (const [scope, graph] of graphs) {
+    const visited = new Set<string>();
+    const active = new Set<string>();
+    const stack: string[] = [];
+    const visit = (file: string): void => {
+      if (active.has(file)) {
+        errors.push(
+          `${scope} dependency cycle: ${[...stack.slice(stack.indexOf(file)), file].join(' -> ')}`,
+        );
+        return;
+      }
+      if (visited.has(file)) return;
+      active.add(file);
+      stack.push(file);
+      for (const target of graph.get(file) ?? []) visit(target);
+      stack.pop();
+      active.delete(file);
+      visited.add(file);
+    };
+    for (const file of graph.keys()) visit(file);
   }
-  for (const file of graph.keys()) visit(file);
   return errors;
 }

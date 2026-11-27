@@ -1,25 +1,24 @@
 /**
  * @file 提供按项目管理智能体的目录页面。
  * @implementation 查询并筛选智能体，协调创建、编辑、复制、归档和开启会话等操作。
- * @updated 2026-11-23T05:01:08+08:00
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { useUiTranslation } from '@/i18n';
 import { useDeferredValue, useRef, useState } from 'react';
-import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMutating } from '@tanstack/react-query';
 import { Archive, Bot, Copy, MessageSquarePlus, Plus, RefreshCw } from 'lucide-react';
 import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
-import type { AgentCard, Project, Session } from '@shared/types';
-import { api } from '@/api/client';
-import { keys } from '@/app/events';
+import type { AgentCard, Project } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { messageOf, useExtensions } from '@/features/extensions/api';
+import { useStartAgentSession } from '@/use-query/agents/use-start-agent-session';
 import {
   agentKeys,
-  agentsQuery,
   agentIssueMessage,
   capabilityLabels,
   dependencyIssues,
   useAgentMutation,
+  useAgents,
 } from './api';
 import { AgentDialog, AgentProblems } from './components';
 import { AgentEditor } from './editor';
@@ -77,8 +76,7 @@ function ProjectAgents({
 }) {
   const { t } = useUiTranslation('extensions');
   const projectId = project?.id ?? '';
-  const client = useQueryClient();
-  const query = useQuery(agentsQuery(projectId));
+  const query = useAgents(projectId);
   const extensions = useExtensions(projectId);
   const operation = useAgentMutation(projectId);
   const [modal, setModal] = useState<Modal>();
@@ -88,20 +86,7 @@ function ProjectAgents({
   const [notice, setNotice] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const lock = useRef(false);
-  const start = useMutation({
-    mutationKey: agentKeys.mutations(projectId),
-    mutationFn: (item: AgentCard) =>
-      api<{ session: Session }>('/api/sessions', {
-        method: 'POST',
-        body: { projectId, agentRevisionId: item.revisionId },
-      }),
-    onSuccess: ({ session }) => {
-      if (!session?.id) throw new Error('创建会话响应缺少会话信息，请刷新会话列表确认结果。');
-      void client.invalidateQueries({ queryKey: keys.sessions });
-      void client.invalidateQueries({ queryKey: keys.bootstrap });
-    },
-    onSettled: () => client.invalidateQueries({ queryKey: agentKeys.list(projectId) }),
-  });
+  const start = useStartAgentSession(projectId);
   const pending = useIsMutating({ mutationKey: agentKeys.mutations(projectId) }) > 0;
   const canManage = Boolean(project?.available);
   const items = query.data ?? [];

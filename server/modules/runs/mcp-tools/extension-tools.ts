@@ -1,7 +1,7 @@
 /**
  * @file 注册 Skill 工具绑定、包脚本和运行选中的 MCP 工具。
  * @implementation 在调用期间重新解析项目授权和扩展版本，通过统一 MCP 执行器接入绑定与外部工具。
- * @updated 2026-11-27T21:25:00+08:00
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { existsSync } from 'node:fs';
 import { lstat } from 'node:fs/promises';
@@ -16,7 +16,7 @@ import type { RunSkill } from '../../../run-skills.js';
 import { readSkillResource, supportsSearch } from '../../../skill-package-runtime.js';
 import { executeHttpBinding } from '../../../skill-tool-bindings.js';
 import { invokeCheckedMcp, type CheckedMcpHost } from './checked-mcp.js';
-import type { RunMcpToolHost, ToolRegistration } from './index.js';
+import type { RunMcpToolHost, ToolRegistration } from './types.js';
 
 type ExtensionToolHost = RunMcpToolHost & CheckedMcpHost;
 

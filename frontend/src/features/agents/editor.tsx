@@ -1,18 +1,18 @@
 /**
  * @file 提供智能体配置编辑对话框。
  * @implementation 管理配置草稿、依赖刷新和版本冲突，在保存前重新检查依赖，并处理放弃更改确认。
- * @updated 2026-11-23T04:52:18+08:00
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { OptionsSelect } from '@/components/options-select';
 import { useUiTranslation } from '@/i18n';
 import { useId, useRef, useState, type FormEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentCard, AgentConfig } from '@shared/types';
 import { Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { extensionsQuery, messageOf, useExtensions } from '@/features/extensions/api';
+import { messageOf, useExtensions } from '@/features/extensions/api';
+import { useFetchFreshExtensions } from '@/use-query/extensions/use-extensions';
+import { useAgents, useFetchFreshAgents } from '@/use-query/agents/use-agents';
 import {
-  agentsQuery,
   capabilityLabels,
   capabilityOptions,
   dependencyIssues,
@@ -40,10 +40,11 @@ export function AgentEditor({
   onSaved: (message: string) => void;
 }) {
   const { t } = useUiTranslation('extensions');
-  const client = useQueryClient();
   const save = useAgentMutation(projectId);
   const extensions = useExtensions(projectId);
-  const agents = useQuery(agentsQuery(projectId));
+  const fetchFreshExtensions = useFetchFreshExtensions(projectId);
+  const agents = useAgents(projectId);
+  const fetchFreshAgents = useFetchFreshAgents(projectId);
   const id = useId();
   const [item, setItem] = useState(initialItem);
   const [baseline, setBaseline] = useState(() =>
@@ -94,7 +95,7 @@ export function AgentEditor({
     setError('');
     setNotice('');
     try {
-      const items = await client.fetchQuery({ ...extensionsQuery(projectId), staleTime: 0 });
+      const items = await fetchFreshExtensions();
       const result = dependencyRefresh(config, items);
       if (result.changes.length) setRefresh(result);
       else setNotice(t('agentEditor.dependenciesCurrent'));
@@ -111,7 +112,7 @@ export function AgentEditor({
     setWorking(true);
     setError('');
     try {
-      const items = await client.fetchQuery({ ...agentsQuery(projectId), staleTime: 0 });
+      const items = await fetchFreshAgents();
       const found = items.find((value) => value.id === item.id);
       if (!found) throw new Error(t('agentEditor.missingAgent'));
       setReplacement(found);
@@ -142,7 +143,7 @@ export function AgentEditor({
     setNotice('');
     try {
       // Check the latest dependency list immediately before saving the pinned versions.
-      const items = await client.fetchQuery({ ...extensionsQuery(projectId), staleTime: 0 });
+      const items = await fetchFreshExtensions();
       if (dependencyIssues(prepared, items).length) {
         setError(t('agentEditor.dependenciesChanged'));
         return;

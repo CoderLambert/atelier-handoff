@@ -1,7 +1,7 @@
 /**
  * @file 查询项目的扩展目录和聊天 picker 目录。
- * @implementation 按 scope 使用独立缓存键，由服务端决定 picker 可见的跨项目扩展并暴露复合加载状态。
- * @updated 2026-11-27T21:25:00+08:00
+ * @implementation 按 scope 使用独立缓存键，由服务端决定 picker 可见的跨项目扩展并暴露复合加载状态，支持按需强制刷新目录。
+ * @updated 2026-11-27T22:35:00+08:00
  */
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Extension } from '@shared/extensions';
@@ -30,6 +30,11 @@ export const extensionsQuery = (projectId: string, scope: ExtensionCatalogScope 
 
 export function useExtensions(projectId?: string, scope?: ExtensionCatalogScope) {
   return useQuery(extensionsQuery(projectId ?? '', scope));
+}
+
+export function useFetchFreshExtensions(projectId: string) {
+  const client = useQueryClient();
+  return () => client.fetchQuery({ ...extensionsQuery(projectId), staleTime: 0 });
 }
 
 export function useExtensionPickerCatalog(projectId?: string) {
