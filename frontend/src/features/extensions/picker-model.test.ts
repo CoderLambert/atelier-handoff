@@ -1,3 +1,8 @@
+/**
+ * @file 验证扩展选择器模型的状态过滤与分组逻辑。
+ * @implementation 覆盖扩展搜索、分类筛选与排序行为的单元测试。
+ * @updated 2026-11-27T12:20:00-06:00
+ */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import type { SkillInheritanceItem } from '@shared/skill-inheritance';
@@ -99,8 +104,16 @@ test('fenced and inline code remain literal and closing fences restore completio
 
 test('slash options use authorized preview items while keeping commands at the start only', () => {
   const installed: SkillInheritanceItem = {
-    id: skill.id, name: skill.name, description: skill.description, version: 2,
-    source: 'atelier', manual: true, auto: false, mode: 'manual', effective: 'manual', override: 'follow',
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    version: 2,
+    source: 'atelier',
+    manual: true,
+    auto: false,
+    mode: 'manual',
+    effective: 'manual',
+    override: 'follow',
   };
   const preview = completionSkills([
     installed,
@@ -112,19 +125,33 @@ test('slash options use authorized preview items while keeping commands at the s
   const text = 'please /rev';
   const token = atEnd(text)!;
   const rows = choices(items, token, text, 'readonly');
-  assert.deepEqual(rows.map((row) => [row.item.id, row.skillSource]), [
-    ['skill', 'atelier'], ['workspace', 'workspace'],
-  ]);
+  assert.deepEqual(
+    rows.map((row) => [row.item.id, row.skillSource]),
+    [
+      ['skill', 'atelier'],
+      ['workspace', 'workspace'],
+    ],
+  );
   assert.equal(choices(items, atEnd('/rev')!, '/rev', 'readonly').length, 3);
   assert.deepEqual(choices([skill], token, text, 'readonly'), []);
   const row = rows[0];
   assert.ok(row);
-  const selected = chooseExtension({ ...draft, text, extensionSelections: [
-    { id: skill.id, version: 1 }, { id: 'workspace', version: 1 },
-  ] }, token, row);
+  const selected = chooseExtension(
+    {
+      ...draft,
+      text,
+      extensionSelections: [
+        { id: skill.id, version: 1 },
+        { id: 'workspace', version: 1 },
+      ],
+    },
+    token,
+    row,
+  );
   assert.equal(selected.draft.text, 'please ');
   assert.deepEqual(selected.draft.extensionSelections, [
-    { id: skill.id, version: 2 }, { id: 'workspace', version: 1 },
+    { id: skill.id, version: 2 },
+    { id: 'workspace', version: 1 },
   ]);
 });
 

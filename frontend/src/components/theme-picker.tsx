@@ -43,12 +43,36 @@ export function ThemePicker({
   const [open, setOpen] = useState(false);
 
   const themes = [
-    { id: 'obsidian' as const, titleKey: 'layout.themeObsidian' as const, descKey: 'layout.themeObsidianDesc' as const },
-    { id: 'classic' as const, titleKey: 'layout.themeClassic' as const, descKey: 'layout.themeClassicDesc' as const },
-    { id: 'parchment' as const, titleKey: 'layout.themeParchment' as const, descKey: 'layout.themeParchmentDesc' as const },
-    { id: 'nordic' as const, titleKey: 'layout.themeNordic' as const, descKey: 'layout.themeNordicDesc' as const },
-    { id: 'rose' as const, titleKey: 'layout.themeRose' as const, descKey: 'layout.themeRoseDesc' as const },
-    { id: 'midnight' as const, titleKey: 'layout.themeMidnight' as const, descKey: 'layout.themeMidnightDesc' as const },
+    {
+      id: 'obsidian' as const,
+      titleKey: 'layout.themeObsidian' as const,
+      descKey: 'layout.themeObsidianDesc' as const,
+    },
+    {
+      id: 'classic' as const,
+      titleKey: 'layout.themeClassic' as const,
+      descKey: 'layout.themeClassicDesc' as const,
+    },
+    {
+      id: 'parchment' as const,
+      titleKey: 'layout.themeParchment' as const,
+      descKey: 'layout.themeParchmentDesc' as const,
+    },
+    {
+      id: 'nordic' as const,
+      titleKey: 'layout.themeNordic' as const,
+      descKey: 'layout.themeNordicDesc' as const,
+    },
+    {
+      id: 'rose' as const,
+      titleKey: 'layout.themeRose' as const,
+      descKey: 'layout.themeRoseDesc' as const,
+    },
+    {
+      id: 'midnight' as const,
+      titleKey: 'layout.themeMidnight' as const,
+      descKey: 'layout.themeMidnightDesc' as const,
+    },
   ];
 
   const matched = themes.find((entry) => entry.id === theme);

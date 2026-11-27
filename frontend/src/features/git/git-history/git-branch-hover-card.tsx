@@ -28,8 +28,7 @@ export function GitBranchHoverCard({
 
   const cardWidth = 320;
   const estimatedHeight = 150;
-  const spaceRight =
-    typeof window !== 'undefined' ? window.innerWidth - rect.right : 400;
+  const spaceRight = typeof window !== 'undefined' ? window.innerWidth - rect.right : 400;
   const showLeft = spaceRight < cardWidth + 16 && rect.left > cardWidth + 16;
 
   const left = showLeft ? rect.left - cardWidth - 8 : rect.right + 8;
@@ -59,7 +58,9 @@ export function GitBranchHoverCard({
           ) : (
             <BranchIcon className="w-4 h-4 git-card-branch-local shrink-0" aria-hidden="true" />
           )}
-          <span className="truncate" title={branch.name}>{branch.name}</span>
+          <span className="truncate" title={branch.name}>
+            {branch.name}
+          </span>
         </span>
       </div>
 

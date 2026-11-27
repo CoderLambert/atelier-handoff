@@ -75,7 +75,8 @@ export function GitResetModal({
             <span>{t('commit.resetTitle')}</span>
           </DialogTitle>
           <DialogDescription className="text-xs pt-1 truncate" title={commitSubject}>
-            {t('commit.targetCommit')}<code>{commitHash.slice(0, 8)}</code> {commitSubject ? `· ${commitSubject}` : ''}
+            {t('commit.targetCommit')}
+            <code>{commitHash.slice(0, 8)}</code> {commitSubject ? `· ${commitSubject}` : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -308,7 +309,12 @@ export function GitCherryPickModal({
           >
             {t('actions.cancel')}
           </Button>
-          <Button type="button" size="sm" disabled={loading} onClick={() => void handleCherryPick()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={loading}
+            onClick={() => void handleCherryPick()}
+          >
             {loading ? t('commit.cherryPicking') : t('commit.cherryPickSubmit')}
           </Button>
         </DialogFooter>

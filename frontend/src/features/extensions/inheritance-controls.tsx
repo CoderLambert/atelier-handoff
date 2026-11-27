@@ -47,10 +47,14 @@ export function SkillIdentity({ item }: { item: SkillInheritanceItem }) {
   return (
     <div className="skill-inheritance-identity">
       <strong>{item.name}</strong>
-      {item.description ? <p className="text-sm text-muted-foreground">{item.description}</p> : null}
+      {item.description ? (
+        <p className="text-sm text-muted-foreground">{item.description}</p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span>{t(skillSources[item.source])}</span>
-        {item.source === 'atelier' ? <span>{t('inheritance.version', { version: item.version })}</span> : null}
+        {item.source === 'atelier' ? (
+          <span>{t('inheritance.version', { version: item.version })}</span>
+        ) : null}
       </div>
     </div>
   );
@@ -64,7 +68,11 @@ export function SkillAvailability({ item }: { item: SkillInheritanceItem }) {
       : item.reason && reasonLabels[item.reason];
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <Badge variant={item.effective === 'off' ? 'secondary' : item.effective === 'auto' ? 'success' : 'outline'}>
+      <Badge
+        variant={
+          item.effective === 'off' ? 'secondary' : item.effective === 'auto' ? 'success' : 'outline'
+        }
+      >
         {t(statusLabels[item.effective])}
       </Badge>
       {reason ? <p className="text-xs text-muted-foreground">{t(reason)}</p> : null}
@@ -133,7 +141,9 @@ export function SkillAvailabilityFeedback({
     <>
       {error ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-destructive" role="alert">{t('inheritance.loadFailed')}</p>
+          <p className="text-sm text-destructive" role="alert">
+            {t('inheritance.loadFailed')}
+          </p>
           <Button type="button" variant="outline" size="sm" disabled={fetching} onClick={reload}>
             {t('common.reload')}
           </Button>
@@ -145,7 +155,9 @@ export function SkillAvailabilityFeedback({
         </p>
       ) : null}
       {saveError ? (
-        <p className="text-sm text-destructive" role="alert">{t('inheritance.saveFailed')}</p>
+        <p className="text-sm text-destructive" role="alert">
+          {t('inheritance.saveFailed')}
+        </p>
       ) : null}
     </>
   );

@@ -83,7 +83,9 @@ export function GitContextMenu({ x, y, items, onClose }: GitContextMenuProps) {
     >
       {items.map((item, index) => {
         if (item.divider) {
-          return <div key={`divider-${index}`} className="git-context-menu-divider" role="separator" />;
+          return (
+            <div key={`divider-${index}`} className="git-context-menu-divider" role="separator" />
+          );
         }
         const Icon = item.icon;
         return (

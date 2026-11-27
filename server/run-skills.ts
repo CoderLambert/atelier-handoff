@@ -148,7 +148,8 @@ export async function mountManualSkillPackages(sdkDirectory: string, skills: Run
   try {
     for (const skill of skills) {
       if (!skill.package) continue;
-      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(skill.name)) throw new Error('Invalid installed Skill name');
+      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(skill.name))
+        throw new Error('Invalid installed Skill name');
       await writeSkillPackage(join(directory, skill.name), skill.package);
     }
     return directory;

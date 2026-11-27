@@ -85,10 +85,7 @@ export async function getGitRepoStatus(cwd: string): Promise<GitRepoStatus> {
   const gitDir = isAbsolute(rawGitDir) ? rawGitDir : join(cwd, rawGitDir);
 
   let repoState: RepoState = 'NORMAL';
-  if (
-    existsSync(join(gitDir, 'rebase-merge')) ||
-    existsSync(join(gitDir, 'rebase-apply'))
-  ) {
+  if (existsSync(join(gitDir, 'rebase-merge')) || existsSync(join(gitDir, 'rebase-apply'))) {
     repoState = 'REBASING';
   } else if (existsSync(join(gitDir, 'MERGE_HEAD'))) {
     repoState = 'MERGING';
@@ -119,12 +116,7 @@ export async function getGitRepoStatus(cwd: string): Promise<GitRepoStatus> {
     }
   }
 
-  const upRes = await execGit(cwd, [
-    'rev-parse',
-    '--abbrev-ref',
-    '--symbolic-full-name',
-    '@{u}',
-  ]);
+  const upRes = await execGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
   const upstream = upRes.success && upRes.stdout.trim() ? upRes.stdout.trim() : null;
 
   let ahead = 0;
@@ -144,7 +136,12 @@ export async function getGitRepoStatus(cwd: string): Promise<GitRepoStatus> {
   const isDirty = statusRes.success && statusRes.stdout.trim().length > 0;
 
   const conflicts = new Set<string>();
-  const diffRes = await execGit(cwd, ['--no-optional-locks', 'diff', '--name-only', '--diff-filter=U']);
+  const diffRes = await execGit(cwd, [
+    '--no-optional-locks',
+    'diff',
+    '--name-only',
+    '--diff-filter=U',
+  ]);
   if (diffRes.success && diffRes.stdout.trim()) {
     for (const file of diffRes.stdout.trim().split('\n')) {
       const trimmed = file.trim();

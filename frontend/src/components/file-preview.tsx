@@ -25,11 +25,7 @@ import {
 } from '@lamberl-lee/file-preview';
 import { pdfPlugin } from '@lamberl-lee/file-preview/plugins/pdf';
 import '@lamberl-lee/file-preview/styles/index.css';
-import {
-  previewRegistry,
-  toFileInfo,
-  type PreviewFile,
-} from './file-preview-utils';
+import { previewRegistry, toFileInfo, type PreviewFile } from './file-preview-utils';
 
 export type { PreviewFile } from './file-preview-utils';
 

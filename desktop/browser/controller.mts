@@ -221,10 +221,7 @@ export function createBrowserController(host: BrowserHost) {
     downloads.observe(wc.session);
     wc.setWindowOpenHandler((details) => {
       const humanAllowed =
-        visible === tab &&
-        human.has(projectId) &&
-        current(projectId) === tab &&
-        !details.features;
+        visible === tab && human.has(projectId) && current(projectId) === tab && !details.features;
       const agentAllowed = !human.has(projectId) && agentTarget.get(projectId) === tab.id;
       if (
         ownsTab(tab) &&

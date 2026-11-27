@@ -203,7 +203,15 @@ test('queue renders FIFO text, full-text disclosure, errors, withdraw and paused
 test('authorization changes surface review in place of ordinary queue resume', () => {
   const markup = renderQueue({
     paused: true,
-    items: [{ id: 'scope-item', text: 'Pending task', createdAt: 'now', error: 'Legacy error', scopeChanged: true }],
+    items: [
+      {
+        id: 'scope-item',
+        text: 'Pending task',
+        createdAt: 'now',
+        error: 'Legacy error',
+        scopeChanged: true,
+      },
+    ],
   });
   assert.match(markup, /复核并继续/);
   assert.match(markup, /排队时的授权范围已变化，请复核后继续/);

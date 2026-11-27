@@ -37,8 +37,12 @@ export function GlobalSkillInheritance() {
       <div className="skill-inheritance-panel">
         <div className="skill-inheritance-heading">
           <div>
-            <h2 id={`${id}-title`} className="text-base font-semibold">{t('inheritance.globalTitle')}</h2>
-            <p id={`${id}-help`} className="text-sm text-muted-foreground">{t('inheritance.globalHelp')}</p>
+            <h2 id={`${id}-title`} className="text-base font-semibold">
+              {t('inheritance.globalTitle')}
+            </h2>
+            <p id={`${id}-help`} className="text-sm text-muted-foreground">
+              {t('inheritance.globalHelp')}
+            </p>
           </div>
           {view ? (
             <div className="flex items-center gap-2">
@@ -58,13 +62,19 @@ export function GlobalSkillInheritance() {
         <code className="text-xs text-muted-foreground">{t('inheritance.hostPath')}</code>
       </div>
       <SkillAvailabilityFeedback
-        error={query.isError} loading={query.isPending} fetching={query.isFetching}
-        reload={() => void query.refetch()} saveError={update.error} saving={update.saving}
+        error={query.isError}
+        loading={query.isPending}
+        fetching={query.isFetching}
+        reload={() => void query.refetch()}
+        saveError={update.error}
+        saving={update.saving}
       />
       {view ? (
         <section className="skill-inheritance-view" aria-labelledby={`${id}-catalog`}>
           <div className="skill-inheritance-heading">
-            <h2 id={`${id}-catalog`} className="text-base font-semibold">{t('inheritance.hostCatalog')}</h2>
+            <h2 id={`${id}-catalog`} className="text-base font-semibold">
+              {t('inheritance.hostCatalog')}
+            </h2>
             {items.length ? (
               <input
                 type="search"
@@ -94,14 +104,24 @@ export function GlobalSkillInheritance() {
                       ]}
                       onChange={(mode) => update.save({ type: 'host', id: item.id, mode })}
                     />
-                    {!item.manual ? <p className="text-xs text-muted-foreground">{t('extensions.manualUnsupported')}</p> : null}
-                    {!item.auto ? <p className="text-xs text-muted-foreground">{t('inheritance.autoUnavailable')}</p> : null}
+                    {!item.manual ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t('extensions.manualUnsupported')}
+                      </p>
+                    ) : null}
+                    {!item.auto ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t('inheritance.autoUnavailable')}
+                      </p>
+                    ) : null}
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">{t(items.length ? 'extensions.noMatches' : 'inheritance.noHostSkills')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t(items.length ? 'extensions.noMatches' : 'inheritance.noHostSkills')}
+            </p>
           )}
         </section>
       ) : null}
@@ -122,7 +142,9 @@ export function ProjectSkillInheritance({ projectId }: { projectId: string }) {
       <div className="skill-inheritance-panel">
         <div className="skill-inheritance-heading">
           <div>
-            <h2 id={id} className="text-base font-semibold">{t('inheritance.projectTitle')}</h2>
+            <h2 id={id} className="text-base font-semibold">
+              {t('inheritance.projectTitle')}
+            </h2>
             <p className="text-sm text-muted-foreground">{t('inheritance.projectHelp')}</p>
           </div>
           {view ? (
@@ -144,8 +166,12 @@ export function ProjectSkillInheritance({ projectId }: { projectId: string }) {
           ) : null}
         </div>
         <SkillAvailabilityFeedback
-          error={query.isError} loading={query.isPending} fetching={query.isFetching}
-          reload={() => void query.refetch()} saveError={update.error} saving={update.saving}
+          error={query.isError}
+          loading={query.isPending}
+          fetching={query.isFetching}
+          reload={() => void query.refetch()}
+          saveError={update.error}
+          saving={update.saving}
         />
       </div>
       {workspace.length ? (

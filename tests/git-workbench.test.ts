@@ -110,9 +110,10 @@ test('Git board reads the exact stage, file diff, local refs, and paged commits'
         url + '/history?oid=' + head + '&offset=1',
       );
       assert.deepEqual(empty.items, []);
-      const byQuery = await request<{ items: { oid: string; subject: string }[]; totalCount?: number }>(
-        url + '/history?oid=' + head + '&query=' + encodeURIComponent('initial'),
-      );
+      const byQuery = await request<{
+        items: { oid: string; subject: string }[];
+        totalCount?: number;
+      }>(url + '/history?oid=' + head + '&query=' + encodeURIComponent('initial'));
       assert.equal(byQuery.items.length, 1);
       assert.equal(byQuery.items[0]?.oid, head);
       const byAuthor = await request<{ items: { oid: string }[] }>(
@@ -148,17 +149,30 @@ test('Git worktree streams observe external edits, the selected index, and share
         (await request<{ project: Project }>('/api/projects', 'POST', { path }, 201)).project;
       const project = await bind(repo);
       const gitUrl = '/api/projects/' + project.id + '/git';
-      const input = { requestId: randomUUID(), mode: 'linked', branch: 'nested/feature', base: { kind: 'head' } };
+      const input = {
+        requestId: randomUUID(),
+        mode: 'linked',
+        branch: 'nested/feature',
+        base: { kind: 'head' },
+      };
       const preview = await request<GitDevelopmentPreview>(gitUrl + '/preview', 'POST', input);
       const { workspace } = await request<{ workspace: GitSessionWorkspace }>(
-        gitUrl + '/sessions', 'POST', { ...input, expectedOid: preview.oid }, 201,
+        gitUrl + '/sessions',
+        'POST',
+        { ...input, expectedOid: preview.oid },
+        201,
       );
       const otherRoot = join(base, 'other project');
       await mkdir(otherRoot);
       const other = await bind(otherRoot);
       const main = gitUrl + '/worktrees/' + project.id;
       const linked = gitUrl + '/worktrees/' + workspace.id;
-      await request('/api/projects/' + other.id + '/git/worktrees/' + workspace.id + '/changes', 'GET', undefined, 404);
+      await request(
+        '/api/projects/' + other.id + '/git/worktrees/' + workspace.id + '/changes',
+        'GET',
+        undefined,
+        404,
+      );
 
       const address = app.server.address();
       assert.ok(address && typeof address === 'object');
@@ -189,7 +203,10 @@ test('Git worktree streams observe external edits, the selected index, and share
       }
       await mkdir(join(workspace.path, 'cache'));
       await writeFile(join(workspace.path, 'cache', 'ignored.txt'), 'generated');
-      const [projectChange, linkedChange] = await Promise.all([openStream(main), openStream(linked)]);
+      const [projectChange, linkedChange] = await Promise.all([
+        openStream(main),
+        openStream(linked),
+      ]);
       await Promise.all([projectChange(), linkedChange()]);
 
       const nextProjectChange = projectChange();
@@ -206,17 +223,23 @@ test('Git worktree streams observe external edits, the selected index, and share
         'quiet',
       );
       assert.deepEqual((await request<{ files: unknown[] }>(main + '/status')).files, []);
-      const linkedStatus = await request<{ files: { path: string; index: string; worktree: string }[] }>(
-        linked + '/status',
+      const linkedStatus = await request<{
+        files: { path: string; index: string; worktree: string }[];
+      }>(linked + '/status');
+      assert.deepEqual(
+        linkedStatus.files.map(({ path, index, worktree }) => [path, index, worktree]),
+        [['same.txt', '.', 'M']],
       );
-      assert.deepEqual(linkedStatus.files.map(({ path, index, worktree }) => [path, index, worktree]), [
-        ['same.txt', '.', 'M'],
-      ]);
 
       git(workspace.path, 'add', 'same.txt');
       await linkedChange();
-      const staged = await request<{ files: { index: string; worktree: string }[] }>(linked + '/status');
-      assert.deepEqual(staged.files.map(({ index, worktree }) => [index, worktree]), [['M', '.']]);
+      const staged = await request<{ files: { index: string; worktree: string }[] }>(
+        linked + '/status',
+      );
+      assert.deepEqual(
+        staged.files.map(({ index, worktree }) => [index, worktree]),
+        [['M', '.']],
+      );
 
       git(workspace.path, 'commit', '-m', 'external commit');
       await nextProjectChange;
@@ -247,7 +270,12 @@ test('Git file actions update only the selected index entries and preserve worki
     try {
       const request = await client(app);
       const bind = async (path: string) => {
-        const { project } = await request<{ project: Project }>('/api/projects', 'POST', { path }, 201);
+        const { project } = await request<{ project: Project }>(
+          '/api/projects',
+          'POST',
+          { path },
+          201,
+        );
         return '/api/projects/' + project.id + '/git/worktrees/' + project.id + '/file-index';
       };
       const index = await bind(repo);
@@ -268,7 +296,10 @@ test('Git file actions update only the selected index entries and preserve worki
       await writeFile(join(initial, 'first.txt'), 'first file with a later edit\n');
       await request(firstIndex, 'POST', { path: 'first.txt', layer: 'staged' });
       assert.equal(git(initial, 'status', '--short'), '?? first.txt\n');
-      assert.equal(await readFile(join(initial, 'first.txt'), 'utf8'), 'first file with a later edit\n');
+      assert.equal(
+        await readFile(join(initial, 'first.txt'), 'utf8'),
+        'first file with a later edit\n',
+      );
     } finally {
       await app.close();
     }
@@ -284,20 +315,33 @@ test('Git full file content follows the selected snapshot and returns the parent
     const app = await createApp({ root, data });
     try {
       const request = await client(app);
-      const { project } = await request<{ project: Project }>('/api/projects', 'POST', { path: repo }, 201);
+      const { project } = await request<{ project: Project }>(
+        '/api/projects',
+        'POST',
+        { path: repo },
+        201,
+      );
       const base = `/api/projects/${project.id}/git`;
       const checkout = `${base}/worktrees/${project.id}/file-content?path=same.txt&source=`;
       assert.deepEqual(await request(checkout + 'index'), { text: 'staged content\n' });
       assert.deepEqual(await request(checkout + 'worktree'), { text: 'working content\n' });
       assert.deepEqual(await request(checkout + 'head'), { text: 'base\n' });
-      assert.deepEqual(await request(`${base}/commits/${head}/file-content?path=same.txt&source=commit`), { text: 'base\n' });
+      assert.deepEqual(
+        await request(`${base}/commits/${head}/file-content?path=same.txt&source=commit`),
+        { text: 'base\n' },
+      );
       git(repo, 'rm', '-f', 'same.txt');
       git(repo, 'commit', '-m', 'Delete');
       const deleted = git(repo, 'rev-parse', 'HEAD').trim();
       const deletedFile = `${base}/commits/${deleted}/file-content?path=same.txt&source=`;
       assert.deepEqual(await request(deletedFile + 'parent'), { text: 'base\n' });
       await request(deletedFile + 'commit', 'GET', undefined, 404);
-      await request(`${base}/worktrees/${project.id}/file-content?path=.env&source=worktree`, 'GET', undefined, 403);
+      await request(
+        `${base}/worktrees/${project.id}/file-content?path=.env&source=worktree`,
+        'GET',
+        undefined,
+        403,
+      );
     } finally {
       await app.close();
     }

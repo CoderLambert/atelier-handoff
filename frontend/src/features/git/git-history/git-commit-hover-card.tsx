@@ -20,12 +20,7 @@ export interface GitCommitHoverCardProps {
   dateFormat: Intl.DateTimeFormat;
 }
 
-export function GitCommitHoverCard({
-  commit,
-  rect,
-  cwd,
-  dateFormat,
-}: GitCommitHoverCardProps) {
+export function GitCommitHoverCard({ commit, rect, cwd, dateFormat }: GitCommitHoverCardProps) {
   const { t } = useUiTranslation('git');
   const [stats, setStats] = useState<GitCommitStats | null>(() => {
     return commitStatsCache.get(commit.oid) ?? null;
@@ -141,12 +136,8 @@ export function GitCommitHoverCard({
               <FileText className="w-3.5 h-3.5" aria-hidden="true" />
               <span>{t('card.changes', { count: stats.filesChanged })}</span>
             </span>
-            <span className="git-stat-add">
-              +{stats.insertions}
-            </span>
-            <span className="git-stat-del">
-              -{stats.deletions}
-            </span>
+            <span className="git-stat-add">+{stats.insertions}</span>
+            <span className="git-stat-del">-{stats.deletions}</span>
           </div>
         ) : null}
       </div>

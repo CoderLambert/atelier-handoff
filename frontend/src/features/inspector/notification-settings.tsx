@@ -70,10 +70,18 @@ export function NotificationSettings() {
               </SelectTrigger>
               <SelectContent position="popper" align="end">
                 <SelectGroup>
-                  <SelectItem value="codex">{t('settings.notificationsSoundThemeCodex')}</SelectItem>
-                  <SelectItem value="chime">{t('settings.notificationsSoundThemeChime')}</SelectItem>
-                  <SelectItem value="marimba">{t('settings.notificationsSoundThemeMarimba')}</SelectItem>
-                  <SelectItem value="bubble">{t('settings.notificationsSoundThemeBubble')}</SelectItem>
+                  <SelectItem value="codex">
+                    {t('settings.notificationsSoundThemeCodex')}
+                  </SelectItem>
+                  <SelectItem value="chime">
+                    {t('settings.notificationsSoundThemeChime')}
+                  </SelectItem>
+                  <SelectItem value="marimba">
+                    {t('settings.notificationsSoundThemeMarimba')}
+                  </SelectItem>
+                  <SelectItem value="bubble">
+                    {t('settings.notificationsSoundThemeBubble')}
+                  </SelectItem>
                   <SelectItem value="ping">{t('settings.notificationsSoundThemePing')}</SelectItem>
                 </SelectGroup>
               </SelectContent>

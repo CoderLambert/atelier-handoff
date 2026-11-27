@@ -24,7 +24,8 @@ export interface TokenSlice {
 
 const MARKDOWN_PATH_RE = /\.(?:md|markdown)$/iu;
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'BUTTON', 'SVG']);
-const BLOCK_SELECTOR = 'p, li, h1, h2, h3, h4, h5, h6, td, th, blockquote, pre, dt, dd, figcaption, caption';
+const BLOCK_SELECTOR =
+  'p, li, h1, h2, h3, h4, h5, h6, td, th, blockquote, pre, dt, dd, figcaption, caption';
 
 export function isMarkdownPath(path: string): boolean {
   return MARKDOWN_PATH_RE.test(path);

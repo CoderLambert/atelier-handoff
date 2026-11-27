@@ -50,8 +50,7 @@ export interface BrowserToolExecutorDeps {
 }
 
 export type BrowserToolResult =
-  | { text: string; png?: undefined }
-  | { png: string; text?: undefined };
+  { text: string; png?: undefined } | { png: string; text?: undefined };
 
 async function ensureCdp(
   tab: ExecutableBrowserTab,

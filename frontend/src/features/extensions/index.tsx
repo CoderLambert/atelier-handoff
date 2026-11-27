@@ -224,17 +224,33 @@ function ProjectExtensions({
         ))}
       </div>
       {kind === 'skill' ? (
-        <div className="my-4 flex flex-wrap gap-2" role="group" aria-label={t('inheritance.scopeLabel')}>
-          <Button type="button" size="sm" variant={showGlobal ? 'ghost' : 'secondary'}
-            aria-pressed={!showGlobal} onClick={() => onSkillScopeChange(false)}>
+        <div
+          className="my-4 flex flex-wrap gap-2"
+          role="group"
+          aria-label={t('inheritance.scopeLabel')}
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant={showGlobal ? 'ghost' : 'secondary'}
+            aria-pressed={!showGlobal}
+            onClick={() => onSkillScopeChange(false)}
+          >
             <FolderPlus data-icon="inline-start" aria-hidden="true" />
             {t('inheritance.projectSkills')}
           </Button>
-          <Button type="button" size="sm" variant={showGlobal ? 'secondary' : 'ghost'}
-            aria-pressed={showGlobal} onClick={() => onSkillScopeChange(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant={showGlobal ? 'secondary' : 'ghost'}
+            aria-pressed={showGlobal}
+            onClick={() => onSkillScopeChange(true)}
+          >
             <Monitor data-icon="inline-start" aria-hidden="true" />
             {t('inheritance.local')}
-            <Badge variant="outline" aria-hidden="true">{t('inheritance.global')}</Badge>
+            <Badge variant="outline" aria-hidden="true">
+              {t('inheritance.global')}
+            </Badge>
           </Button>
         </div>
       ) : null}
@@ -254,7 +270,12 @@ function ProjectExtensions({
     return (
       <>
         {navigation}
-        <section id={`${id}-results`} role="tabpanel" aria-labelledby={`${id}-${kind}`} tabIndex={0}>
+        <section
+          id={`${id}-results`}
+          role="tabpanel"
+          aria-labelledby={`${id}-${kind}`}
+          tabIndex={0}
+        >
           <GlobalSkillInheritance />
         </section>
       </>
@@ -497,7 +518,11 @@ function ProjectExtensions({
                   >
                     {t('extensions.viewEdit')}
                   </ActionButton>
-                  {item.kind === 'skill' && item.origin?.github && item.userInvocable && item.enabled && onStartSkill ? (
+                  {item.kind === 'skill' &&
+                  item.origin?.github &&
+                  item.userInvocable &&
+                  item.enabled &&
+                  onStartSkill ? (
                     <ActionButton
                       variant="ghost"
                       size="sm"

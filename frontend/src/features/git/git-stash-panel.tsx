@@ -189,7 +189,8 @@ export function GitStashPanel({ cwd, onRefreshAll, showToast }: GitStashPanelPro
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono text-[10.5px] text-muted-foreground">
-                      {t('stash.refPrefix')}{`{${s.index}}`}
+                      {t('stash.refPrefix')}
+                      {`{${s.index}}`}
                     </span>
                     <span className="truncate text-foreground font-medium">{s.message}</span>
                   </div>
@@ -241,9 +242,7 @@ export function GitStashPanel({ cwd, onRefreshAll, showToast }: GitStashPanelPro
               <Archive className="w-4 h-4" aria-hidden="true" />
               <span>{t('stash.stashCurrent')}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs pt-1">
-              {t('stash.dialogDesc')}
-            </DialogDescription>
+            <DialogDescription className="text-xs pt-1">{t('stash.dialogDesc')}</DialogDescription>
           </DialogHeader>
 
           <div className="py-3">
@@ -267,7 +266,12 @@ export function GitStashPanel({ cwd, onRefreshAll, showToast }: GitStashPanelPro
             >
               {t('actions.cancel')}
             </Button>
-            <Button type="button" size="sm" disabled={loading} onClick={() => void handleStashPush()}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={loading}
+              onClick={() => void handleStashPush()}
+            >
               {loading ? t('stash.stashing') : t('stash.stashSubmit')}
             </Button>
           </DialogFooter>

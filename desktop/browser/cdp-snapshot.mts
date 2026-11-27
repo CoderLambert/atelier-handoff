@@ -164,7 +164,10 @@ function isEditableNode(role: string, props: Map<string, unknown>): boolean {
   if (props.get('readonly') === true) return false;
   if (EDITABLE_ROLES.has(role)) return true;
   const editable = props.get('editable');
-  return editable === true || (typeof editable === 'string' && editable !== 'false' && editable !== 'none');
+  return (
+    editable === true ||
+    (typeof editable === 'string' && editable !== 'false' && editable !== 'none')
+  );
 }
 
 function extractAttrs(node: AxNode, props: Map<string, unknown>): string[] {
@@ -224,13 +227,7 @@ function buildRenderedTree(
       const child = nodeMap.get(childId);
       if (!child) continue;
       childNodes.push(
-        ...buildRenderedTree(
-          child,
-          nodeMap,
-          visited,
-          name || parentName,
-          interactive || isHeading,
-        ),
+        ...buildRenderedTree(child, nodeMap, visited, name || parentName, interactive || isHeading),
       );
     }
   }
@@ -263,7 +260,13 @@ function buildRenderedTree(
   if (!hasContent && !isStructural) return childNodes;
 
   // Collapse unnamed structural container with only a single child of the same role.
-  if (isStructural && !name && attrs.length === 0 && childNodes.length === 1 && childNodes[0]?.role === role) {
+  if (
+    isStructural &&
+    !name &&
+    attrs.length === 0 &&
+    childNodes.length === 1 &&
+    childNodes[0]?.role === role
+  ) {
     return childNodes;
   }
 
@@ -366,7 +369,10 @@ export async function snapshotAccessibilityTree(options: {
       const vp = metrics.data.cssVisualViewport ?? metrics.data.visualViewport;
       const content = metrics.data.cssContentSize ?? metrics.data.contentSize;
       if (vp && vp.clientWidth > 0 && vp.clientHeight > 0) {
-        const totalH = Math.max(Math.round(content?.height ?? vp.clientHeight), Math.round(vp.clientHeight));
+        const totalH = Math.max(
+          Math.round(content?.height ?? vp.clientHeight),
+          Math.round(vp.clientHeight),
+        );
         const vpLine = `viewport: ${Math.round(vp.clientWidth)}x${Math.round(vp.clientHeight)} scroll: ${Math.round(vp.pageY)}/${totalH}`;
         lines.push(vpLine);
         charCount += vpLine.length + 1;
@@ -392,7 +398,10 @@ export async function snapshotAccessibilityTree(options: {
 
     const shouldAssignRef =
       node.backendDOMNodeId !== undefined &&
-      (node.interactive || node.editable || STRUCTURAL_ROLES.has(node.role) || node.role === 'element');
+      (node.interactive ||
+        node.editable ||
+        STRUCTURAL_ROLES.has(node.role) ||
+        node.role === 'element');
 
     if (shouldAssignRef && node.backendDOMNodeId !== undefined) {
       const ref = `r${revision}-${++refCounter}`;

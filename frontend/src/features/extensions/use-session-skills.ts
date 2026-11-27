@@ -29,7 +29,7 @@ export function useSessionSkills({
   const draftSkills = selections?.filter(({ id }) => byId.has(id)) ?? [];
   // The existing picker writes an explicit list of tool names for MCP selections.
   const missing = query.isSuccess
-    ? selections?.filter(({ id, tools }) => !tools && !byId.has(id)) ?? []
+    ? (selections?.filter(({ id, tools }) => !tools && !byId.has(id)) ?? [])
     : [];
   const draftSkillIds = new Set(draftSkills.map(({ id }) => id));
 

@@ -797,7 +797,11 @@ test(
         ),
       );
       assert.equal(
-        await page.getByText('只读续接会发起新一轮模型请求，基于现有结果继续，不会重放写入或命令。', { exact: true }).count(),
+        await page
+          .getByText('只读续接会发起新一轮模型请求，基于现有结果继续，不会重放写入或命令。', {
+            exact: true,
+          })
+          .count(),
         1,
       );
       // Rewind keeps a separate affordance and confirmation; cancellation preserves the draft.
@@ -1107,7 +1111,7 @@ test(
       const readHeight = () => input.evaluate((element) => element.clientHeight);
       const initialHeight = await readHeight();
       await input.fill('first\nsecond\nthird\nfourth');
-      assert.ok(await readHeight() > initialHeight);
+      assert.ok((await readHeight()) > initialHeight);
       await input.fill('overflowing\n'.repeat(40));
       assert.equal(await readHeight(), 220);
       assert.ok(await input.evaluate((element) => element.scrollHeight > element.clientHeight));

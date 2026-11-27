@@ -14,7 +14,14 @@ const eventFields: Record<string, readonly string[]> = {
   'process.exited': ['code', 'signal', 'stderrBytes'],
   'sdk.initialized': ['model', 'version', 'resumed'],
   'sdk.first_text': ['elapsedMs'],
-  'sdk.api_retry': ['attempt', 'maxRetries', 'retryDelayMs', 'httpStatus', 'error', 'afterStopRequested'],
+  'sdk.api_retry': [
+    'attempt',
+    'maxRetries',
+    'retryDelayMs',
+    'httpStatus',
+    'error',
+    'afterStopRequested',
+  ],
   'sdk.error': ['stage', 'code'],
   'sdk.result': [
     'subtype',

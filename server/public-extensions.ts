@@ -9,7 +9,10 @@ import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join, posix } from 'node:path';
 import { parseDocument } from 'yaml';
 import { AppError, type McpTransport } from '../shared/types.js';
-import type { GithubSkillVersion, PublicEntry as PublicEntryDto } from '../shared/public-extensions.js';
+import type {
+  GithubSkillVersion,
+  PublicEntry as PublicEntryDto,
+} from '../shared/public-extensions.js';
 import { previewGithubSkill, type PublicEntryWithPackage } from './github-skill.js';
 import { fingerprint } from './files.js';
 import { previewSkillHub } from './skillhub.js';
@@ -242,7 +245,12 @@ export async function previewPublic(
   source: string,
   kind: PublicKind,
   request = fetch,
-  options: { includePackage?: boolean; github?: GithubSkillVersion; packageDigest?: string; signal?: AbortSignal } = {},
+  options: {
+    includePackage?: boolean;
+    github?: GithubSkillVersion;
+    packageDigest?: string;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<PublicEntry[]> {
   const invalidConfig = '此声明需要当前尚未支持的启动参数、传输方式或凭据格式。';
   try {

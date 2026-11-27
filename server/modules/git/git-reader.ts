@@ -364,11 +364,10 @@ export async function readGitHistory(
   }
 
   for (const runArgs of logRuns) {
-    const commits = await queryGitLogCommits(
-      git,
-      ['--max-count=300', ...runArgs, oid, '--'],
-      { signal, allowExit: [1] },
-    );
+    const commits = await queryGitLogCommits(git, ['--max-count=300', ...runArgs, oid, '--'], {
+      signal,
+      allowExit: [1],
+    });
     for (const commit of commits) {
       commitMap.set(commit.oid, commit);
     }

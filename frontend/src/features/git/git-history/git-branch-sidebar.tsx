@@ -249,7 +249,11 @@ export function GitBranchSidebar({
       }
       onRefreshAll?.();
     } catch (err) {
-      showToast?.(t('branch.mergeFailed'), 'error', err instanceof Error ? err.message : String(err));
+      showToast?.(
+        t('branch.mergeFailed'),
+        'error',
+        err instanceof Error ? err.message : String(err),
+      );
     } finally {
       setMerging(false);
       setMergeRequest(null);
@@ -326,9 +330,13 @@ export function GitBranchSidebar({
                   <GitBranchItem
                     key={item.name}
                     branch={item}
-                    isSelected={selectedBranch?.kind === 'local' && selectedBranch.name === item.name}
+                    isSelected={
+                      selectedBranch?.kind === 'local' && selectedBranch.name === item.name
+                    }
                     isHead={item.name === tree.branch}
-                    worktreePath={item.worktreeId ? worktreePathMap.get(item.worktreeId) : undefined}
+                    worktreePath={
+                      item.worktreeId ? worktreePathMap.get(item.worktreeId) : undefined
+                    }
                     searchQuery={branchQuery}
                     onSelect={onSelectBranch}
                     onDoubleClick={handleDoubleClickBranch}
@@ -352,7 +360,9 @@ export function GitBranchSidebar({
                     <GitBranchItem
                       key={item.name}
                       branch={item}
-                      isSelected={selectedBranch?.kind === 'remote' && selectedBranch.name === item.name}
+                      isSelected={
+                        selectedBranch?.kind === 'remote' && selectedBranch.name === item.name
+                      }
                       isHead={false}
                       searchQuery={branchQuery}
                       onSelect={onSelectBranch}

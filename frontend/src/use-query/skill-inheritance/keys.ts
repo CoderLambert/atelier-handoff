@@ -13,9 +13,7 @@ export type SessionSkillScope = {
 };
 
 export type SkillInheritanceScope =
-  | { type: 'global' }
-  | { type: 'project'; projectId: string }
-  | SessionSkillScope;
+  { type: 'global' } | { type: 'project'; projectId: string } | SessionSkillScope;
 
 export const skillInheritanceKeys = {
   all: ['skill-inheritance'] as const,

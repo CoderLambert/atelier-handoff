@@ -13,7 +13,13 @@ export function useUpdateSkillInheritance(scope: SkillInheritanceScope) {
   const mutation = useMutation({
     mutationKey: skillInheritanceKeys.update,
     retry: false,
-    mutationFn: ({ scope, patch }: { scope: SkillInheritanceScope; patch: SkillInheritancePatch }) =>
+    mutationFn: ({
+      scope,
+      patch,
+    }: {
+      scope: SkillInheritanceScope;
+      patch: SkillInheritancePatch;
+    }) =>
       api(skillInheritanceEndpoint(scope), { method: 'PATCH', body: patch }).then((data) =>
         skillInheritanceViewSchema.parse(data),
       ),

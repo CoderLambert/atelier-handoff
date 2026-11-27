@@ -280,7 +280,10 @@ try {
   const stopButton = page.locator('.composer-stop-button');
   const stopRoute = '**/api/runs/*/stop';
   await page.route(stopRoute, async (route) => {
-    await route.fulfill({ status: 503, json: { error: { code: 'STOP_FIXTURE', message: 'STOP_FAILED_FIXTURE' } } });
+    await route.fulfill({
+      status: 503,
+      json: { error: { code: 'STOP_FIXTURE', message: 'STOP_FAILED_FIXTURE' } },
+    });
   });
   await stopButton.click();
   await page.locator('.workspace-notice').getByText('会话操作失败。', { exact: true }).waitFor();
@@ -332,7 +335,11 @@ try {
   await page.getByText('TRANSCRIPT_FINAL_504', { exact: true }).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'), 'en');
   await page.getByRole('button', { name: 'Resume read-only', exact: true }).waitFor();
-  await stoppedCard.getByText('Stopped by the user. The process exited, and changes already made were kept.', { exact: true }).waitFor();
+  await stoppedCard
+    .getByText('Stopped by the user. The process exited, and changes already made were kept.', {
+      exact: true,
+    })
+    .waitFor();
   assert.equal(await page.locator('[data-transcript-notice-kind="api_retry"]').count(), 0);
   const englishGap = await followupBubble.evaluate((bubble) => {
     const card = document.querySelector('.run-recovery[data-status="stopped"]');
@@ -364,12 +371,21 @@ try {
     const source = storedRuns[0];
     const stopped = storedRuns.find((run) => run.status === 'stopped');
     assert.ok(source && stopped?.transcript);
-    const retry = { kind: 'api_retry', order: 100, at: stopped.endedAt ?? stopped.createdAt, attempt: 1, maxRetries: 9 } as const;
+    const retry = {
+      kind: 'api_retry',
+      order: 100,
+      at: stopped.endedAt ?? stopped.createdAt,
+      attempt: 1,
+      maxRetries: 9,
+    } as const;
     legacyStore.update('runs', stopped.id, {
       transcript: { ...stopped.transcript, notices: [...stopped.transcript.notices, retry] },
     });
     legacyStore.event(stopped.id, stopped.sessionId, 'sdk.api_retry', {
-      attempt: 1, maxRetries: 9, httpStatus: null, error: 'unknown',
+      attempt: 1,
+      maxRetries: 9,
+      httpStatus: null,
+      error: 'unknown',
     });
     const { transcript: _transcript, ...runData } = source;
     const at = new Date(Date.parse(source.createdAt) - 60_000).toISOString();

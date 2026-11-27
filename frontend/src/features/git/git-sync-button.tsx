@@ -40,16 +40,13 @@ export interface GitSyncButtonProps {
   showToast: (message: string, type?: 'success' | 'error', stderr?: string) => void;
 }
 
-export function GitSyncButton({
-  cwd,
-  status,
-  onRefreshAll,
-  showToast,
-}: GitSyncButtonProps) {
+export function GitSyncButton({ cwd, status, onRefreshAll, showToast }: GitSyncButtonProps) {
   const { t } = useUiTranslation('git');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showForcePushDialog, setShowForcePushDialog] = useState(false);
-  const [autoStashAction, setAutoStashAction] = useState<'pull' | 'sync' | 'pull-rebase' | null>(null);
+  const [autoStashAction, setAutoStashAction] = useState<'pull' | 'sync' | 'pull-rebase' | null>(
+    null,
+  );
 
   const bridge = desktopGitBridge();
 
@@ -76,7 +73,9 @@ export function GitSyncButton({
   }
 
   // 执行核心同步操作
-  const runOperation = async (action: 'publish' | 'fetch' | 'pull' | 'pull-rebase' | 'push' | 'sync' | 'force-push') => {
+  const runOperation = async (
+    action: 'publish' | 'fetch' | 'pull' | 'pull-rebase' | 'push' | 'sync' | 'force-push',
+  ) => {
     if (!bridge || !cwd || isSyncing) return;
     setIsSyncing(true);
 
@@ -349,11 +348,7 @@ export function GitSyncButton({
               >
                 {t('board.close')}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void handleAutoStashConfirm()}
-              >
+              <Button type="button" size="sm" onClick={() => void handleAutoStashConfirm()}>
                 {t('sync.autoStashButton')}
               </Button>
             </DialogFooter>

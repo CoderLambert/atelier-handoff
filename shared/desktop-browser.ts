@@ -236,7 +236,10 @@ export const desktopBrowserArgs = {
   }),
   browser_press_key: z.strictObject({
     key: z.string().min(1).max(64),
-    modifiers: z.array(z.enum(['Control', 'Shift', 'Alt', 'Meta'])).max(4).optional(),
+    modifiers: z
+      .array(z.enum(['Control', 'Shift', 'Alt', 'Meta']))
+      .max(4)
+      .optional(),
     includeSnapshot: z.boolean().optional(),
   }),
   browser_select_option: z

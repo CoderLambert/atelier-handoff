@@ -212,9 +212,7 @@ export function applySkillScope(
       throw new AppError('EXTENSION_CHANGED', '所选 Skill 已停用，请重新选择。', 409);
   }
   const skills = selectRunSkills(
-    installed.filter(
-      ({ id }) => isAutomatic(id) || bundle.used.some((ref) => ref.id === id),
-    ),
+    installed.filter(({ id }) => isAutomatic(id) || bundle.used.some((ref) => ref.id === id)),
     bundle.used,
   );
   for (const skill of snapshot.local.values()) {

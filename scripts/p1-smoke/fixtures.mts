@@ -512,11 +512,17 @@ export async function fixtures(): Promise<Fixtures> {
         const conversation = JSON.stringify(messages);
         const userMessage = messages.findLast((item) => item.role === 'user');
         const latestUser = JSON.stringify(userMessage ?? {});
-        const documentReceipt = Array.isArray(userMessage?.content) && userMessage.content.some(
-          (block: unknown) => typeof block === 'object' && block !== null &&
-            'type' in block && block.type === 'tool_result' &&
-            'tool_use_id' in block && block.tool_use_id === documentReadId,
-        );
+        const documentReceipt =
+          Array.isArray(userMessage?.content) &&
+          userMessage.content.some(
+            (block: unknown) =>
+              typeof block === 'object' &&
+              block !== null &&
+              'type' in block &&
+              block.type === 'tool_result' &&
+              'tool_use_id' in block &&
+              block.tool_use_id === documentReadId,
+          );
         const currentTask = latestUser.split('用户本轮任务：').at(-1) ?? '';
         if (currentTask.includes(liveInserted)) {
           evidence.liveRequests.push(liveInserted);

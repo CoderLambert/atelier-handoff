@@ -14,15 +14,20 @@ const stopMutationKey = ['runs', 'stop'] as const;
 type StopTarget = Pick<Run, 'id' | 'sessionId'>;
 
 export function useRunStopPending(run: StopTarget | undefined) {
-  return useIsMutating({
-    mutationKey: stopMutationKey,
-    exact: true,
-    predicate: ({ state: { variables } }) =>
-      run !== undefined &&
-      typeof variables === 'object' && variables !== null &&
-      'id' in variables && variables.id === run.id &&
-      'sessionId' in variables && variables.sessionId === run.sessionId,
-  }) > 0;
+  return (
+    useIsMutating({
+      mutationKey: stopMutationKey,
+      exact: true,
+      predicate: ({ state: { variables } }) =>
+        run !== undefined &&
+        typeof variables === 'object' &&
+        variables !== null &&
+        'id' in variables &&
+        variables.id === run.id &&
+        'sessionId' in variables &&
+        variables.sessionId === run.sessionId,
+    }) > 0
+  );
 }
 
 export function useStopRun() {
@@ -40,7 +45,11 @@ export function useStopRun() {
       const queryKey = sessionKeys.snapshot(target.sessionId);
       await client.cancelQueries({ queryKey, exact: true });
       client.setQueryData<Snapshot>(queryKey, (snapshot) => {
-        if (!snapshot?.runs.some((current) => current.id === run.id && activeStatuses.includes(current.status)))
+        if (
+          !snapshot?.runs.some(
+            (current) => current.id === run.id && activeStatuses.includes(current.status),
+          )
+        )
           return snapshot;
         return {
           ...snapshot,

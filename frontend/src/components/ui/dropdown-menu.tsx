@@ -11,10 +11,7 @@ export const DropdownMenu = Primitive.Root;
 export const DropdownMenuTrigger = Primitive.Trigger;
 export const DropdownMenuGroup = Primitive.Group;
 
-export function DropdownMenuLabel({
-  className,
-  ...props
-}: ComponentProps<typeof Primitive.Label>) {
+export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Primitive.Label>) {
   return (
     <Primitive.Label
       className={cn('px-2.5 py-1 text-[11px] font-medium text-muted-foreground', className)}
@@ -44,10 +41,7 @@ export function DropdownMenuContent({
   );
 }
 
-export function DropdownMenuItem({
-  className,
-  ...props
-}: ComponentProps<typeof Primitive.Item>) {
+export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof Primitive.Item>) {
   return (
     <Primitive.Item
       className={cn(
@@ -63,10 +57,5 @@ export function DropdownMenuSeparator({
   className,
   ...props
 }: ComponentProps<typeof Primitive.Separator>) {
-  return (
-    <Primitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
-      {...props}
-    />
-  );
+  return <Primitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />;
 }

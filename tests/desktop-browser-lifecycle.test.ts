@@ -244,7 +244,10 @@ describe('cdp-driver', () => {
 
     assert.match(result.text, /^url: https:\/\/example\.test\/form\ntitle: Form\n/);
     assert.match(result.text, /- main \[ref=r3-1\]/);
-    assert.match(result.text, /  - textbox "Email" \[ref=r3-2\] \[value="a@b\.test"\] \[required\]/);
+    assert.match(
+      result.text,
+      /  - textbox "Email" \[ref=r3-2\] \[value="a@b\.test"\] \[required\]/,
+    );
     assert.match(result.text, /  - combobox "Country" \[ref=r3-3\] \[collapsed\]/);
     assert.match(result.text, /  - checkbox "Agree" \[ref=r3-4\] \[checked\]/);
     assert.match(result.text, /  - button "Save" \[ref=r3-5\] \[disabled\]/);
@@ -326,7 +329,12 @@ describe('cdp-driver', () => {
         zoomFactor: () => 1.5,
         send: async (method, params) => {
           if (method === 'DOM.getContentQuads') {
-            return { quads: [[0, 0, 0, 0, 0, 0, 0, 0], [100, 200, 140, 200, 140, 240, 100, 240]] };
+            return {
+              quads: [
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [100, 200, 140, 200, 140, 240, 100, 240],
+              ],
+            };
           }
           if (method === 'Input.dispatchMouseEvent') {
             const p = params as { type: string; x: number; y: number; button: string };
@@ -454,7 +462,9 @@ describe('cdp-driver', () => {
       {
         hooks,
         send: async (_method, params) => {
-          pressedKeys.push(`${(params as { type: string }).type}:${(params as { key: string }).key}`);
+          pressedKeys.push(
+            `${(params as { type: string }).type}:${(params as { key: string }).key}`,
+          );
           return {};
         },
       },
@@ -687,7 +697,8 @@ describe('cdp-driver', () => {
             hooks,
             send: async (method, params) => {
               if (method === 'DOM.resolveNode') return { object: { objectId: 'btn-obj' } };
-              if (method === 'DOM.getContentQuads') return { quads: [[10, 10, 50, 10, 50, 50, 10, 50]] };
+              if (method === 'DOM.getContentQuads')
+                return { quads: [[10, 10, 50, 10, 50, 50, 10, 50]] };
               if (method === 'Runtime.callFunctionOn') {
                 const fn = (params as { functionDeclaration?: string }).functionDeclaration ?? '';
                 if (fn.includes('elementFromPoint')) {

@@ -31,23 +31,21 @@ const loadMotionFeatures = () =>
 
 const root = document.getElementById('root');
 if (root) {
-  void Promise.all([
-    initializeUiLanguage(),
-    initializeUiTheme(),
-    initializeUiNotifications(),
-  ]).then(() => {
-    createRoot(root).render(
-      <StrictMode>
-        <MotionConfig reducedMotion="user">
-          <LazyMotion features={loadMotionFeatures} strict>
-            <QueryClientProvider client={client}>
-              <Provider store={store}>
-                <RouterProvider router={workspaceRouter} />
-              </Provider>
-            </QueryClientProvider>
-          </LazyMotion>
-        </MotionConfig>
-      </StrictMode>,
-    );
-  });
+  void Promise.all([initializeUiLanguage(), initializeUiTheme(), initializeUiNotifications()]).then(
+    () => {
+      createRoot(root).render(
+        <StrictMode>
+          <MotionConfig reducedMotion="user">
+            <LazyMotion features={loadMotionFeatures} strict>
+              <QueryClientProvider client={client}>
+                <Provider store={store}>
+                  <RouterProvider router={workspaceRouter} />
+                </Provider>
+              </QueryClientProvider>
+            </LazyMotion>
+          </MotionConfig>
+        </StrictMode>,
+      );
+    },
+  );
 }

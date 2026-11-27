@@ -159,11 +159,7 @@ export function GitCommitList({
       {/* 底部加载失败重试条 */}
       {isFetchNextPageError && (
         <div className="git-load-failed">
-          <button
-            type="button"
-            className="git-retry-button"
-            onClick={onFetchNextPage}
-          >
+          <button type="button" className="git-retry-button" onClick={onFetchNextPage}>
             <RotateCcw size={13} aria-hidden="true" />
             <span>{t('history.loadFailed')}</span>
           </button>

@@ -76,7 +76,13 @@ export function createLiveInsertion({
     }
     return skillScope ===
       skills.automatic(
-        skills.context(run.projectId, session, executor === 'native-v1', run.workspacePath, workspaceAutomatic),
+        skills.context(
+          run.projectId,
+          session,
+          executor === 'native-v1',
+          run.workspacePath,
+          workspaceAutomatic,
+        ),
       )
       ? 'live'
       : 'priority';

@@ -273,21 +273,31 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     assert.ok(toReview);
     new ProjectExtensions(running.app.store).save(
       p.project.id,
-      { version: newlyAvailable.version, body: '---\ndescription: Changed existing skill.\n---\nUpdated instructions.' },
+      {
+        version: newlyAvailable.version,
+        body: '---\ndescription: Changed existing skill.\n---\nUpdated instructions.',
+      },
       newlyAvailable.id,
     );
     complete.get(last.run.id)?.();
     await waitFor(async () => (await state()).messageQueue.items.some((item) => item.scopeChanged));
     assert.equal(starts.length, 4);
-    assert.ok((await state()).messageQueue.items.find((item) => item.id === toReview.id)?.scopeChanged);
+    assert.ok(
+      (await state()).messageQueue.items.find((item) => item.id === toReview.id)?.scopeChanged,
+    );
     await running.request(path + '/message-queue/resume', 'POST', {}, 409);
-    await running.request(path + '/message-queue/resume', 'POST', { reviewItemId: queuedWhileRunning.id }, 409);
+    await running.request(
+      path + '/message-queue/resume',
+      'POST',
+      { reviewItemId: queuedWhileRunning.id },
+      409,
+    );
     assert.equal(starts.length, 4);
 
     // Recognize the scope error already persisted by older desktop builds.
-    running.app.store.db.prepare('UPDATE pending_messages SET error=? WHERE id=?').run(
-      '排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。', toReview.id,
-    );
+    running.app.store.db
+      .prepare('UPDATE pending_messages SET error=? WHERE id=?')
+      .run('排队时的智能体、扩展或浏览器授权已变化。请撤回并重新发送。', toReview.id);
     await running.request(path + '/message-queue/resume', 'POST', { reviewItemId: toReview.id });
     const reviewed = starts[4];
     assert.equal(starts.length, 5);
@@ -297,7 +307,10 @@ test('queued turns persist, run FIFO after cleanup and resume after reopening', 
     assert.equal((await sendBody(reviewedBody)).run?.id, reviewed.run.id);
     const afterReview = await state();
     assert.equal(afterReview.session.draft.text, 'keep editing');
-    assert.deepEqual(afterReview.messageQueue.items.map((item) => item.delivery), ['unknown']);
+    assert.deepEqual(
+      afterReview.messageQueue.items.map((item) => item.delivery),
+      ['unknown'],
+    );
     complete.get(reviewed.run.id)?.();
   } finally {
     await running?.app.close();

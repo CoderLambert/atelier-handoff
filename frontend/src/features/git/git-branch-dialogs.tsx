@@ -258,7 +258,11 @@ export function GitRenameBranchModal({
             >
               {t('actions.cancel')}
             </Button>
-            <Button type="submit" size="sm" disabled={loading || !newName.trim() || newName === oldName}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={loading || !newName.trim() || newName === oldName}
+            >
               {loading ? t('branch.saving') : t('branch.renameSubmit')}
             </Button>
           </DialogFooter>

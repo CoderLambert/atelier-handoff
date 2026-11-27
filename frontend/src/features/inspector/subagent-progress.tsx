@@ -110,7 +110,10 @@ export function SubagentProgress({
             className="group/subagent rounded-xl border border-border bg-card text-card-foreground"
             data-subagent-id={id}
           >
-            <summary data-preserve-scroll className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary
+              data-preserve-scroll
+              className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <ChevronRight
                 aria-hidden="true"
                 className="size-4 shrink-0 text-muted-foreground group-open/subagent:rotate-90"

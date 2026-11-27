@@ -69,7 +69,10 @@ describe('桌面端 Git 基础 IPC 能力', () => {
         cwd: dir,
       });
 
-      const headHash = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+      const headHash = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
       const stats = await getGitCommitStats(dir, headHash);
       assert.equal(stats.hash, headHash);
       assert.ok(stats.body.includes('feat: initial commit'));
@@ -157,12 +160,22 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       const feature = git('rev-parse', 'HEAD');
       git('switch', 'main');
 
-      const request = { cwd: dir, source: { kind: 'local' as const, name: local }, targetBranch: 'main' };
-      const remoteResult = await gitMergeBranch({ ...request, source: { kind: 'remote', name: remote } });
+      const request = {
+        cwd: dir,
+        source: { kind: 'local' as const, name: local },
+        targetBranch: 'main',
+      };
+      const remoteResult = await gitMergeBranch({
+        ...request,
+        source: { kind: 'remote', name: remote },
+      });
       assert.equal(remoteResult.status, 'upToDate');
       const stale = await gitMergeBranch({ ...request, targetBranch: local });
       assert.equal(stale.status, 'targetChanged');
-      const missing = await gitMergeBranch({ ...request, source: { kind: 'local', name: 'missing' } });
+      const missing = await gitMergeBranch({
+        ...request,
+        source: { kind: 'local', name: 'missing' },
+      });
       assert.equal(missing.status, 'failed');
       assert.equal(git('rev-parse', 'HEAD'), base);
 
@@ -181,11 +194,17 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       writeFileSync(join(dir, 'f.txt'), 'v1\n');
       execFileSync('git', ['add', 'f.txt'], { cwd: dir });
       execFileSync('git', ['commit', '-m', 'commit 1'], { cwd: dir });
-      const c1Hash = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+      const c1Hash = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
 
       writeFileSync(join(dir, 'f.txt'), 'v2\n');
       execFileSync('git', ['commit', '-am', 'commit 2'], { cwd: dir });
-      const c2Hash = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+      const c2Hash = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
 
       // 1. amendCommit
       const amendRes = await gitAmendCommit(dir, 'commit 2 amended');
@@ -219,7 +238,10 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       writeFileSync(join(dir, 'side.txt'), 'side content\n');
       execFileSync('git', ['add', 'side.txt'], { cwd: dir });
       execFileSync('git', ['commit', '-m', 'side commit'], { cwd: dir });
-      const sideHash = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+      const sideHash = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
 
       await gitCheckoutBranch(dir, 'main');
       const cpRes = await gitCherryPick(dir, sideHash);
@@ -240,7 +262,6 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       const popStash = await gitStashPop(dir, 0);
       assert.equal(popStash.success, true);
       assert.equal((await getGitRepoStatus(dir)).isDirty, true);
-
     } finally {
       cleanup();
     }
@@ -265,7 +286,11 @@ describe('桌面端 Git 基础 IPC 能力', () => {
       execFileSync('git', ['commit', '-am', 'branch change'], { cwd: dir });
 
       // 触发合并冲突
-      const merge = { cwd: dir, source: { kind: 'local' as const, name: 'main' }, targetBranch: 'conflict-branch' };
+      const merge = {
+        cwd: dir,
+        source: { kind: 'local' as const, name: 'main' },
+        targetBranch: 'conflict-branch',
+      };
       const mergeRes = await gitMergeBranch(merge);
       assert.equal(mergeRes.status, 'failed');
 
@@ -356,7 +381,9 @@ describe('桌面端 Git 基础 IPC 能力', () => {
           await getGitRepoStatus(tempDir);
         },
         (error: Error) => {
-          assert.ok(error.message.includes('git') || error.message.includes('Not a git repository'));
+          assert.ok(
+            error.message.includes('git') || error.message.includes('Not a git repository'),
+          );
           return true;
         },
       );

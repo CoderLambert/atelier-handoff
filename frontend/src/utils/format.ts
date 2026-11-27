@@ -11,7 +11,11 @@ import { getTranslator, getUiLocale, type UiLocale } from '@/i18n';
  * @param locale 界面语言
  * @param binary 是否使用 KiB/MiB 二进制单位
  */
-export function formatBytes(bytes: number, locale: UiLocale = getUiLocale(), binary = false): string {
+export function formatBytes(
+  bytes: number,
+  locale: UiLocale = getUiLocale(),
+  binary = false,
+): string {
   if (bytes < 1024) return `${bytes.toLocaleString(locale)} B`;
   const units = binary ? ['KiB', 'MiB', 'GiB', 'TiB'] : ['KB', 'MB', 'GB', 'TB'];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)) - 1, units.length - 1);
@@ -26,7 +30,10 @@ export function formatBytes(bytes: number, locale: UiLocale = getUiLocale(), bin
 /**
  * 格式化时间戳字符串为简写日期与时间。
  */
-export function formatDate(value: string | null | undefined, locale: UiLocale = getUiLocale()): string {
+export function formatDate(
+  value: string | null | undefined,
+  locale: UiLocale = getUiLocale(),
+): string {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isFinite(date.getTime())
@@ -42,7 +49,10 @@ export function formatDate(value: string | null | undefined, locale: UiLocale = 
 /**
  * 格式化执行耗时（毫秒）。
  */
-export function formatDuration(ms: number | null | undefined, locale: UiLocale = getUiLocale()): string {
+export function formatDuration(
+  ms: number | null | undefined,
+  locale: UiLocale = getUiLocale(),
+): string {
   const t = getTranslator('inspector');
   if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
   if (ms < 1000) return t('format.milliseconds', { value: Math.round(ms).toLocaleString(locale) });

@@ -265,7 +265,8 @@ test(
       }
       throw new Error('Timed out observing ' + label);
     }
-    const trace = (id: string) => request<{ run: Run; tools: ToolCall[]; events: RunEvent[] }>('/api/runs/' + id);
+    const trace = (id: string) =>
+      request<{ run: Run; tools: ToolCall[]; events: RunEvent[] }>('/api/runs/' + id);
     const snapshot = (id: string) =>
       request<{ messages: Message[]; runs: Run[]; tools: ToolCall[] }>('/api/sessions/' + id);
     try {
@@ -424,7 +425,9 @@ test(
       assert.equal(retry?.payload.httpStatus, 429);
       assert.equal(retry?.payload.afterStopRequested, undefined);
       assert.ok(!retriedRun.transcript?.notices.some((notice) => notice.kind === 'api_retry'));
-      assert.ok(retriedRun.requestTiming?.records.some(({ request }) => (request?.attempts ?? 0) > 1));
+      assert.ok(
+        retriedRun.requestTiming?.records.some(({ request }) => (request?.attempts ?? 0) > 1),
+      );
       assert.ok(attempts.get('RETRY_FIXTURE') === 2);
       const errored = await start('ERROR_FIXTURE');
       await wait(
@@ -434,7 +437,9 @@ test(
       const erroredRun = (await trace(errored.run)).run;
       const failure = erroredRun.transcript?.notices.find((notice) => notice.kind === 'api_error');
       assert.ok(failure?.kind === 'api_error' && failure.code.length > 0);
-      assert.ok(erroredRun.requestTiming?.records.some(({ request, stream }) => request?.failed && !stream));
+      assert.ok(
+        erroredRun.requestTiming?.records.some(({ request, stream }) => request?.failed && !stream),
+      );
 
       const approval = await start('APPROVAL_FIXTURE', 'project-v1');
       const awaiting = await wait(async () => {

@@ -5,13 +5,27 @@
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  Activity, Bot, ChevronDown, FolderOpen, MessagesSquare, Package,
-  PanelLeftClose, PanelLeftOpen, Plus, Puzzle, Search, Settings,
+  Activity,
+  Bot,
+  ChevronDown,
+  FolderOpen,
+  MessagesSquare,
+  Package,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Puzzle,
+  Search,
+  Settings,
 } from 'lucide-react';
 import { type Project, type RunStatus, type Session } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/components/ui/utils';
 import { useUiTranslation } from '@/i18n';
@@ -86,12 +100,10 @@ export function Sidebar({
     }),
     [t],
   );
-
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const searchTrigger = useRef<HTMLButtonElement>(null);
-
   useEffect(() => {
     if (collapsed) {
       setSearchOpen(false);
@@ -100,20 +112,17 @@ export function Sidebar({
       searchInput.current?.focus();
     }
   }, [collapsed, searchOpen]);
-
   const closeSearch = useCallback(() => {
     setSearch('');
     setSearchOpen(false);
     requestAnimationFrame(() => searchTrigger.current?.focus());
   }, []);
-
   const [pagination, setPagination] = useState(() => new Map<string, SessionTreePagination>());
   const [closedBranches, setClosedBranches] = useState(() => new Map<string, string | undefined>());
   const [closedProjects, setClosedProjects] = useState(() => new Map<string, string | undefined>());
   const [menuBoundary, setMenuBoundary] = useState<HTMLElement | null>(null);
   const treeId = useId();
   const filter = search.trim();
-
   const knownProjects = useMemo(() => {
     const map = new Map(projects?.map((entry) => [entry.id, entry]));
     if (project && !map.has(project.id)) map.set(project.id, project);

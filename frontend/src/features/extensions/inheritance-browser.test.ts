@@ -32,10 +32,16 @@ const host: SkillInheritanceItem = {
 };
 const missing = '90000000-0000-4000-8000-000000000002';
 const workspace: SkillInheritanceItem = {
-  ...host, id: '90000000-0000-4000-8000-000000000003', source: 'workspace', version: 3,
+  ...host,
+  id: '90000000-0000-4000-8000-000000000003',
+  source: 'workspace',
+  version: 3,
 };
 const installed: SkillInheritanceItem = {
-  ...host, id: '90000000-0000-4000-8000-000000000004', source: 'atelier', version: 4,
+  ...host,
+  id: '90000000-0000-4000-8000-000000000004',
+  source: 'atelier',
+  version: 4,
 };
 
 async function fixtureBundle() {
@@ -157,13 +163,24 @@ test(
           override: session ? override : 'follow',
           reason,
         };
-        json({ enabled, projectMode, items: session ? [
-          item,
-          { ...workspace, mode: 'auto', override: workspaceOverride,
-            effective: workspaceOverride === 'off' || (!native && !automatic) ? 'off' : 'auto',
-            reason: workspaceOverride === 'off' ? 'session-off' : undefined },
-          { ...installed, mode: 'manual', effective: automatic ? 'off' : 'manual' },
-        ] : [item] });
+        json({
+          enabled,
+          projectMode,
+          items: session
+            ? [
+                item,
+                {
+                  ...workspace,
+                  mode: 'auto',
+                  override: workspaceOverride,
+                  effective:
+                    workspaceOverride === 'off' || (!native && !automatic) ? 'off' : 'auto',
+                  reason: workspaceOverride === 'off' ? 'session-off' : undefined,
+                },
+                { ...installed, mode: 'manual', effective: automatic ? 'off' : 'manual' },
+              ]
+            : [item],
+        });
       } else if (url.pathname === '/api/bootstrap') {
         json({ csrfToken: 'fixture-only', config: { gateway: 'http://localhost:1' } });
       } else if (url.pathname === '/api/config') {
@@ -291,12 +308,16 @@ test(
       await page.keyboard.press('Escape');
       await dialog.waitFor({ state: 'hidden' });
 
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Session Skills');
+      await page.waitForFunction(
+        () => document.activeElement?.getAttribute('aria-label') === 'Session Skills',
+      );
       await input.fill('please /fixture');
       await option('Atelier-installed').waitFor();
       assert.equal(await option('Workspace directory').count(), 0);
       await option('Atelier-installed').click();
-      await page.getByRole('button', { name: 'Remove fixture-notes (Atelier-installed) from draft' }).waitFor();
+      await page
+        .getByRole('button', { name: 'Remove fixture-notes (Atelier-installed) from draft' })
+        .waitFor();
 
       await page.getByRole('button', { name: 'Automatic fixture mode' }).click();
       await input.fill('please /fixture');
@@ -308,22 +329,39 @@ test(
       assert.equal(await option('Local user directory').count(), 0);
       assert.equal(await option('Atelier-installed').count(), 0);
       await option('Workspace directory').click();
-      const workspaceChip = page.getByRole('button', { name: 'Remove fixture-notes (Workspace directory) from draft' });
+      const workspaceChip = page.getByRole('button', {
+        name: 'Remove fixture-notes (Workspace directory) from draft',
+      });
       await workspaceChip.waitFor();
-      assert.deepEqual(JSON.parse((await page.locator('#draft').textContent()) ?? '{}').extensionSelections, [
-        { id: installed.id, version: installed.version },
-        { id: workspace.id, version: workspace.version },
-      ]);
+      assert.deepEqual(
+        JSON.parse((await page.locator('#draft').textContent()) ?? '{}').extensionSelections,
+        [
+          { id: installed.id, version: installed.version },
+          { id: workspace.id, version: workspace.version },
+        ],
+      );
       assert.equal(await input.inputValue(), 'please ');
       assert.equal(await page.locator('#sent').textContent(), '0');
       await trigger.click();
-      await dialog.getByRole('combobox', { name: 'Session restriction for fixture-notes (Workspace directory)' }).click();
+      await dialog
+        .getByRole('combobox', {
+          name: 'Session restriction for fixture-notes (Workspace directory)',
+        })
+        .click();
       await page.getByRole('option', { name: 'Off', exact: true }).click();
       await dialog.getByText('Remove from draft', { exact: true }).first().waitFor();
-      await page.waitForFunction(() => !document.querySelector('[aria-label="Session restriction for fixture-notes (Workspace directory)"][disabled]'));
+      await page.waitForFunction(
+        () =>
+          !document.querySelector(
+            '[aria-label="Session restriction for fixture-notes (Workspace directory)"][disabled]',
+          ),
+      );
       const automaticScope = '?sessionId=session-alpha&automatic=1';
       assert.ok(queries.includes(automaticScope));
-      assert.deepEqual(mutations.at(-1), { scope: automaticScope, patch: { type: 'session', id: workspace.id, mode: 'off' } });
+      assert.deepEqual(mutations.at(-1), {
+        scope: automaticScope,
+        patch: { type: 'session', id: workspace.id, mode: 'off' },
+      });
       await page.keyboard.press('Escape');
       await dialog.waitFor({ state: 'hidden' });
       await workspaceChip.click();

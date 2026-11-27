@@ -42,7 +42,8 @@
   --ui-theme-obsidian-ring: #18181b;
   --ui-theme-obsidian-scrim: rgb(0 0 0 / 0.35);
   --ui-theme-obsidian-shadow: rgb(0 0 0 / 0.05);
-  --ui-theme-obsidian-shadow-overlay: 0 16px 36px -4px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04);
+  --ui-theme-obsidian-shadow-overlay:
+    0 16px 36px -4px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04);
 
   /* Atelier Classic Palette */
   --ui-theme-classic-background: #fafbf8;
@@ -67,7 +68,8 @@
   --ui-theme-classic-ring: #3f5e34;
   --ui-theme-classic-scrim: rgb(24 32 15 / 0.35);
   --ui-theme-classic-shadow: rgb(34 45 25 / 0.05);
-  --ui-theme-classic-shadow-overlay: 0 16px 36px -4px rgb(34 45 25 / 0.09), 0 4px 12px -2px rgb(34 45 25 / 0.04);
+  --ui-theme-classic-shadow-overlay:
+    0 16px 36px -4px rgb(34 45 25 / 0.09), 0 4px 12px -2px rgb(34 45 25 / 0.04);
   --ui-theme-classic-success: #2c6844;
   --ui-theme-classic-success-soft: #ecf5ee;
   --ui-theme-classic-success-border: #c1dec9;
@@ -132,7 +134,8 @@
   --ui-theme-nordic-ring: #2563eb;
   --ui-theme-nordic-scrim: rgb(15 23 42 / 0.35);
   --ui-theme-nordic-shadow: rgb(15 23 42 / 0.05);
-  --ui-theme-nordic-shadow-overlay: 0 16px 36px -4px rgb(15 23 42 / 0.08), 0 4px 12px -2px rgb(15 23 42 / 0.04);
+  --ui-theme-nordic-shadow-overlay:
+    0 16px 36px -4px rgb(15 23 42 / 0.08), 0 4px 12px -2px rgb(15 23 42 / 0.04);
 
   /* Rosé Pine Dawn Palette */
   --ui-theme-rose-background: #fcf7f2;
@@ -157,7 +160,8 @@
   --ui-theme-rose-ring: #a8516a;
   --ui-theme-rose-scrim: rgb(74 69 104 / 0.35);
   --ui-theme-rose-shadow: rgb(74 69 104 / 0.06);
-  --ui-theme-rose-shadow-overlay: 0 16px 36px -4px rgb(74 69 104 / 0.10), 0 4px 12px -2px rgb(74 69 104 / 0.05);
+  --ui-theme-rose-shadow-overlay:
+    0 16px 36px -4px rgb(74 69 104 / 0.1), 0 4px 12px -2px rgb(74 69 104 / 0.05);
   --ui-theme-rose-info: #286983;
   --ui-theme-rose-info-soft: #eef5f7;
   --ui-theme-rose-success: #2f7066;
@@ -193,7 +197,8 @@
   --ui-theme-midnight-ring: #4cb8f0;
   --ui-theme-midnight-scrim: rgb(0 0 0 / 0.65);
   --ui-theme-midnight-shadow: rgb(0 0 0 / 0.35);
-  --ui-theme-midnight-shadow-overlay: 0 16px 36px -4px rgb(0 0 0 / 0.45), 0 4px 12px -2px rgb(0 0 0 / 0.25);
+  --ui-theme-midnight-shadow-overlay:
+    0 16px 36px -4px rgb(0 0 0 / 0.45), 0 4px 12px -2px rgb(0 0 0 / 0.25);
   --ui-theme-midnight-info: #4cb8f0;
   --ui-theme-midnight-info-soft: #122638;
   --ui-theme-midnight-success: #34d399;
@@ -259,8 +264,12 @@
   --ui-text-control: 0.875rem;
   --ui-reading-width: 80ch;
 
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Segoe UI', system-ui,
+    sans-serif;
+  --font-body:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', system-ui,
+    sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
   --text-xs: 0.75rem;
   --text-sm: var(--ui-text-compact);

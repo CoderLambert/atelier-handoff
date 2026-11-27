@@ -25,7 +25,9 @@ export interface GitToastItem {
 export function useGitToast() {
   const { t } = useUiTranslation('git');
   const [toasts, setToasts] = useState<GitToastItem[]>([]);
-  const [activeStderr, setActiveStderr] = useState<{ message: string; stderr: string } | null>(null);
+  const [activeStderr, setActiveStderr] = useState<{ message: string; stderr: string } | null>(
+    null,
+  );
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id));
@@ -62,9 +64,15 @@ export function useGitToast() {
                 role="status"
               >
                 {toast.type === 'error' ? (
-                  <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+                  <AlertCircle
+                    className="w-4 h-4 text-destructive shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" aria-hidden="true" />
+                  <CheckCircle2
+                    className="w-4 h-4 text-success shrink-0 mt-0.5"
+                    aria-hidden="true"
+                  />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium leading-snug break-words">{toast.message}</p>
@@ -74,7 +82,9 @@ export function useGitToast() {
                       variant="link"
                       size="sm"
                       className="p-0 h-auto text-[11px] text-destructive underline mt-1"
-                      onClick={() => setActiveStderr({ message: toast.message, stderr: toast.stderr! })}
+                      onClick={() =>
+                        setActiveStderr({ message: toast.message, stderr: toast.stderr! })
+                      }
                     >
                       {t('sync.viewDetails')}
                     </Button>

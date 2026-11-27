@@ -165,7 +165,10 @@ export const inspector = {
     '本轮只取得 SDK 流事件，无法测量请求起点。',
     'Only SDK stream events were captured. Request start could not be measured.',
   ],
-  'trace.requestTimingOmitted': ['另有 {{count}} 条超出记录上限', '{{count}} more exceeded the recording limit'],
+  'trace.requestTimingOmitted': [
+    '另有 {{count}} 条超出记录上限',
+    '{{count}} more exceeded the recording limit',
+  ],
   'trace.requestTotal': ['请求跨度', 'Request span'],
   'trace.requestFirstToken': ['SDK 首 token', 'SDK time to first token'],
   'trace.requestFirstContent': ['请求至首个内容事件', 'Request to first content event'],
@@ -176,7 +179,10 @@ export const inspector = {
   'trace.requestToStream': ['请求开始至首流', 'Request start to first stream event'],
   'trace.requestNoSpan': ['请求跨度未关联', 'Request span unlinked'],
   'trace.requestNoStream': ['无关联流事件', 'No linked stream events'],
-  'trace.requestNoStreamEnd': ['流中断，已观察 {{duration}}', 'Stream interrupted after {{duration}} observed'],
+  'trace.requestNoStreamEnd': [
+    '流中断，已观察 {{duration}}',
+    'Stream interrupted after {{duration}} observed',
+  ],
   'trace.requestAttempts': ['尝试 {{count}} 次', '{{count}} attempts'],
   'trace.requestFailed': ['请求失败', 'Request failed'],
   'trace.turns': ['SDK 轮次', 'SDK turns'],

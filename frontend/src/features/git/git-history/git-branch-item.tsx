@@ -81,10 +81,7 @@ export const GitBranchItem = memo(function GitBranchItem({
           {isHead && <span className="git-head-badge">{t('branch.headTag')}</span>}
         </div>
         {worktreePath && folderName && (
-          <span
-            className="git-worktree-pill"
-            title={t('branch.occupied', { path: worktreePath })}
-          >
+          <span className="git-worktree-pill" title={t('branch.occupied', { path: worktreePath })}>
             <Folder className="git-worktree-folder-icon" aria-hidden="true" />
             <span className="truncate">{folderName}</span>
           </span>

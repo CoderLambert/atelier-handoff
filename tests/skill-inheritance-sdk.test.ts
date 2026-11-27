@@ -330,7 +330,11 @@ test(
     assert.match(blocked?.error ?? '', /复核/u);
     assert.ok(capture.every((body) => !body.includes(queuedText)));
     await api(`sessions/${b.id}/message-queue/resume`, 'POST', { reviewItemId: queuedMessage.id });
-    for (let retry = 0; retry < 160 && !capture.some((body) => body.includes(queuedText)); retry++) {
+    for (
+      let retry = 0;
+      retry < 160 && !capture.some((body) => body.includes(queuedText));
+      retry++
+    ) {
       await delay(25);
     }
     const resumed = capture.find((body) => body.includes(queuedText));

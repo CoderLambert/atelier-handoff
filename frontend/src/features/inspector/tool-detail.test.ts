@@ -926,12 +926,10 @@ test(
               .evaluate((element) => element === document.activeElement),
             true,
           );
-          const layout = await page
-            .locator('details')
-            .evaluate((element) => ({
-              width: element.clientWidth,
-              scrollWidth: element.scrollWidth,
-            }));
+          const layout = await page.locator('details').evaluate((element) => ({
+            width: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+          }));
           assert.ok(layout.scrollWidth <= layout.width + 1);
           assert.equal(await page.locator('#app script, #app img').count(), 0);
           assert.equal(await page.evaluate(() => Reflect.get(window, 'pwned')), undefined);

@@ -25,12 +25,7 @@ export const GitHeadCard = memo(function GitHeadCard({
 
   return (
     <div className="git-head-card-container">
-      <button
-        type="button"
-        className="git-head-card"
-        aria-pressed={isActive}
-        onClick={onSelect}
-      >
+      <button type="button" className="git-head-card" aria-pressed={isActive} onClick={onSelect}>
         <div className="git-head-card-header">
           <span className="git-head-card-title">
             <BranchIcon size={14} aria-hidden="true" />

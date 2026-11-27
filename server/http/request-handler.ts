@@ -43,8 +43,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       } catch {
         throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
       }
-      if (url.origin !== expectedOrigin)
-        throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
+      if (url.origin !== expectedOrigin) throw new AppError('INVALID_INPUT', '请求路径无效。', 400);
       if (
         !['GET', 'HEAD'].includes(req.method || '') &&
         req.headers['x-atelier-token'] !== options.csrfToken

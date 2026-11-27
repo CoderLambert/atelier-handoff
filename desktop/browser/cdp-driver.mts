@@ -129,7 +129,9 @@ function matchesCoord(actual: number, expected: number, zoom: number): boolean {
   return Math.abs(actual - expected) <= tol || Math.abs(actual - expected * zoom) <= tol;
 }
 
-function quadCenter(quad: readonly [number, number, number, number, number, number, number, number]): {
+function quadCenter(
+  quad: readonly [number, number, number, number, number, number, number, number],
+): {
   x: number;
   y: number;
   area: number;
@@ -380,17 +382,15 @@ export async function executeCdpFillForm(
   for (const field of fields) {
     const ref = field.target ?? field.ref;
     const target = session.refs.get(ref ?? '');
-    if (!target) throw new Error(`第 ${filledCount + 1} 项表单引用（${ref ?? ''}）已失效，请重新读取页面。`);
+    if (!target)
+      throw new Error(`第 ${filledCount + 1} 项表单引用（${ref ?? ''}）已失效，请重新读取页面。`);
     if (target.role === 'combobox' || target.role === 'listbox') {
       try {
         await executeCdpSelectOption(session, ref, { value: field.value, label: field.value });
         filledCount += 1;
         continue;
       } catch (error) {
-        if (
-          !(error instanceof Error) ||
-          !error.message.includes('目标元素不是原生下拉选择框')
-        ) {
+        if (!(error instanceof Error) || !error.message.includes('目标元素不是原生下拉选择框')) {
           throw error;
         }
       }
@@ -423,8 +423,7 @@ export async function executeCdpClick(
 
   const doubleClick =
     typeof optionsOrDouble === 'boolean' ? optionsOrDouble : Boolean(optionsOrDouble?.doubleClick);
-  const button =
-    typeof optionsOrDouble === 'object' ? (optionsOrDouble.button ?? 'left') : 'left';
+  const button = typeof optionsOrDouble === 'object' ? (optionsOrDouble.button ?? 'left') : 'left';
   const pressedButtons = button === 'left' ? 1 : button === 'right' ? 2 : 4;
 
   const { x, y, objectId } = await resolveElementCenter(session, target.id, { centerScroll: true });
@@ -608,7 +607,8 @@ export async function executeCdpWaitFor(
     signal.throwIfAborted();
     const evaluated = callFunctionResultSchema.parse(
       await session.send('Runtime.evaluate', {
-        expression: '(document.body && (document.body.innerText || document.body.textContent)) || ""',
+        expression:
+          '(document.body && (document.body.innerText || document.body.textContent)) || ""',
         returnByValue: true,
       }),
     );
@@ -659,9 +659,7 @@ export function formatPendingDialogNotice(
     dialog.defaultPrompt !== undefined && dialog.defaultPrompt.length > 0
       ? `，默认输入：${JSON.stringify(dialog.defaultPrompt)}`
       : '';
-  const prefix = triggeredByAction
-    ? '网页操作已触发浏览器弹窗'
-    : '当前页面存在未处理的浏览器弹窗';
+  const prefix = triggeredByAction ? '网页操作已触发浏览器弹窗' : '当前页面存在未处理的浏览器弹窗';
   return `${prefix}（类型：${dialog.type}，内容：${JSON.stringify(dialog.message)}${promptPart}）。请根据任务需要调用 browser_handle_dialog 选择确认或取消。`;
 }
 

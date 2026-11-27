@@ -74,7 +74,10 @@ export const gitOpResultSchema = z.strictObject({
 });
 export type GitOpResult = z.infer<typeof gitOpResultSchema>;
 
-const existingBranchName = z.string().min(1).regex(/^[^\x00-\x20\x7f]+$/u);
+const existingBranchName = z
+  .string()
+  .min(1)
+  .regex(/^[^\x00-\x20\x7f]+$/u);
 export const gitMergeRequestSchema = z.strictObject({
   cwd: z.string().min(1),
   source: z.strictObject({ kind: z.enum(['local', 'remote']), name: existingBranchName }),

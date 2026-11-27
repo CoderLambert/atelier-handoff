@@ -72,11 +72,7 @@ export function CollapsedSessionMenuItems({
                   className="sidebar-session-menu-item sidebar-session-menu-recent"
                   onSelect={() => onSession(item.session.id)}
                 >
-                  {isSelected ? (
-                    <Check aria-hidden="true" />
-                  ) : (
-                    <MessageSquare aria-hidden="true" />
-                  )}
+                  {isSelected ? <Check aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}
                   <span className="sidebar-session-menu-recent-main">
                     <span className="truncate">{item.session.title}</span>
                     {item.projectName ? (
@@ -103,10 +99,7 @@ export function CollapsedSessionMenuItems({
         <>
           <DropdownMenuSeparator className="sidebar-session-menu-separator" />
           <DropdownMenuGroup>
-            <DropdownMenuItem
-              className="sidebar-session-menu-item"
-              onSelect={onOpenSwitcher}
-            >
+            <DropdownMenuItem className="sidebar-session-menu-item" onSelect={onOpenSwitcher}>
               <Search aria-hidden="true" />
               {t('sidebar.switchAllSessions')}
             </DropdownMenuItem>

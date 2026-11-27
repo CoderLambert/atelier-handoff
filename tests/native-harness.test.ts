@@ -203,8 +203,17 @@ test(
         },
       });
       const inheritance = new SkillInheritance(store.skillInheritance, join(root, 'empty-home'));
-      const snapshot = inheritance.snapshot({ projectId: project.id, directory: projectPath, sessionId: session.id, native: true }, true);
-      const { skills } = applySkillScope(snapshot, { prompt: run.prompt, mcp: [], used: [] }, [], [], run.prompt);
+      const snapshot = inheritance.snapshot(
+        { projectId: project.id, directory: projectPath, sessionId: session.id, native: true },
+        true,
+      );
+      const { skills } = applySkillScope(
+        snapshot,
+        { prompt: run.prompt, mcp: [], used: [] },
+        [],
+        [],
+        run.prompt,
+      );
       await runner.start(run, run.prompt, [], skills);
       assert.deepEqual(errors, []);
       const finished = store.get('runs', run.id);

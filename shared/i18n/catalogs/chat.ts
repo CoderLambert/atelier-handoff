@@ -652,7 +652,10 @@ export const chat = {
     'Prioritizing stops the current turn before running this message.',
   ],
   'queue.resume': ['继续队列', 'Resume queue'],
-  'queue.scopeChanged': ['排队时的授权范围已变化，请复核后继续。', 'The queued message’s permissions changed. Review them to continue.'],
+  'queue.scopeChanged': [
+    '排队时的授权范围已变化，请复核后继续。',
+    'The queued message’s permissions changed. Review them to continue.',
+  ],
   'queue.review': ['复核并继续', 'Review and continue'],
   'queue.reviewTitle': ['按当前授权继续', 'Continue with current permissions'],
   'queue.reviewDescription': [

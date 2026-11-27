@@ -61,7 +61,9 @@ export function modifiersBitmask(modifiers?: readonly KeyModifier[]): number {
   return mask;
 }
 
-export function selectAllModifiers(platform: NodeJS.Platform = process.platform): readonly KeyModifier[] {
+export function selectAllModifiers(
+  platform: NodeJS.Platform = process.platform,
+): readonly KeyModifier[] {
   return platform === 'darwin' ? ['Meta'] : ['Control'];
 }
 

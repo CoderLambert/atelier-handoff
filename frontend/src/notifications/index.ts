@@ -70,9 +70,7 @@ export function getUiNotifications(): DesktopUiNotifications {
   return inMemoryNotifications;
 }
 
-export function setUiNotifications(
-  patch: Partial<DesktopUiNotifications>,
-): DesktopUiNotifications {
+export function setUiNotifications(patch: Partial<DesktopUiNotifications>): DesktopUiNotifications {
   const next = resolveDesktopUiNotifications({
     ...inMemoryNotifications,
     ...patch,

@@ -12,11 +12,7 @@ import {
   workspaceLayoutSchema,
   type WorkspaceLayout,
 } from '../../../shared/workspace-layout.js';
-import {
-  defaultUiTheme,
-  resolveUiTheme,
-  type UiTheme,
-} from '../../../shared/desktop-ui-theme.js';
+import { defaultUiTheme, resolveUiTheme, type UiTheme } from '../../../shared/desktop-ui-theme.js';
 
 const settings = sqliteTable('settings', {
   key: text().primaryKey(),

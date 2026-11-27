@@ -5,11 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  findLineMatches,
-  isMarkdownPath,
-  splitLineTokensWithMatches,
-} from './git-file-search';
+import { findLineMatches, isMarkdownPath, splitLineTokensWithMatches } from './git-file-search';
 
 test('isMarkdownPath detects .md and .markdown extensions case-insensitively', () => {
   assert.equal(isMarkdownPath('AGENTS.md'), true);

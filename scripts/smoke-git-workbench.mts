@@ -295,7 +295,10 @@ try {
   );
   const added = board.locator('.git-diff-line[data-kind=added]');
   await added.getByText('original checkout only', { exact: true }).waitFor();
-  await board.locator('.git-file-row').filter({ hasText: /notes\.md/u }).click();
+  await board
+    .locator('.git-file-row')
+    .filter({ hasText: /notes\.md/u })
+    .click();
   await added.getByText('# After', { exact: true }).waitFor();
   await added.locator('.git-syntax-token').first().waitFor();
   const sourceFile = board.locator('.git-file-row').filter({ hasText: /syntax\.ts/u });
@@ -480,7 +483,10 @@ try {
   assert.ok(windowSize);
   await page.setViewportSize(windowSize);
   await opener.click();
-  await board.locator('.git-file-row').filter({ hasText: /english-review\.md/u }).waitFor();
+  await board
+    .locator('.git-file-row')
+    .filter({ hasText: /english-review\.md/u })
+    .waitFor();
   const englishCommit = board.getByRole('button', { name: 'AI commit', exact: true });
   await englishCommit.click();
   const englishReview = page.getByRole('dialog', { name: 'Review Git commit', exact: true });

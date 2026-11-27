@@ -169,11 +169,15 @@ export class FileRecords {
     });
     return attachment;
   }
-  async uploadDocument(sessionId: string, name: string, input: {
-    chunks(): AsyncIterable<Buffer | Uint8Array>;
-    declaredLength?: string;
-    isAborted(): boolean;
-  }) {
+  async uploadDocument(
+    sessionId: string,
+    name: string,
+    input: {
+      chunks(): AsyncIterable<Buffer | Uint8Array>;
+      declaredLength?: string;
+      isAborted(): boolean;
+    },
+  ) {
     this.store.get('sessions', sessionId);
     name = safeName(name);
     const mime = documentAttachmentMime(name);

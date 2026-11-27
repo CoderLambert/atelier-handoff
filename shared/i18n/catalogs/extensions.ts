@@ -44,8 +44,14 @@ export const extensions = {
   'hooks.on': ['启用', 'Enable'],
   'hooks.off': ['停用', 'Disable'],
   'hooks.sourceProject': ['设置来源：本项目覆盖', 'Setting source: project override'],
-  'hooks.sourceGlobalOn': ['设置来源：全局默认（启用）', 'Setting source: global default (enabled)'],
-  'hooks.sourceGlobalOff': ['设置来源：全局默认（停用）', 'Setting source: global default (disabled)'],
+  'hooks.sourceGlobalOn': [
+    '设置来源：全局默认（启用）',
+    'Setting source: global default (enabled)',
+  ],
+  'hooks.sourceGlobalOff': [
+    '设置来源：全局默认（停用）',
+    'Setting source: global default (disabled)',
+  ],
   'hooks.globalLabel': ['全局默认启用 RTK', 'Enable RTK by default globally'],
   'hooks.globalHelp': [
     '适用于跟随全局的所有项目。项目的显式设置优先。',
@@ -68,8 +74,14 @@ export const extensions = {
     'A usable built-in RTK is missing from this runtime. Commands run unchanged, and you can still save preferences.',
   ],
   'hooks.loading': ['正在读取 Hooks 设置…', 'Loading Hooks settings…'],
-  'hooks.loadFailed': ['无法读取 Hooks 设置，请重新加载。', 'Could not load Hooks settings. Reload to try again.'],
-  'hooks.saveFailed': ['RTK 设置保存失败，仍保留先前的设置。请重试。', 'Could not save RTK settings. Previous settings are kept. Try again.'],
+  'hooks.loadFailed': [
+    '无法读取 Hooks 设置，请重新加载。',
+    'Could not load Hooks settings. Reload to try again.',
+  ],
+  'hooks.saveFailed': [
+    'RTK 设置保存失败，仍保留先前的设置。请重试。',
+    'Could not save RTK settings. Previous settings are kept. Try again.',
+  ],
   'common.http': ['HTTP', 'HTTP'],
   'common.name': ['名称', 'Name'],
   'common.description': ['描述', 'Description'],
@@ -369,7 +381,10 @@ export const extensions = {
   'inheritance.policyOff': ['停用', 'Off'],
   'inheritance.policyManual': ['仅手动', 'Manual only'],
   'inheritance.policyAuto': ['允许自动调用', 'Allow automatic use'],
-  'inheritance.autoUnavailable': ['此 Skill 不支持自动调用。', 'This Skill does not support automatic use.'],
+  'inheritance.autoUnavailable': [
+    '此 Skill 不支持自动调用。',
+    'This Skill does not support automatic use.',
+  ],
   'inheritance.projectTitle': ['此项目的本机继承', 'Local inheritance for this project'],
   'inheritance.projectHelp': [
     '只控制来自用户目录的 Skill，不影响已安装的项目 Skills 或项目目录中的 Skills。',
@@ -389,8 +404,14 @@ export const extensions = {
   'inheritance.statusManual': ['仅手动', 'Manual only'],
   'inheritance.statusAuto': ['自动可用', 'Automatic'],
   'inheritance.reasonGlobalOff': ['全局继承已关闭。', 'Global inheritance is off.'],
-  'inheritance.reasonProjectBlocked': ['项目已阻止本机继承。', 'This project blocks local inheritance.'],
-  'inheritance.reasonNotNative': ['仅在本机信任模式下可用。', 'Available only in Native trust mode.'],
+  'inheritance.reasonProjectBlocked': [
+    '项目已阻止本机继承。',
+    'This project blocks local inheritance.',
+  ],
+  'inheritance.reasonNotNative': [
+    '仅在本机信任模式下可用。',
+    'Available only in Native trust mode.',
+  ],
   'inheritance.reasonWorkspaceMode': [
     '当前模式不可用。请切换到全工具自动化或本机信任。',
     'Unavailable in this mode. Switch to Full tool automation or Native trust.',
@@ -398,8 +419,14 @@ export const extensions = {
   'inheritance.reasonDisabled': ['已在上层设置中停用。', 'Disabled by the parent policy.'],
   'inheritance.reasonSessionOff': ['已在本会话停用。', 'Disabled for this session.'],
   'inheritance.loading': ['正在读取 Skill 可用范围…', 'Loading Skill availability…'],
-  'inheritance.loadFailed': ['无法读取 Skill 可用范围。请重新加载。', 'Couldn’t load Skill availability. Reload to try again.'],
-  'inheritance.saveFailed': ['未能确认设置已保存。请重试。', 'Couldn’t confirm the change. Please try again.'],
+  'inheritance.loadFailed': [
+    '无法读取 Skill 可用范围。请重新加载。',
+    'Couldn’t load Skill availability. Reload to try again.',
+  ],
+  'inheritance.saveFailed': [
+    '未能确认设置已保存。请重试。',
+    'Couldn’t confirm the change. Please try again.',
+  ],
   'inheritance.sessionTitle': ['本会话 Skills', 'Session Skills'],
   'inheritance.sessionDescription': [
     '查看下一次新运行的可用范围。会话只能限制上层策略；手动选择只会添加到草稿，不会发送。',
@@ -410,15 +437,27 @@ export const extensions = {
     'The active run keeps the Skill scope it started with.',
   ],
   'inheritance.recordedOnRun': ['已记录在当前运行中', 'Recorded on active run'],
-  'inheritance.sessionPolicy': ['{{name}}（{{source}}）的会话限制', 'Session restriction for {{name}} ({{source}})'],
+  'inheritance.sessionPolicy': [
+    '{{name}}（{{source}}）的会话限制',
+    'Session restriction for {{name}} ({{source}})',
+  ],
   'inheritance.sessionFollow': ['跟随上层', 'Follow parent policy'],
   'inheritance.sessionEmpty': ['此会话没有 Skill。', 'No Skills in this session.'],
   'inheritance.addToDraft': ['添加到草稿', 'Add to draft'],
-  'inheritance.addToDraftLabel': ['将 {{name}}（{{source}}）添加到草稿', 'Add {{name}} ({{source}}) to draft'],
+  'inheritance.addToDraftLabel': [
+    '将 {{name}}（{{source}}）添加到草稿',
+    'Add {{name}} ({{source}}) to draft',
+  ],
   'inheritance.removeFromDraft': ['从草稿移除', 'Remove from draft'],
-  'inheritance.removeFromDraftLabel': ['从草稿移除 {{name}}（{{source}}）', 'Remove {{name}} ({{source}}) from draft'],
+  'inheritance.removeFromDraftLabel': [
+    '从草稿移除 {{name}}（{{source}}）',
+    'Remove {{name}} ({{source}}) from draft',
+  ],
   'inheritance.draftSelected': ['已在草稿中', 'In draft'],
-  'inheritance.draftStale': ['草稿中的选择已失效，请移除后重新选择。', 'This draft selection is no longer valid. Remove it before selecting again.'],
+  'inheritance.draftStale': [
+    '草稿中的选择已失效，请移除后重新选择。',
+    'This draft selection is no longer valid. Remove it before selecting again.',
+  ],
   'inheritance.missingSelections': ['未找到的草稿 Skills', 'Draft Skills no longer listed'],
   'inheritance.removeMissing': ['从草稿移除 {{id}}', 'Remove {{id}} from draft'],
   'inheritance.draftSkills': ['草稿中的 Skills', 'Draft Skills'],
@@ -434,7 +473,10 @@ export const extensions = {
     '下一次新运行可用 {{count, number}} 项',
     '{{count, number}} Skills available for the next new run',
   ],
-  'inheritance.selectionLimit': ['草稿中的 Skill 和工具最多可选 {{count, number}} 项。', 'You can select up to {{count, number}} Skills and tools per draft.'],
+  'inheritance.selectionLimit': [
+    '草稿中的 Skill 和工具最多可选 {{count, number}} 项。',
+    'You can select up to {{count, number}} Skills and tools per draft.',
+  ],
   'extensions.searchPlaceholder': ['搜索名称或描述', 'Search names or descriptions'],
   'extensions.searchLabel': ['搜索扩展', 'Search extensions'],
   'extensions.market': ['Skill 市场', 'Skill market'],
@@ -538,10 +580,7 @@ export const extensions = {
     '来源说明不能超过 4096 个字符。',
     'Source cannot exceed 4096 characters.',
   ],
-  'extensionEditor.bodyRequired': [
-    '请填写扩展指令正文。',
-    'Enter the extension instruction body.',
-  ],
+  'extensionEditor.bodyRequired': ['请填写扩展指令正文。', 'Enter the extension instruction body.'],
   'extensionEditor.bodyTooLong': [
     '扩展指令正文不能超过 65000 个字符。',
     'Instruction body cannot exceed 65000 characters.',
@@ -742,10 +781,7 @@ export const extensions = {
     '此项目暂无已启用的命令或可手动调用的 Skill。',
     'This project has no enabled commands or manually invocable Skills.',
   ],
-  'picker.noFiles': [
-    '没有匹配的项目文件。',
-    'No matching project files found.',
-  ],
+  'picker.noFiles': ['没有匹配的项目文件。', 'No matching project files found.'],
   'picker.selectHint': ['↑ ↓ 选择', '↑ ↓ Select'],
   'picker.confirmHint': ['Enter / Tab 确认', 'Enter / Tab Confirm'],
   'picker.closeHint': ['Esc 关闭', 'Esc Close'],
@@ -769,12 +805,27 @@ export const extensions = {
     'MCP Registry 搜索词或 GitHub 配置链接',
     'MCP Registry search term or GitHub configuration link',
   ],
-  'publicImport.githubSource': ['GitHub 仓库、目录或文件链接', 'GitHub repository, folder, or file link'],
+  'publicImport.githubSource': [
+    'GitHub 仓库、目录或文件链接',
+    'GitHub repository, folder, or file link',
+  ],
   'publicImport.backToResults': ['返回结果', 'Back to results'],
-  'publicImport.skillResults': ['找到 {{count, number}} 个 Skill', '{{count, number}} Skills found'],
-  'publicImport.skillResults_one': ['找到 {{count, number}} 个 Skill', '{{count, number}} Skill found'],
-  'publicImport.skillResults_other': ['找到 {{count, number}} 个 Skill', '{{count, number}} Skills found'],
-  'publicImport.chooseSkill': ['选择要预览和安装的 Skill。', 'Choose a Skill to preview and install.'],
+  'publicImport.skillResults': [
+    '找到 {{count, number}} 个 Skill',
+    '{{count, number}} Skills found',
+  ],
+  'publicImport.skillResults_one': [
+    '找到 {{count, number}} 个 Skill',
+    '{{count, number}} Skill found',
+  ],
+  'publicImport.skillResults_other': [
+    '找到 {{count, number}} 个 Skill',
+    '{{count, number}} Skills found',
+  ],
+  'publicImport.chooseSkill': [
+    '选择要预览和安装的 Skill。',
+    'Choose a Skill to preview and install.',
+  ],
   'publicImport.skillBody': ['查看 Skill 正文', 'Read Skill instructions'],
   'publicImport.installSkill': ['安装 Skill', 'Install Skill'],
   'publicImport.loadingSkill': ['正在读取 Skill 安装预览…', 'Loading Skill installation preview…'],
@@ -791,28 +842,67 @@ export const extensions = {
     'This Skill contains unsupported dynamic commands, hooks, or permission settings, or refers to files outside its package. It installs disabled.',
   ],
   'publicImport.invalidSource': ['请输入有效的公开来源链接。', 'Enter a valid public source link.'],
-  'publicImport.sourceFailed': ['读取公开来源失败。请检查网络和链接后重试。', 'Could not read the public source. Check the connection and link, then try again.'],
-  'publicImport.sourceChanged': ['来源版本或校验信息已变化，请重新预览。', 'The source version or verification data changed. Preview it again.'],
-  'publicImport.sourceTooLarge': ['公开文件或技能包超过读取上限。', 'The public file or Skill package exceeds the size limit.'],
-  'publicImport.manifestEncoding': ['SKILL.md 必须使用 UTF-8 编码。', 'SKILL.md must use UTF-8 encoding.'],
+  'publicImport.sourceFailed': [
+    '读取公开来源失败。请检查网络和链接后重试。',
+    'Could not read the public source. Check the connection and link, then try again.',
+  ],
+  'publicImport.sourceChanged': [
+    '来源版本或校验信息已变化，请重新预览。',
+    'The source version or verification data changed. Preview it again.',
+  ],
+  'publicImport.sourceTooLarge': [
+    '公开文件或技能包超过读取上限。',
+    'The public file or Skill package exceeds the size limit.',
+  ],
+  'publicImport.manifestEncoding': [
+    'SKILL.md 必须使用 UTF-8 编码。',
+    'SKILL.md must use UTF-8 encoding.',
+  ],
   'publicImport.manifestTooLarge': ['SKILL.md 超过读取上限。', 'SKILL.md exceeds the size limit.'],
-  'publicImport.sourceExists': ['当前项目已导入此条目，请从对应卡片检查更新。', 'This entry is already installed. Check for updates from its card.'],
+  'publicImport.sourceExists': [
+    '当前项目已导入此条目，请从对应卡片检查更新。',
+    'This entry is already installed. Check for updates from its card.',
+  ],
   'publicImport.githubConnected': ['GitHub 已连接 · @{{login}}', 'GitHub connected · @{{login}}'],
-  'publicImport.githubAnonymous': ['正在使用 GitHub 的匿名额度。', 'Using GitHub’s anonymous rate limit.'],
+  'publicImport.githubAnonymous': [
+    '正在使用 GitHub 的匿名额度。',
+    'Using GitHub’s anonymous rate limit.',
+  ],
   'publicImport.githubConnect': ['连接本机 GitHub 账号', 'Connect local GitHub account'],
   'publicImport.githubDisconnect': ['断开 GitHub', 'Disconnect GitHub'],
-  'publicImport.githubLoginRequired': ['请先通过 GitHub CLI 登录 github.com，再连接。', 'Sign in to github.com with GitHub CLI, then connect here.'],
+  'publicImport.githubLoginRequired': [
+    '请先通过 GitHub CLI 登录 github.com，再连接。',
+    'Sign in to github.com with GitHub CLI, then connect here.',
+  ],
   'publicImport.githubLoginHelp': ['GitHub CLI 登录说明', 'GitHub CLI sign-in instructions'],
-  'publicImport.githubPublicOnly': ['请选择公开 GitHub 仓库。', 'Choose a public GitHub repository.'],
-  'publicImport.githubRateLimit': ['GitHub 请求暂时达到限制，请稍后重试。', 'GitHub temporarily limited requests. Try again later.'],
-  'publicImport.githubNotFound': ['找不到链接指向的 GitHub 分支、目录或 SKILL.md。', 'The GitHub branch, folder, or SKILL.md could not be found.'],
-  'publicImport.githubUnsafeFiles': ['技能目录包含不安全的路径、链接或非普通文件。', 'The Skill folder contains an unsafe path, link, or non-regular file.'],
+  'publicImport.githubPublicOnly': [
+    '请选择公开 GitHub 仓库。',
+    'Choose a public GitHub repository.',
+  ],
+  'publicImport.githubRateLimit': [
+    'GitHub 请求暂时达到限制，请稍后重试。',
+    'GitHub temporarily limited requests. Try again later.',
+  ],
+  'publicImport.githubNotFound': [
+    '找不到链接指向的 GitHub 分支、目录或 SKILL.md。',
+    'The GitHub branch, folder, or SKILL.md could not be found.',
+  ],
+  'publicImport.githubUnsafeFiles': [
+    '技能目录包含不安全的路径、链接或非普通文件。',
+    'The Skill folder contains an unsafe path, link, or non-regular file.',
+  ],
   'publicImport.githubTruncated': [
     'GitHub 目录结果不完整。请使用更具体的 GitHub 目录或 SKILL.md 链接。',
     'GitHub returned an incomplete directory. Use a more specific GitHub folder or SKILL.md link.',
   ],
-  'publicImport.nameTaken': ['当前项目已有同名扩展。请先处理已有条目。', 'This project already has an extension with that name. Resolve the existing entry first.'],
-  'publicImport.extensionChanged': ['项目条目已经更新。请关闭并重新打开更新界面。', 'The project entry changed. Close and reopen the update dialog.'],
+  'publicImport.nameTaken': [
+    '当前项目已有同名扩展。请先处理已有条目。',
+    'This project already has an extension with that name. Resolve the existing entry first.',
+  ],
+  'publicImport.extensionChanged': [
+    '项目条目已经更新。请关闭并重新打开更新界面。',
+    'The project entry changed. Close and reopen the update dialog.',
+  ],
   'publicImport.localModified': [
     '此扩展包含本地修改。请备份后恢复来源内容，或移除原条目后再导入。',
     'This extension has local edits. Back them up and restore the source content, or remove the existing entry and import again.',

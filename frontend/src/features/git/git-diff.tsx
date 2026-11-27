@@ -89,7 +89,13 @@ function useHunkTokens(path: string | undefined, lines: GitDiffLine[]) {
   return highlight?.path === path && highlight?.lines === lines ? highlight : undefined;
 }
 
-export function HighlightedLine({ text, tokens }: { text: string; tokens: Tokens[number] | undefined }) {
+export function HighlightedLine({
+  text,
+  tokens,
+}: {
+  text: string;
+  tokens: Tokens[number] | undefined;
+}) {
   if (!tokens?.length) return text;
   return tokens.map(({ content, htmlStyle }, index) => {
     const style: TokenStyle = {

@@ -1441,7 +1441,9 @@
     background: var(--ui-card);
     color: var(--ui-foreground);
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
   }
   .git-branch-search-input:focus {
     border-color: var(--ui-primary);
@@ -1481,7 +1483,9 @@
     text-align: left;
     cursor: pointer;
     box-shadow: 0 1px 2px var(--ui-shadow);
-    transition: border-color 0.15s, background-color 0.15s;
+    transition:
+      border-color 0.15s,
+      background-color 0.15s;
   }
   .git-head-card:hover {
     border-color: var(--ui-primary);
@@ -1526,7 +1530,8 @@
     animation: git-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   @keyframes git-pulse {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
       transform: scale(1);
     }
@@ -1575,7 +1580,9 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
   }
   .git-group-header-btn:hover {
     background: var(--ui-muted);
@@ -1609,7 +1616,9 @@
     color: var(--ui-foreground);
     text-align: left;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
   }
   .git-branch-item-btn:hover {
     background: var(--ui-muted);
@@ -1721,7 +1730,10 @@
     background: var(--ui-background);
     color: var(--ui-foreground);
     outline: none;
-    transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+    transition:
+      border-color 0.15s,
+      background-color 0.15s,
+      box-shadow 0.15s;
   }
   .git-commit-search-input:focus {
     background: var(--ui-card);
@@ -1775,7 +1787,9 @@
     gap: 12px;
     padding: 7px 12px;
     border-radius: 6px;
-    transition: background-color 0.15s, box-shadow 0.15s;
+    transition:
+      background-color 0.15s,
+      box-shadow 0.15s;
     cursor: pointer;
   }
   .git-commit-row:hover {
@@ -1799,7 +1813,9 @@
     border: 2px solid var(--ui-muted-foreground);
     background: var(--ui-card);
     flex-shrink: 0;
-    transition: border-color 0.15s, background-color 0.15s;
+    transition:
+      border-color 0.15s,
+      background-color 0.15s;
   }
   .git-commit-row:hover .git-commit-dot {
     border-color: var(--ui-primary);
@@ -1848,7 +1864,9 @@
     color: var(--ui-muted-foreground);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 0.15s, background-color 0.15s;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
   }
   .git-commit-hash-btn:hover {
     color: var(--ui-foreground);
@@ -1964,7 +1982,9 @@
     color: var(--ui-foreground);
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
   }
   .git-retry-button:hover {
     background: var(--ui-muted);
