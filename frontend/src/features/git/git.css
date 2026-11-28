@@ -15,14 +15,15 @@
     outline: none;
   }
   .git-board-heading {
-    min-height: 48px;
+    min-height: 52px;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding-inline: 16px 12px;
-    border-block-end: 1px solid var(--ui-border);
+    border-block-end: 1px solid var(--ui-border-subtle);
+    background: color-mix(in srgb, var(--ui-background) 88%, var(--ui-card));
   }
   .git-board-heading .git-board-title {
     min-width: 0;
@@ -168,7 +169,7 @@
     min-height: 0;
     flex: 1;
     overflow: auto;
-    border-block-start: 1px solid var(--ui-border);
+    border-block-start: 1px solid var(--ui-border-subtle);
   }
   .git-panel[hidden] {
     display: none;
@@ -194,7 +195,7 @@
   }
   .git-list {
     position: relative;
-    border-inline-end: 1px solid var(--ui-border);
+    border-inline-end: 1px solid var(--ui-border-subtle);
     background: var(--ui-background);
   }
   .git-list ul,
@@ -270,8 +271,8 @@
     justify-content: space-between;
     gap: 8px 16px;
     padding: 8px 12px;
-    border-block-end: 1px solid var(--ui-border);
-    background: var(--ui-muted);
+    border-block-end: 1px solid var(--ui-border-subtle);
+    background: color-mix(in srgb, var(--ui-background) 70%, var(--ui-card));
   }
   .git-files-counts {
     display: flex;
@@ -342,12 +343,15 @@
   .git-list-button.git-file-row {
     min-height: 40px;
     height: auto;
-    padding: 5px 7px;
+    padding: 6px 8px;
     gap: 8px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
   }
   .git-file-row[aria-pressed='true'] {
-    box-shadow: inset 2px 0 var(--ui-primary);
+    background: var(--ui-card);
+    box-shadow:
+      inset 3px 0 0 var(--ui-primary),
+      0 1px 3px var(--ui-shadow);
   }
   .git-file-icon {
     display: grid;

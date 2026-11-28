@@ -27,7 +27,7 @@ function PageHeader({ icon, title, description, actions, className, ...props }: 
         {icon ? (
           <div
             aria-hidden="true"
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-muted text-primary [&>svg]:size-5"
+            className="flex size-11 shrink-0 items-center justify-center rounded-[14px] border border-primary/20 bg-primary/10 text-primary shadow-xs [&>svg]:size-5"
           >
             {icon}
           </div>
