@@ -25,6 +25,8 @@ node --import tsx scripts/task-plan-eval.mts --run \
 
 这里测量固定规划提示产生的候选清单和它对后续输出的影响。材料正文由评测器提供，评测器独立渲染 HTML 和检查结果。工作台中的文件发现、权限审批、真实工具选择与动态重规划有独立测试。单个模型和样例集的结果只适用于该次配对试验。
 
+在桌面上对比拆分提示词时，可以复用下方的[聊天复测用例](#聊天复测用例)。
+
 ## 首轮实测
 
 使用本机 `qwen3.5:9b`、Ollama `0.40.7` 和采样种子 `126`。六个样例各跑一组新旧配对，共 12 次试验。评分器修正了 A4 预览措辞、日志证据和 Markdown 分节的识别，用相同代码重新判定两组保留的回复与产物，浏览器实测值直接沿用。原始记录为 `.local/task-plan-evaluation/verified-126/report.json`，最终判分为同目录的 `report-regraded.json`。
@@ -76,3 +78,156 @@ ATELIER_TASK_PLAN_GATEWAY=http://127.0.0.1:PORT \
 ATELIER_TASK_PLAN_MODEL=gpt-6.1-terra ATELIER_TASK_PLAN_EFFORT=high \
   node --import tsx scripts/task-planning-runtime-eval.mts /path/to/baseline-worktree .local/task-planning/terra-result
 ```
+
+## 聊天复测用例
+
+从桌面新聊天原样发送每道题，澄清题在原聊天里回复。记录实际模型、推理档位、清单模式和所用拆分提示词。对照两份提示词时，固定模型、档位、模式和输入。分别记录可见清单是否出现、首次出现与首次发布的先后、最终清单状态，以及实际下载的内容。
+
+清单重点核对是否覆盖关键依赖和验收，是否有重复条目。记录步数供比较。简单任务可复用上方的 `simple` 作对照。明确要求清单的用例可在「自动」和「仅在我要求时」复跑。自动触发题要先核对当前模型的模式覆盖。[自动模式规则](../server/modules/runs/task-plan-guidance.ts#L48) · [澄清行为](chat-task-plan.md#执行中缺少关键决定时怎样继续)
+
+### 两份台账的发货状态冲突
+
+```text
+请合并两份台账，生成今天的发货清单。
+
+台账 A
+A102，待发货
+B105，待发货
+
+台账 B
+A102，已取消
+B105，待发货
+
+两份台账都没有更新时间，也没有注明哪份为准。
+
+只把待发货的订单写入可下载的 dispatch.csv，列为 order_id,status。待发货用 ready 表示，按订单号排序。
+```
+
+应当场询问 `A102` 是否发货，答复前无可下载的 `dispatch.csv`。在同一聊天回复「A102 已取消，请排除。」后，核对下载内容。
+
+```csv
+order_id,status
+B105,ready
+```
+
+### 签到表缺少场次决定
+
+```text
+帮我制作这次活动的签到表，只做一个场次。
+
+周六上午场：林悦、赵宁
+周六下午场：陈宇、许琳、周可
+
+需求单的场次一栏写的是「待确认」。
+
+请发布可下载的 check-in.csv，包含 name 和 attendance 两列。姓名按报名顺序排列，attendance 留空，现场填写。
+```
+
+应询问做上午场还是下午场，答复前无文件。在同一聊天回复「做周六下午场。」后，核对下载内容。
+
+```csv
+name,attendance
+陈宇,
+许琳,
+周可,
+```
+
+非阻塞对照在新聊天里将「需求单的场次一栏写的是『待确认』」整句换成「需求单已确认做周六下午场。活动对外名称待定，签到表只含指定两列。」应直接发布相同的签到表。
+
+### 用户明确要求跟踪工作坊结算
+
+```text
+帮我完成三个工作坊的报名结算。请先在工作台建立可见的任务清单，执行中更新进度，每项核对后再勾选完成。
+
+每个工作坊的容量
+room,capacity
+Birch,4
+Cedar,6
+Maple,5
+
+原始报名表
+id,room,seats,status
+B01,Birch,2,confirmed
+B02,Birch,1,confirmed
+B10,Birch,1,waitlist
+B11,Birch,1,waitlist
+C01,Cedar,2,confirmed
+C02,Cedar,2,confirmed
+C03,Cedar,1,confirmed
+C10,Cedar,2,waitlist
+C11,Cedar,2,waitlist
+C12,Cedar,1,waitlist
+M01,Maple,2,confirmed
+M02,Maple,1,confirmed
+M10,Maple,1,waitlist
+M11,Maple,1,waitlist
+
+更正记录
+id,revision,seats,status
+C02,3,2,cancelled
+M01,2,3,confirmed
+B02,2,1,cancelled
+C02,2,3,confirmed
+
+结算规则
+- 同一报名以 revision 最大的更正为准。更正表的行序没有意义。
+- cancelled 不占座，也不进入候补名单。
+- 先安排名单中的 confirmed，再按报名 ID 升序递补。每组必须整组入场。遇到第一个放不下的候补组，该工作坊停止递补。
+- 发布前核对每个工作坊的容量，以及三份文件之间的数字是否一致。
+
+发布三份可下载文件
+1. roster.csv，列为 room,id,seats,source。source 用 confirmed 或 promoted。
+2. waitlist.csv，列为 room,id,seats,reason。放不下的队首用 capacity，被队首挡住的后续组用 queue_blocked。
+3. summary.md，逐场列出容量、原确认人数、递补人数、最终入场人数和余位，并说明取消了哪些报名、为什么 Cedar 有余位却仍有候补。
+
+两份 CSV 都按 room、id 升序排列。
+```
+
+应在交付前出现可见清单。检查清单是否覆盖最新更正、依次递补和三份文件的核对，验证完成后能否更新到全部完成。下载两份 CSV 和简报，逐场核对人数。
+
+| 工作坊 | 容量 | 原确认 | 递补 | 最终入场 | 余位 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Birch | 4 | 2 | 2 | 4 | 0 |
+| Cedar | 6 | 3 | 2 | 5 | 1 |
+| Maple | 5 | 4 | 1 | 5 | 0 |
+| 合计 | 15 | 9 | 5 | 14 | 1 |
+
+取消 `B02` 和 `C02`。`C02` 用 revision 3，即使 revision 2 排在最后一行。Cedar 的 `C11` 需要两席，剩余一席，`C12` 因此继续候补。候补文件的三行应是 `Cedar,C11,2,capacity`、`Cedar,C12,1,queue_blocked` 和 `Maple,M11,1,capacity`。
+
+### 维修交接的自动清单
+
+用「自动」模式发送以下原题，观察模型是否主动建清单。
+
+```text
+请根据设备台账和工单流水，生成今天的维修交接材料。
+
+设备台账
+device,site,critical
+D01,East,yes
+D02,East,no
+D03,West,yes
+D04,West,no
+
+工单流水
+ticket,device,revision,status
+T101,D01,1,open
+T102,D02,1,open
+T103,D03,1,open
+T104,D04,1,open
+T105,D99,1,open
+T106,D03,1,open
+T107,D02,1,open
+T101,D01,3,reopened
+T106,D03,2,cancelled
+T102,D02,2,closed
+T101,D01,2,closed
+
+同一工单以 revision 最大的一条为准。open 和 reopened 都要交接，closed 和 cancelled 不进入待维修清单。关键设备标为 P1，其余标为 P2。设备在台账里查不到时，记录异常，不猜测站点或优先级。
+
+请发布三份可下载文件：
+- open-tickets.csv，列为 ticket,device,site,priority，按优先级、工单号升序。
+- exceptions.md，列出无法匹配的工单、设备编号和处理结果。
+- summary.json，包含工单总数、待维修数、关闭数、取消数、无法匹配数，以及各站点的待维修数。汇总数字要与交付文件一致。
+```
+
+全程未出现清单时，记为本次未触发。无论清单结果如何，单独核对交付。待维修顺序为 `T101`、`T103`、`T104`、`T107`，前两项为 P1，后两项为 P2。`T101` 使用 revision 3 的 `reopened`。异常只有 `T105 / D99`，从待维修表排除。工单总数为 7，其中待维修 4、关闭 1、取消 1、无法匹配 1。East 与 West 各有 2 张待维修工单。
