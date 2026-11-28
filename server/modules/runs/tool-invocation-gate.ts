@@ -1,7 +1,7 @@
 /**
  * @file 提供工具一次性调用票据门禁与项目目录写操作串行锁。
- * @implementation 按工具名称与规范化参数哈希签发并一次性核销 MCP 票据，随子代理结束吊销挂起票据，并按工作目录串行化获批后的写入副作用。
- * @updated 2026-11-27T19:48:00+08:00
+ * @implementation 按工具和参数哈希核销票据，携带 SDK 提示与子任务标识，撤销已结束子任务的票据，并串行化获批写入。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { fingerprint } from '../../files.js';
@@ -11,6 +11,7 @@ export interface ToolTicketEntry {
   name: string;
   hash: string;
   subagentId?: string;
+  sdkPromptId?: string;
 }
 
 export function callHash(name: string, args: Record<string, unknown>): string {
@@ -31,9 +32,21 @@ export class ToolInvocationGate {
 
   constructor(private readonly isActorActive: (subagentId: string) => boolean = () => true) {}
 
-  issue(id: string, name: string, args: Record<string, unknown>, subagentId?: string): string {
+  issue(
+    id: string,
+    name: string,
+    args: Record<string, unknown>,
+    subagentId?: string,
+    sdkPromptId?: string,
+  ): string {
     const ticket = randomUUID();
-    this.tickets.set(ticket, { id, name, hash: callHash(name, args), subagentId });
+    this.tickets.set(ticket, {
+      id,
+      name,
+      hash: callHash(name, args),
+      subagentId,
+      ...(sdkPromptId && { sdkPromptId }),
+    });
     return ticket;
   }
 

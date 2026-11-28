@@ -7,6 +7,7 @@ import { closeSync, constants, openSync, readSync, fstatSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import { clarificationGuidance } from './modules/runs/acceptance-stop.js';
 
 export const nativeReadTools = ['Read', 'Glob', 'Grep', 'WebFetch'];
 export const nativeWorkTools = [
@@ -31,7 +32,9 @@ export function nativeSdkOptions(
       type: 'preset',
       preset: 'claude_code',
       snapshot: false,
-      append: [nativeInstructions, planGuidance].filter(Boolean).join('\n\n'),
+      append: [nativeInstructions, clarificationGuidance, planGuidance]
+        .filter(Boolean)
+        .join('\n\n'),
     },
   };
 }

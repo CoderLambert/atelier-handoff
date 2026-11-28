@@ -303,6 +303,7 @@ test('mcp tools: edit + automatic scheduled task creation requires manual approv
       cleanError: (error) => (error instanceof Error ? error.message : String(error)),
       pagedOutputIds: new Set(),
       updatePlan: () => undefined,
+      requestClarification: (question) => question,
       getTool: () => {
         throw new Error('unused');
       },

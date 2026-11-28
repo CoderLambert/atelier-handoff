@@ -119,6 +119,7 @@ function fixture(server: EnabledMcp, mode: Run['mode'] = 'edit', withBinding = f
     },
     pagedOutputIds: new Set(),
     updatePlan: unexpected,
+    requestClarification: (question) => question,
     getTool: unexpected,
     getExtension: (id) => extensions.get(id) ?? unexpected(),
     event: (type, payload) => events.push({ type, payload }),
@@ -210,6 +211,7 @@ test('registration preserves ordering, descriptors and ticket rejection, and ski
   assert.deepEqual(
     tools.mcpTools.map(({ name }) => name),
     [
+      'request_clarification',
       'update_plan',
       'list_files',
       'search_files',

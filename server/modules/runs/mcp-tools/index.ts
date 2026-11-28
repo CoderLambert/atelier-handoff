@@ -1,7 +1,7 @@
 /**
  * @file 装配运行的 Atelier MCP 工具并统一处理 SDK 工具回执。
- * @implementation 以运行提供的能力核验票据和工作区，在子任务取消作用域内执行工具并归还在途登记，同时按原注册顺序组装工具。
- * @updated 2026-11-27T22:35:00+08:00
+ * @implementation 用一次性票据核验调用并传递 SDK 提示标识，在对应取消作用域内执行工具、记录回执及释放在途登记。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -32,7 +32,7 @@ function createCustomTool(host: RunMcpToolHost): CustomToolRegistrar {
     name: string,
     description: string,
     schema: S,
-    handler: (args: z.infer<z.ZodObject<S>>, id: string) => Promise<unknown>,
+    handler: (args: z.infer<z.ZodObject<S>>, id: string, sdkPromptId?: string) => Promise<unknown>,
   ) =>
     tool(name, description, { ...schema, atelierTicket: z.string().optional() }, async (input) => {
       const fullName = 'mcp__atelier__' + name;
@@ -49,7 +49,7 @@ function createCustomTool(host: RunMcpToolHost): CustomToolRegistrar {
       const work = toolContext.run(scope, async () => {
         try {
           await verifyDispatch();
-          const result = await handler(z.object(schema).parse(args), id);
+          const result = await handler(z.object(schema).parse(args), id, entry.sdkPromptId);
           const output = typeof result === 'string' ? result : JSON.stringify(result);
           const saved = finishTool(id, true, output);
           const summary = saved ? customOutputSummary(fullName, id, result, output) : undefined;

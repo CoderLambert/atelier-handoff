@@ -1,20 +1,30 @@
 /**
- * @file 将明确交付要求的验收接入主会话 Stop 和运行终态。
- * @implementation 按真实用户输入关联 SDK 提示，限制一次纠正，把验收结果写入运行事件，并在缺少 Stop 回执时核对最终输出。
- * @updated 2026-11-28T19:30:00+08:00
+ * @file 协调主会话交付验收与待回答的澄清问题。
+ * @implementation 关联用户输入和 SDK 提示，事务性记录澄清，并处理待回答时的工具门禁、Stop 验收及一次修正。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
+import { AppError } from '../../../shared/errors.js';
 import type { Run } from '../../../shared/types.js';
 import type { FileRecords } from '../../artifacts.js';
 import type { Store } from '../../store.js';
-import { checkRunAcceptance, type AcceptanceCheck } from './acceptance-check.js';
+import {
+  assertAcceptancePublication,
+  checkRunAcceptance,
+  type AcceptanceCheck,
+} from './acceptance-check.js';
 import { readAcceptanceCriteria } from './acceptance-criteria.js';
+
+export const clarificationGuidance =
+  '关键事实缺失、证据冲突或重要取舍未定且会改变交付时，先用现有材料核对。仍无法确定且 request_clarification 可用时，立刻调用它。把当前的关键问题和它为何影响交付写在工具参数里，由工具直接在聊天中显示。随后结束本次答复。收到用户回答后再继续依赖该答案的部分。已有明确依据时直接继续。';
 
 interface AcceptanceInput {
   text: string;
   messageId?: string;
-  live?: { prompt: string; sdkPromptId?: string; priorArtifactIds?: ReadonlySet<string> };
+  live?: { prompt: string; priorArtifactIds?: ReadonlySet<string> };
+  sdkPromptId?: string;
   hasCriteria: boolean;
+  clarification?: string;
   lifetime: AbortController;
 }
 
@@ -46,8 +56,37 @@ export class RunAcceptanceStop {
     this.current = acceptanceInput(run.prompt, messageId);
   }
 
-  get text() {
-    return this.current.text;
+  requireInputReady() {
+    if (this.current.clarification)
+      throw new AppError('CLARIFICATION_PENDING', '请先回答澄清问题，再继续本轮操作。', 409);
+  }
+
+  publicationFiles() {
+    return this.files.withPublicationCheck((name) => {
+      this.requireInputReady();
+      assertAcceptancePublication(this.current.text, name);
+    });
+  }
+
+  requestClarification(
+    question: string,
+    sdkPromptId: string | undefined,
+    present: (question: string) => void,
+  ): string {
+    this.signal.throwIfAborted();
+    if (this.finishing || !sdkPromptId || this.current.sdkPromptId !== sdkPromptId)
+      throw new AppError('CLARIFICATION_STALE', '这条澄清已过时，请根据最新用户消息判断。', 409);
+    if (this.current.clarification) return this.current.clarification;
+    this.store.transaction(() => {
+      present(question);
+      this.store.event(this.run.id, this.run.sessionId, 'run.clarification_requested', {
+        question,
+        ...(this.current.messageId && { messageId: this.current.messageId }),
+      });
+    });
+    this.current.clarification = question;
+    this.last = undefined;
+    return question;
   }
 
   replaceInput(text: string, messageId: string) {
@@ -67,13 +106,13 @@ export class RunAcceptanceStop {
         ? previous.text + '\n' + addition
         : text;
     this.current = acceptanceInput(requirements, messageId);
-    if (this.current.hasCriteria)
-      this.current.live = {
-        prompt: text,
-        priorArtifactIds: cumulative
+    this.current.live = {
+      prompt: text,
+      priorArtifactIds:
+        !this.current.hasCriteria || cumulative
           ? previous.live?.priorArtifactIds
           : new Set(this.store.repos.artifacts.listByRun(this.run.id).map(({ id }) => id)),
-      };
+    };
     this.last = undefined;
   }
 
@@ -84,10 +123,10 @@ export class RunAcceptanceStop {
       event.hook_event_name === 'UserPromptSubmit' &&
       !event.agent_id &&
       event.session_id === this.sessionId &&
-      this.current.live &&
-      event.prompt === this.current.live.prompt
+      (event.source === undefined || event.source === 'sdk' || event.source === 'user') &&
+      (!this.current.live || event.prompt === this.current.live.prompt)
     )
-      this.current.live.sdkPromptId = event.prompt_id;
+      this.current.sdkPromptId = event.prompt_id;
     return {};
   };
 
@@ -118,7 +157,13 @@ export class RunAcceptanceStop {
         { criterion: 'verification', status: 'unverified', detail: '无法完成本轮交付验收。' },
       ];
     }
-    if (signal.aborted || current !== this.current || (allowCorrection && this.finishing)) return;
+    if (
+      signal.aborted ||
+      current !== this.current ||
+      this.current.clarification ||
+      (allowCorrection && this.finishing)
+    )
+      return;
     const reasons = checks.filter(({ status }) => status !== 'passed').map(({ detail }) => detail);
     const failure = reasons.length ? '交付验收未通过。' + reasons.join(' ') : null;
     // A previously published, disallowed file is immutable. Deletion cannot repair it.
@@ -148,11 +193,12 @@ export class RunAcceptanceStop {
       this.finishing ||
       this.signal.aborted ||
       !this.current.hasCriteria ||
+      this.current.clarification ||
       event.hook_event_name !== 'Stop' ||
       event.agent_id ||
       event.session_id !== this.sessionId ||
       event.background_tasks?.length ||
-      (this.current.live && (!event.prompt_id || this.current.live.sdkPromptId !== event.prompt_id))
+      (this.current.live && (!event.prompt_id || this.current.sdkPromptId !== event.prompt_id))
     )
       return {};
     const signal = AbortSignal.any([this.signal, this.current.lifetime.signal, options.signal]);
@@ -175,7 +221,7 @@ export class RunAcceptanceStop {
 
   async finalFailure(answer: string): Promise<string | null> {
     this.close();
-    if (!this.current.hasCriteria) return null;
+    if (!this.current.hasCriteria || this.current.clarification) return null;
     const previous = this.last;
     if (
       previous &&

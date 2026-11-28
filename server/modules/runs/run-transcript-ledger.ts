@@ -1,7 +1,7 @@
 /**
- * @file 持有单轮运行的转录顺位、工具公告和通知。
- * @implementation 将 SDK 转录增量批量写入宿主事务，协调工具 Hook 和流帧到达顺序，并在原运行收尾事务中补齐顺位。
- * @updated 2026-11-27T18:02:17+08:00
+ * @file 管理单轮运行的转录顺位、工具公告与通知。
+ * @implementation 批量保存 SDK 转录增量，即时写入澄清，并协调工具钩子与流式消息到达顺序。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import type {
   SDKAssistantMessage,
@@ -118,6 +118,11 @@ export class RunTranscriptLedger {
 
   fallback(assistantId: string, result: string): void {
     this.transcript.fallback(assistantId, result);
+  }
+
+  recordQuestion(assistantId: string, question: string): void {
+    this.fallback(assistantId, question);
+    this.flush();
   }
 
   recordNotice(key: string, buildNotice: (position: NoticePosition) => TranscriptNotice): void {

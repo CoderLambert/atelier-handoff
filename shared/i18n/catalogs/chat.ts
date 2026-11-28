@@ -785,6 +785,7 @@ export const chat = {
   'tool.list': ['列出文件', 'List files'],
   'tool.navigate': ['打开网页', 'Open web page'],
   'tool.navigateHistory': ['切换网页历史', 'Navigate browser history'],
+  'tool.clarification': ['请求澄清', 'Ask for clarification'],
   'tool.plan': ['更新计划', 'Update plan'],
   'tool.pressKey': ['网页按键', 'Press browser key'],
   'tool.publish': ['发布交付物', 'Publish deliverable'],

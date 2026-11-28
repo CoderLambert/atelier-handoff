@@ -1,7 +1,7 @@
 /**
- * @file 注册运行的计划、项目文件、交付物、工具输出和检索工具。
- * @implementation 按执行模式及智能体能力装配工具和计划说明，委托审批、工作区写入、输出分页和命令在途登记。
- * @updated 2026-11-28T18:50:22+08:00
+ * @file 注册澄清、计划、项目文件、交付物、工具输出和检索工具。
+ * @implementation 按模式及能力装配工具，将主任务的澄清交给宿主记录，并委托审批、工作区写入、输出分页和命令登记。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import { z } from 'zod';
 import { AppError } from '../../../../shared/errors.js';
@@ -39,6 +39,22 @@ export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolReg
   } = host;
   mcpTools.push(
     ...[
+      custom(
+        'request_clarification',
+        'Ask the user a question when missing information or conflicting evidence blocks the requested outcome. Call this directly with the user-facing question. The tool posts it to chat immediately. End this turn and wait for the user before doing work that depends on the answer.',
+        { question: z.string().min(1).max(1000) },
+        async ({ question }, id, sdkPromptId) => {
+          if (getTool(id).subagentId)
+            throw new AppError('AGENT_CAPABILITY_DENIED', '请将待澄清问题交给主任务。', 403);
+          return {
+            recorded: true,
+            question: host.requestClarification(
+              z.string().trim().min(1).parse(question),
+              sdkPromptId,
+            ),
+          };
+        },
+      ),
       custom(
         'update_plan',
         describeTaskPlanTool(run.taskPlanning?.mode ?? 'auto'),
@@ -88,6 +104,8 @@ export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolReg
       ),
     ].filter((entry) => {
       switch (entry.name) {
+        case 'request_clarification':
+          return !run.scheduleMeta;
         case 'update_plan':
           return allowed('plan');
         case 'list_files':

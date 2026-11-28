@@ -34,7 +34,7 @@ export type CustomToolRegistrar = <S extends z.ZodRawShape>(
   name: string,
   description: string,
   schema: S,
-  handler: (args: z.infer<z.ZodObject<S>>, id: string) => Promise<unknown>,
+  handler: (args: z.infer<z.ZodObject<S>>, id: string, sdkPromptId?: string) => Promise<unknown>,
 ) => McpTools[number];
 
 export interface RunMcpToolHost {
@@ -57,11 +57,12 @@ export interface RunMcpToolHost {
     ticket: unknown,
     name: string,
     args: Record<string, unknown>,
-  ): { id: string; subagentId?: string } | undefined;
+  ): { id: string; subagentId?: string; sdkPromptId?: string } | undefined;
   finishTool(id: string, ok: boolean, output: string): ToolCall | undefined;
   cleanError(error: unknown): string;
   pagedOutputIds: Set<string>;
   updatePlan(steps: Step[]): void;
+  requestClarification(question: string, sdkPromptId?: string): string;
   getTool(id: string): ToolCall;
   getExtension(id: string): Extension;
   event(type: string, payload: Record<string, unknown>): void;

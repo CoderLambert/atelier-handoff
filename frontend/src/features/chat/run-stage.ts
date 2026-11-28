@@ -22,6 +22,7 @@ const toolLabels: Readonly<
     | 'tool.delete'
     | 'tool.command'
     | 'tool.weather'
+    | 'tool.clarification'
     | 'tool.plan'
     | 'tool.publish'
     | 'tool.navigate'
@@ -48,6 +49,7 @@ const toolLabels: Readonly<
   delete_file: 'tool.delete',
   run_command: 'tool.command',
   weather_lookup: 'tool.weather',
+  request_clarification: 'tool.clarification',
   update_plan: 'tool.plan',
   publish_artifact: 'tool.publish',
   browser_navigate: 'tool.navigate',

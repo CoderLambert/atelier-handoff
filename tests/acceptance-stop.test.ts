@@ -1,11 +1,11 @@
 /**
- * @file 验证主运行收尾验收、一次修正及其实际 SDK 请求。
- * @implementation 使用锁定 SDK、回环响应器和临时 SQLite 检查修正上下文、验收记录及最终运行状态。
- * @updated 2026-11-28T19:35:00+08:00
+ * @file 验证主运行交付验收、澄清等待及实际 SDK 请求。
+ * @implementation 使用锁定 SDK、回环响应器和临时 SQLite 核对验收修正、澄清展示、插话与等待期间的操作门禁。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,7 +101,7 @@ function fixture(store: Store, projectPath: string, prompt: string, gateway: str
   });
 }
 
-async function runScenario(prompt: string, answers: ReplyStep[]) {
+async function runScenario(prompt: string, answers: ReplyStep[], edit = false) {
   const directory = await mkdtemp(join(tmpdir(), 'atelier-acceptance-sdk-'));
   const projectPath = join(directory, 'project');
   await mkdir(projectPath);
@@ -133,16 +133,19 @@ async function runScenario(prompt: string, answers: ReplyStep[]) {
     const address = gateway.address();
     assert.ok(address && typeof address === 'object');
     run = fixture(store, projectPath, prompt, `http://127.0.0.1:${address.port}`);
+    if (edit) run = store.update('runs', run.id, { mode: 'edit', approvalMode: 'automatic' });
     await runner.start(run, prompt);
     assert.deepEqual(errors, []);
-    const events = store
-      .runHistory(run.id)
-      .events.filter(({ type }) => type === 'run.acceptance_checked');
+    const history = store.runHistory(run.id).events;
+    const events = history.filter(({ type }) => type === 'run.acceptance_checked');
     return {
       requests,
       run: store.get('runs', run.id),
       artifacts: store.repos.artifacts.listByRun(run.id),
       receipts: events.map(({ payload }) => receipt.parse(payload)),
+      history,
+      projectFiles: await readdir(projectPath),
+      messages: store.list('messages').filter(({ runId }) => runId === run.id),
     };
   } finally {
     await runner.shutdown();
@@ -187,6 +190,77 @@ test('real SDK repair publishes the missing file and verifies its immutable byte
     result.receipts.map(({ checks }) => checks.map(({ status }) => status)),
     [['failed'], ['passed']],
   );
+});
+
+test('real SDK surfaces a blocking question without trying to repair an unfinished delivery', async () => {
+  const question = '两份订单表对 A102 的状态冲突。今天应发货，还是排除？';
+  const result = await runScenario('合并订单并交付 report.md', [
+    [
+      {
+        name: 'mcp__atelier__request_clarification',
+        id: 'toolu_blocked_delivery',
+        input: { question: `  ${question}  ` },
+      },
+    ],
+    '收到答复后继续。',
+  ]);
+  assert.ok(
+    result.requests[1]?.includes('recorded'),
+    'the SDK must receive a successful question receipt',
+  );
+  assert.equal(result.requests.length, 2);
+  assert.equal(result.run.status, 'completed', result.run.error ?? undefined);
+  assert.deepEqual(result.receipts, []);
+  assert.deepEqual(result.artifacts, []);
+  const requested = result.history.filter(({ type }) => type === 'run.clarification_requested');
+  assert.equal(requested.length, 1);
+  assert.equal(requested[0]?.payload.question, question);
+  assert.equal(result.messages.filter((message) => message.text === question).length, 1);
+});
+
+test('a run cannot publish after it has asked for a blocking decision', async () => {
+  const result = await runScenario('请交付 report.md', [
+    [
+      {
+        name: 'mcp__atelier__request_clarification',
+        id: 'toolu_pending_decision',
+        input: { question: '应采用已取消的状态吗？' },
+      },
+    ],
+    publish('toolu_premature_report', 'report.md', 'unresolved content'),
+    '等待用户确认。',
+  ]);
+  assert.equal(result.run.status, 'completed', result.run.error ?? undefined);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.receipts, []);
+  assert.ok(result.requests[2]?.includes('先回答澄清问题'));
+});
+
+test('automatically approved edits are blocked while the question is unanswered', async () => {
+  const result = await runScenario(
+    '采用我确认的状态并交付 report.md',
+    [
+      [
+        {
+          name: 'mcp__atelier__request_clarification',
+          id: 'toolu_which_status',
+          input: { question: '用 A 还是 B？' },
+        },
+      ],
+      [
+        {
+          name: 'mcp__atelier__write_file',
+          id: 'toolu_unconfirmed_write',
+          input: { path: 'guessed.txt', content: 'B', reason: 'Write the selected status' },
+        },
+      ],
+      '等待确认。',
+    ],
+    true,
+  );
+  assert.equal(result.run.status, 'completed', result.run.error ?? undefined);
+  assert.deepEqual(result.projectFiles, []);
+  assert.ok(result.requests[2]?.includes('先回答澄清问题'));
 });
 
 test('real SDK uses a newly inserted user request and ignores the superseded Stop', async () => {
@@ -267,9 +341,23 @@ test('a skipped main Stop verifies the final SDK answer; child, foreign and stal
       stop_hook_active: false,
       last_assistant_message: '已经完成',
     };
+    const submit = acceptance.hooks.UserPromptSubmit[0]?.hooks[0];
+    assert.ok(submit);
+    await submit(
+      { ...event, hook_event_name: 'UserPromptSubmit', prompt_id: 'previous', prompt: run.prompt },
+      undefined,
+      { signal },
+    );
     assert.deepEqual(await stop({ ...event, agent_id: 'child' }, undefined, { signal }), {});
     assert.deepEqual(await stop({ ...event, session_id: randomUUID() }, undefined, { signal }), {});
     acceptance.replaceInput('只回复 33', randomUUID());
+    assert.throws(
+      () =>
+        acceptance.requestClarification('旧问题？', 'previous', () =>
+          assert.fail('stale question became visible'),
+        ),
+      { code: 'CLARIFICATION_STALE' },
+    );
     assert.deepEqual(await stop({ ...event, prompt_id: 'previous' }, undefined, { signal }), {});
     assert.equal(store.runHistory(run.id).events.length, 0);
     const failure = await acceptance.finalFailure('22');

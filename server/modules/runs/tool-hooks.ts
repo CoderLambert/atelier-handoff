@@ -1,7 +1,7 @@
 /**
  * @file 构造 Claude SDK 工具调用和回执钩子。
- * @implementation 校验工具白名单、子代理能力和 TodoWrite 输入，将主运行已成功的 TodoWrite 交给清单写入入口，并处理 RTK 改写与输出分页。
- * @updated 2026-11-28T21:32:37+08:00
+ * @implementation 校验工具权限，签发关联 SDK 提示的工具票据，并处理计划写入、RTK 改写和工具结果。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import { taskPlanSteps } from './task-plan-guidance.js';
 import { lstat } from 'node:fs/promises';
@@ -260,7 +260,13 @@ export function createRunToolHooks(deps: RunToolHooksDeps) {
       const updatedInput = permittedMcp.has(event.tool_name)
         ? {
             ...args,
-            atelierTicket: toolGate.issue(id, event.tool_name, args, actor?.id),
+            atelierTicket: toolGate.issue(
+              id,
+              event.tool_name,
+              args,
+              actor?.id,
+              event.session_id === sdkSessionId ? event.prompt_id : undefined,
+            ),
           }
         : rtkCandidate;
       return decision('allow', '受控工具，审批由工作台执行器按本轮设置处理。', updatedInput);

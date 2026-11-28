@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
- * @implementation 协调 SDK 流、工具、子任务和会话续接，按本轮能力装配清单，关联主会话 Stop 验收、发布范围检查与最终运行状态。
- * @updated 2026-11-28T19:47:32+08:00
+ * @implementation 协调 SDK 流、工具和子任务，将澄清写入会话转录，并在等待回答时拦截新的工具操作。
+ * @updated 2026-11-29T00:37:27+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -51,7 +51,6 @@ import { createRunPlanning } from './modules/runs/task-planning.js';
 import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
 import { resolveRunOutcome } from './modules/runs/run-outcome.js';
 import { RunAcceptanceStop } from './modules/runs/acceptance-stop.js';
-import { assertAcceptancePublication } from './modules/runs/acceptance-check.js';
 import { consumeSdkStream } from './modules/runs/sdk-stream-consumer.js';
 import { SdkTaskCoordinator } from './modules/runs/sdk-task-coordinator.js';
 import { createToolCallRecorder } from './modules/runs/tool-call-recorder.js';
@@ -210,6 +209,7 @@ export class AgentRunner implements Runner {
     const verifyCurrent = () => {
       toolSignal().throwIfAborted();
       if (turn.isClosing) throw new AppError('RUN_STOPPED', '运行正在收尾。', 409);
+      acceptance.requireInputReady();
       validateAgent?.();
     };
     const planning = createRunPlanning(this.store, run, verifyCurrent);
@@ -333,9 +333,7 @@ export class AgentRunner implements Runner {
       sdkSessionId,
       promptMessageId,
     );
-    const runFiles = this.files.withPublicationCheck((name) =>
-      assertAcceptancePublication(acceptance.text, name),
-    );
+    const runFiles = acceptance.publicationFiles();
     const subagents = new SubagentRun(
       run,
       sdkSessionId,
@@ -383,6 +381,8 @@ export class AgentRunner implements Runner {
         this.store.event(run.id, session.id, 'tool.announced', { toolCallId: id, tool: name }),
       now,
     });
+    const presentQuestion = (question: string) =>
+      ledger.recordQuestion(createAssistant(), question);
     let assistantId = ledger.initialize(promptMessageId, createAssistant);
     let assistantAnchor: string | undefined;
     const turn = new LiveTurnCoordinator({
@@ -472,6 +472,8 @@ export class AgentRunner implements Runner {
       cleanError: (error) => this.clean(error, Infinity),
       pagedOutputIds,
       updatePlan,
+      requestClarification: (question, sdkPromptId) =>
+        acceptance.requestClarification(question, sdkPromptId, presentQuestion),
       getTool: (id) => this.store.get('tools', id),
       getExtension: (id) => this.store.get('extensions', id),
       event: (type, payload) => this.store.event(run.id, session.id, type, payload),
