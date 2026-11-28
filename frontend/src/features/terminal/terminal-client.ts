@@ -1,7 +1,7 @@
 /**
  * @file 持有人工终端的解析器、连接与可移动视图。
- * @implementation 有界资源注册表按 runtime/terminal 唯一建实例；视图租约挂载 DOM 并同步工作台配色，连续输出分批解析，输入回执即时记账。
- * @updated 2026-11-26T01:00:00+08:00
+ * @implementation 有界注册表按 runtime/terminal 唯一建实例，视图租约管理 DOM，输出分批解析并即时处理输入回执。剪贴板复制读取当前选区，粘贴前核对连接、视图租约和输入焦点。
+ * @updated 2026-11-28T15:13:32+08:00
  */
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -186,6 +186,10 @@ export class TerminalClientSession {
         this.fitAddon = new FitAddon();
         this.terminal.loadAddon(this.fitAddon);
         this.terminal.open(this.container);
+        const terminal = this.terminal;
+        if (!/Mac|iPhone|iPad/.test(navigator.platform)) {
+          terminal.attachCustomKeyEventHandler((event) => this.handleClipboardKey(terminal, event));
+        }
         this.appliedTheme = document.documentElement.dataset.theme;
         this.themeObserver = new MutationObserver(() => this.syncTheme());
         this.themeObserver.observe(document.documentElement, {
@@ -215,6 +219,44 @@ export class TerminalClientSession {
         // Keep parser/WS active: disableStdin would also suppress DSR/DA responses.
       },
     };
+  }
+  private handleClipboardKey(terminal: Terminal, event: KeyboardEvent): boolean {
+    if (
+      event.type !== 'keydown' ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      !event.ctrlKey ||
+      !event.shiftKey ||
+      event.altKey ||
+      event.metaKey
+    )
+      return true;
+    const key = event.key.toLowerCase();
+    if (key !== 'c' && key !== 'v') return true;
+
+    event.preventDefault();
+    const clipboard = navigator.clipboard;
+    if (event.repeat || !clipboard) return false;
+    if (key === 'c') {
+      const text = terminal.getSelection();
+      if (text) void clipboard.writeText(text).catch(() => {});
+    } else if (this.writable) {
+      const { epoch, lease } = this;
+      void clipboard
+        .readText()
+        .then((text) => {
+          if (
+            text &&
+            epoch === this.epoch &&
+            lease === this.lease &&
+            this.writable &&
+            document.activeElement === terminal.textarea
+          )
+            terminal.paste(text);
+        })
+        .catch(() => {});
+    }
+    return false;
   }
   private syncTheme(): void {
     const theme = document.documentElement.dataset.theme;

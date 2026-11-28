@@ -1,14 +1,14 @@
 /**
  * @file 从隔离开发态 Electron 验收人工终端。
- * @implementation 使用真实配对窗口、PTY 和本地空模型目录，复用终端交互场景并核对所属 shell 的退出身份。
- * @updated 2026-11-26T03:55:00+08:00
+ * @implementation 使用真实配对窗口、PTY 和本地空模型目录，默认覆盖终端交互与 shell 退出。剪贴板模式验证中英文界面的系统复制粘贴、命令中断与重载恢复。
+ * @updated 2026-11-28T15:13:32+08:00
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { _electron, type ElectronApplication } from 'playwright-core';
+import { _electron, type ElectronApplication, type Page } from 'playwright-core';
 import { z } from 'zod';
 import { terminalListResponseSchema } from '../shared/terminal.js';
 import {
@@ -25,6 +25,7 @@ const evidence = resolve(
   process.env.ATELIER_TERMINAL_EVIDENCE ?? '.local/terminal-workbench/electron',
 );
 const model = 'fixture-terminal-no-inference';
+const clipboardOnly = process.argv.includes('--clipboard');
 let modelRequests = 0;
 let app: ElectronApplication | undefined;
 let observed: TerminalProcessIdentity[] = [];
@@ -77,6 +78,92 @@ async function shellExited(identity: TerminalProcessIdentity): Promise<boolean> 
   );
 }
 
+// This smoke uses a disposable display and its system clipboard.
+async function checkTerminalClipboard(
+  application: ElectronApplication,
+  page: Page,
+  terminalId: string,
+  locale: string,
+): Promise<void> {
+  const terminal = page.locator(`.terminal-viewport[data-terminal-id="${terminalId}"]`);
+  const textarea = terminal.locator('.xterm-helper-textarea');
+  await until(
+    async () => (await textarea.isEditable()) || undefined,
+    10_000,
+    'Terminal input ready',
+  );
+  await textarea.focus();
+  const marker = `ATELIER_COPY_${locale}`;
+  await page.keyboard.insertText(`printf '\\n%s\\n' '${marker}'`);
+  await page.keyboard.press('Enter');
+  const row = terminal.locator('.xterm-rows > div').filter({ hasText: new RegExp(`^${marker}$`) });
+  await row.waitFor();
+  const bounds = await row.boundingBox();
+  assert.ok(bounds);
+  await page.mouse.dblclick(bounds.x + 16, bounds.y + bounds.height / 2);
+  await application.evaluate(({ clipboard }) => clipboard.writeText('clipboard-sentinel'));
+  await page.keyboard.press('Control+Shift+C');
+  await until(
+    async () =>
+      (await application.evaluate(({ clipboard }) => clipboard.readText())) === marker
+        ? true
+        : undefined,
+    3000,
+    'Ctrl+Shift+C copies the selected terminal output to the system clipboard',
+  );
+
+  const pasted = `clipboard-中文-${locale}`;
+  const filename = `clipboard-${locale}.txt`;
+  const path = join(project, filename);
+  const command = `printf '%s' '${pasted}' > '${filename}'`;
+  await application.evaluate(({ clipboard }, text) => clipboard.writeText(text), command);
+  await textarea.focus();
+  await page.keyboard.press('Control+Shift+V');
+  await until(
+    async () =>
+      (await terminal.locator('.xterm-rows').innerText()).includes(pasted) ? true : undefined,
+    3000,
+    'Ctrl+Shift+V pastes system clipboard text into the shell input',
+  );
+  await assert.rejects(readFile(path, 'utf8'), { code: 'ENOENT' });
+  await page.keyboard.press('Enter');
+  await until(
+    async () =>
+      (await readFile(path, 'utf8').catch(() => undefined)) === pasted ? true : undefined,
+    3000,
+    'The shell receives the pasted command once with Unicode intact',
+  );
+}
+
+async function runClipboardSmoke(application: ElectronApplication, page: Page, sessionId: string) {
+  await page.goto(new URL(`/#/sessions/${sessionId}/terminal`, page.url()).href);
+  const panel = page.getByRole('region', { name: '终端', exact: true });
+  await panel.getByRole('button', { name: '新建终端', exact: true }).click();
+  const terminal = panel.locator('.terminal-viewport[data-terminal-id]');
+  const terminalId = z.uuid().parse(await terminal.getAttribute('data-terminal-id'));
+  await checkTerminalClipboard(application, page, terminalId, 'zh');
+
+  await page.keyboard.insertText('printf "\\n%s\\n" ATELIER_FOREGROUND; while :; do :; done');
+  await page.keyboard.press('Enter');
+  await terminal
+    .locator('.xterm-rows > div')
+    .filter({ hasText: /^ATELIER_FOREGROUND$/u })
+    .waitFor();
+  await page.keyboard.press('Control+c');
+  await page.keyboard.insertText('printf "\\n%s\\n" ATELIER_INTERRUPT_OK');
+  await page.keyboard.press('Enter');
+  await terminal
+    .locator('.xterm-rows > div')
+    .filter({ hasText: /^ATELIER_INTERRUPT_OK$/u })
+    .waitFor();
+  await page.reload();
+  await terminal
+    .locator('.xterm-rows > div')
+    .filter({ hasText: /^ATELIER_INTERRUPT_OK$/u })
+    .waitFor();
+  return { shutdownTerminalId: terminalId, ctrlC: true, reloadRetainedTerminal: true };
+}
+
 try {
   await Promise.all([
     mkdir(project),
@@ -123,35 +210,37 @@ try {
   await application.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1280, 800),
   );
-  const result = await runTerminalSmoke({
-    page,
-    sessionId,
-    initialCwd: project,
-    screenshotDirectory: evidence,
-    resizeWindow: async (width, height) => {
-      await application.evaluate(
-        ({ BrowserWindow }, size) => {
-          BrowserWindow.getAllWindows()[0]?.setContentSize(size.width, size.height);
+  const result = clipboardOnly
+    ? await runClipboardSmoke(application, page, sessionId)
+    : await runTerminalSmoke({
+        page,
+        sessionId,
+        initialCwd: project,
+        screenshotDirectory: evidence,
+        resizeWindow: async (width, height) => {
+          await application.evaluate(
+            ({ BrowserWindow }, size) => {
+              BrowserWindow.getAllWindows()[0]?.setContentSize(size.width, size.height);
+            },
+            { width, height },
+          );
         },
-        { width, height },
-      );
-    },
-    observeShell: async (pid) => {
-      const sample = await processSample(pid);
-      assert.ok(sample);
-      const sidecar = await processSample(sample.parent);
-      assert.ok(sidecar);
-      assert.equal(sidecar.parent, mainPid, 'Terminal belongs to this Electron runtime');
-      assert.ok(
-        sidecar.args.includes(resolve('server/main.ts')),
-        'Terminal parent is the actual development sidecar',
-      );
-      const identity = allowTerminalShell(pid, sidecar.pid, [sample, sidecar]);
-      observed.push(identity);
-      return identity;
-    },
-    shellExited,
-  });
+        observeShell: async (pid) => {
+          const sample = await processSample(pid);
+          assert.ok(sample);
+          const sidecar = await processSample(sample.parent);
+          assert.ok(sidecar);
+          assert.equal(sidecar.parent, mainPid, 'Terminal belongs to this Electron runtime');
+          assert.ok(
+            sidecar.args.includes(resolve('server/main.ts')),
+            'Terminal parent is the actual development sidecar',
+          );
+          const identity = allowTerminalShell(pid, sidecar.pid, [sample, sidecar]);
+          observed.push(identity);
+          return identity;
+        },
+        shellExited,
+      });
   // Changing language and returning to the saved route must retain this same terminal.
   const terminalRoute = page.url();
   await page.goto(`${new URL(page.url()).origin}/#/settings/models`);
@@ -163,6 +252,8 @@ try {
   );
   await page.goto(terminalRoute);
   await page.getByRole('region', { name: 'Terminal', exact: true }).waitFor();
+  if (clipboardOnly)
+    await checkTerminalClipboard(application, page, result.shutdownTerminalId, 'en');
   const listed: unknown = await page.evaluate(async (id) => {
     const response = await fetch(`/api/sessions/${id}/terminals`);
     return response.json();
@@ -192,8 +283,9 @@ try {
         node: process.version,
         electron: '45.4.1',
         languages: ['zh-CN', 'en'],
+        ...(clipboardOnly ? { systemClipboard: true } : {}),
         appShutdownMs: Date.now() - started,
-        allObservedShellsExited: true,
+        ...(!clipboardOnly ? { allObservedShellsExited: true } : {}),
         modelRequests,
       },
       null,
