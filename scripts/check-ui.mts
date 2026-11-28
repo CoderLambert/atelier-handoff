@@ -20,7 +20,8 @@ interface Violation {
     | 'scrollbar'
     | 'focus-outline'
     | 'raw-control'
-    | 'raw-font-size';
+    | 'raw-font-size'
+    | 'legacy-token';
   detail: string;
   line: number;
 }
@@ -30,6 +31,8 @@ const paletteClass =
 const hexColor = /#[\da-f]{3,8}\b/i;
 const colorFunction = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(\s*[\d.+-]/i;
 const allowedNativeInputTypes = new Set(['file', 'checkbox', 'radio', 'hidden', 'range', 'color']);
+const legacyTokenPattern =
+  /var\((--(?:bg|surface|surface-warm|fg|fg-2|muted|meta|border|border-soft|accent|accent-on|accent-hover|accent-active|success|warn|danger|elev-raised|sidebar-bg|aside-bg|selected|soft-accent|approval-bg|approval-border|user-bg|code-add|code-delete|shadow-color|scrim))(?=[,)])/g;
 const oldControlClass = /^(?:btn(?:-(?:primary|secondary|ghost|danger))?|icon-button)$/;
 const literal = (value: t.Node | null | undefined) =>
   t.isStringLiteral(value) ? value.value : undefined;
@@ -174,6 +177,15 @@ function checkCss(source: string, file: string): Violation[] {
         });
       }
     }
+    if (file !== 'styles.css') {
+      for (const match of declaration.value.matchAll(legacyTokenPattern)) {
+        violations.push({
+          rule: 'legacy-token',
+          detail: `${declaration.prop}:var(${match[1]})`,
+          line: declaration.source?.start?.line ?? 1,
+        });
+      }
+    }
     if (declaration.prop === 'content') return;
     const value = declaration.value.replace(/url\([^)]*\)/gi, '');
     if (hexColor.test(value) || colorFunction.test(value)) {
@@ -215,6 +227,7 @@ if (process.argv.includes('--self-test')) {
   );
   assert.equal(checkTsx(`const a = <input />;`, 'components/ui/input.tsx').length, 0);
   assert.equal(checkCss('.meta { font-size: 11.5px; }', 'feature.css')[0]?.rule, 'raw-font-size');
+  assert.equal(checkCss('.meta { color: var(--muted); }', 'feature.css')[0]?.rule, 'legacy-token');
 } else {
   const root = fileURLToPath(new URL('../frontend/src/', import.meta.url));
   const errors: string[] = [];

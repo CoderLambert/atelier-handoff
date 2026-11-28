@@ -11,7 +11,6 @@ import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolb
 import type { AgentCard, Project } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { Bot } from 'lucide-react';
 import { messageOf, useExtensions } from '@/features/extensions/api';
 import { useStartAgentSession } from '@/use-query/agents/use-start-agent-session';
 import {
