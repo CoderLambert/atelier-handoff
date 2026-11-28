@@ -1,9 +1,9 @@
 /**
- * @file 提供任务输入、引用、附件编辑和运行停止操作。
- * @implementation 管理输入事件与发送锁，按会话策略提供运行操作，并将补全和草稿上下文交给各自的组件。
- * @updated 2026-11-27T18:34:46+08:00
+ * @file 提供任务输入、文本增强、引用、附件编辑和运行停止操作。
+ * @implementation 管理输入、发送锁和运行操作。编辑或发送时取消增强，写回前复核当前草稿。
+ * @updated 2026-11-28T17:50:11+08:00
  */
-import { useUiTranslation, translateError } from '@/i18n';
+import { useUiTranslation } from '@/i18n';
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowUp, Paperclip, Plus } from 'lucide-react';
 import { composerTextLimit, formatMessageText } from '@shared/message-quotes';
@@ -18,6 +18,7 @@ import { DraftSessionSkills, SessionSkillsControl } from '@/features/extensions/
 import { stagedAttachment } from './staged-attachments';
 import { useSessionSkills } from '@/features/extensions/use-session-skills';
 import { ComposerContextChips, ComposerQuotes } from './composer-context';
+import { composerErrorText, type ComposerError } from './composer-errors';
 import { selectComposerPolicy } from './composer-policy';
 import { ContextPicker } from './context-picker';
 import { selectContextUsage } from './context-usage-model';
@@ -28,22 +29,12 @@ import type { ComposerMode } from './run-mode';
 import { TaskPlan } from './task-plan';
 import { useComposerKeymap } from './use-composer-keymap';
 
-import {
-  useComposerAttachments,
-  type AttachmentActionError,
-  type DraftChange,
-} from './hooks/use-composer-attachments';
+import { useComposerAttachments, type DraftChange } from './hooks/use-composer-attachments';
 import { Textarea } from '@/components/ui/textarea';
+import { TextEnhanceAction } from '@/features/text-enhancement/text-enhance-action';
+import { useTextEnhancement } from '@/features/text-enhancement/use-text-enhancement';
 
 export type { DraftChange } from './hooks/use-composer-attachments';
-type ComposerError =
-  | { type: 'attachment'; error: AttachmentActionError }
-  | { type: 'send'; cause: unknown }
-  | {
-      type: 'notice';
-      key: 'composer.attachmentsDisabled' | 'composer.dropBusy' | 'composer.pasteBusy';
-    };
-
 const modeFooter = {
   native: 'composer.nativeFooter',
   automatic: 'composer.automaticFooter',
@@ -66,6 +57,7 @@ export function Composer({
   onEffortChange,
   onModeChange,
   onDraftChange,
+  getDraft,
   onSend,
   onStop,
   stopPendingRunId,
@@ -85,6 +77,7 @@ export function Composer({
   onEffortChange: (effort?: ReasoningEffort) => void;
   onModeChange: (mode: ComposerMode) => void;
   onDraftChange: DraftChange;
+  getDraft: () => Draft;
   onSend: (insertIntoRunId?: string) => Promise<void>;
   onStop: (runId: string) => void;
   stopPendingRunId?: string;
@@ -106,15 +99,7 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [error, setError] = useState<ComposerError>();
-  const errorText = error
-    ? error.type === 'notice'
-      ? t(error.key)
-      : error.type === 'send'
-        ? translateError(error.cause, t('composer.sendUnconfirmed'))
-        : error.error.type === 'limit'
-          ? t('attachment.limit')
-          : translateError(error.error.cause, t('attachment.removeFailed'))
-    : '';
+  const errorText = composerErrorText(error, t);
   const sessionId = snapshot.session.id;
   const agent = snapshot.agent;
   const {
@@ -165,6 +150,17 @@ export function Composer({
     submitting,
     onError: (error) => setError({ type: 'attachment', error }),
   });
+  const enhancement = useTextEnhancement({
+    target: sessionId,
+    kind: 'instruction',
+    text: draft.text,
+    disabled: archived || submitting,
+    onReplace(expected, text) {
+      if (sendLock.current || getDraft().text !== expected) return false;
+      onDraftChange((previous) => ({ ...previous, text }));
+      return true;
+    },
+  });
   const dropAllowed = canUpload && draft.attachmentIds.length < 20;
   const canSend =
     !archived &&
@@ -190,6 +186,7 @@ export function Composer({
   async function submit(insertIntoRunId?: string) {
     if (!canSend || pendingOperations.current || sendLock.current) return;
     sendLock.current = true;
+    enhancement.cancel();
     setError(undefined);
     try {
       await onSend(insertIntoRunId);
@@ -258,6 +255,7 @@ export function Composer({
               variant="outline"
               className="composer-starter-btn"
               onClick={() => {
+                enhancement.cancel();
                 onDraftChange((previous) => ({ ...previous, text: starter }));
                 input?.focus();
               }}
@@ -388,6 +386,7 @@ export function Composer({
             queueUpload(files);
           }}
           onChange={(event) => {
+            enhancement.cancel();
             const text = event.target.value;
             onDraftChange((previous) => ({ ...previous, text }));
           }}
@@ -444,6 +443,7 @@ export function Composer({
             >
               <Paperclip data-icon="inline-start" aria-hidden="true" />
             </Button>
+            <TextEnhanceAction action={enhancement} />
             <SessionSkillsControl
               compact
               canChangePolicy={!newSession}

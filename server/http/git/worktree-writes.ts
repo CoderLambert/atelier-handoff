@@ -23,7 +23,7 @@ import {
 import { body } from '../body.js';
 import { json } from '../response.js';
 import type { RouteRequest } from '../types.js';
-import { withGitDisconnect } from './disconnect.js';
+import { withClientDisconnect } from '../disconnect.js';
 
 interface WorktreeWriteOptions {
   worktrees: Pick<
@@ -50,7 +50,7 @@ export async function postWorktreeWrite(
     }
     case 'commit-draft': {
       const input = gitCommitDraftRequest.parse(await body(req));
-      return withGitDisconnect(res, async (signal) =>
+      return withClientDisconnect(res, async (signal) =>
         json(res, await draftWorktreeCommit(worktrees, gateway, project, id, input, signal)),
       );
     }

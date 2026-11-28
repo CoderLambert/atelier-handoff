@@ -45,6 +45,7 @@ import { createSessionRoutes } from './sessions/routes.js';
 import { createSettingsRoutes } from './settings/routes.js';
 import { createSkillRoutes } from './skills/routes.js';
 import { createTerminalRoutes } from './terminal/routes.js';
+import { createTextEnhancementRoutes } from './text-enhancement-routes.js';
 import type { RouteHandler } from './types.js';
 
 export function buildRuntimeRoutes(deps: {
@@ -85,6 +86,7 @@ export function buildRuntimeRoutes(deps: {
   return [
     createScheduleTriggerRoutes(deps.schedules, deps.scheduleScheduler),
     createTerminalRoutes(deps.terminals),
+    createTextEnhancementRoutes(deps.gateway),
     createBootstrapRoutes({
       store,
       projects: deps.projects,

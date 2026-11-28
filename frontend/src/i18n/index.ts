@@ -99,6 +99,9 @@ export function useUiLanguage() {
 }
 
 const errors = new Map<string, keyof typeof import('@shared/i18n/catalogs/common').common>([
+  ['TEXT_ENHANCEMENT_TIMEOUT', 'enhancement.timeout'],
+  ['TEXT_ENHANCEMENT_INVALID', 'enhancement.invalid'],
+  ['TEXT_ENHANCEMENT_UNAVAILABLE', 'enhancement.unavailable'],
   ['CONFLICT', 'errors.conflict'],
   ['RUN_CHANGED', 'errors.conflict'],
   ['OPERATION_CHANGED', 'errors.conflict'],

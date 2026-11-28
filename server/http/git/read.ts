@@ -32,7 +32,7 @@ import {
 import { json } from '../response.js';
 import type { RouteRequest } from '../types.js';
 import { streamGitChanges } from './changes.js';
-import { withGitDisconnect } from './disconnect.js';
+import { withClientDisconnect } from '../disconnect.js';
 
 interface GitReadOptions {
   store: CommitPlanStore;
@@ -66,7 +66,7 @@ export function readProjectGit(
     });
   }
 
-  return withGitDisconnect(res, async (signal) => {
+  return withClientDisconnect(res, async (signal) => {
     if (parts.length === 7 && section === 'worktrees' && id) {
       // All other worktree reads check out first, even an unknown or desktop-only action.
       const { git, rebuildable } = await worktrees.checkout(project, id, signal);

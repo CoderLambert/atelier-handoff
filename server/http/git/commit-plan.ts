@@ -25,7 +25,7 @@ import type { DevelopmentWorktrees } from '../../modules/git/development-worktre
 import { body } from '../body.js';
 import { json } from '../response.js';
 import type { RouteRequest } from '../types.js';
-import { withGitDisconnect } from './disconnect.js';
+import { withClientDisconnect } from '../disconnect.js';
 
 interface CommitPlanOptions extends CommitPlanDraftDependencies {
   store: CommitPlanStore;
@@ -54,7 +54,7 @@ export async function postCommitPlan(
           ? { kind: 'revision', input: multiCommitRevisionRequest.parse(raw) }
           : { kind: 'draft', input: multiCommitDraftRequest.parse(raw) },
       );
-      return withGitDisconnect(res, async (signal) => json(res, await plan(signal)));
+      return withClientDisconnect(res, async (signal) => json(res, await plan(signal)));
     }
     case 'commit-plan-validate': {
       const input = multiCommitValidate.parse(await body(req));

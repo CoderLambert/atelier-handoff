@@ -282,6 +282,7 @@ function SessionChat(props: ChatProps) {
         onModelChange={props.onModelChange}
         onEffortChange={props.onEffortChange}
         onModeChange={props.onModeChange}
+        getDraft={getDraft}
         onDraftChange={props.onDraftChange}
         onSend={props.onSend}
         onStop={props.onStop}
