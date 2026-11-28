@@ -5,19 +5,23 @@ description: 工作台的四种输入模式、受控审批和文件基线复核�
 tags: [permissions, sandbox, bubblewrap, native-execution, approval]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-23T19:36:38.791Z
+    at: 2026-11-27T05:51:26.216Z
 sources:
   - id: openwiki-source-ce5aff777b3733ade8671fea
     resource: repo://frontend/src/features/chat/run-mode.ts
-  - id: openwiki-source-000361a88dbbc94ac8bb2060
-    resource: repo://server/app.ts
   - id: openwiki-source-ccf6bb698fab445b37e7436a
     resource: repo://server/commands.ts
+  - id: openwiki-source-013b450d86da1bcd8d9ca8bf
+    resource: repo://server/db/schema/schedules.ts
+  - id: openwiki-source-a299b5f0a3c5a4c63b3411ce
+    resource: repo://server/modules/runs/create-run.ts
+  - id: openwiki-source-6c0d9eb948875391a826000e
+    resource: repo://server/modules/schedules/scheduler.ts
   - id: openwiki-source-834cc557fcfaff5d2bdb5a60
     resource: repo://server/native-harness.ts
   - id: openwiki-source-6272e3b28e5421c6eeb853b7
     resource: repo://server/permissions.ts
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+generated: { by: "claude-code", at: "2026-11-28T07:11:46.812Z" }
 ---
 
 # 受控权限与本机信任
@@ -38,5 +42,7 @@ generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 ## 受控命令隔离
 
 受控命令在 Linux 通过 Bubblewrap 执行，使用独立命名空间、受限挂载和 60 秒取消计时器。系统启动能力检查失败时，调用会返回命令不可用错误。本机信任模式的原生 Bash 遵循 SDK 原生执行路径。排查权限时先核对这一轮的模式、执行器与工具 ID。
+
+任务执行偏好与普通会话分开保存；后台触发不会继承一次手动对话的工具选择。配置约束见[自动化任务与运行历史](./scheduled-tasks.md)。
 
 可从[Agent 运行时](../architecture/agent-runtime.md)和[会话子代理](./subagents.md)继续查阅工具回执与分支权限。

@@ -5,7 +5,7 @@ description: 开发桌面、Linux x64 打包输入、发布清单和独立安装
 tags: [desktop, build, electron, linux, packaging, smoke-test]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-23T19:36:38.791Z
+    at: 2026-11-27T05:51:26.216Z
 sources:
   - id: openwiki-source-754af1375ffae564bdab3544
     resource: repo://desktop/main.mts
@@ -13,15 +13,15 @@ sources:
     resource: repo://openspec/roadmaps/build-atelier-desktop/roadmap.md
   - id: openwiki-source-5b54a58d1b51cd490b0e7162
     resource: repo://package.json
-  - id: openwiki-source-23775c3de52f3ab95a13cb8b
-    resource: repo://README.md
   - id: openwiki-source-39a2636efc69030d51e32d63
     resource: repo://scripts/linux/package.mts
   - id: openwiki-source-9982f6639f97e28643d73aa5
     resource: repo://scripts/package-platform-preview.mts
   - id: openwiki-source-eb4663761189167522a9402e
     resource: repo://scripts/smoke-linux.mts
-generated: { by: "claude-code", at: "2026-11-23T19:26:38.011Z" }
+  - id: openwiki-source-c25b23396141a24d1ae248db
+    resource: repo://server/db/connection.ts
+generated: { by: "claude-code", at: "2026-11-27T05:51:26.216Z" }
 ---
 
 # 桌面端打包与运维构建
@@ -36,7 +36,7 @@ generated: { by: "claude-code", at: "2026-11-23T19:26:38.011Z" }
 
 ## 跨平台候选
 
-`scripts/package-platform-preview.mts` 为 Windows x64 和 macOS arm64 组装候选 ZIP，并检查目标平台 Node、Electron、SQLite 原生驱动及迁移资源。候选构建不等于目标系统安装、签名或真机验收；后续平台验收和发行按路线图安排。
+`scripts/package-platform-preview.mts` 为 Windows x64 和 macOS arm64 组装候选 ZIP，并检查目标平台 Node、Electron、SQLite 原生驱动及迁移资源。候选脚本显式枚举要核对的迁移文件，当前清单到 `0011-runtime-hotpath-indexes.sql`，不能据此认定 v12–v15 的自动化任务迁移已完成候选验收。候选构建也不等于目标系统安装、签名或真机验收；后续平台验收和发行按路线图安排。
 
 ## 验收入口
 

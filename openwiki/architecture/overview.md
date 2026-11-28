@@ -5,7 +5,7 @@ description: Electron 桌面宿主、Node 运行时、React 工作台与本地�
 tags: [architecture, electron, runtime, react, gateway]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-23T19:26:38.011Z
+    at: 2026-11-27T05:51:26.216Z
 sources:
   - id: openwiki-source-754af1375ffae564bdab3544
     resource: repo://desktop/main.mts
@@ -15,7 +15,11 @@ sources:
     resource: repo://frontend/src/main.tsx
   - id: openwiki-source-5b54a58d1b51cd490b0e7162
     resource: repo://package.json
-generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
+  - id: openwiki-source-000361a88dbbc94ac8bb2060
+    resource: repo://server/app.ts
+  - id: openwiki-source-3fa62e7db05e246c4b1a480b
+    resource: repo://server/main.ts
+generated: { by: "claude-code", at: "2026-11-28T07:11:46.812Z" }
 ---
 
 # 系统架构全景
@@ -27,6 +31,8 @@ generated: { by: "claude-code", at: "2026-11-22T13:27:54.578Z" }
 | React 工作台 | 项目树、会话流、执行明细和独立设置页。TanStack Router 管理路由，TanStack Query 缓存服务端视图 | `frontend/src/main.tsx`、`frontend/src/app/workspace-router.tsx` |
 
 桌面主进程启动并监督运行时，在运行时就绪后用其地址建立应用窗口。Renderer 通过同源 HTTP 读取或提交业务数据，通过 SSE 接收运行时事件，原生窗口能力经 preload 暴露的入口调用。Node 运行时持有数据目录锁与 SQLite。桌面原生网页由 Electron 管理，页面与项目工作区视图各有自己的生命周期。
+
+`server/app.ts` 负责组装业务服务与 HTTP 路由；例如手动会话和自动化任务会走同一套运行创建流程。自动化任务的定时、触发记录及派发由独立调度模块负责，桌面宿主只需把系统唤醒事件交给运行时。见[自动化任务与运行历史](../concepts/scheduled-tasks.md)。
 
 Linux 桌面可由 `ManagedShunt` 启动托管网关，把连接信息交给运行时，关闭时回收网关进程。运行时根据所选模型和当前设置组装网关请求。网关目录、Magpie 与发送路径见[模型目录与网关路由](../integrations/model-gateways.md)。
 
