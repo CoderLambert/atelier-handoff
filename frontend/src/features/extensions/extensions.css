@@ -8,7 +8,7 @@
 .ext-dialog,
 .ext-completion,
 .ext-chips {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-family: var(--font-body);
   font-size: var(--text-ui);
   line-height: var(--leading-body, 1.65);
@@ -47,7 +47,7 @@
   margin-bottom: 28px;
 }
 .ext-eyebrow {
-  color: var(--meta);
+  color: var(--ui-primary);
   font: var(--text-xs)/1.6 var(--font-mono);
   letter-spacing: 0.12em;
 }
@@ -58,13 +58,13 @@
 }
 .ext-subtitle {
   margin-top: 10px !important;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
 }
 .ext-tabs {
   display: flex;
   gap: 28px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .ext-tabs [role='tab'] {
   display: flex;
@@ -77,14 +77,14 @@
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font: inherit;
   white-space: nowrap;
   cursor: pointer;
 }
 .ext-tabs [role='tab'][aria-selected='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--fg);
+  border-bottom-color: var(--ui-primary);
+  color: var(--ui-foreground);
   font-weight: 600;
 }
 .ext-tab-mark {
@@ -92,14 +92,14 @@
   place-items: center;
   width: 16px;
   font: 17px/1 var(--font-mono);
-  color: var(--meta);
+  color: var(--ui-primary);
 }
 .ext-count {
   min-width: 19px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--surface-warm);
-  color: var(--muted);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   font: var(--text-xs)/1.4 var(--font-mono);
   text-align: center;
 }
@@ -111,10 +111,10 @@
   min-width: 0;
   max-width: 340px;
   padding: 8px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
+  background: var(--ui-card);
+  color: var(--ui-muted-foreground);
 }
 .ext-search > svg,
 .ext-tab-mark svg,
@@ -136,19 +136,19 @@
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--fg);
+  color: var(--ui-foreground);
   font: inherit;
 }
 .ext-search:focus-within {
-  border-color: var(--accent);
+  border-color: var(--ui-primary);
   box-shadow: var(--focus-ring);
 }
 .ext-search input::placeholder {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-scope-note {
   margin-bottom: 20px !important;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-page-message:empty {
@@ -170,15 +170,15 @@
   flex-direction: column;
   min-width: 0;
   padding: 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  background: var(--ui-card);
   transition:
     border-color var(--motion-fast, 160ms),
     box-shadow var(--motion-fast, 160ms);
 }
 .ext-card-disabled {
-  background: var(--aside-bg, var(--surface-warm));
+  background: var(--ui-background, var(--ui-muted));
 }
 .ext-card-top {
   display: flex;
@@ -192,18 +192,18 @@
   width: 34px;
   height: 34px;
   flex: none;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--soft-accent);
-  color: var(--accent);
+  background: var(--ui-accent);
+  color: var(--ui-primary);
   font: 22px/1 var(--font-mono);
 }
 .ext-card-disabled .ext-kind-mark {
-  background: var(--surface-warm);
-  color: var(--muted);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-card-kind {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-card-top > [data-slot='switch-root'] {
@@ -216,13 +216,13 @@
   gap: 5px 12px;
   padding-top: 12px;
   margin-top: 14px;
-  border-top: 1px solid var(--border-soft);
-  color: var(--fg-2);
+  border-top: 1px solid var(--ui-border-subtle);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
 }
 .ext-auto-setting small {
   grid-column: 1 / -1;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: inherit;
   overflow-wrap: anywhere;
 }
@@ -230,7 +230,7 @@
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
 }
 .ext-auto-field > [data-slot='switch-root'] {
@@ -241,7 +241,7 @@
   gap: 4px;
 }
 .ext-auto-field small {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-card-title {
@@ -251,14 +251,14 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--fg);
+  color: var(--ui-foreground);
   font: 600 var(--text-lg)/1.5 var(--font-display);
   overflow-wrap: anywhere;
   text-align: left;
   cursor: pointer;
 }
 .ext-name-prefix {
-  color: var(--meta);
+  color: var(--ui-primary);
 }
 .ext-card-description {
   display: -webkit-box;
@@ -267,7 +267,7 @@
   overflow: hidden;
   min-height: calc(2 * 1.7em);
   margin-top: 7px !important;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -278,7 +278,7 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-top: 16px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-state-dot,
@@ -301,7 +301,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--ui-muted-foreground);
 }
 .ext-state-dot.ext-is-enabled::before {
   background: var(--ui-success);
@@ -350,7 +350,7 @@
   gap: 4px 10px;
   min-width: 0;
   margin-top: 12px !important;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font: var(--text-xs)/1.6 var(--font-mono);
   overflow-wrap: anywhere;
 }
@@ -369,7 +369,7 @@
   -webkit-line-clamp: 3;
   overflow: hidden;
   margin-top: 10px !important;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
@@ -386,9 +386,9 @@
   justify-items: center;
   gap: 12px;
   padding: 64px 20px;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--ui-border);
   border-radius: var(--radius-lg);
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   text-align: center;
 }
 .ext-empty > span {
@@ -398,12 +398,12 @@
   height: 48px;
   margin-bottom: 4px;
   border-radius: var(--radius-lg);
-  background: var(--surface-warm);
-  color: var(--meta);
+  background: var(--ui-muted);
+  color: var(--ui-primary);
   font: 28px/1 var(--font-mono);
 }
 .ext-empty h2 {
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font: 600 var(--text-lg)/1.5 var(--font-display);
 }
 .ext-empty p {
@@ -412,12 +412,12 @@
 }
 .ext-loading {
   padding: 40px 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-error,
 .ext-form-error {
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
   background: var(--ui-destructive-soft);
   color: var(--ui-destructive);
@@ -444,7 +444,7 @@
   margin: 0;
 }
 .ext-editor-scope {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
@@ -464,7 +464,7 @@
   display: grid;
   gap: 6px;
   min-width: 0;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
 }
 .ext-field > span {
@@ -472,7 +472,7 @@
 }
 .ext-field small,
 .ext-help {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   font-weight: 400;
   line-height: 1.7;
@@ -487,10 +487,10 @@
   min-width: 0;
   max-width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   font: inherit;
 }
 .ext-field textarea,
@@ -499,7 +499,7 @@
 }
 .ext-field input::placeholder,
 .ext-field textarea::placeholder {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-field-pair {
   display: grid;
@@ -513,7 +513,7 @@
   gap: 7px;
   min-height: 40px;
   margin-top: 25px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   white-space: nowrap;
 }
@@ -522,7 +522,7 @@
   height: 16px;
   flex: none;
   margin: 0;
-  accent-color: var(--accent);
+  accent-color: var(--ui-primary);
 }
 .ext-code-input {
   font: var(--text-sm)/1.7 var(--font-mono) !important;
@@ -539,7 +539,7 @@
   justify-content: space-between;
   gap: 8px;
   margin-bottom: -8px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   font-weight: 550;
 }
@@ -549,9 +549,9 @@
   align-items: center;
   min-height: 32px;
   padding: 4px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
-  color: var(--accent);
+  color: var(--ui-primary);
   font-size: var(--text-xs);
   cursor: pointer;
 }
@@ -570,12 +570,12 @@
 .ext-preview {
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  background: var(--aside-bg, var(--surface-warm));
+  background: var(--ui-background, var(--ui-muted));
 }
 .ext-preview > summary {
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   cursor: pointer;
 }
@@ -584,7 +584,7 @@
   max-height: 360px;
   margin-top: 14px;
   overflow: auto;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
@@ -601,7 +601,7 @@
 .ext-prose h2,
 .ext-prose h3 {
   margin: 18px 0 8px;
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-family: var(--font-display);
   line-height: 1.4;
 }
@@ -619,7 +619,7 @@
   padding: 12px;
   margin: 10px 0;
   border-radius: var(--radius-sm);
-  background: var(--surface-warm);
+  background: var(--ui-muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--text-sm)/1.7 var(--font-mono);
@@ -630,7 +630,7 @@
 }
 .ext-prose blockquote {
   padding-left: 12px;
-  border-left: 2px solid var(--border);
+  border-left: 2px solid var(--ui-border);
 }
 .ext-prose table {
   display: block;
@@ -641,7 +641,7 @@
 .ext-prose td,
 .ext-prose th {
   padding: 6px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
 }
 .ext-dialog-actions {
   display: flex;
@@ -650,7 +650,7 @@
   flex-wrap: wrap;
   gap: 10px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--ui-border-subtle);
 }
 .ext-dialog > .ext-dialog-actions {
   margin-top: 20px;
@@ -670,10 +670,10 @@
   padding: 12px;
   margin: 0;
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  background: var(--aside-bg, var(--surface-warm));
-  color: var(--fg-2);
+  background: var(--ui-background, var(--ui-muted));
+  color: var(--ui-secondary-foreground);
   font: var(--text-xs)/1.7 var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -692,7 +692,7 @@
   margin: 0;
   border: 1px solid var(--ui-warning);
   border-radius: var(--radius-md);
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
 }
 .ext-replacement > p {
@@ -708,7 +708,7 @@
 }
 .ext-save-state {
   margin-right: auto;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-save-state:empty {
@@ -726,13 +726,13 @@
   margin-bottom: 6px;
 }
 .ext-tool-heading h3 {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-size: var(--text-sm);
   font-weight: 600;
 }
 .ext-tool-count {
   margin-left: auto;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-tool-list {
@@ -741,7 +741,7 @@
   max-height: 340px;
   margin-top: 12px;
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
 }
 .ext-tool {
@@ -750,7 +750,7 @@
   gap: 12px;
   min-width: 0;
   padding: 12px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .ext-tool:last-child {
   border-bottom: 0;
@@ -772,12 +772,12 @@
   min-width: 0;
 }
 .ext-tool strong {
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font: 550 var(--text-sm)/1.5 var(--font-mono);
   overflow-wrap: anywhere;
 }
 .ext-tool small {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   line-height: 1.6;
   white-space: pre-wrap;
@@ -789,14 +789,14 @@
 }
 .ext-tool-empty {
   padding: 20px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
 }
 .ext-test-result {
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 .ext-test-result strong {
   font-size: var(--text-sm);
@@ -820,7 +820,7 @@
   flex: none;
   margin: 0;
   padding: 20px 56px 18px 24px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .ext-binding-dialog .react-dialog-header h2 {
   font-size: 1.3rem;
@@ -850,20 +850,20 @@
   gap: 6px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 .ext-binding-list-title {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   padding: 3px 6px 7px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-binding-list-title h3 {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-size: var(--text-sm);
 }
 .ext-binding-list-item {
@@ -877,11 +877,11 @@
 }
 .ext-binding-list-item:hover,
 .ext-binding-list-item[aria-pressed='true'] {
-  background: var(--surface);
-  border-color: var(--border);
+  background: var(--ui-card);
+  border-color: var(--ui-border);
 }
 .ext-binding-list-item[aria-pressed='true'] {
-  box-shadow: inset 2px 0 var(--accent);
+  box-shadow: inset 2px 0 var(--ui-primary);
 }
 .ext-binding-list-item :is(strong, span) {
   overflow: hidden;
@@ -892,7 +892,7 @@
   font-size: var(--text-sm);
 }
 .ext-binding-list-item span {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-binding-add {
@@ -903,13 +903,13 @@
 }
 .ext-binding-empty {
   padding: 20px 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-binding-form > .ext-dialog-actions {
   flex: none;
   margin: 0;
   padding: 12px 24px;
-  background: var(--surface);
+  background: var(--ui-card);
 }
 .ext-binding-form .ext-save-state {
   margin-inline-end: auto;
@@ -935,12 +935,12 @@
   min-width: 0;
   padding: 14px;
   margin: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
 }
 .ext-binding legend {
   padding-inline: 6px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   font-weight: 600;
 }
@@ -980,10 +980,10 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   padding: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--elev-raised);
+  background: var(--ui-card);
+  box-shadow: var(--ui-shadow-overlay);
 }
 .ext-completion-head {
   display: flex;
@@ -991,14 +991,14 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px 10px 10px;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
 }
 .ext-completion-head strong {
   font-weight: 600;
 }
 .ext-completion-head > span {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .ext-completion-list {
   min-height: 0;
@@ -1015,14 +1015,14 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .ext-completion [role='option'][aria-selected='true'] {
-  background: var(--selected);
-  color: var(--fg);
+  background: var(--ui-selected);
+  color: var(--ui-foreground);
 }
 .ext-option-mark {
   display: grid;
@@ -1030,10 +1030,10 @@
   width: 28px;
   height: 28px;
   flex: none;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--meta);
+  background: var(--ui-card);
+  color: var(--ui-primary);
   font: 17px/1 var(--font-mono);
 }
 .ext-option-copy {
@@ -1052,13 +1052,13 @@
 }
 .ext-option-copy small {
   overflow: hidden;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ext-file-name {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-weight: 600;
 }
 .ext-file-match {
@@ -1069,18 +1069,18 @@
   font-weight: 700;
 }
 .ext-file-dir {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-family: var(--font-mono, monospace);
   font-size: var(--text-xs);
 }
 .ext-file-size {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-family: var(--font-mono, monospace);
   font-size: var(--text-xs);
 }
 .ext-option-kind {
   flex: none;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-completion-footer {
@@ -1090,14 +1090,14 @@
   gap: 14px;
   padding: 10px 10px 5px;
   margin-top: 4px;
-  border-top: 1px solid var(--border-soft);
-  color: var(--muted);
+  border-top: 1px solid var(--ui-border-subtle);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .ext-completion-empty {
   padding: 16px 10px;
   margin: 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1116,14 +1116,14 @@
   min-width: 0;
   max-width: 100%;
   padding: 3px 7px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-sm);
-  background: var(--soft-accent);
-  color: var(--fg-2);
+  background: var(--ui-accent);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
 }
 .ext-chip > span:first-child {
-  color: var(--accent);
+  color: var(--ui-primary);
   font-family: var(--font-mono);
 }
 .ext-chip > span:nth-child(2) {
@@ -1137,7 +1137,7 @@
 }
 .ext-chip-unavailable {
   border-style: dashed;
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 :where(.ext-page, .ext-dialog, .ext-completion, .ext-chips)
   :where(button, input, textarea, summary):focus-visible {
@@ -1147,11 +1147,11 @@
 
 @media (hover: hover) {
   .ext-card:hover {
-    border-color: var(--accent);
-    box-shadow: var(--elev-raised);
+    border-color: var(--ui-primary);
+    box-shadow: var(--ui-shadow-overlay);
   }
   .ext-card-title:hover {
-    color: var(--accent);
+    color: var(--ui-primary);
   }
 }
 @media (max-width: 900px) {
@@ -1314,7 +1314,7 @@
 
 .market-result-count {
   padding: 0 0 8px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   flex: none;
   overflow-wrap: anywhere;
@@ -1324,7 +1324,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
 }
 
@@ -1332,7 +1332,7 @@
   display: none;
 }
 .market-catalog-list > li + li {
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--ui-border-subtle);
 }
 
 .market-result {
@@ -1349,7 +1349,7 @@
 
 .market-result:hover,
 .market-result:focus-visible {
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 .market-result:focus-visible {
   outline: 1.5px solid color-mix(in srgb, var(--ui-ring) 55%, transparent);
@@ -1370,10 +1370,10 @@
 }
 .market-result-copy strong {
   font-size: var(--text-ui);
-  color: var(--fg);
+  color: var(--ui-foreground);
 }
 .market-result-summary {
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
 }
 .market-result-meta {
@@ -1382,7 +1382,7 @@
   gap: 8px;
   min-width: 0;
   max-width: 31%;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .market-result-meta > span:last-child {
@@ -1392,11 +1392,11 @@
   flex: none;
   width: var(--ui-icon-size);
   height: var(--ui-icon-size);
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 
 .skillhub-detail {
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--ui-border-subtle);
 }
 .skillhub-detail-header,
 .skillhub-detail-scroll,
@@ -1408,7 +1408,7 @@
   flex: none;
 }
 .skillhub-detail-header {
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .skillhub-detail-header h3 {
   font-size: var(--text-xl);
@@ -1418,7 +1418,7 @@
 .skillhub-detail-header p,
 .skillhub-empty,
 .market-empty {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
@@ -1440,8 +1440,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-top: 1px solid var(--border-soft);
-  background: var(--surface);
+  border-top: 1px solid var(--ui-border-subtle);
+  background: var(--ui-card);
 }
 .skillhub-detail-footer [role='alert'] {
   flex-basis: 100%;
@@ -1492,9 +1492,9 @@
   margin-block-end: 16px;
   padding: 16px 22px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(105deg, var(--surface-warm) 35%, var(--surface));
+  background: linear-gradient(105deg, var(--ui-muted) 35%, var(--ui-card));
 }
 
 .market-intro-copy {
@@ -1507,12 +1507,12 @@
 .market-intro-copy strong {
   font-size: var(--text-lg);
   letter-spacing: -0.015em;
-  color: var(--fg);
+  color: var(--ui-foreground);
 }
 
 .market-intro-copy p {
   font-size: var(--text-sm);
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
 }
 
 .market-intro-art {
@@ -1530,9 +1530,13 @@
   display: block;
   width: 42px;
   height: 64px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: repeating-linear-gradient(0deg, var(--surface) 0 9px, var(--border-soft) 9px 10px);
+  background: repeating-linear-gradient(
+    0deg,
+    var(--ui-card) 0 9px,
+    var(--ui-border-subtle) 9px 10px
+  );
 }
 
 .market-intro-art i:nth-child(2) {
@@ -1549,8 +1553,8 @@
   height: 38px;
   place-items: center;
   border-radius: 10px;
-  color: var(--accent);
-  background: var(--surface-warm);
+  color: var(--ui-primary);
+  background: var(--ui-muted);
 }
 
 .market-category-icon svg {
@@ -1586,10 +1590,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 1px 7px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
+  background: var(--ui-card);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 
@@ -1685,7 +1689,7 @@
 }
 .ext-import-results h3,
 .ext-import-skill h3 {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-size: var(--text-sm);
   font-weight: 650;
 }
@@ -1696,7 +1700,7 @@
   margin: 8px 0 0;
   padding: 4px;
   overflow: auto;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
 }
 .ext-import-choice.ext-button {
@@ -1719,12 +1723,12 @@
 }
 .ext-import-choice code,
 .ext-import-skill header code {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
 .ext-import-choice[aria-pressed='true'] {
-  border-color: var(--border);
+  border-color: var(--ui-border);
 }
 .ext-import-skill {
   display: grid;
@@ -1733,9 +1737,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
   padding: 14px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 .ext-import-skill > header {
   display: flex;
@@ -1749,17 +1753,17 @@
 }
 .ext-import-files > summary {
   cursor: pointer;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
 }
 .ext-import-empty {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   padding: 14px 0;
   font-size: var(--text-sm);
 }
 .ext-import-footer {
   justify-content: flex-end;
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--ui-border-subtle);
   padding-top: 12px;
 }
 .ext-import-status {
@@ -1767,7 +1771,7 @@
   align-items: center;
   gap: 7px;
   margin-inline-end: auto;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
 }
 .ext-import-status svg {

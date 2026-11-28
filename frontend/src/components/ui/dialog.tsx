@@ -57,6 +57,9 @@ export function DialogDescription({
   ...props
 }: ComponentProps<typeof Primitive.Description>) {
   return (
-    <Primitive.Description className={cn('text-sm text-[var(--muted)]', className)} {...props} />
+    <Primitive.Description
+      className={cn('text-sm text-[var(--ui-muted-foreground)]', className)}
+      {...props}
+    />
   );
 }

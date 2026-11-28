@@ -12,6 +12,8 @@ import { FolderPlus, Monitor, Plus, RefreshCw, Store, Trash2, Webhook } from 'lu
 import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { Puzzle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
   ActionButton,
@@ -69,27 +71,28 @@ export default function ExtensionsPage({ projects, projectId, onStartSkill }: Ex
     projects[0];
   return (
     <section className="ext-page" aria-label={t('extensions.pageTitle')}>
-      <header className="ext-heading">
-        <div>
-          <p className="ext-eyebrow">{t('extensions.eyebrow')}</p>
-          <h1>{t('extensions.pageTitle')}</h1>
-          <p className="ext-subtitle">{t('extensions.subtitle')}</p>
-        </div>
-        {!globalSkills ? (
-          <CatalogProjectSelect
-            className="ext-project-label"
-            label={t('common.currentProject')}
-            selectLabel={t('extensions.projectSelector')}
-            value={project?.id ?? ''}
-            options={projects.map((value) => ({
-              value: value.id,
-              label: value.name || value.path || value.id,
-            }))}
-            emptyLabel={t('common.noProjects')}
-            onValueChange={setPinnedId}
-          />
-        ) : null}
-      </header>
+      <PageHeader
+        className="mb-6"
+        icon={<Puzzle />}
+        title={t('extensions.pageTitle')}
+        description={t('extensions.subtitle')}
+        actions={
+          !globalSkills ? (
+            <CatalogProjectSelect
+              className="ext-project-label"
+              label={t('common.currentProject')}
+              selectLabel={t('extensions.projectSelector')}
+              value={project?.id ?? ''}
+              options={projects.map((value) => ({
+                value: value.id,
+                label: value.name || value.path || value.id,
+              }))}
+              emptyLabel={t('common.noProjects')}
+              onValueChange={setPinnedId}
+            />
+          ) : null
+        }
+      />
       <ProjectExtensions
         key={project?.id ?? 'none'}
         project={project}

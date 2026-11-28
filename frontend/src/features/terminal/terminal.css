@@ -21,7 +21,7 @@
   flex: 0 0 40px;
   gap: 8px;
   padding: 0 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--ui-border);
 }
 .terminal-heading-content {
   flex: 1;

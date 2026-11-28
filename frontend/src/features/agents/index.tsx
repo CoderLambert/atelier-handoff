@@ -10,6 +10,8 @@ import { Archive, Bot, Copy, MessageSquarePlus, Plus, RefreshCw } from 'lucide-r
 import { CatalogProjectSelect, CatalogToolbar } from '@/components/catalog-toolbar';
 import type { AgentCard, Project } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { Bot } from 'lucide-react';
 import { messageOf, useExtensions } from '@/features/extensions/api';
 import { useStartAgentSession } from '@/use-query/agents/use-start-agent-session';
 import {
@@ -42,26 +44,27 @@ export default function AgentsPage({ projects, projectId, onOpenSession }: Agent
   const pending = useIsMutating({ mutationKey: ['agents'] }) > 0;
   return (
     <section className="agents-page" aria-label={t('agents.pageTitle')}>
-      <header className="agents-heading">
-        <div>
-          <p className="agents-eyebrow">{t('agents.eyebrow')}</p>
-          <h1>{t('agents.pageTitle')}</h1>
-          <p className="agents-subtitle">{t('agents.subtitle')}</p>
-        </div>
-        <CatalogProjectSelect
-          className="agents-project"
-          label={t('common.currentProject')}
-          selectLabel={t('agents.projectSelector')}
-          disabled={!projects.length || pending}
-          value={project?.id ?? ''}
-          options={projects.map((value) => ({
-            value: value.id,
-            label: value.name || value.path || value.id,
-          }))}
-          emptyLabel={t('common.noProjects')}
-          onValueChange={(value) => setSelection({ from: projectId, id: value })}
-        />
-      </header>
+      <PageHeader
+        className="mb-6"
+        icon={<Bot />}
+        title={t('agents.pageTitle')}
+        description={t('agents.subtitle')}
+        actions={
+          <CatalogProjectSelect
+            className="agents-project"
+            label={t('common.currentProject')}
+            selectLabel={t('agents.projectSelector')}
+            disabled={!projects.length || pending}
+            value={project?.id ?? ''}
+            options={projects.map((value) => ({
+              value: value.id,
+              label: value.name || value.path || value.id,
+            }))}
+            emptyLabel={t('common.noProjects')}
+            onValueChange={(value) => setSelection({ from: projectId, id: value })}
+          />
+        }
+      />
       <ProjectAgents key={project?.id ?? 'none'} project={project} onOpenSession={onOpenSession} />
     </section>
   );

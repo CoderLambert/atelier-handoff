@@ -291,14 +291,14 @@
   width: fit-content;
   max-width: 100%;
   margin: 0 auto;
-  box-shadow: var(--elev-raised);
+  box-shadow: var(--ui-shadow-overlay);
 }
 
 .selection-quote-action {
   position: fixed;
   z-index: 10;
   transform: translateX(-50%);
-  box-shadow: var(--elev-raised);
+  box-shadow: var(--ui-shadow-overlay);
 }
 
 .selection-quote-action[data-placement='above'] {

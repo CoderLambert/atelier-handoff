@@ -11,8 +11,8 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 36px clamp(24px, 4vw, 64px) 0;
-  background: var(--surface);
-  color: var(--fg);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
 }
 .settings-page-header,
 .settings-page-body {
@@ -26,7 +26,7 @@
   justify-content: space-between;
   gap: 24px;
   padding-bottom: 30px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .settings-page-heading {
   display: flex;
@@ -40,10 +40,10 @@
   flex: none;
   width: 48px;
   height: 48px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-lg);
-  background: var(--surface-warm);
-  color: var(--accent);
+  background: var(--ui-muted);
+  color: var(--ui-primary);
 }
 .settings-page-mark svg,
 .settings-diagnostics-icon svg {
@@ -60,7 +60,7 @@
 .settings-page-heading p,
 .settings-section-intro p {
   margin: 5px 0 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
   line-height: 1.7;
 }
@@ -100,14 +100,14 @@
   gap: 5px;
 }
 .settings-page-nav-description {
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   font-weight: 400;
   line-height: 1.6;
 }
 .settings-page-nav-note {
   margin: 20px 12px 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   line-height: 1.8;
 }
@@ -138,19 +138,19 @@
   margin: 0;
   padding: 0 0 28px;
   border: 0;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .settings-form-section legend {
   width: 100%;
   margin: 0 0 20px;
   padding: 0;
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-size: var(--text-ui);
   font-weight: 600;
 }
 .settings-section-description {
   margin: -12px 0 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
   line-height: 1.7;
 }
@@ -163,7 +163,7 @@
 }
 .settings-field-copy label,
 .settings-number-field {
-  color: var(--fg);
+  color: var(--ui-foreground);
   font-size: var(--text-sm);
   font-weight: 500;
   line-height: 1.7;
@@ -173,7 +173,7 @@
 .settings-catalog-status p,
 .settings-number-field > span {
   margin: 5px 0 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   font-weight: 400;
   line-height: 1.8;
@@ -206,9 +206,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  background: var(--surface-warm);
+  background: var(--ui-muted);
 }
 .settings-connection > svg {
   flex: none;
@@ -228,14 +228,14 @@
 .settings-connection p,
 .settings-account-summary p {
   margin: 4px 0 0;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-xs);
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
 .settings-account {
   padding: 16px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: var(--radius-md);
 }
 .settings-account-summary {
@@ -248,7 +248,7 @@
   flex: none;
   width: 20px;
   height: 20px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
 }
 .settings-account-summary > div {
   flex: 1;
@@ -259,7 +259,7 @@
 }
 .settings-account-path {
   margin-top: 12px;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
 }
 .settings-account-path summary {
@@ -270,7 +270,7 @@
   display: block;
   margin-top: 8px;
   overflow-wrap: anywhere;
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-family: var(--font-mono);
   line-height: 1.8;
 }
@@ -278,7 +278,7 @@
   margin: 0;
   padding-inline-start: 12px;
   border-inline-start: 2px solid var(--ui-warning);
-  color: var(--fg-2);
+  color: var(--ui-secondary-foreground);
   font-size: var(--text-sm);
   line-height: 1.8;
 }
@@ -332,14 +332,14 @@
   justify-content: space-between;
   gap: 16px;
   padding: 16px 0;
-  background: var(--surface);
+  background: var(--ui-card);
 }
 .settings-save-bar > [data-slot='button'] {
   flex: none;
 }
 .settings-save-feedback {
   min-width: 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -368,9 +368,9 @@
   justify-content: space-between;
   gap: 16px;
   padding: 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-md);
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
 }
 .settings-notice-error {
@@ -387,7 +387,7 @@
   align-items: flex-start;
   gap: 16px;
   padding: 28px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
   border-radius: var(--radius-lg);
 }
 .settings-diagnostics h3 {
@@ -398,7 +398,7 @@
 .settings-diagnostics p {
   max-width: 52ch;
   margin: 0;
-  color: var(--muted);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
   line-height: 1.8;
 }
