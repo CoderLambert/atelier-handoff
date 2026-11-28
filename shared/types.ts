@@ -68,6 +68,7 @@ export interface Session {
   fork?: SessionForkOrigin;
   inheritedMessages?: InheritedMessage[];
   creatingFork?: true;
+  createdFromDraft?: true;
   origin?: 'schedule';
   title: string;
   status: 'active' | 'archived';

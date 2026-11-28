@@ -1,7 +1,7 @@
 /**
  * @file 管理会话草稿、引用、运行偏好与任务发送。
- * @implementation 串行保存草稿，使用共享引用规则追加文件摘录，发送时组合正文与引用并复用幂等键。
- * @updated 2026-11-27T18:34:46+08:00
+ * @implementation 按项目复用新会话草稿编号并在本地保存编辑内容。已有会话的草稿串行同步，提交时组合正文、引用与幂等键。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import {
   composerTextLimit,
@@ -9,8 +9,14 @@ import {
   messageQuotesSchema,
   type FileQuoteSource,
 } from '@shared/message-quotes';
-import { reasoningEfforts, retainedSkillSelections, type Draft } from '@shared/types';
+import {
+  reasoningEfforts,
+  retainedSkillSelections,
+  type Draft,
+  type ExtensionSelection,
+} from '@shared/types';
 import { appendDraftQuote } from '@/features/chat/composer-policy';
+import { draftSelectionLimit } from '@/features/extensions/inheritance-model';
 import { parseSearchChargeLimit } from '@/features/chat/run-mode';
 import { getTranslator } from '@/i18n';
 import type {
@@ -30,6 +36,8 @@ interface SaveLane {
 const saves = new Map<string, SaveLane>();
 const lastSessionKey = 'atelier-last-session';
 const key = (id: string) => `atelier-draft:${id}`;
+const newSessionPrefix = 'new:';
+const isNewSessionDraft = (id: string) => id.startsWith(newSessionPrefix);
 export const emptyDraft = (mode: Draft['mode'] = 'readonly'): Draft => ({
   text: '',
   contextPaths: [],
@@ -37,6 +45,8 @@ export const emptyDraft = (mode: Draft['mode'] = 'readonly'): Draft => ({
   extensionSelections: [],
   mode,
 });
+export const defaultNewSessionDraft = (nativeExecution: boolean): Draft =>
+  nativeExecution ? { ...emptyDraft('edit'), executionPreference: 'native-v1' } : emptyDraft();
 
 export const storage = {
   get(key: string) {
@@ -61,6 +71,48 @@ export const storage = {
     }
   },
 };
+const projectDraftKey = (projectId: string) => `atelier-new-session:${projectId}`;
+const windowDraftIds = new Map<string, string>();
+
+export function newSessionDraftId(projectId: string) {
+  const saved = windowDraftIds.get(projectId) ?? storage.get(projectDraftKey(projectId));
+  const id = saved ?? crypto.randomUUID();
+  windowDraftIds.set(projectId, id);
+  storage.set(projectDraftKey(projectId), id);
+  return id;
+}
+
+export async function finishNewSessionDraft(projectId: string, id: string) {
+  if (windowDraftIds.get(projectId) === id) {
+    windowDraftIds.delete(projectId);
+    storage.remove(projectDraftKey(projectId));
+  }
+  await deleteDraft(`new:${id}`, async () => {});
+}
+
+export function seedSkillDraft(
+  projectId: string,
+  selection: ExtensionSelection,
+  editable: boolean,
+) {
+  const id = `new:${newSessionDraftId(projectId)}`;
+  if (store.getState().workspace.submitting[id]) return;
+  updateDraft(id, (draft) => {
+    const others = (draft.extensionSelections ?? []).filter((item) => item.id !== selection.id);
+    if (others.length >= draftSelectionLimit)
+      throw new Error(
+        getTranslator('extensions')('inheritance.selectionLimit', { count: draftSelectionLimit }),
+      );
+    return {
+      ...draft,
+      extensionSelections: [...others, selection],
+      mode: editable ? 'edit' : 'readonly',
+      executionPreference: 'project-v1',
+      approvalMode: undefined,
+    };
+  });
+}
+
 export function lastSession() {
   return storage.get(lastSessionKey);
 }
@@ -130,6 +182,10 @@ export function updateDraft(id: string, update: DraftUpdate, server?: Draft, imm
   const save = lane(id);
   const sequence = ++save.sequence;
   store.dispatch(actions.setDraft({ id, draft }));
+  if (isNewSessionDraft(id)) {
+    storage.set(key(id), JSON.stringify({ ...draft, attachmentIds: [] }));
+    return;
+  }
   storage.set(key(id), JSON.stringify(draft));
   clearTimeout(save.timer);
   const enqueue = () => {
@@ -203,17 +259,17 @@ export async function submitDraft(
     });
     if (store.getState().workspace.searchChargeLimits[id] === searchChargeLimit)
       store.dispatch(actions.setSearchChargeLimit({ id }));
-    if (JSON.stringify(readDraft(id, server)) === draftFingerprint)
-      updateDraft(id, {
+    if (JSON.stringify(readDraft(id, server)) === draftFingerprint) {
+      const receipt = result.run ?? result.queuedMessage;
+      updateDraft(isNewSessionDraft(id) ? id.slice(newSessionPrefix.length) : id, {
         ...emptyDraft(readonlyProfile ? 'readonly' : draft.mode),
         approvalMode,
         executionPreference,
         model: draft.model,
         effort: draft.effort,
-        extensionSelections: retainedSkillSelections(
-          (result.run ?? result.queuedMessage).extensions,
-        ),
+        extensionSelections: retainedSkillSelections(receipt.extensions),
       });
+    }
     save.attempt = undefined;
     return result;
   } catch (error) {

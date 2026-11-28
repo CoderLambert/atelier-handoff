@@ -1,7 +1,7 @@
 /**
  * @file 解析会话创建和草稿更新请求。
- * @implementation 和运行入口共用执行器取值，保留草稿模式、附件和手动 Skill 的校验。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 校验创建请求中的项目和可选草稿编号，限制草稿编号与智能体版本的组合，并解析草稿更新和执行器选项。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { z } from 'zod';
 import { composerTextLimit, messageQuotesSchema } from '../../../shared/message-quotes.js';
@@ -25,10 +25,13 @@ const draftSchema = z
   })
   .refine((draft) => !draft.approvalMode || draft.mode === 'edit', '自动化草稿须允许修改。');
 
-export const sessionCreateInput = z.object({
-  projectId: z.string().uuid(),
-  agentRevisionId: z.string().uuid().optional(),
-});
+export const sessionCreateInput = z
+  .object({
+    projectId: z.string().uuid(),
+    agentRevisionId: z.string().uuid().optional(),
+    draftId: z.uuidv4().optional(),
+  })
+  .refine((input) => !input.draftId || !input.agentRevisionId);
 export const sessionUpdateInput = z.object({
   title: z.string().trim().min(1).max(160).optional(),
   status: z.enum(['active', 'archived']).optional(),

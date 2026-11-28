@@ -43,6 +43,7 @@ function page<const Path extends string>(path: Path) {
 const routeTree = root.addChildren([
   page('/'),
   page('/sessions'),
+  page('/drafts/$draftProjectId'),
   page('/sessions/$sessionId'),
   page('/sessions/$sessionId/trace'),
   page('/sessions/$sessionId/trace/$runId'),

@@ -43,8 +43,7 @@ export function createSkillScope({
       sessionId: session?.id,
       directory: directory ?? (session ? sessionDirectory(session) : project.path),
       native: native && nativeExecution && !session?.agentRevisionId,
-      workspaceAutomatic:
-        workspaceAutomatic && !native && Boolean(session) && !session?.agentRevisionId,
+      workspaceAutomatic: workspaceAutomatic && !native && !session?.agentRevisionId,
       installed: bound ? all.filter((item) => bound.get(item.id)?.version === item.version) : all,
       boundAuto:
         bound &&

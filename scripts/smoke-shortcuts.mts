@@ -15,6 +15,7 @@ import { build } from 'esbuild';
 import { z } from 'zod';
 import { terminalListResponseSchema } from '../shared/terminal.js';
 import { shortcutPreferencesSchema } from '../shared/shortcuts.js';
+import { openPersistedSessionFixture } from './p1-smoke/persisted-session.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'atelier-shortcuts-smoke-'));
 const project = join(directory, 'project');
@@ -100,8 +101,7 @@ try {
   await bind.getByLabel('本机目录').fill(project);
   await bind.getByRole('button', { name: '绑定项目', exact: true }).click();
   await bind.waitFor({ state: 'hidden' });
-  await page.waitForURL((url) => /^#\/sessions\/[a-f0-9-]+$/u.test(url.hash));
-  const firstId = z.uuid().parse(new URL(page.url()).hash.split('/')[2]);
+  const firstId = await openPersistedSessionFixture(page);
   const origin = new URL(page.url()).origin;
   const conversation = `${origin}/#/sessions/${firstId}`;
   await app.evaluate(({ BrowserWindow }) =>
@@ -191,11 +191,7 @@ try {
   assert.equal(await page.locator('#prompt-input').inputValue(), '保留我的会话草稿');
   checked.push('input focus returns from content page without losing draft');
 
-  await page.getByRole('button', { name: '新建会话', exact: true }).click();
-  await page.waitForURL(
-    (url) => /^#\/sessions\/[a-f0-9-]+$/u.test(url.hash) && !url.hash.includes(firstId),
-  );
-  const secondId = z.uuid().parse(new URL(page.url()).hash.split('/')[2]);
+  const secondId = await openPersistedSessionFixture(page);
   const secondDraft = '第二个会话草稿 typing continuously';
   await page.locator('#prompt-input').focus();
   await page.locator('#prompt-input').pressSequentially(secondDraft);

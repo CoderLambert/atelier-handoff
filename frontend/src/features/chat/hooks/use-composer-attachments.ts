@@ -1,7 +1,7 @@
 /**
  * @file 编排草稿附件的上传与移除。
- * @implementation 复用串行 query mutations，捕获发起操作时的草稿回调，保留逐项失败及会话隔离。
- * @updated 2026-11-20T11:00:00+08:00
+ * @implementation 新会话附件先校验并暂存在窗口。已有会话串行上传或移除附件，逐项处理失败并保留发起操作时的会话归属。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useRef, useState } from 'react';
@@ -11,8 +11,10 @@ import { attachmentKeys } from '@/use-query/attachments/keys';
 import {
   AttachmentValidationError,
   useUploadAttachment,
+  validateAttachment,
 } from '@/use-query/attachments/use-upload-attachment';
 import { useRemoveAttachment } from '@/use-query/attachments/use-remove-attachment';
+import { removeStagedAttachment, stageAttachment } from '../staged-attachments';
 
 export type AttachmentActionError = { type: 'limit' } | { type: 'remove'; cause: unknown };
 export type DraftChange = (draft: Draft | ((previous: Draft) => Draft)) => void;
@@ -25,6 +27,7 @@ interface UploadEntry {
 export function useComposerAttachments({
   sessionId,
   draft,
+  newSession,
   onDraftChange,
   attachmentsAllowed,
   archived,
@@ -33,6 +36,7 @@ export function useComposerAttachments({
 }: {
   sessionId: string;
   draft: Draft;
+  newSession: boolean;
   onDraftChange: DraftChange;
   attachmentsAllowed: boolean;
   archived: boolean;
@@ -58,13 +62,15 @@ export function useComposerAttachments({
       pendingOperations.current += 1;
       setUploads((previous) => [...previous, { id: entryId, name: file.name }]);
       const changeDraft = onDraftChange;
-      void upload
-        .mutateAsync(file)
+      const add = newSession
+        ? validateAttachment(file).then(() => stageAttachment(sessionId, file))
+        : upload.mutateAsync(file).then(({ id }) => id);
+      void add
         .then(
-          (attachment) => {
+          (id) => {
             changeDraft((previous) => ({
               ...previous,
-              attachmentIds: [...new Set([...previous.attachmentIds, attachment.id])],
+              attachmentIds: [...new Set([...previous.attachmentIds, id])],
             }));
             setUploads((previous) => previous.filter((entry) => entry.id !== entryId));
           },
@@ -84,6 +90,14 @@ export function useComposerAttachments({
 
   function removeAttachment(attachmentId: string) {
     if (removing.includes(attachmentId) || archived || submitting) return;
+    if (newSession) {
+      removeStagedAttachment(sessionId, attachmentId);
+      onDraftChange((previous) => ({
+        ...previous,
+        attachmentIds: previous.attachmentIds.filter((id) => id !== attachmentId),
+      }));
+      return;
+    }
     pendingOperations.current += 1;
     setRemoving((previous) => [...previous, attachmentId]);
     const changeDraft = onDraftChange;

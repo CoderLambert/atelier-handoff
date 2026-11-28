@@ -13,6 +13,7 @@ import { AttachmentPreview } from './attachment-preview';
 export function ComposerContextChips({
   contextPaths,
   attachmentIds,
+  stagedAttachments,
   attachments,
   uploads,
   removing,
@@ -23,6 +24,7 @@ export function ComposerContextChips({
 }: {
   contextPaths: readonly string[];
   attachmentIds: readonly string[];
+  stagedAttachments?: ReadonlyMap<string, string>;
   attachments: readonly Attachment[];
   uploads: readonly { id: string; name: string; error?: string }[];
   removing: readonly string[];
@@ -63,7 +65,7 @@ export function ComposerContextChips({
       })}
       {attachmentIds.map((id) => {
         const item = byId.get(id);
-        const name = item?.name ?? id;
+        const name = item?.name ?? stagedAttachments?.get(id) ?? id;
         const isRemoving = removing.includes(id);
         return (
           <div key={id} className="context-chip attachment-chip">

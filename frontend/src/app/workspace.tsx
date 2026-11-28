@@ -21,22 +21,19 @@ import { cn } from '@/components/ui/utils';
 import type { QuoteGitCode } from '@/features/git/git-code-selection';
 import { ShortcutHost } from '@/features/shortcuts';
 import { translateError, useUiTranslation } from '@/i18n';
-import { useCreateSession } from '@/use-query/sessions/use-create-session';
 import { useSessionSnapshot } from '@/use-query/sessions/use-session-snapshot';
-import { updateSessionDraft } from '@/use-query/sessions/use-update-session-draft';
 import { useUpgradeSessionAgent } from '@/use-query/sessions/use-upgrade-session-agent';
 import { useUpdateWorkspaceLayout } from '@/use-query/settings/use-update-workspace-layout';
 import { useWorkspaceLayout } from '@/use-query/settings/use-workspace-layout';
 import { useBootstrap } from '@/use-query/workspace/use-bootstrap';
 import { useWorkspaceCache } from '@/use-query/workspace/use-workspace-cache';
 import { useWorkspaceEvents } from '@/use-query/workspace/use-workspace-events';
-import { appendFileQuote, lastSession } from './drafts';
+import { appendFileQuote, defaultNewSessionDraft, lastSession, newSessionDraftId } from './drafts';
 import { PanelHost } from './panels/panel-host';
 import { WorkspaceRightPanel } from './panels/workspace-right-panel';
 import { panels } from './panels/registry';
 import { useWorkspacePanel } from './panels/use-workspace-panel';
 import type { SessionActionRequest } from './session-management-controller';
-import { sessionSwitchItems } from './session-switcher-model';
 import { Sidebar } from './sidebar';
 import { actions, useAppDispatch, useWorkspace } from './store';
 import type { SessionAction } from './types';
@@ -47,12 +44,14 @@ import { WorkspacePanels, useWorkspaceViewport } from './workspace-panels';
 import { WorkspaceSessionHeader } from './workspace-session-header';
 import {
   applyLayoutOverride,
+  composerSession,
   releaseLayoutOverride,
   resolveWorkspaceLayout,
   type PendingLayoutOverride,
 } from './workspace-state';
 import { WorkspaceToolbar } from './workspace-toolbar';
 
+const NewSessionChat = lazy(() => import('./new-session-chat'));
 const SessionChat = lazy(() => import('./session-chat'));
 const ExtensionsPage = lazy(() => import('@/features/extensions'));
 const AgentsPage = lazy(() => import('@/features/agents'));
@@ -109,6 +108,7 @@ export default function Workspace() {
     onNoProjects: openProjectsOnEmpty,
   });
   const { pathname, sessionId, routePanel, trace, messageId, view, tab, section, canGoBack } = nav;
+  const draftProject = ready.data?.projects.find(({ id }) => id === nav.draftProjectId);
 
   const session = useSessionSnapshot(sessionId);
   const snapshot = session.data;
@@ -118,12 +118,14 @@ export default function Workspace() {
     snapshot?.runs.at(-1);
   const project =
     snapshot?.project ??
+    draftProject ??
     ready.data?.projects.find(
       (item) => item.id === ready.data?.sessions.find((item) => item.id === sessionId)?.projectId,
     ) ??
     ready.data?.projects[0];
   const previewProject = view === 'chat' ? project?.id : undefined;
   const desktop = Boolean(window.atelierDesktop);
+  const nativeExecution = ready.data?.capabilities.nativeExecution === true;
 
   const width = useWorkspaceViewport();
   const panel = useWorkspacePanel({ sessionId, snapshot, width });
@@ -148,7 +150,6 @@ export default function Workspace() {
   const layout = resolveWorkspaceLayout(pendingLayout, layoutQuery.data);
   const showLeft = width >= 768;
 
-  const createSession = useCreateSession();
   const upgradeAgent = useUpgradeSessionAgent();
   const focusGeneration = useRef(0);
   const drawerTrigger = useRef<HTMLElement | null>(null);
@@ -215,37 +216,43 @@ export default function Workspace() {
 
   const canQuoteGit =
     view === 'chat' &&
-    snapshot &&
-    snapshot.session.id === sessionId &&
-    snapshot.session.status !== 'archived' &&
-    snapshot.project.id === gitBoard?.project.id;
+    gitBoard?.project.id === project?.id &&
+    (Boolean(draftProject) ||
+      (snapshot?.session.id === sessionId && snapshot?.session.status === 'active'));
 
   const quoteGitCode: QuoteGitCode = (file, text) => {
-    if (!canQuoteGit || !snapshot) return 'unavailable';
-    const result = appendFileQuote(snapshot.session.id, snapshot.session.draft, file, text);
+    if (!canQuoteGit) return 'unavailable';
+    const target = draftProject
+      ? {
+          id: `new:${newSessionDraftId(draftProject.id)}`,
+          draft: defaultNewSessionDraft(nativeExecution),
+        }
+      : snapshot?.session;
+    if (!target) return 'unavailable';
+    const result = appendFileQuote(target.id, target.draft, file, text);
     if (result === 'added' || result === 'duplicate') {
       if (tab !== 'conversation') nav.selectTab('conversation');
       if (panel.canDock && panel.fullWindow) panel.dockRight();
       if (panel.canDock && tab === 'conversation') {
-        dispatch(actions.requestComposerFocus({ sessionId: snapshot.session.id }));
+        dispatch(actions.requestComposerFocus({ sessionId: target.id }));
       }
     }
     return result;
   };
 
-  const inputTarget = sessionId
-    ? snapshot && snapshot.session.id === sessionId
-      ? snapshot.session
-      : ready.data?.sessions.find(({ id }) => id === sessionId)
-    : (ready.data?.sessions.find(({ id, status }) => id === lastSession() && status === 'active') ??
-      sessionSwitchItems(ready.data?.sessions ?? [], ready.data?.projects ?? [], '').find(
-        ({ session }) => session.status === 'active',
-      )?.session);
+  const inputTarget = snapshot?.session ?? composerSession(ready.data, sessionId, lastSession());
   const inputSubmitting = useWorkspace((state) =>
-    Boolean(inputTarget && state.workspace.submitting[inputTarget.id]),
+    Boolean(!draftProject && inputTarget && state.workspace.submitting[inputTarget.id]),
   );
 
   async function focusComposer() {
+    if (draftProject && !gitBusy) {
+      if (panel.fullWindow) panel.collapseRight(false);
+      dispatch(
+        actions.requestComposerFocus({ sessionId: `new:${newSessionDraftId(draftProject.id)}` }),
+      );
+      return;
+    }
     if (
       !inputTarget ||
       inputTarget.status === 'archived' ||
@@ -277,12 +284,6 @@ export default function Workspace() {
     nav.openSession(id);
   }
 
-  async function createProjectSession(id: string) {
-    const { session: created } = await createSession.mutateAsync(id);
-    nav.openSession(created.id);
-    cache.invalidateSessionLists();
-  }
-
   const openSessionAction = useCallback(
     (type: SessionAction, target: Session) => {
       dispatch(actions.setDrawer(undefined));
@@ -302,7 +303,7 @@ export default function Workspace() {
     view,
     projects: ready.data?.projects,
     onSessionAction: openSessionAction,
-    onNewProject: (id: string) => void createProjectSession(id).catch(showSessionError),
+    onNewProject: (id: string) => void nav.openDraft(id).catch(showSessionError),
     artifactCount: ready.data?.artifacts.length,
     sessions: ready.data?.sessions,
     sessionsFailed: ready.isError,
@@ -311,7 +312,7 @@ export default function Workspace() {
     onView: nav.openView,
     onNew: () =>
       project?.available
-        ? void createProjectSession(project.id).catch(showSessionError)
+        ? void nav.openDraft(project.id).catch(showSessionError)
         : setProjectsOpen(true),
     onProjects: () => {
       dispatch(actions.setDrawer(undefined));
@@ -385,7 +386,7 @@ export default function Workspace() {
     gitBusy,
     terminalLoading: panel.terminalLoading,
     canFocusComposer:
-      Boolean(inputTarget && inputTarget.status === 'active' && !inputTarget.creatingFork) &&
+      Boolean(draftProject || (inputTarget?.status === 'active' && !inputTarget.creatingFork)) &&
       !inputSubmitting &&
       !gitBusy,
     changeLayout,
@@ -590,21 +591,7 @@ export default function Workspace() {
                     <ExtensionsPage
                       projects={ready.data?.projects ?? []}
                       projectId={project?.id}
-                      onStartSkill={async (projectId, selection, editable) => {
-                        const { session } = await createSession.mutateAsync(projectId);
-                        await updateSessionDraft({
-                          sessionId: session.id,
-                          draft: {
-                            ...session.draft,
-                            extensionSelections: [selection],
-                            mode: editable ? 'edit' : 'readonly',
-                            executionPreference: 'project-v1',
-                            approvalMode: undefined,
-                          },
-                        });
-                        nav.openSession(session.id);
-                        void cache.revalidateSession(session.id);
-                      }}
+                      onStartSkill={nav.startSkillDraft}
                     />
                   </div>
                 ) : null}
@@ -621,7 +608,7 @@ export default function Workspace() {
                   <section
                     className="conversation-screen"
                     aria-label={t('session.workspace')}
-                    data-has-session={Boolean(sessionId)}
+                    data-has-session={Boolean(sessionId || draftProject)}
                     data-has-context={Boolean(
                       snapshot?.agent || snapshot?.workspace || snapshot?.session.fork,
                     )}
@@ -677,7 +664,7 @@ export default function Workspace() {
                             key={snapshot.session.id}
                             snapshot={snapshot}
                             defaultModel={ready.data?.config.model ?? ''}
-                            nativeExecution={ready.data?.capabilities.nativeExecution === true}
+                            nativeExecution={nativeExecution}
                             onOpenLink={desktop ? handleOpenDesktopLink : undefined}
                             focusMessageId={messageId}
                             onSent={cache.revalidateSession}
@@ -707,7 +694,17 @@ export default function Workspace() {
                             />
                           </div>
                         ) : null}
-                        {!snapshot ? (
+                        {draftProject ? (
+                          <NewSessionChat
+                            key={draftProject.id}
+                            project={draftProject}
+                            defaultModel={ready.data?.config.model ?? ''}
+                            nativeExecution={nativeExecution}
+                            onSent={nav.replaceDraft}
+                            onError={setNotice}
+                          />
+                        ) : null}
+                        {!snapshot && !draftProject ? (
                           session.isError ? (
                             <div role="alert" className="empty-text">
                               <p>{translateError(session.error, t('session.loadFailed'))}</p>
@@ -762,7 +759,7 @@ export default function Workspace() {
         sessionFailed={session.isError}
         onRetrySession={() => void session.refetch()}
         loading={loading}
-        onCreateProjectSession={createProjectSession}
+        onOpenProjectDraft={nav.openDraft}
         onOpenGit={openGit}
         sessionAction={sessionAction}
         getCurrentPath={nav.getCurrentPath}

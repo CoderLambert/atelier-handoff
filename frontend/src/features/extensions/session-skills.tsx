@@ -45,12 +45,14 @@ export function SessionSkillsControl({
   disabled,
   selectionCount,
   compact = false,
+  canChangePolicy = true,
 }: {
   skills: SessionSkills;
   activeRun?: Run;
   disabled: boolean;
   selectionCount: number;
   compact?: boolean;
+  canChangePolicy?: boolean;
 }) {
   const { t } = useUiTranslation('extensions');
   const title = useRef<HTMLHeadingElement>(null);
@@ -122,25 +124,29 @@ export function SessionSkillsControl({
                         </div>
                         <SkillAvailability item={item} />
                         <div className="grid justify-items-start gap-2">
-                          <SkillPolicySelect
-                            value={item.override}
-                            label={t('inheritance.sessionPolicy', names)}
-                            disabled={controlsDisabled || !canRestrictSkill(item)}
-                            options={[
-                              { value: 'follow', label: t('inheritance.sessionFollow') },
-                              { value: 'off', label: t(policies.off) },
-                              ...(item.mode === 'auto' || item.override === 'manual'
-                                ? [
-                                    {
-                                      value: 'manual' as const,
-                                      label: t(policies.manual),
-                                      disabled: !item.manual,
-                                    },
-                                  ]
-                                : []),
-                            ]}
-                            onChange={(mode) => update.save({ type: 'session', id: item.id, mode })}
-                          />
+                          {canChangePolicy ? (
+                            <SkillPolicySelect
+                              value={item.override}
+                              label={t('inheritance.sessionPolicy', names)}
+                              disabled={controlsDisabled || !canRestrictSkill(item)}
+                              options={[
+                                { value: 'follow', label: t('inheritance.sessionFollow') },
+                                { value: 'off', label: t(policies.off) },
+                                ...(item.mode === 'auto' || item.override === 'manual'
+                                  ? [
+                                      {
+                                        value: 'manual' as const,
+                                        label: t(policies.manual),
+                                        disabled: !item.manual,
+                                      },
+                                    ]
+                                  : []),
+                              ]}
+                              onChange={(mode) =>
+                                update.save({ type: 'session', id: item.id, mode })
+                              }
+                            />
+                          ) : null}
                           {selection ? (
                             <>
                               <p className="text-xs text-muted-foreground" role="status">

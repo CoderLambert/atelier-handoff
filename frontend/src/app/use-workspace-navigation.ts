@@ -1,7 +1,7 @@
 /**
  * @file 编排工作区路由同步、启动恢复与页面导航动作。
- * @implementation 维护会话/视图/标签/设置路由解析，处理运行完成跳转、最近位置记忆及跨路由清理陈旧输入焦点请求。
- * @updated 2026-11-27T19:25:00+08:00
+ * @implementation 解析会话、项目草稿与视图路由，处理首发后路由替换、最近位置恢复和跨路由焦点清理。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
@@ -11,10 +11,11 @@ import {
   useParams,
   useRouter,
 } from '@tanstack/react-router';
+import type { ExtensionSelection } from '@shared/types';
 import { isWorkspaceLocation } from '@shared/workspace-location';
 import type { Bootstrap } from '@/api/types';
 import { useRememberWorkspaceLocation } from '@/use-query/settings/use-remember-workspace-location';
-import { lastSession, rememberSession } from './drafts';
+import { lastSession, rememberSession, seedSkillDraft } from './drafts';
 import { panelLocation } from './panels/panel-location';
 import { actions, useAppDispatch, type Tab, type View } from './store';
 import type { SettingsSection } from './types';
@@ -40,7 +41,14 @@ export function useWorkspaceNavigation({
   const router = useRouter();
   const navigate = useNavigate();
   const canGoBack = useCanGoBack();
-  const { sessionId, runId: routeRunId, messageId: routeMessageId } = useParams({ strict: false });
+  const {
+    sessionId,
+    draftProjectId,
+    runId: routeRunId,
+    messageId: routeMessageId,
+  } = useParams({
+    strict: false,
+  });
   const { routePanel, contentPath } = panelLocation(pathname, sessionId, location.state);
   const trace = routePanel ? contentPath.match(/\/trace\/([^/]+)$/u)?.[1] : routeRunId;
   const messageId = routePanel ? contentPath.match(/\/messages\/([^/]+)$/u)?.[1] : routeMessageId;
@@ -69,7 +77,7 @@ export function useWorkspaceNavigation({
     function onRunFinished(event: Event) {
       const custom = event as CustomEvent<{ sessionId?: string; status?: string }>;
       const finishedSessionId = custom.detail?.sessionId;
-      if (finishedSessionId && !sessionId) {
+      if (finishedSessionId && !sessionId && !draftProjectId) {
         void navigate({ to: `/sessions/${encodeURIComponent(finishedSessionId)}` });
       }
     }
@@ -77,7 +85,7 @@ export function useWorkspaceNavigation({
     return () => {
       window.removeEventListener('atelier:run-finished', onRunFinished);
     };
-  }, [sessionId, navigate]);
+  }, [draftProjectId, sessionId, navigate]);
 
   useEffect(() => {
     if (!ready || pathname !== '/') return;
@@ -120,13 +128,36 @@ export function useWorkspaceNavigation({
     [dispatch, navigate],
   );
 
+  const openDraft = useCallback(
+    (projectId: string) => {
+      dispatch(actions.setDrawer(undefined));
+      if (router.state.location.pathname === `/drafts/${projectId}`) return Promise.resolve();
+      return navigate({ to: '/drafts/$draftProjectId', params: { draftProjectId: projectId } });
+    },
+    [dispatch, navigate, router],
+  );
+  const startSkillDraft = useCallback(
+    async (projectId: string, selection: ExtensionSelection, editable: boolean) => {
+      seedSkillDraft(projectId, selection, editable);
+      await openDraft(projectId);
+    },
+    [openDraft],
+  );
+  const replaceDraft = useCallback(
+    (projectId: string, id: string) => {
+      if (router.state.location.pathname !== `/drafts/${projectId}`) return Promise.resolve();
+      return navigate({ to: '/sessions/$sessionId', params: { sessionId: id }, replace: true });
+    },
+    [navigate, router],
+  );
+
   const openView = useCallback(
     (next: View) => {
       dispatch(actions.setDrawer(undefined));
       if (next === 'settings') {
         void navigate({ to: settingsPaths.models });
       } else if (next === 'chat') {
-        if (view === 'chat' && sessionId) return;
+        if (view === 'chat' && (sessionId || draftProjectId)) return;
         const currentReady = readyRef.current;
         const saved = lastSession() ?? currentReady?.workspaceLastSession;
         openSession(
@@ -137,7 +168,7 @@ export function useWorkspaceNavigation({
         void navigate({ to: collectionPaths[next] });
       }
     },
-    [dispatch, navigate, openSession, sessionId, view],
+    [dispatch, draftProjectId, navigate, openSession, sessionId, view],
   );
 
   const openTrace = useCallback(
@@ -203,6 +234,7 @@ export function useWorkspaceNavigation({
   return {
     pathname,
     sessionId,
+    draftProjectId,
     routePanel,
     contentPath,
     trace,
@@ -212,6 +244,9 @@ export function useWorkspaceNavigation({
     section,
     canGoBack,
     openSession,
+    openDraft,
+    startSkillDraft,
+    replaceDraft,
     openView,
     openTrace,
     selectTab,

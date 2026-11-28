@@ -20,7 +20,7 @@ export const attachmentAccept =
   '.png,.jpg,.jpeg,.xls,.xlsx,.pdf,.docx,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.css,.html,.yaml,.yml,.log,.py';
 const textFile = /\.(txt|md|json|csv|js|ts|jsx|tsx|css|html|yaml|yml|log|py)$/i;
 
-async function legacyAttachmentBody(file: File) {
+async function validatedLegacyBytes(file: File) {
   const image = attachmentImageMime(file.name);
   if (
     image
@@ -37,6 +37,15 @@ async function legacyAttachmentBody(file: File) {
       throw new AttachmentValidationError('attachment.requireUtf8');
     }
   }
+  return bytes;
+}
+
+export async function validateAttachment(file: File) {
+  if (!documentAttachmentMime(file.name)) await validatedLegacyBytes(file);
+}
+
+async function legacyAttachmentBody(file: File) {
+  const bytes = await validatedLegacyBytes(file);
   let binary = '';
   for (let offset = 0; offset < bytes.length; offset += 8192) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));

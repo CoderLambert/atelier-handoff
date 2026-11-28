@@ -15,6 +15,7 @@ import { cn } from '@/components/ui/utils';
 import { ExtensionPicker, type ExtensionPickerHandle } from '@/features/extensions/picker';
 import type { SessionSkillScope } from '@/use-query/skill-inheritance/keys';
 import { DraftSessionSkills, SessionSkillsControl } from '@/features/extensions/session-skills';
+import { stagedAttachment } from './staged-attachments';
 import { useSessionSkills } from '@/features/extensions/use-session-skills';
 import { ComposerContextChips, ComposerQuotes } from './composer-context';
 import { selectComposerPolicy } from './composer-policy';
@@ -52,6 +53,7 @@ const modeFooter = {
 
 export function Composer({
   snapshot,
+  newSession = false,
   draft,
   taskPlanRun,
   inputRef: externalInputRef,
@@ -70,6 +72,7 @@ export function Composer({
   submitting,
 }: {
   snapshot: Snapshot;
+  newSession?: boolean;
   draft: Draft;
   taskPlanRun?: Run;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
@@ -128,12 +131,10 @@ export function Composer({
     insertRunId,
   } = selectComposerPolicy(snapshot, draft, nativeExecution);
   const skillsDisabled = archived || submitting;
-  const skillScope: SessionSkillScope = {
-    type: 'session',
-    projectId: snapshot.session.projectId,
-    sessionId,
-    mode: mode === 'native' || mode === 'automatic' ? mode : 'controlled',
-  };
+  const skillMode = mode === 'native' || mode === 'automatic' ? mode : 'controlled';
+  const skillScope: SessionSkillScope = newSession
+    ? { type: 'draft', projectId: snapshot.project.id, mode: skillMode }
+    : { type: 'session', projectId: snapshot.project.id, sessionId, mode: skillMode };
   const sessionSkills = useSessionSkills({
     scope: skillScope,
     selections: draft.extensionSelections,
@@ -156,6 +157,7 @@ export function Composer({
     dismissUpload,
   } = useComposerAttachments({
     sessionId,
+    newSession,
     draft,
     onDraftChange,
     attachmentsAllowed,
@@ -290,6 +292,16 @@ export function Composer({
         <ComposerContextChips
           contextPaths={draft.contextPaths}
           attachmentIds={draft.attachmentIds}
+          stagedAttachments={
+            newSession
+              ? new Map(
+                  draft.attachmentIds.map((id) => [
+                    id,
+                    stagedAttachment(sessionId, id)?.file.name ?? id,
+                  ]),
+                )
+              : undefined
+          }
           attachments={snapshot.attachments}
           uploads={uploads}
           removing={removing}
@@ -330,6 +342,7 @@ export function Composer({
           maxLength={composerTextLimit}
           value={draft.text}
           disabled={archived}
+          readOnly={newSession && submitting}
           aria-invalid={quoteTooLong || undefined}
           aria-keyshortcuts={insertRunId ? 'Control+Enter Alt+Enter' : undefined}
           aria-describedby={
@@ -433,6 +446,7 @@ export function Composer({
             </Button>
             <SessionSkillsControl
               compact
+              canChangePolicy={!newSession}
               skills={sessionSkills}
               activeRun={run?.startedAt ? run : undefined}
               disabled={skillsDisabled}

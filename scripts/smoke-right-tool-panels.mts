@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron, type ElectronApplication } from 'playwright-core';
 import type { DesktopUiLanguageBridge } from '../shared/desktop-ui-language.js';
+import { openPersistedSessionFixture } from './p1-smoke/persisted-session.mjs';
 
 const root = await mkdtemp(join(tmpdir(), 'atelier-right-tools-'));
 const project = join(root, 'project');
@@ -67,6 +68,7 @@ try {
   await dialog.getByLabel('本机目录').fill(project);
   await dialog.getByRole('button', { name: '绑定项目', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
+  await openPersistedSessionFixture(page);
   const topbar = page.locator('.topbar');
   const splitter = page.locator('#resize-inspector');
   const tool = page.locator('.workspace-right-tool');

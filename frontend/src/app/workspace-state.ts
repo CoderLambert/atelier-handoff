@@ -3,9 +3,10 @@
  * @implementation 将无副作用的布局覆盖释放、视图/标签判定和会话落点选择抽离为纯函数，便于工作区与测试共用。
  * @updated 2026-11-27T19:25:00+08:00
  */
-import type { Session } from '@shared/types';
+import type { Project, Session } from '@shared/types';
 import { initialWorkspaceLayout, type WorkspaceLayout } from '@shared/workspace-layout';
 import { isWorkspaceLocation, workspaceSessionId } from '@shared/workspace-location';
+import { sessionSwitchItems } from './session-switcher-model';
 import type { Tab, View } from './store';
 import type { SettingsSection } from './types';
 
@@ -118,4 +119,19 @@ export function resolveWorkspaceLayout(
   serverLayout: WorkspaceLayout | undefined,
 ): WorkspaceLayout {
   return override?.layout ?? serverLayout ?? initialWorkspaceLayout;
+}
+
+export function composerSession(
+  bootstrap: { sessions: readonly Session[]; projects: readonly Project[] } | undefined,
+  sessionId?: string,
+  lastId?: string | null,
+) {
+  if (!bootstrap) return;
+  const { sessions, projects } = bootstrap;
+  if (sessionId) return sessions.find(({ id }) => id === sessionId);
+  return (
+    sessions.find(({ id, status }) => id === lastId && status === 'active') ??
+    sessionSwitchItems(sessions, projects, '').find(({ session }) => session.status === 'active')
+      ?.session
+  );
 }

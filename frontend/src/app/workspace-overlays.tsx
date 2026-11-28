@@ -49,7 +49,7 @@ export interface WorkspaceOverlaysProps {
   sessionFailed: boolean;
   onRetrySession: () => void;
   loading: ReactNode;
-  onCreateProjectSession: (id: string) => Promise<void>;
+  onOpenProjectDraft: (id: string) => Promise<void>;
   onOpenGit: (project: Project) => void;
   sessionAction?: SessionActionRequest;
   getCurrentPath: () => string;
@@ -79,7 +79,7 @@ export function WorkspaceOverlays({
   sessionFailed,
   onRetrySession,
   loading,
-  onCreateProjectSession,
+  onOpenProjectDraft,
   onOpenGit,
   sessionAction,
   getCurrentPath,
@@ -148,9 +148,7 @@ export function WorkspaceOverlays({
           open
           onOpenChange={onProjectsOpenChange}
           projects={[...projects]}
-          onChoose={async (id) => {
-            await onCreateProjectSession(id);
-          }}
+          onChoose={onOpenProjectDraft}
           onGit={(project) => {
             onOpenGit(project);
             onProjectsOpenChange(false);

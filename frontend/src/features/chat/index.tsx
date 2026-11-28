@@ -29,6 +29,7 @@ import './chat.css';
 
 export interface ChatProps {
   snapshot: Snapshot;
+  newSession?: boolean;
   draft: Draft;
   getDraft: () => Draft;
   defaultModel: string;
@@ -261,6 +262,7 @@ function SessionChat(props: ChatProps) {
       <Composer
         key={`composer:${snapshot.session.id}`}
         snapshot={snapshot}
+        newSession={props.newSession}
         draft={draft}
         taskPlanRun={composerPlan}
         inputRef={inputRef}

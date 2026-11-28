@@ -1,7 +1,7 @@
 /**
  * @file 管理会话创建、归档、恢复、智能体升级和删除。
- * @implementation 复核工作树、执行、审批、终端及附件占用，再提交相关会话和清理记录。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 在事务中按项目与草稿来源复用新会话编号。归档、恢复和删除时复核资源占用并提交状态及清理记录。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
@@ -72,11 +72,13 @@ export function createSessionLifecycle({
     agentRevisionId?: string;
     title?: string;
     origin?: 'schedule';
+    draftId?: string;
   }) {
     const project = store.get('projects', input.projectId);
     await resolveProjectPath(project.path, '', { directory: true });
     const session: Session = {
-      id: randomUUID(),
+      id: input.draftId ?? randomUUID(),
+      ...(input.draftId ? { createdFromDraft: true } : {}),
       projectId: project.id,
       title: input.title?.trim() || '新会话',
       ...(input.origin ? { origin: input.origin } : {}),
@@ -90,12 +92,25 @@ export function createSessionLifecycle({
           : emptyDraft(),
       ...(input.agentRevisionId ? { agentRevisionId: input.agentRevisionId } : {}),
     };
-    store.transaction(() => {
+    return store.transaction(() => {
+      if (input.draftId) {
+        let existing: Session | undefined;
+        try {
+          existing = store.get('sessions', input.draftId);
+        } catch (error) {
+          if (!(error instanceof AppError) || error.code !== 'NOT_FOUND') throw error;
+        }
+        if (existing) {
+          if (existing.projectId !== project.id || !existing.createdFromDraft)
+            throw new AppError('IDEMPOTENCY_CONFLICT', '草稿编号已被使用。', 409);
+          return existing;
+        }
+      }
       if (input.agentRevisionId) agents.requireReady(project.id, input.agentRevisionId);
       store.put('sessions', session);
+      store.event('session-' + session.id, session.id, 'session.created', {});
+      return session;
     });
-    store.event('session-' + session.id, session.id, 'session.created', {});
-    return session;
   }
 
   function fork(id: string, input: Parameters<SessionForks['create']>[1]) {

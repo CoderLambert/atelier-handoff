@@ -1,7 +1,7 @@
 /**
  * @file 提供全局、项目及会话的 Skill 继承设置。
- * @implementation 校验范围和会话状态，更新继承后唤醒待处理消息调度。
- * @updated 2026-11-27T21:25:00+08:00
+ * @implementation 校验全局、项目、会话及只读草稿范围，按运行模式解析继承。更新继承后唤醒待处理消息调度。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { z } from 'zod';
 import { skillInheritancePatchSchema } from '../../../shared/skill-inheritance.js';
@@ -17,6 +17,7 @@ const inheritanceScope = z.strictObject({
   projectId: z.string().uuid().optional(),
   sessionId: z.string().uuid().optional(),
   native: z.literal('1').optional(),
+  draft: z.literal('1').optional(),
   automatic: z.literal('1').optional(),
 });
 
@@ -41,7 +42,8 @@ export function createSkillRoutes({
     const scope = inheritanceScope.parse(Object.fromEntries(url.searchParams));
     if (
       (scope.sessionId && scope.projectId) ||
-      ((scope.native || scope.automatic) && !scope.sessionId) ||
+      (scope.draft && (!scope.projectId || patch)) ||
+      ((scope.native || scope.automatic) && !scope.sessionId && !scope.draft) ||
       (scope.native && scope.automatic)
     )
       throw new AppError('EXTENSION_UNAVAILABLE', 'Skill 设置范围无效。', 400);
@@ -53,7 +55,7 @@ export function createSkillRoutes({
       ? skills.context(
           projectId,
           session,
-          session ? scope.native === '1' : true,
+          session || scope.draft ? scope.native === '1' : true,
           undefined,
           scope.automatic === '1',
         )

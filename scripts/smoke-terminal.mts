@@ -17,6 +17,7 @@ import {
   type TerminalProcessIdentity,
 } from './p1-smoke/terminal.mjs';
 import { until, type ProcessSample } from './p1-smoke/contracts.mjs';
+import { openPersistedSessionFixture } from './p1-smoke/persisted-session.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'atelier-terminal-desktop-'));
 const project = join(directory, 'project');
@@ -205,8 +206,7 @@ try {
   await bind.getByLabel('本机目录').fill(project);
   await bind.getByRole('button', { name: '绑定项目', exact: true }).click();
   await bind.waitFor({ state: 'hidden' });
-  await page.waitForURL((url) => /^#\/sessions\/[a-f0-9-]+$/u.test(url.hash));
-  const sessionId = z.uuid().parse(new URL(page.url()).hash.split('/')[2]);
+  const sessionId = await openPersistedSessionFixture(page);
   await application.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1280, 800),
   );

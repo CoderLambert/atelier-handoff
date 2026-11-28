@@ -1,7 +1,7 @@
 /**
  * @file 连接会话输入、运行偏好、消息发送与会话级运行动作。
- * @implementation 按会话提供草稿与稳定的操作回调，内聚停止、重试与消息分支/回退请求，避免工作区外壳透传内联回调击穿对话记忆化。
- * @updated 2026-11-27T19:25:00+08:00
+ * @implementation 按会话提供草稿与稳定的操作回调，支持注入草稿首发动作，内聚停止、重试和消息分支或回退。
+ * @updated 2026-11-28T15:51:00+08:00
  */
 import { useUiTranslation, translateError } from '@/i18n';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -14,18 +14,24 @@ import { useRetryRun } from '@/use-query/runs/use-retry-run';
 import { useStopRun } from '@/use-query/runs/use-stop-run';
 import { useForkSession } from '@/use-query/sessions/use-fork-session';
 import { useInsertQueuedMessage } from '@/use-query/sessions/use-insert-queued-message';
-import { useSendSessionMessage } from '@/use-query/sessions/use-send-session-message';
+import {
+  useSendSessionMessage,
+  type SendSessionMessage,
+} from '@/use-query/sessions/use-send-session-message';
 import { readDraft, submitDraft, updateDraft } from './drafts';
 import { actions, store, useWorkspace } from './store';
+
+const ignoreTrace = () => {};
 
 export default function SessionChat({
   snapshot,
   defaultModel,
   nativeExecution = false,
   onOpenLink,
+  sendDraft,
   onSent,
   onError,
-  onTrace,
+  onTrace = ignoreTrace,
   onOpenSchedule,
   onOpenSession,
   getLocationPath,
@@ -40,9 +46,10 @@ export default function SessionChat({
   defaultModel: string;
   nativeExecution?: boolean;
   onOpenLink?: (url: string, destination: 'internal' | 'external') => Promise<void>;
+  sendDraft?: SendSessionMessage;
   onSent: (id: string) => Promise<void>;
   onError: (message: string) => void;
-  onTrace: (id: string) => void;
+  onTrace?: (id: string) => void;
   onOpenSchedule?: (taskId: string) => void;
   onOpenSession?: (sessionId: string) => void;
   getLocationPath?: () => string;
@@ -145,7 +152,7 @@ export default function SessionChat({
         result = await submitDraft(
           id,
           serverDraft,
-          sendSessionMessage,
+          sendDraft ?? sendSessionMessage,
           readonlyProfile,
           defaultModel || undefined,
           nativeAvailable,
@@ -184,6 +191,7 @@ export default function SessionChat({
       onError,
       onSent,
       readonlyProfile,
+      sendDraft,
       sendSessionMessage,
       serverDraft,
       t,
@@ -287,6 +295,7 @@ export default function SessionChat({
   return (
     <Chat
       snapshot={snapshot}
+      newSession={Boolean(sendDraft)}
       draft={savedDraft ?? fallback}
       getDraft={getDraft}
       defaultModel={defaultModel}
