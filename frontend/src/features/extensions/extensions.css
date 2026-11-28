@@ -1215,7 +1215,7 @@
   .ext-completion-footer {
     justify-content: space-between;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .ext-dialog-actions {
     gap: 8px;

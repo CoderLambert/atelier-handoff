@@ -325,20 +325,6 @@
 .aside-closed .app {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
 }
-dialog {
-  width: min(520px, calc(100% - 32px));
-  max-height: 85dvh;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 0;
-  color: var(--fg);
-  background: var(--bg);
-  box-shadow: 0 24px 80px var(--scrim);
-  font-size: var(--text-ui);
-}
-dialog::backdrop {
-  background: var(--scrim);
-}
 .dialog-actions {
   display: flex;
   align-items: center;
@@ -346,14 +332,6 @@ dialog::backdrop {
   flex-wrap: wrap;
   gap: 10px;
   padding-top: 24px;
-}
-dialog.permission-dialog {
-  --dialog-gap: 40px;
-  width: min(920px, calc(100% - var(--dialog-gap)));
-  max-height: calc(100dvh - var(--dialog-gap));
-}
-dialog.permission-dialog:has(.diff-layout) {
-  width: min(1120px, calc(100% - var(--dialog-gap)));
 }
 .permission-dialog .dialog-header {
   padding: 14px 22px;
@@ -369,9 +347,6 @@ dialog.permission-dialog:has(.diff-layout) {
   background: var(--bg);
 }
 @media (max-width: 600px) {
-  dialog.permission-dialog {
-    --dialog-gap: 20px;
-  }
   .permission-dialog .dialog-header,
   .permission-dialog .dialog-body {
     padding: 12px 14px;

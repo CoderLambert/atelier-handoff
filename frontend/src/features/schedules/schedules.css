@@ -22,7 +22,7 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1160px;
   min-height: 100%;
   margin-inline: auto;
 }
@@ -733,7 +733,7 @@
   background: var(--surface-warm);
   border: 1px solid var(--border);
   color: var(--fg);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;

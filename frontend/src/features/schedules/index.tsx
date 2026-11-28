@@ -8,6 +8,8 @@ import { ArrowUpRight, Clock, Pause, Play, Plus, Trash2, Zap } from 'lucide-reac
 import type { Project, ScheduledTask, Session } from '@shared/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -147,19 +149,20 @@ export default function SchedulesPage({
             </div>
 
             {tasks.length === 0 && !schedulesQuery.isLoading ? (
-              <div className="schedules-empty">
-                <div className="schedules-empty-icon" aria-hidden="true">
-                  <Clock className="size-5" />
-                </div>
-                <h2 className="schedules-empty-title">{t('emptyTitle')}</h2>
-                <p className="schedules-empty-copy">{t('emptyDescription')}</p>
-                {!creating && projects.length > 0 ? (
-                  <Button type="button" variant="outline" size="sm" onClick={startCreating}>
-                    <Plus className="size-3.5" aria-hidden="true" />
-                    <span>{t('newTask')}</span>
-                  </Button>
-                ) : null}
-              </div>
+              <EmptyState
+                icon={<Clock />}
+                title={t('emptyTitle')}
+                description={t('emptyDescription')}
+                className="border-0 bg-transparent px-4 py-10"
+                action={
+                  !creating && projects.length > 0 ? (
+                    <Button type="button" variant="outline" size="sm" onClick={startCreating}>
+                      <Plus className="size-3.5" aria-hidden="true" />
+                      <span>{t('newTask')}</span>
+                    </Button>
+                  ) : null
+                }
+              />
             ) : (
               <ul className="schedules-task-list">
                 {tasks.map((task) => {
@@ -316,30 +319,16 @@ export default function SchedulesPage({
                   </div>
                 </div>
 
-                <div className="schedules-tabs" role="tablist">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'rules'}
-                    className={
-                      tab === 'rules' ? 'schedules-tab schedules-tab-active' : 'schedules-tab'
-                    }
-                    onClick={() => setTab('rules')}
-                  >
-                    {t('tabs.rules')}
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'history'}
-                    className={
-                      tab === 'history' ? 'schedules-tab schedules-tab-active' : 'schedules-tab'
-                    }
-                    onClick={() => setTab('history')}
-                  >
-                    {t('tabs.history')}
-                  </button>
-                </div>
+                <Tabs
+                  value={tab}
+                  onValueChange={(value) => setTab(value as 'rules' | 'history')}
+                  variant="underline"
+                >
+                  <TabsList className="w-full">
+                    <TabsTrigger value="rules">{t('tabs.rules')}</TabsTrigger>
+                    <TabsTrigger value="history">{t('tabs.history')}</TabsTrigger>
+                  </TabsList>
+                </Tabs>
 
                 {tab === 'rules' ? (
                   <>

@@ -19,7 +19,8 @@ interface Violation {
     | 'motion-import'
     | 'scrollbar'
     | 'focus-outline'
-    | 'raw-control';
+    | 'raw-control'
+    | 'raw-font-size';
   detail: string;
   line: number;
 }
@@ -163,6 +164,16 @@ function checkCss(source: string, file: string): Violation[] {
         line: declaration.source?.start?.line ?? 1,
       });
     }
+    if (file !== 'styles.css' && declaration.prop === 'font-size') {
+      const pxMatch = /^([\d.]+)px$/i.exec(declaration.value.trim());
+      if (pxMatch && Number(pxMatch[1]) < 20) {
+        violations.push({
+          rule: 'raw-font-size',
+          detail: `${declaration.prop}:${declaration.value.trim()}`,
+          line: declaration.source?.start?.line ?? 1,
+        });
+      }
+    }
     if (declaration.prop === 'content') return;
     const value = declaration.value.replace(/url\([^)]*\)/gi, '');
     if (hexColor.test(value) || colorFunction.test(value)) {
@@ -203,6 +214,7 @@ if (process.argv.includes('--self-test')) {
     ['raw-control', 'raw-control'],
   );
   assert.equal(checkTsx(`const a = <input />;`, 'components/ui/input.tsx').length, 0);
+  assert.equal(checkCss('.meta { font-size: 11.5px; }', 'feature.css')[0]?.rule, 'raw-font-size');
 } else {
   const root = fileURLToPath(new URL('../frontend/src/', import.meta.url));
   const errors: string[] = [];

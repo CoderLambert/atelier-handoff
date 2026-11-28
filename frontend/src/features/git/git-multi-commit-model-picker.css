@@ -11,7 +11,7 @@
     min-width: 0;
   }
   .git-multi-commit-model-picker > label {
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
   .git-multi-commit-model-controls {
@@ -32,7 +32,7 @@
   }
   .git-multi-commit-model-picker p {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--text-sm);
     color: var(--ui-muted-foreground);
     overflow-wrap: anywhere;
   }
