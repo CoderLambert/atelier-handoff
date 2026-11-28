@@ -1,7 +1,7 @@
 /**
  * @file 启动和关闭工作台服务。
- * @implementation 配对桌面宿主，独占数据目录，并从私有启动参数注入 RTK 资源。清除环境覆盖，本地监听并统一释放业务和持久化资源。
- * @updated 2026-11-26T01:32:35+08:00
+ * @implementation 配对桌面宿主并独占数据目录，传递 RTK 启动参数，响应开发重启探测，统一释放运行时资源。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { isAbsolute, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -11,6 +11,10 @@ import { createApp } from './app.js';
 import { acquireDataOwner, DataOwnerError } from './data-owner.js';
 import { desktopBrowserEnabled } from './desktop-browser.js';
 import { receiveDesktopHost, sendDesktopHost } from './desktop-host.js';
+import {
+  developmentRestartProbe,
+  developmentRestartResult,
+} from '../shared/desktop-development-restart.js';
 import { desktopHostDeadlines, desktopHostSystemResumeSchema } from '../shared/desktop-host.js';
 
 // Startup argv is supplied by the private desktop supervisor. Environment files
@@ -79,7 +83,19 @@ try {
   process.once('SIGTERM', exit);
   if (host) {
     process.once('disconnect', exit);
+    let restartReserved = false;
     process.on('message', (message: unknown) => {
+      const restart = developmentRestartProbe.safeParse(message);
+      if (restart.success && process.env.ATELIER_DEV_LAUNCH === '1' && process.connected) {
+        process.send?.(
+          developmentRestartResult.parse({
+            type: 'atelier-dev:restart-result',
+            id: restart.data.id,
+            ready: (restartReserved ||= app.prepareDevelopmentRestart()),
+          }),
+          () => {},
+        );
+      }
       if (desktopHostSystemResumeSchema.safeParse(message).success) {
         app.scheduleScheduler.wakeFromSuspend();
       }

@@ -1,7 +1,7 @@
 /**
  * @file 管理工作台窗口、配对请求和原生恢复入口。
- * @implementation 限制可信页面导航与 HTTP 配对范围，通过系统对话框提供恢复操作。
- * @updated 2026-11-20T02:00+08:00
+ * @implementation 限制可信页导航和 HTTP 配对范围，按开发启动选用持久分区，并提供原生恢复对话框。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { BrowserWindow, dialog } from 'electron';
 import { desktopHostDeadlines, desktopPairingHeader } from '../../shared/desktop-host.js';
@@ -12,6 +12,7 @@ export function createWindow(
   preload: string,
   getOrigin: () => string | undefined,
   theme: UiTheme,
+  preserveStorage = false,
 ): BrowserWindow {
   const hideMenuBar = process.platform === 'linux' || process.platform === 'win32';
   const owner = new BrowserWindow({
@@ -23,7 +24,7 @@ export function createWindow(
     ...(hideMenuBar ? { autoHideMenuBar: true } : {}),
     webPreferences: {
       preload,
-      partition: 'atelier-workbench',
+      partition: preserveStorage ? 'persist:atelier-development' : 'atelier-workbench',
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

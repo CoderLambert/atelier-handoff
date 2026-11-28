@@ -1,7 +1,7 @@
 /**
  * @file 组装 Atelier 运行时并注册 HTTP 领域路由。
- * @implementation 连接持久化、用例和终端传输，统一管理在途请求、长连接与关停顺序。
- * @updated 2026-11-26T23:20:03+08:00
+ * @implementation 装配运行时用例及存储，协调请求、连接和关停。开发重启前检查写请求、活动终端和运行，并预留关停状态。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { randomBytes } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
@@ -140,7 +140,6 @@ export async function createApp(options: CreateAppOptions) {
     unavailableReason,
     isSessionDeleting: operations.isDeleting,
   });
-
   const { createRun, queue, queueScheduler, readQueue } = createMessageRuntime({
     store,
     worktrees,
@@ -241,7 +240,10 @@ export async function createApp(options: CreateAppOptions) {
       permissions,
     }),
   });
-  const { server, stopListening, drainConnections } = createRuntimeHttpServer(handle, streams);
+  const { server, hasWrites, stopListening, drainConnections } = createRuntimeHttpServer(
+    handle,
+    streams,
+  );
   const terminalTransport = registerTerminalTransport(server, terminals, {
     validateUpgrade: (req) => validateTerminalUpgrade(server, req, isShuttingDown),
   });
@@ -278,5 +280,21 @@ export async function createApp(options: CreateAppOptions) {
         store.close();
       }
     })());
-  return { server, store, permissions, files, runner, schedules, scheduleScheduler, close };
+  function prepareDevelopmentRestart(): boolean {
+    if (shuttingDown || hasWrites() || terminals.hasActiveProcesses()) return false;
+    if (store.repos.runs.listActive().length) return false;
+    shuttingDown = true;
+    return true;
+  }
+  const runtime = {
+    server,
+    store,
+    permissions,
+    files,
+    runner,
+    schedules,
+    scheduleScheduler,
+    close,
+  };
+  return { ...runtime, prepareDevelopmentRestart };
 }

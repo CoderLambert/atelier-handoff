@@ -1,7 +1,7 @@
 /**
  * @file 监督独立的 Node 工作台运行时。
- * @implementation 校验私有 IPC 就绪握手，传递内置网关及可信 RTK 资源路径，清除继承的 RTK 覆盖，并按连接代次清理子进程。
- * @updated 2026-11-26T01:32:35+08:00
+ * @implementation 校验私有握手，传递内置网关及可信 RTK 路径，按连接代次清理子进程并向当前运行时发起开发重启探测。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -17,6 +17,10 @@ import {
   type DesktopHostSystemResume,
 } from '../../shared/desktop-host.js';
 
+import {
+  developmentRestartProbe,
+  developmentRestartResult,
+} from '../../shared/desktop-development-restart.js';
 import { DesktopHostError, type DesktopFailureKey } from './i18n.mjs';
 
 const failureKey = {
@@ -76,6 +80,34 @@ export class RuntimeSupervisor {
       protocolVersion: desktopHostVersion,
     };
     active.child.send(message, () => undefined);
+  }
+
+  prepareDevelopmentRestart(): Promise<boolean> {
+    const child = this.current?.child;
+    if (!child || !this.connected) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const id = randomUUID();
+      const finish = (ready: boolean) => {
+        clearTimeout(timeout);
+        child.off('message', receive);
+        child.off('disconnect', disconnect);
+        resolve(ready);
+      };
+      const receive = (input: unknown) => {
+        const result = developmentRestartResult.safeParse(input);
+        if (result.success && result.data.id === id) finish(result.data.ready && this.owns(child));
+      };
+      const disconnect = () => finish(false);
+      const timeout = setTimeout(disconnect, 2_000);
+      child.on('message', receive);
+      child.once('disconnect', disconnect);
+      child.send(
+        developmentRestartProbe.parse({ type: 'atelier-dev:prepare-restart', id }),
+        (error) => {
+          if (error) finish(false);
+        },
+      );
+    });
   }
 
   async start(gateway?: ManagedShuntConnection): Promise<{ origin: string; pairing: string }> {
@@ -159,7 +191,8 @@ export class RuntimeSupervisor {
         child.on('message', (message: unknown) => {
           if (launch.retired || failed) return;
           if (launch.ready) {
-            this.onMessage(child, message);
+            if (!developmentRestartResult.safeParse(message).success)
+              this.onMessage(child, message);
             return;
           }
           const reply = desktopHostReplySchema.safeParse(message);

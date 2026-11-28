@@ -1,6 +1,6 @@
 /**
  * @file 验证开发桌面命令可以跟随 Git 拉取重新构建。
- * @implementation 用临时仓库和可控的桌面、构建替身检验真实 npm 入口、失败恢复和寿命边界。
+ * @implementation 通过临时仓库和桌面替身验证 npm 入口、空闲后重启、端口继承、构建失败及用户退出。
  * @updated 2026-12-08T12:00:00+00:00
  */
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 test(
-  'desktop rebuilds only when the local checkout advances and keeps the window running',
+  'desktop rebuilds on checkout changes and restarts after the window is idle',
   { timeout: 40_000 },
   async () => {
     const fixture = await mkdtemp(join(tmpdir(), 'atelier-desktop-git-'));
@@ -62,6 +62,21 @@ test(
         new URL('../scripts/run-desktop.mts', import.meta.url),
         join(checkout, 'scripts/run-desktop.mts'),
       );
+      await mkdir(join(checkout, 'shared'));
+      await mkdir(join(checkout, 'dist/desktop'), { recursive: true });
+      await cp(
+        new URL('../shared/desktop-development-restart.ts', import.meta.url),
+        join(checkout, 'shared/desktop-development-restart.ts'),
+      );
+      await symlink(
+        fileURLToPath(new URL('../node_modules/zod', import.meta.url)),
+        join(checkout, 'node_modules/zod'),
+        'junction',
+      );
+      await writeFile(
+        join(checkout, 'node_modules/electron/index.js'),
+        'module.exports = process.execPath;',
+      );
       const { scripts } = z
         .object({ scripts: z.object({ desktop: z.string(), 'desktop:build': z.string() }) })
         .parse(JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')));
@@ -91,11 +106,17 @@ test(
     `,
       );
       await writeFile(
-        join(checkout, 'node_modules/electron/cli.js'),
+        join(checkout, 'dist/desktop/main.mjs'),
         `
-      const { appendFileSync, existsSync } = require('node:fs');
-      appendFileSync('windows', JSON.stringify(process.argv.slice(2)) + '\\n');
-      const timer = setInterval(() => { if (existsSync('quit')) clearInterval(timer); }, 50);
+      import { appendFileSync, existsSync } from 'node:fs';
+      if (process.env.ATELIER_DEV_LAUNCH !== '1') throw new Error('Missing development launch mode');
+      appendFileSync('windows', JSON.stringify(['dist/desktop/main.mjs', ...process.argv.slice(2)]) + '\\n');
+      appendFileSync('ports', (process.env.ATELIER_PORT ?? 'initial') + '\\n');
+      process.on('message', (message) => {
+        if (message.type !== 'atelier-dev:restart' || existsSync('busy')) return;
+        process.send({type:'atelier-dev:restarting', port:43210}, () => process.exit(0));
+      });
+      const timer = setInterval(() => { if (existsSync('quit')) { clearInterval(timer); process.disconnect(); } }, 50);
     `,
       );
 
@@ -118,15 +139,23 @@ test(
       git(checkout, 'fetch');
       await pause(2_000);
       assert.equal(await reader('builds'), 'initial\n');
+      await writeFile(join(checkout, 'busy'), '');
       git(checkout, 'pull', '--ff-only');
       await until(equalFile('builds', 'initial\nupdated\n'), 'Pull did not trigger a rebuild');
+      await pause(2_000);
+      assert.equal(await reader('windows'), window);
+      await rm(join(checkout, 'busy'));
+      await until(
+        equalFile('windows', window.repeat(2)),
+        'Successful rebuild did not restart Electron',
+      );
 
       await commit('broken');
       git(checkout, 'pull', '--ff-only');
       await until(async () => output.includes('Rebuild failed'), 'Build failure was not reported');
       await pause(2_000);
       assert.equal(await reader('builds'), 'initial\nupdated\nbroken\n');
-      assert.equal(await reader('windows'), window);
+      assert.equal(await reader('windows'), window.repeat(2));
 
       await commit('fixed');
       git(checkout, 'pull', '--ff-only');
@@ -138,7 +167,8 @@ test(
         equalFile('builds', 'initial\nupdated\nbroken\nfixed\n'),
         'Later commit did not rebuild',
       );
-      assert.equal(await reader('windows'), window);
+      await until(equalFile('windows', window.repeat(3)), 'Later rebuild did not restart Electron');
+      assert.match(await reader('ports'), /43210\n43210\n$/u);
       await writeFile(join(checkout, 'quit'), '');
       assert.deepEqual(await exited, [0, null]);
     } finally {

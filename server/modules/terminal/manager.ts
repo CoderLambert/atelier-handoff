@@ -1,7 +1,7 @@
 /**
  * @file 管理人工终端的会话归属和生命周期。
- * @implementation 协调终端创建、票据签发、工作树目录预留与关闭清理，并将连接流控和实例队列委托给 TerminalAttachmentSession 与 TerminalInstance。
- * @updated 2026-11-27T22:10:00+08:00
+ * @implementation 协调终端进程、票据、工作树占用及清理，报告活动进程供重启判断。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
@@ -627,6 +627,10 @@ export class TerminalManager {
       if (entry.closeWork === work) entry.closeWork = undefined;
     });
     return work;
+  }
+
+  hasActiveProcesses(): boolean {
+    return [...this.entries.values()].some(({ record }) => terminalHasActiveProcess(record.state));
   }
 
   shutdown(): Promise<{ closed: number; failed: string[] }> {

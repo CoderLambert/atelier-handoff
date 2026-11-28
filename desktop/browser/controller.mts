@@ -1,7 +1,7 @@
 /**
  * @file 管理项目浏览器的原生标签、控制权、视图布局与下载接入。
- * @implementation 编排 WebContentsView 与人工/Agent 边界，委托 operation-lifecycle 与 cdp-driver 执行工具，并提供显式 bindIpc 绑定/解绑句柄。
- * @updated 2026-11-27T22:00:00+08:00
+ * @implementation 协调原生网页视图、人工接管和工具操作。接管、交接或工具操作期间暂缓开发重启。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import {
   BrowserWindow,
@@ -631,7 +631,14 @@ export function createBrowserController(host: BrowserHost) {
     transferring.clear();
   }
 
-  return { bindIpc, runTool, reset, cancel };
+  return {
+    bindIpc,
+    runTool,
+    reset,
+    cancel,
+    blocksDevelopmentRestart: () =>
+      human.size > 0 || transferring.size > 0 || [...tabs.values()].some((tab) => tab.busy),
+  };
 
   function cancel(callId: string): void {
     for (const tab of tabs.values()) {

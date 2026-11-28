@@ -1,7 +1,7 @@
 /**
  * @file 管理桌面应用、内置网关及原生操作入口的生命周期。
- * @implementation 装配窗口、快捷键、系统托盘与原生入口，管理内置 Shunt、运行时恢复和退出。按安装或开发资源布局向私有运行时传入固定 RTK 路径。
- * @updated 2026-11-27T23:50:00+08:00
+ * @implementation 装配可信窗口、原生操作、内置 Shunt 和运行时。开发启动时协调网页与运行时的空闲检查，正常退出后由启动器重开。
+ * @updated 2026-12-08T12:00:00+00:00
  */
 import { app, powerMonitor, type BrowserWindow, type Event as ElectronEvent } from 'electron';
 import type { ChildProcess } from 'node:child_process';
@@ -41,9 +41,14 @@ import { bindUiNotifications } from './host/ui-notifications-ipc.mjs';
 import { bindDesktopGit } from './host/git-ipc.mjs';
 import { createTrustedSenderPredicate } from './host/trusted-ipc.mjs';
 import { asDesktopHostError, DesktopHostError, desktopI18n } from './host/i18n.mjs';
+import {
+  developmentRestartAccepted,
+  developmentRestartRequest,
+} from '../shared/desktop-development-restart.js';
 import { DesktopTrayController } from './host/tray.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const developmentLauncher = !app.isPackaged && process.env.ATELIER_DEV_LAUNCH === '1';
 // The development bundle lives in dist/desktop; source execution lives in desktop.
 const root = app.isPackaged
   ? join(process.resourcesPath, 'runtime')
@@ -191,7 +196,7 @@ async function start(): Promise<void> {
   const owner =
     window && !window.isDestroyed()
       ? window
-      : createWindow(join(here, 'preload.cjs'), () => origin, uiTheme.get());
+      : createWindow(join(here, 'preload.cjs'), () => origin, uiTheme.get(), developmentLauncher);
   window = owner;
   owner.removeListener('close', handleWindowClose);
   owner.on('close', handleWindowClose);
@@ -262,8 +267,37 @@ const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) => 
 const uiTheme = new DesktopUiThemePreferences(regularProfile);
 const uiNotifications = new DesktopUiNotificationsPreferences(regularProfile);
 
-if (!app.requestSingleInstanceLock()) app.quit();
-else {
+if (!app.requestSingleInstanceLock()) {
+  if (developmentLauncher)
+    console.warn(
+      '[desktop] An Atelier instance is already running. To load this build, quit it completely and run npm run desktop again.',
+    );
+  app.quit();
+} else {
+  if (developmentLauncher && process.send) {
+    let checking = false;
+    process.on('message', (input: unknown) => {
+      if (
+        !developmentRestartRequest.safeParse(input).success ||
+        !origin ||
+        stopping ||
+        checking ||
+        browser.blocksDevelopmentRestart()
+      )
+        return;
+      checking = true;
+      void supervisor.prepareDevelopmentRestart().then((ready) => {
+        checking = false;
+        if (!ready || !origin || stopping) return;
+        const message = developmentRestartAccepted.parse({
+          type: 'atelier-dev:restarting',
+          port: Number(new URL(origin).port),
+        });
+        if (process.connected) process.send?.(message, () => app.quit());
+        else app.quit();
+      });
+    });
+  }
   app.on('second-instance', () => {
     if (origin && window && !window.isDestroyed()) focusWindow(window);
   });
@@ -275,19 +309,21 @@ else {
     .then(async () => {
       await Promise.all([uiLanguage.load(), uiTheme.load(), uiNotifications.load()]);
       if (!migrationMode) {
-        desktopTray = new DesktopTrayController({
-          isMinimizeToTrayEnabled: () => uiNotifications.get().minimizeToTrayOnClose,
-          onToggleMinimizeToTray: (enabled) => {
-            void uiNotifications
-              .set({ ...uiNotifications.get(), minimizeToTrayOnClose: enabled })
-              .then(() => desktopTray?.refreshMenu())
-              .catch(() => desktopTray?.refreshMenu());
-          },
-          onShowWindow: () => {
-            if (origin && window && !window.isDestroyed()) focusWindow(window);
-          },
-          onQuit: () => app.quit(),
-        });
+        if (!developmentLauncher) {
+          desktopTray = new DesktopTrayController({
+            isMinimizeToTrayEnabled: () => uiNotifications.get().minimizeToTrayOnClose,
+            onToggleMinimizeToTray: (enabled) => {
+              void uiNotifications
+                .set({ ...uiNotifications.get(), minimizeToTrayOnClose: enabled })
+                .then(() => desktopTray?.refreshMenu())
+                .catch(() => desktopTray?.refreshMenu());
+            },
+            onShowWindow: () => {
+              if (origin && window && !window.isDestroyed()) focusWindow(window);
+            },
+            onQuit: () => app.quit(),
+          });
+        }
         const unbindUiLanguage = bindUiLanguage(
           uiLanguage,
           () => window,
@@ -362,6 +398,8 @@ app.on('before-quit', (event) => {
   desktopTray?.destroy();
   desktopTray = undefined;
   lifecycle.abort();
+  if (developmentLauncher && window && !window.isDestroyed())
+    window.webContents.session.flushStorageData();
   clearRuntimeWindow();
   void supervisor
     .stop()
