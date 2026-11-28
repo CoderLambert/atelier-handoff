@@ -994,4 +994,12 @@ export const inspector = {
     '处理配对或解绑请求失败。',
     'Failed to process pairing or unbind action.',
   ],
+  'settings.channelsPushScheduleResults': [
+    '允许定时任务推送结果到 Telegram',
+    'Push scheduled task results to Telegram',
+  ],
+  'settings.channelsPushScheduleResultsDescription': [
+    '开启后，定时任务执行完成或失败时会自动将结果摘要广播至所有已绑定的 Telegram 聊天。',
+    'When enabled, completed or failed scheduled task summaries are broadcast to all bound Telegram chats.',
+  ],
 } as const;

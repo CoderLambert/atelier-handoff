@@ -60,6 +60,7 @@ import { bindChannelsIpc } from './channels/channels-ipc.mjs';
 import { ChannelServerClient } from './channels/server-client.mjs';
 import { PairingGuard } from './channels/pairing-guard.mjs';
 import { SessionRouter } from './channels/session-router.mjs';
+import { HarnessBridge } from './channels/harness-bridge.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const developmentLauncher = !app.isPackaged && process.env.ATELIER_DEV_LAUNCH === '1';
@@ -285,10 +286,18 @@ const channelConfigs = new ChannelConfigStore(regularProfile);
 const channelServerClient = new ChannelServerClient(() => runtimeConnection);
 const channelPairingGuard = new PairingGuard(channelServerClient);
 const channelSessionRouter = new SessionRouter(channelServerClient);
+const channelHarnessBridge = new HarnessBridge(channelServerClient);
+channelSessionRouter.setRunHooks({
+  stopActiveRun: (channel, chatId) => channelHarnessBridge.stopActiveRun(channel, chatId),
+  isRunActive: (channel, chatId) => channelHarnessBridge.isRunActive(channel, chatId),
+});
 const channelManager = new ChannelManager(channelSecrets, channelConfigs, {
   pairingGuard: channelPairingGuard,
   sessionRouter: channelSessionRouter,
 });
+channelManager.setRoutedHandler((message, mapping, adapter) =>
+  channelHarnessBridge.enqueue(message, mapping, adapter),
+);
 channelManager.registerAdapter(new TelegramAdapter());
 
 if (!app.requestSingleInstanceLock()) {
@@ -379,6 +388,24 @@ if (!app.requestSingleInstanceLock()) {
         );
         const unbindDesktopShortcutIpc = desktopShortcuts.bindIpc();
         const unbindBrowserIpc = browser.bindIpc();
+        const unbindSchedulePush = channelServerClient.subscribeEvents((event) => {
+          if (event.type !== 'schedule.run.updated') return;
+          const payload = event.payload ?? {};
+          const status = payload.status;
+          if (status !== 'completed' && status !== 'failed') return;
+          const title = typeof payload.taskTitle === 'string' ? payload.taskTitle : '定时任务';
+          const summary = typeof payload.summary === 'string' ? payload.summary.trim() : '';
+          const err = typeof payload.error === 'string' ? payload.error.trim() : '';
+          const header =
+            status === 'completed' ? `⏰ 定时任务已完成：${title}` : `⚠️ 定时任务失败：${title}`;
+          const body = summary || err || '（无详细输出）';
+          void channelManager.broadcastScheduleResult(
+            'telegram',
+            `${header}
+
+${body}`,
+          );
+        });
         const unbindChannelsIpc = bindChannelsIpc(channelManager, {
           getWindow: windowHost.getWindow,
           isTrustedSender: createTrustedSenderPredicate(
@@ -400,6 +427,7 @@ if (!app.requestSingleInstanceLock()) {
           unbindDesktopGit();
           unbindDesktopShortcutIpc();
           unbindBrowserIpc();
+          unbindSchedulePush();
           unbindChannelsIpc();
         });
         await start();

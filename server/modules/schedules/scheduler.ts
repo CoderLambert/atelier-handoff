@@ -607,10 +607,13 @@ export function createScheduleScheduler({
         'schedule.run.updated',
         {
           taskId: task.id,
+          taskTitle: task.title,
           projectId: task.projectId,
           runId,
           status: succeeded ? 'completed' : 'failed',
           notify,
+          summary: assistantText.slice(0, 3500),
+          error: succeeded ? null : (runError ?? null),
         },
       );
     }

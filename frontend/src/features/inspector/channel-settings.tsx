@@ -33,6 +33,7 @@ export function ChannelSettings() {
   const bridge = typeof window !== 'undefined' ? window.atelierChannels : undefined;
   const tokenInputId = useId();
   const toggleId = useId();
+  const schedulePushId = useId();
 
   const [snapshot, setSnapshot] = useState<ChannelStateSnapshot | null>(null);
   const [loading, setLoading] = useState(Boolean(bridge));
@@ -182,6 +183,23 @@ export function ChannelSettings() {
     }
   }
 
+  async function handleSchedulePushToggle(checked: boolean) {
+    if (!bridge) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await bridge.saveConfig({
+        channel: 'telegram',
+        pushScheduleResults: checked,
+      });
+      setSnapshot(next);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : t('settings.channelsSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleApprovePairing(chatId: string) {
     if (!bridge) return;
     setPairingBusyId(chatId);
@@ -308,6 +326,19 @@ export function ChannelSettings() {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="settings-execution-toggle">
+          <div className="settings-field-copy">
+            <label htmlFor={schedulePushId}>{t('settings.channelsPushScheduleResults')}</label>
+            <p>{t('settings.channelsPushScheduleResultsDescription')}</p>
+          </div>
+          <Switch
+            id={schedulePushId}
+            checked={Boolean(config?.pushScheduleResults)}
+            disabled={busy}
+            onCheckedChange={(checked) => void handleSchedulePushToggle(checked)}
+          />
         </div>
 
         {testResult ? (

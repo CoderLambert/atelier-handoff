@@ -221,6 +221,40 @@ export class ChannelManager {
     return this.getStateSnapshot(channel);
   }
 
+  async broadcastToBound(
+    channel: ChannelId,
+    text: string,
+  ): Promise<{ delivered: number; failed: number }> {
+    const adapter = this.adapters.get(channel);
+    if (!adapter || adapter.getStatus().state !== 'connected' || !this.pairingGuard) {
+      return { delivered: 0, failed: 0 };
+    }
+    const bindings = await this.pairingGuard.listBindings(channel);
+    let delivered = 0;
+    let failed = 0;
+    for (const binding of bindings) {
+      try {
+        await adapter.send(binding.chatId, text);
+        delivered += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn(`[channels] Failed to broadcast to ${channel}:${binding.chatId}:`, error);
+      }
+    }
+    return { delivered, failed };
+  }
+
+  async broadcastScheduleResult(
+    channel: ChannelId,
+    text: string,
+  ): Promise<{ delivered: number; failed: number }> {
+    const cfg = this.configs.get(channel);
+    if (!cfg.enabled || !cfg.pushScheduleResults) {
+      return { delivered: 0, failed: 0 };
+    }
+    return this.broadcastToBound(channel, text);
+  }
+
   async startChannel(channel: ChannelId): Promise<void> {
     const adapter = this.getAdapter(channel);
     const token = await this.secrets.getToken(channel);
