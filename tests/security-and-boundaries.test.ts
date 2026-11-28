@@ -1,10 +1,11 @@
 /**
  * @file 验证安全边界、HTTP 路径校验、文件检索过滤与命令输出截断。
- * @implementation 覆盖协议相对路径与非法编码、硬链接过滤、嵌套凭据遮蔽以及多字节 UTF-8 截断。
- * @updated 2026-11-27T12:00:00-06:00
+ * @implementation 覆盖跨站来源、协议相对路径与非法编码、硬链接过滤、嵌套凭据遮蔽以及多字节 UTF-8 截断。
+ * @updated 2026-11-28T18:03:06+08:00
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { z } from 'zod';
 import { createServer, request as httpRequest } from 'node:http';
 import { link, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,20 @@ test('HTTP handler rejects protocol-relative paths and bad percent-encoding', as
     const spoofed = await rawGet(address.port, '//evil.example/api/bootstrap', {
       origin: 'http://evil.example',
     });
-    assert.equal(spoofed.status, 403);
+    assert.equal(spoofed.status, 400);
+    assert.equal(
+      z.object({ error: z.object({ code: z.string() }) }).parse(spoofed.body).error.code,
+      'INVALID_INPUT',
+    );
+
+    const crossSite = await rawGet(address.port, '/api/bootstrap', {
+      origin: 'http://evil.example',
+    });
+    assert.equal(crossSite.status, 403);
+    assert.equal(
+      z.object({ error: z.object({ code: z.string() }) }).parse(crossSite.body).error.code,
+      'ORIGIN_DENIED',
+    );
 
     const protocolRelative = await rawGet(address.port, '//evil.example/api/bootstrap');
     assert.equal(protocolRelative.status, 400);

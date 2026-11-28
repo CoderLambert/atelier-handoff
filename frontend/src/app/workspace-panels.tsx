@@ -1,9 +1,16 @@
 /**
  * @file 管理工作区分栏和右侧面板尺寸。
- * @implementation 限制分隔条拖动范围并保留分栏宽度；右栏折叠时用 Activity 保留状态、暂停副作用，布局变化通知原生网页更新坐标。
- * @updated 2026-11-26T21:58:23+08:00
+ * @implementation 限制分隔条拖动范围并保留分栏宽度；右栏折叠时用 Activity 保留状态、暂停副作用，按分栏容器实际宽度计算像素，布局变化通知原生网页更新坐标。
+ * @updated 2026-11-28T18:03:06+08:00
  */
-import { Activity, useLayoutEffect, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  Activity,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { Group, Panel, Separator, useGroupRef } from 'react-resizable-panels';
 import { useUiTranslation } from '@/i18n';
 import {
@@ -54,9 +61,19 @@ export function WorkspacePanels({
 }: WorkspacePanelsProps) {
   const { t } = useUiTranslation('navigation');
   const group = useGroupRef();
+  const groupElement = useRef<HTMLDivElement>(null);
+  const [groupWidth, setGroupWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const element = groupElement.current;
+    if (!element) return;
+    setGroupWidth(element.clientWidth);
+    const observer = new ResizeObserver(() => setGroupWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const visibleRight = showRight && !rightCollapsed;
   const dockedRight = visibleRight && !focusRight;
-  const usable = width - (Number(showLeft) + Number(dockedRight)) * separatorWidth;
+  const usable = (groupWidth ?? width) - (Number(showLeft) + Number(dockedRight)) * separatorWidth;
   const centerMin = width < 768 ? 0 : centerMinimum;
   const rightMin = dockedRight ? minInspectorWidth : 0;
   const savedLeft = layout.collapsed ? collapsedNavigationWidth : layout.recent.left;
@@ -95,6 +112,7 @@ export function WorkspacePanels({
   return (
     <Group
       groupRef={group}
+      elementRef={groupElement}
       className="workspace-resizable"
       orientation="horizontal"
       disabled={focusRight}

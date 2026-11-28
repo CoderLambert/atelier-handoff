@@ -1,10 +1,11 @@
 /**
  * @file 验证人工 PTY 的环境和真实 shell 生命周期。
- * @implementation 检查内部凭据移除、用户 PATH 保留及真实 PTY 的 Unicode 输出与退出事件。
- * @updated 2026-11-26T01:00:00+08:00
+ * @implementation 检查环境隔离、Unicode 流与退出，并等待真实前台进程组后验证 Ctrl+C。
+ * @updated 2026-11-28T18:03:06+08:00
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -103,9 +104,25 @@ test(
           exited = value;
         },
       });
-      terminal.write("printf '\\nWAIT_%s\\n' READY; sleep 30\n");
-      await until(() => output.includes('\r\nWAIT_READY\r\n'));
+      const prompt = 'ATELIER_TEST_PROMPT> ';
+      terminal.write(
+        `PS1='${prompt}'; sh -c 'printf "\\nWAIT_%s:%s\\n" READY "$$"; exec sleep 30'\n`,
+      );
+      const jobMarker = () => /\r\nWAIT_READY:(\d+)\r\n/u.exec(output)?.[1];
+      await until(() => jobMarker() !== undefined);
+      const job = jobMarker();
+      assert.ok(job);
+      await until(() => {
+        const stat = readFileSync(`/proc/${job}/stat`, 'utf8');
+        const endOfName = stat.lastIndexOf(')');
+        // After comm, /proc/<pid>/stat contains state, parent, process group,
+        // session, tty and foreground process group, in that order.
+        const [, , group, , , foreground] = stat.slice(endOfName + 2).split(' ');
+        return stat.slice(0, endOfName).endsWith(' (sleep') && group === foreground;
+      });
+      const beforeInterrupt = output.length;
       terminal.write('\u0003');
+      await until(() => output.slice(beforeInterrupt).includes(prompt));
       terminal.write("printf '\\nAFTER_%s\\n' INTERRUPT; exit 0\n");
       await until(() => exited !== undefined);
       assert.ok(output.includes('\r\nAFTER_INTERRUPT\r\n'));

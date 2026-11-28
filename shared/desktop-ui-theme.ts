@@ -20,12 +20,12 @@ export const defaultUiTheme: UiTheme = 'obsidian';
 
 // Keep native window backgrounds aligned with frontend/src/styles.css.
 export const uiThemeBackgroundColors: Record<UiTheme, string> = {
-  obsidian: '#f9f9fb',
-  classic: '#fafbf8',
-  parchment: '#fcfbf8',
-  nordic: '#f8fafd',
-  rose: '#fcf7f2',
-  midnight: '#0d1117',
+  obsidian: '#f4f5f8',
+  classic: '#f3f6f0',
+  parchment: '#f6f3ec',
+  nordic: '#f3f7fc',
+  rose: '#f8f1ea',
+  midnight: '#10151e',
 };
 
 export const uiThemeSchema = z.enum(allUiThemes);

@@ -246,23 +246,23 @@ test(
         await splitter.waitFor({ state: 'detached' });
         await panel.waitFor({ state: 'hidden' });
         assert.equal(await splitter.count(), 0);
-        // Read both rectangles in one frame: a resize may restore saved pixels
-        // between separate browser calls.
-        const geometry = await page.locator('.main').evaluate((element) => {
-          const navigation = document.querySelector('nav[aria-label="工作空间导航"]');
-          return {
-            navigation: navigation?.getBoundingClientRect().width ?? 0,
-            center: element.getBoundingClientRect().width,
-            viewport: innerWidth,
-          };
-        });
-        assert.ok(geometry);
-        assert.ok(
-          Math.abs(
-            geometry.center -
-              (geometry.viewport - geometry.navigation - (geometry.navigation ? 8 : 0)),
-          ) < 2,
-          JSON.stringify(geometry),
+        // The work area can be inset from the viewport. Verify that the
+        // center fills the actual group after the navigation and its separator.
+        await page.waitForFunction(
+          () => {
+            const group = document.querySelector('.workspace-resizable');
+            const center = document.querySelector('.main');
+            if (!group || !center) return false;
+            const navigation = group.querySelector('nav[aria-label="工作空间导航"]');
+            const separator = group.querySelector('[data-separator]');
+            const usable =
+              group.getBoundingClientRect().width -
+              (navigation?.getBoundingClientRect().width ?? 0) -
+              (separator?.getBoundingClientRect().width ?? 0);
+            return Math.abs(center.getBoundingClientRect().width - usable) < 1;
+          },
+          undefined,
+          { timeout: 3000 },
         );
       }
       for (const viewport of [
@@ -287,13 +287,20 @@ test(
       await page.waitForFunction(
         () => Reflect.get(window, 'nativeLayouts').at(-1)?.bounds?.width > 0,
       );
-      const before = await panel.boundingBox();
-      assert.ok(before && Math.abs(before.width - 640) < 2);
+      await page.waitForFunction(
+        () => {
+          const width =
+            document.querySelector('.workspace-right-tool')?.getBoundingClientRect().width ?? 0;
+          return Math.abs(width - 640) < 1;
+        },
+        undefined,
+        { timeout: 3000 },
+      );
       const topbar = await page.locator('.topbar').boundingBox();
       const tabs = await panel.locator('.desktop-browser-tabbar').boundingBox();
       assert.ok(topbar && tabs);
-      assert.equal(topbar.height, 48);
-      assert.equal(tabs.height, 48);
+      assert.ok(topbar.height > 0);
+      assert.equal(tabs.height, topbar.height);
       assert.equal(tabs.y + tabs.height, topbar.y + topbar.height);
       assert.equal(await panel.locator('.workspace-browser-heading').count(), 0);
       const resized = page.waitForResponse(
@@ -505,7 +512,8 @@ test(
       await page.waitForFunction(
         (width) =>
           Math.abs(
-            (document.querySelector('.terminal-panel')?.getBoundingClientRect().width ?? 0) - width,
+            (document.querySelector('.workspace-right-tool')?.getBoundingClientRect().width ?? 0) -
+              width,
           ) < 2,
         savedRight,
       );

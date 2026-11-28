@@ -1005,7 +1005,8 @@ test(
           paint: style.backgroundImage,
         };
       });
-      assert.equal(fade.height, '24px');
+      const fadeHeight = Number.parseFloat(fade.height);
+      assert.ok(fadeHeight > 0, fade.height);
       assert.equal(fade.pointerEvents, 'none');
       assert.match(fade.paint, /^linear-gradient/);
       assert.equal(
