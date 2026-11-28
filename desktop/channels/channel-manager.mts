@@ -1,19 +1,22 @@
 /**
  * @file 通道适配器注册表与生命周期管理器。
- * @implementation 不直接依赖任何协议库（如 grammY），统一管理配置、密文 Token、启停恢复与状态事件广播。
- * @updated 2026-11-28T10:35:00+08:00
+ * @implementation 不直接依赖任何协议库（如 grammY），统一管理配置、密文 Token、配对鉴权、会话路由、启停恢复与状态事件广播。
+ * @updated 2026-11-28T11:15:00+08:00
  */
 import {
   maskBotToken,
   type ChannelConfig,
   type ChannelConfigUpdate,
   type ChannelId,
+  type ChannelSessionMapping,
   type ChannelStateSnapshot,
   type ChannelStatus,
   type ChannelTestResult,
 } from '../../shared/channels.js';
 import type { ChannelConfigStore } from './config-store.mjs';
+import type { PairingGuard, PairingRequestedListener } from './pairing-guard.mjs';
 import type { ChannelSecretStore } from './secret-store.mjs';
+import type { SessionRouter } from './session-router.mjs';
 import type {
   ChannelAdapter,
   ChannelStatusListener,
@@ -21,16 +24,34 @@ import type {
   InboundMessageHandler,
 } from './types.mjs';
 
+export type RoutedInboundHandler = (
+  message: InboundMessage,
+  mapping: ChannelSessionMapping,
+  adapter: ChannelAdapter,
+) => Promise<void> | void;
+
+export interface ChannelManagerOptions {
+  pairingGuard?: PairingGuard;
+  sessionRouter?: SessionRouter;
+}
+
 export class ChannelManager {
   private readonly adapters = new Map<ChannelId, ChannelAdapter>();
   private readonly statusListeners = new Set<ChannelStatusListener>();
   private readonly unsubscribes: (() => void)[] = [];
   private inboundHandler: InboundMessageHandler | undefined;
+  private routedHandler: RoutedInboundHandler | undefined;
+  private readonly pairingGuard: PairingGuard | undefined;
+  private readonly sessionRouter: SessionRouter | undefined;
 
   constructor(
     private readonly secrets: ChannelSecretStore,
     private readonly configs: ChannelConfigStore,
-  ) {}
+    options: ChannelManagerOptions = {},
+  ) {
+    this.pairingGuard = options.pairingGuard;
+    this.sessionRouter = options.sessionRouter;
+  }
 
   registerAdapter(adapter: ChannelAdapter): void {
     this.adapters.set(adapter.id, adapter);
@@ -56,6 +77,10 @@ export class ChannelManager {
     this.inboundHandler = handler;
   }
 
+  setRoutedHandler(handler: RoutedInboundHandler | undefined): void {
+    this.routedHandler = handler;
+  }
+
   onStatusChange(listener: ChannelStatusListener): () => void {
     this.statusListeners.add(listener);
     return () => {
@@ -63,40 +88,15 @@ export class ChannelManager {
     };
   }
 
+  onPairingRequested(listener: PairingRequestedListener): () => void {
+    if (!this.pairingGuard) return () => {};
+    return this.pairingGuard.onPairingRequested(listener);
+  }
+
   getAdapter(channel: ChannelId): ChannelAdapter {
     const adapter = this.adapters.get(channel);
     if (!adapter) throw new Error(`未注册的消息通道：${channel}`);
     return adapter;
-  }
-
-  private async handleInbound(message: InboundMessage): Promise<void> {
-    if (this.inboundHandler) {
-      await this.inboundHandler(message);
-      return;
-    }
-    // Batch 1 default connectivity verification: echo back inbound messages.
-    const adapter = this.adapters.get(message.channel);
-    if (!adapter) return;
-    try {
-      await adapter.send(message.chatId, `Echo: ${message.text}`);
-    } catch (error) {
-      console.error(`[channels] Echo reply failed for ${message.channel}:`, error);
-    }
-  }
-
-  async restoreEnabledChannels(): Promise<void> {
-    await this.configs.load();
-    for (const [channel] of this.adapters) {
-      const cfg = this.configs.get(channel);
-      if (!cfg.enabled) continue;
-      const token = await this.secrets.getToken(channel);
-      if (!token) continue;
-      try {
-        await this.startChannel(channel);
-      } catch (error) {
-        console.error(`[channels] Failed to restore ${channel}:`, error);
-      }
-    }
   }
 
   async getConfig(channel: ChannelId): Promise<ChannelConfig> {
@@ -117,17 +117,58 @@ export class ChannelManager {
   }
 
   async getStateSnapshot(channel: ChannelId): Promise<ChannelStateSnapshot> {
+    const config = await this.getConfig(channel);
+    const pendingPairings = this.pairingGuard ? this.pairingGuard.listPending(channel) : [];
+    let bindings: ChannelStateSnapshot['bindings'] = [];
+    if (this.pairingGuard) {
+      try {
+        bindings = await this.pairingGuard.listBindings(channel);
+      } catch (error) {
+        console.warn('[channels] Failed to load channel bindings:', error);
+      }
+    }
     return {
-      config: await this.getConfig(channel),
+      config,
       status: this.getStatus(channel),
-      pendingPairings: [],
-      bindings: [],
+      pendingPairings,
+      bindings,
     };
   }
 
-  async testConnection(channel: ChannelId, tokenOverride?: string): Promise<ChannelTestResult> {
+  async saveConfig(update: ChannelConfigUpdate): Promise<ChannelStateSnapshot> {
+    const { channel } = update;
     const adapter = this.getAdapter(channel);
-    const token = tokenOverride?.trim() || (await this.secrets.getToken(channel)) || '';
+
+    if (update.clearToken) {
+      await adapter.stop();
+      await this.secrets.deleteToken(channel);
+      await this.configs.update(channel, { enabled: false, botUsername: null });
+    } else if (typeof update.token === 'string' && update.token.trim().length > 0) {
+      await this.secrets.setToken(channel, update.token.trim());
+    }
+
+    if (typeof update.pushScheduleResults === 'boolean') {
+      await this.configs.update(channel, { pushScheduleResults: update.pushScheduleResults });
+    }
+
+    if (typeof update.enabled === 'boolean') {
+      return this.toggleChannel(channel, update.enabled);
+    }
+
+    const current = this.configs.get(channel);
+    if (current.enabled && typeof update.token === 'string' && update.token.trim().length > 0) {
+      await this.startChannel(channel);
+    }
+
+    return this.getStateSnapshot(channel);
+  }
+
+  async testConnection(channel: ChannelId, rawToken?: string): Promise<ChannelTestResult> {
+    const adapter = this.getAdapter(channel);
+    const token = rawToken?.trim() || (await this.secrets.getToken(channel)) || '';
+    if (!token) {
+      return { ok: false, botUsername: null, error: '请先输入或保存 Bot Token。' };
+    }
     const result = await adapter.testConnection(token);
     if (result.ok && result.botUsername) {
       await this.configs.update(channel, { botUsername: result.botUsername });
@@ -135,61 +176,57 @@ export class ChannelManager {
     return result;
   }
 
-  async saveConfig(input: ChannelConfigUpdate): Promise<ChannelStateSnapshot> {
-    const { channel } = input;
-    if (input.clearToken) {
-      await this.stopChannel(channel);
-      await this.secrets.deleteToken(channel);
-      await this.configs.update(channel, { enabled: false, botUsername: null });
-    } else if (input.token !== undefined && input.token.trim().length > 0) {
-      await this.secrets.setToken(channel, input.token.trim());
+  async toggleChannel(channel: ChannelId, enabled: boolean): Promise<ChannelStateSnapshot> {
+    const adapter = this.getAdapter(channel);
+    if (!enabled) {
+      await this.configs.update(channel, { enabled: false });
+      await adapter.stop();
+      return this.getStateSnapshot(channel);
     }
 
-    const patch: Partial<{ enabled: boolean; pushScheduleResults: boolean }> = {};
-    if (input.enabled !== undefined) patch.enabled = input.enabled;
-    if (input.pushScheduleResults !== undefined)
-      patch.pushScheduleResults = input.pushScheduleResults;
-    if (Object.keys(patch).length > 0) {
-      await this.configs.update(channel, patch);
+    const token = await this.secrets.getToken(channel);
+    if (!token) {
+      throw new Error('请先保存有效的 Bot Token 后再启用通道。');
     }
 
-    const current = this.configs.get(channel);
-    if (current.enabled) {
-      const token = await this.secrets.getToken(channel);
-      if (token) {
-        await this.startChannel(channel);
-      } else {
-        await this.configs.update(channel, { enabled: false });
-      }
-    } else if (input.enabled === false) {
-      await this.stopChannel(channel);
-    }
-
+    await this.configs.update(channel, { enabled: true });
+    await this.startChannel(channel);
     return this.getStateSnapshot(channel);
   }
 
-  async toggleChannel(channel: ChannelId, enabled: boolean): Promise<ChannelStateSnapshot> {
-    if (enabled) {
-      const token = await this.secrets.getToken(channel);
-      if (!token) throw new Error('请先保存有效的 Bot Token。');
-      await this.configs.update(channel, { enabled: true });
-      try {
-        await this.startChannel(channel);
-      } catch (error) {
-        await this.configs.update(channel, { enabled: false });
-        throw error;
-      }
-    } else {
-      await this.configs.update(channel, { enabled: false });
-      await this.stopChannel(channel);
+  async approvePairing(channel: ChannelId, chatId: string): Promise<ChannelStateSnapshot> {
+    if (!this.pairingGuard) throw new Error('配对守卫尚未初始化。');
+    const binding = await this.pairingGuard.approve(channel, chatId);
+    const adapter = this.adapters.get(channel);
+    if (adapter && adapter.getStatus().state === 'connected') {
+      await adapter
+        .send(
+          binding.chatId,
+          '✅ 配对已批准！你现在可以直接发送消息与本地 Atelier 对话，或使用 /status、/new、/stop 指令。',
+        )
+        .catch(() => {});
     }
+    return this.getStateSnapshot(channel);
+  }
+
+  async rejectPairing(channel: ChannelId, chatId: string): Promise<ChannelStateSnapshot> {
+    if (!this.pairingGuard) throw new Error('配对守卫尚未初始化。');
+    this.pairingGuard.reject(channel, chatId);
+    return this.getStateSnapshot(channel);
+  }
+
+  async unbindAccount(channel: ChannelId, chatId: string): Promise<ChannelStateSnapshot> {
+    if (!this.pairingGuard) throw new Error('配对守卫尚未初始化。');
+    await this.pairingGuard.unbind(channel, chatId);
     return this.getStateSnapshot(channel);
   }
 
   async startChannel(channel: ChannelId): Promise<void> {
     const adapter = this.getAdapter(channel);
     const token = await this.secrets.getToken(channel);
-    if (!token) throw new Error('Bot Token 未配置。');
+    if (!token) {
+      throw new Error('未找到已保存的 Bot Token。');
+    }
     await adapter.start(token);
     const status = adapter.getStatus();
     if (status.botUsername) {
@@ -197,18 +234,79 @@ export class ChannelManager {
     }
   }
 
-  async stopChannel(channel: ChannelId): Promise<void> {
-    const adapter = this.adapters.get(channel);
-    if (!adapter) return;
-    await adapter.stop();
+  async restoreEnabledChannels(): Promise<void> {
+    await this.configs.load();
+    for (const channel of this.adapters.keys()) {
+      const cfg = this.configs.get(channel);
+      if (!cfg.enabled) continue;
+      const token = await this.secrets.getToken(channel);
+      if (!token) continue;
+      try {
+        await this.startChannel(channel);
+      } catch (error) {
+        console.error(`[channels] Failed to restore ${channel}:`, error);
+      }
+    }
   }
 
   async stopAll(): Promise<void> {
-    await Promise.all(
-      [...this.adapters.values()].map((adapter) => adapter.stop().catch(() => undefined)),
-    );
-    while (this.unsubscribes.length > 0) {
-      this.unsubscribes.pop()?.();
+    const tasks: Promise<void>[] = [];
+    for (const adapter of this.adapters.values()) {
+      tasks.push(
+        adapter.stop().catch((error) => {
+          console.error(`[channels] Failed to stop ${adapter.id}:`, error);
+        }),
+      );
     }
+    await Promise.all(tasks);
+  }
+
+  dispose(): void {
+    for (const unsub of this.unsubscribes.splice(0)) unsub();
+    this.statusListeners.clear();
+  }
+
+  private async handleInbound(message: InboundMessage): Promise<void> {
+    const adapter = this.getAdapter(message.channel);
+
+    if (this.pairingGuard) {
+      const access = await this.pairingGuard.checkAccess(message);
+      if (!access.allowed) {
+        await adapter.send(message.chatId, access.replyText);
+        return;
+      }
+    }
+
+    if (this.sessionRouter) {
+      let routeResult;
+      try {
+        routeResult = await this.sessionRouter.routeMessage(message);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '会话路由失败。';
+        await adapter.send(message.chatId, `⚠️ ${msg}`);
+        return;
+      }
+      if (routeResult.kind === 'command') {
+        await adapter.send(message.chatId, routeResult.replyText);
+        return;
+      }
+      if (this.routedHandler) {
+        await this.routedHandler(message, routeResult.mapping, adapter);
+        return;
+      }
+      await adapter.send(
+        message.chatId,
+        `[Atelier] 已路由到会话 ${routeResult.mapping.atelierSessionId.slice(0, 8)}，收到：${message.text}`,
+      );
+      return;
+    }
+
+    if (this.inboundHandler) {
+      await this.inboundHandler(message);
+      return;
+    }
+
+    // Batch 1 Echo fallback when neither PairingGuard nor SessionRouter is attached.
+    await adapter.send(message.chatId, `Echo: ${message.text}`);
   }
 }

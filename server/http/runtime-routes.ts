@@ -30,6 +30,7 @@ import type { Store } from '../store.js';
 import type { QueueActions } from '../modules/message-queue/actions.js';
 import { createAgentRoutes } from './agents/routes.js';
 import { createBootstrapRoutes } from './bootstrap/routes.js';
+import { createChannelRoutes } from './channels/routes.js';
 import { createEventRoutes } from './events/routes.js';
 import { createExtensionRoutes } from './extensions/routes.js';
 import { createArtifactRoutes } from './files/artifact-routes.js';
@@ -153,6 +154,7 @@ export function buildRuntimeRoutes(deps: {
       }),
     }),
     createScheduleRoutes(deps.schedules, deps.scheduleScheduler),
+    createChannelRoutes(store),
     createRunRoutes(store, deps.runControls),
     createToolOutputRoutes(store, files),
     createPermissionRoutes(store, deps.permissions),

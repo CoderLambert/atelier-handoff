@@ -1,10 +1,19 @@
 /**
- * @file 提供设置页中的外部消息通道（Telegram Bot）配置与连通性管理卡片。
- * @implementation 通过 window.atelierChannels 桥接安全读写掩码 Token、测试连接、启停开关并实时订阅状态指示灯。
- * @updated 2026-11-28T10:40:00+08:00
+ * @file 提供设置页中的外部消息通道（Telegram Bot）配置、配对审批与已绑定账号管理卡片。
+ * @implementation 通过 window.atelierChannels 桥接安全读写掩码 Token、测试连接、启停开关、实时接收配对请求并支持一键解绑。
+ * @updated 2026-11-28T11:20:00+08:00
  */
 import { useEffect, useId, useState } from 'react';
-import { CheckCircle2, LoaderCircle, Plug, Send } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  LoaderCircle,
+  Plug,
+  Send,
+  ShieldCheck,
+  Unlink,
+  X,
+} from 'lucide-react';
 import type { ChannelStateSnapshot, ChannelTestResult } from '@shared/channels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +40,7 @@ export function ChannelSettings() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [pairingBusyId, setPairingBusyId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<ChannelTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,9 +79,22 @@ export function ChannelSettings() {
       );
     });
 
+    const unsubPairing = bridge.onPairingRequested((pairing) => {
+      if (pairing.channel !== 'telegram') return;
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const others = prev.pendingPairings.filter((item) => item.chatId !== pairing.chatId);
+        return {
+          ...prev,
+          pendingPairings: [pairing, ...others],
+        };
+      });
+    });
+
     return () => {
       active = false;
       unsubStatus();
+      unsubPairing();
     };
   }, [bridge, t]);
 
@@ -95,6 +118,8 @@ export function ChannelSettings() {
 
   const config = snapshot?.config;
   const status = snapshot?.status;
+  const pendingPairings = snapshot?.pendingPairings ?? [];
+  const bindings = snapshot?.bindings ?? [];
   const state = status?.state ?? 'disconnected';
   const busy = saving || toggling || testing;
 
@@ -154,6 +179,48 @@ export function ChannelSettings() {
       setError(cause instanceof Error ? cause.message : t('settings.channelsToggleFailed'));
     } finally {
       setToggling(false);
+    }
+  }
+
+  async function handleApprovePairing(chatId: string) {
+    if (!bridge) return;
+    setPairingBusyId(chatId);
+    setError(null);
+    try {
+      const next = await bridge.approvePairing({ channel: 'telegram', chatId });
+      setSnapshot(next);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : t('settings.channelsPairingActionFailed'));
+    } finally {
+      setPairingBusyId(null);
+    }
+  }
+
+  async function handleRejectPairing(chatId: string) {
+    if (!bridge) return;
+    setPairingBusyId(chatId);
+    setError(null);
+    try {
+      const next = await bridge.rejectPairing({ channel: 'telegram', chatId });
+      setSnapshot(next);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : t('settings.channelsPairingActionFailed'));
+    } finally {
+      setPairingBusyId(null);
+    }
+  }
+
+  async function handleUnbind(chatId: string) {
+    if (!bridge) return;
+    setPairingBusyId(chatId);
+    setError(null);
+    try {
+      const next = await bridge.unbind({ channel: 'telegram', chatId });
+      setSnapshot(next);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : t('settings.channelsPairingActionFailed'));
+    } finally {
+      setPairingBusyId(null);
     }
   }
 
@@ -272,6 +339,113 @@ export function ChannelSettings() {
             {error}
           </p>
         ) : null}
+      </fieldset>
+
+      <fieldset className="settings-form-section">
+        <legend>{t('settings.channelsPendingPairingsTitle')}</legend>
+        <p className="settings-section-description">
+          {t('settings.channelsPendingPairingsDescription')}
+        </p>
+        {pendingPairings.length === 0 ? (
+          <p className="settings-help">{t('settings.channelsPendingPairingsEmpty')}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {pendingPairings.map((item) => {
+              const rowBusy = pairingBusyId === item.chatId;
+              return (
+                <div
+                  key={`${item.channel}:${item.chatId}`}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3.5 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />
+                      <span className="font-medium">
+                        {item.senderName}
+                        {item.senderUsername ? ` (@${item.senderUsername})` : ''}
+                      </span>
+                      <Badge variant="secondary" className="font-mono tracking-wider">
+                        {item.code}
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t('settings.channelsChatIdLabel', { chatId: item.chatId })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={rowBusy}
+                      onClick={() => void handleRejectPairing(item.chatId)}
+                    >
+                      <X data-icon="inline-start" aria-hidden="true" />
+                      {t('settings.channelsRejectPairing')}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={rowBusy}
+                      onClick={() => void handleApprovePairing(item.chatId)}
+                    >
+                      {rowBusy ? (
+                        <LoaderCircle
+                          className="settings-loading-icon"
+                          data-icon="inline-start"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Check data-icon="inline-start" aria-hidden="true" />
+                      )}
+                      {t('settings.channelsApprovePairing')}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
+
+      <fieldset className="settings-form-section">
+        <legend>{t('settings.channelsBindingsTitle')}</legend>
+        <p className="settings-section-description">{t('settings.channelsBindingsDescription')}</p>
+        {bindings.length === 0 ? (
+          <p className="settings-help">{t('settings.channelsBindingsEmpty')}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {bindings.map((binding) => {
+              const rowBusy = pairingBusyId === binding.chatId;
+              return (
+                <div
+                  key={binding.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 px-3.5 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{binding.label}</span>
+                      <Badge variant="outline">{binding.channel}</Badge>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t('settings.channelsChatIdLabel', { chatId: binding.chatId })}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={rowBusy}
+                    onClick={() => void handleUnbind(binding.chatId)}
+                  >
+                    <Unlink data-icon="inline-start" aria-hidden="true" />
+                    {t('settings.channelsUnbind')}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </fieldset>
     </div>
   );

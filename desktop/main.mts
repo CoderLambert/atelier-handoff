@@ -57,6 +57,9 @@ import { ChannelConfigStore } from './channels/config-store.mjs';
 import { ChannelManager } from './channels/channel-manager.mjs';
 import { TelegramAdapter } from './channels/telegram/telegram-adapter.mjs';
 import { bindChannelsIpc } from './channels/channels-ipc.mjs';
+import { ChannelServerClient } from './channels/server-client.mjs';
+import { PairingGuard } from './channels/pairing-guard.mjs';
+import { SessionRouter } from './channels/session-router.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const developmentLauncher = !app.isPackaged && process.env.ATELIER_DEV_LAUNCH === '1';
@@ -279,7 +282,13 @@ const uiTheme = new DesktopUiThemePreferences(regularProfile);
 const uiNotifications = new DesktopUiNotificationsPreferences(regularProfile);
 const channelSecrets = new ChannelSecretStore(regularProfile, safeStorage);
 const channelConfigs = new ChannelConfigStore(regularProfile);
-const channelManager = new ChannelManager(channelSecrets, channelConfigs);
+const channelServerClient = new ChannelServerClient(() => runtimeConnection);
+const channelPairingGuard = new PairingGuard(channelServerClient);
+const channelSessionRouter = new SessionRouter(channelServerClient);
+const channelManager = new ChannelManager(channelSecrets, channelConfigs, {
+  pairingGuard: channelPairingGuard,
+  sessionRouter: channelSessionRouter,
+});
 channelManager.registerAdapter(new TelegramAdapter());
 
 if (!app.requestSingleInstanceLock()) {

@@ -80,6 +80,9 @@ export class Store {
   get schedules() {
     return this.repos.schedules;
   }
+  get channels() {
+    return this.repos.channels;
+  }
   readonly events = new EventEmitter();
   private pendingEvents: RunEvent[] | undefined;
   constructor(readonly directory: string) {

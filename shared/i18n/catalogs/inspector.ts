@@ -971,4 +971,27 @@ export const inspector = {
   'settings.channelsStatus.connecting': ['连接中', 'Connecting'],
   'settings.channelsStatus.connected': ['已连接', 'Connected'],
   'settings.channelsStatus.error': ['异常', 'Error'],
+  'settings.channelsPendingPairingsTitle': ['待审批配对', 'Pending pairing requests'],
+  'settings.channelsPendingPairingsDescription': [
+    '陌生账号向 Bot 发送消息时会收到 6 位配对码（10 分钟有效），请核对配对码后批准接入。',
+    'Unbound accounts receive a 6-digit pairing code (valid 10 min). Verify the code before approving.',
+  ],
+  'settings.channelsPendingPairingsEmpty': [
+    '暂无待审批的配对请求。',
+    'No pending pairing requests.',
+  ],
+  'settings.channelsApprovePairing': ['批准', 'Approve'],
+  'settings.channelsRejectPairing': ['拒绝', 'Reject'],
+  'settings.channelsBindingsTitle': ['已绑定账号', 'Bound accounts'],
+  'settings.channelsBindingsDescription': [
+    '以下账号已授权访问本地 Atelier，可随时一键解绑，解绑后立即失效。',
+    'These accounts are authorized to access local Atelier. Unbinding revokes access immediately.',
+  ],
+  'settings.channelsBindingsEmpty': ['暂无已绑定的账号。', 'No bound accounts yet.'],
+  'settings.channelsUnbind': ['解绑', 'Unbind'],
+  'settings.channelsChatIdLabel': ['Chat ID：{{chatId}}', 'Chat ID: {{chatId}}'],
+  'settings.channelsPairingActionFailed': [
+    '处理配对或解绑请求失败。',
+    'Failed to process pairing or unbind action.',
+  ],
 } as const;
