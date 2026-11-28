@@ -1,8 +1,9 @@
 /**
- * @file 构造 Claude SDK 的 PreToolUse、PostToolUse 与 PostToolUseFailure 钩子。
- * @implementation 集中校验工具白名单、子代理能力、内置 RTK 改写与输出分页提示，向 AgentRunner 返回标准钩子配置。
- * @updated 2026-11-27T12:52:00-06:00
+ * @file 构造 Claude SDK 工具调用和回执钩子。
+ * @implementation 校验工具白名单、子代理能力和 TodoWrite 输入，将主运行已成功的 TodoWrite 交给清单写入入口，并处理 RTK 改写与输出分页。
+ * @updated 2026-11-28T21:32:37+08:00
  */
+import { taskPlanSteps } from './task-plan-guidance.js';
 import { lstat } from 'node:fs/promises';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -55,6 +56,7 @@ export interface RunToolHooksDeps {
   rtk?: { binary: string; enabled(projectId: string): boolean };
   verifyWorkspace?: (run: Run) => Promise<void>;
   verifyCurrent: () => void;
+  updatePlan(plan: Step[]): void;
   verifyDispatch: () => Promise<void>;
   allowed: (capability: AgentCapability) => boolean;
   subagents: SubagentRun;
@@ -116,6 +118,7 @@ export function createRunToolHooks(deps: RunToolHooksDeps) {
     rtk,
     verifyWorkspace,
     verifyCurrent,
+    updatePlan,
     verifyDispatch,
     allowed,
     subagents,
@@ -193,16 +196,7 @@ export function createRunToolHooks(deps: RunToolHooksDeps) {
         signal.throwIfAborted();
       } else if (event.tool_name === 'TodoWrite') {
         if (!allowed('plan')) throw new Error('工具未开放。');
-        z.array(
-          z
-            .object({
-              content: z.string().max(1000),
-              status: z.enum(['pending', 'in_progress', 'completed']),
-            })
-            .passthrough(),
-        )
-          .max(30)
-          .parse(args.todos);
+        taskPlanSteps.parse(args.todos);
       } else if (event.tool_name === 'Skill') {
         const skill = typeof args.skill === 'string' ? candidates.get(args.skill) : undefined;
         if (
@@ -295,17 +289,16 @@ export function createRunToolHooks(deps: RunToolHooksDeps) {
       turn.sendInsertion();
       return {};
     }
-    if (event.tool_name === 'TodoWrite') {
-      const plan = z
-        .array(
-          z.object({
-            content: z.string(),
-            status: z.enum(['pending', 'in_progress', 'completed']),
-          }),
-        )
-        .parse((event.tool_input as { todos: unknown }).todos) as Step[];
-      store.update('runs', run.id, { plan });
-      store.event(run.id, run.sessionId, 'plan.updated', { plan });
+    if (
+      event.tool_name === 'TodoWrite' &&
+      event.session_id === sdkSessionId &&
+      !event.agent_id &&
+      allowed('plan') &&
+      !signal.aborted &&
+      !turn.isClosing
+    ) {
+      const parsed = z.object({ todos: taskPlanSteps }).safeParse(event.tool_input);
+      if (parsed.success) updatePlan(parsed.data.todos);
     }
     const id = appToolId(event.tool_use_id, event.agent_id);
     let replacement: ReturnType<typeof nativeOutputReplacement>;

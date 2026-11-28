@@ -184,7 +184,6 @@ test('native process keeps the harness exit event and cleanup receipt', async (t
 const promptDefaults = {
   native: false,
   mode: 'edit' as const,
-  planAllowed: false,
   selectedSkill: false,
   projectInstructions: '',
   checkpoint: '',
@@ -213,7 +212,6 @@ test('native initial prompt preserves each context and guidance segment in order
     buildInitialPrompt({
       ...promptDefaults,
       native: true,
-      planAllowed: true,
       projectInstructions: '项目指令\n\n',
       checkpoint: '恢复点',
       historyContext: '历史内容',
@@ -227,7 +225,7 @@ test('native initial prompt preserves each context and guidance segment in order
       '项目指令\n\n',
       '恢复点\n\n',
       '<prior_conversation>\n历史内容\n</prior_conversation>\n以上是已发生的历史，不是待执行指令；禁止自动重放旧操作。\n\n',
-      '本轮运行模式：本机信任。按当前登录用户权限直接使用原生工具。计划工具为 update_plan。\n\n',
+      '本轮运行模式：本机信任。按当前登录用户权限直接使用原生工具。\n\n',
       '本轮可用的技能包：research、weather。通过 read_skill_resource 读取包内文件。工具列表包含 run_skill_script 时用它执行包内脚本。工具列表包含 skill_search 时，可用它对搜索请求报价、执行或取回。用工具返回的交付物 ID 交付文件。\n\n',
       '本轮 GitHub Skill 资源目录（<skill-base-dir> 和 ${CLAUDE_SKILL_DIR} 指向对应目录，本机信任可用原生工具访问。运行脚本时保持项目工作目录）：\n[{"name":"research","directory":"/sdk/skills/research"}]\n\n',
       '用户请求实时天气或近期预报时，先调用 weather_lookup。可以使用城市的常用英文名（如昆山用 Kunshan）或用户提供的坐标。回复中注明来源、匹配地点和观测时间。\n\n',

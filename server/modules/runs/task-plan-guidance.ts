@@ -1,21 +1,69 @@
 /**
- * @file Defines model-facing guidance for grounded task plans.
- * @implementation Gives the existing run and plan tool consistent rules for scope, verification and corrections.
- * @updated 2026-11-28T18:57:00+08:00
+ * @file 解析本轮规划策略并生成工具和系统提示共用的模式约束。
+ * @implementation 在模型覆盖与全局设置间取值，智能体工具权限优先，拆分提示词可按工作台偏好替换。
+ * @updated 2026-11-28T21:12:24+08:00
  */
-export const taskPlanGuidance = [
-  '任务清单：复杂任务核实必要事实后先用 update_plan 记录，再开始实质工作。单步问题在回复中直接给答案，不写清单。例如一句话翻译直接回复译文。',
-  '用用户的语言写清单。先从本轮请求和已确认的上下文提取交付物、限制及完成条件，按需只读核实会影响拆解的文件或事实。',
-  '已有材料足以交付时直接安排任务。关键材料缺失时，只追问继续所需的材料或决定；能独立开展的部分可继续。可逆的命名和样式用合理默认，未经用户要求的替代交付不拿来做阻塞选项。',
-  '每条写清动作、对象和可检查的结果，按实际依赖排序。用户要求先只读时，只安排允许的调查和汇报。逐条核对引用的文件名和完整路径，沿用当前有效的资料；已明确缺失的材料记为缺口，已废弃的资料不列为待查来源。',
-  '保留明确指定的交付格式和验证场景。用户同时要求生成文件和验证时，清单应写出生成、实际检查、交付的顺序。例如“生成单文件 HTML；打开并核对指定的浏览或打印场景，交付 HTML 原件”。仅配置支持某个场景还不等于检查过。确实缺工具或权限时，写清缺少的条件。',
-  '提交前双向核对：每项明确要求都有对应步骤，每个步骤都有需求或必要验证作为依据。项目经历、指标和原因只写材料能证实的部分；缺少对比基线就只说明可核实的数据和缺口。用可检查的结果合并重复动作。',
-  '用户中途修正要求或发现新事实时，只调整受影响的步骤并提交整份更新后的清单，移除已取消的工作。只在实际工具或检查给出结果之后标记完成，不提前宣称已读取、已验证或已交付。',
-].join('\n');
+import { z } from 'zod';
+import {
+  defaultTaskPlanningPrompt,
+  type TaskPlanningMode,
+  type TaskPlanningPolicy,
+  type TaskPlanningSettings,
+} from '../../../shared/task-planning.js';
+import type { Run } from '../../../shared/types.js';
+
+export const taskPlanSteps = z
+  .array(
+    z.object({
+      content: z.string().trim().min(1).max(1000),
+      status: z.enum(['pending', 'in_progress', 'completed']),
+    }),
+  )
+  .max(30);
+
+export const nativeTaskPlanningTools = [
+  'TodoWrite',
+  'TaskCreate',
+  'TaskGet',
+  'TaskList',
+  'TaskUpdate',
+];
+
+export function resolveTaskPlanning(
+  settings: TaskPlanningSettings,
+  model: string,
+  agent: Run['agent'],
+): TaskPlanningPolicy {
+  const mode =
+    agent && !agent.capabilities.includes('plan')
+      ? 'off'
+      : (settings.modelOverrides.find((override) => override.model === model)?.mode ??
+        settings.mode);
+  return {
+    mode,
+    ...(mode !== 'off' && settings.prompt !== null ? { prompt: settings.prompt } : {}),
+  };
+}
+
+const modeGuidance = {
+  auto: '用户明确要求列任务或跟踪进度时建立清单。遇到值得追踪的依赖和验收步骤时也建立清单。例如需要制作交付物并分场景验收时，先调用清单工具记录交付与实际检查，再开始执行。简单任务直接按用户要求的格式给出结果，例如一句话翻译直接回复译文。执行中发现任务变复杂时，可以补建清单。',
+  'on-request':
+    '仅在用户明确要求列任务或跟踪进度时使用清单工具。没有明确要求时，直接执行任务，即使任务有多步。',
+  off: '本轮关闭进度清单工具。用户要求方案时，可在回复中写出方案。',
+} satisfies Record<TaskPlanningMode, string>;
+
+export function buildTaskPlanGuidance({ mode, prompt }: TaskPlanningPolicy): string {
+  if (mode === 'off') return modeGuidance.off;
+  return [
+    '任务清单：' + modeGuidance[mode],
+    '使用 update_plan 或 TodoWrite 写入同一份清单，每次提交整份更新，无需重复调用另一个工具。拆分提示只适用于应建立清单的任务。',
+    prompt ?? defaultTaskPlanningPrompt,
+    '例如用户要求桌面、移动端和 A4 验收时，清单写出打开 HTML 检查两种窗口宽度，并打印核对 A4 分页。只在用户明确要求单页时才把页数设为验收条件。',
+  ].join('\n');
+}
 
 export const taskPlanToolDescription =
-  'Record or replace the task checklist when multi-step work benefits from tracking. ' +
-  'Write each step as a concrete action with an observable completion check. ' +
-  'Cover all explicit requirements and only work supported by the request or needed to verify the deliverable. ' +
-  'Update affected steps when requirements change and mark a step complete after verifying its result. ' +
-  'This does not grant permissions.';
+  'Record or replace the task checklist. Write each step as a concrete action with an observable completion check. Use the same checklist for update_plan and TodoWrite.';
+
+export const describeTaskPlanTool = (mode: TaskPlanningMode) =>
+  taskPlanToolDescription + ' ' + modeGuidance[mode];

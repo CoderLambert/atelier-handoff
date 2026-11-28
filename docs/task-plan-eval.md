@@ -56,3 +56,14 @@ HTML 两个实物暴露了不同遗漏。新规则改善了计划对验证场景
 正式识别器对六条原始用户请求中的 HTML 与简单回复两条启用自动检查。简单计算只检查是否有文字回复及是否发布文件；数字是否算对由该样例独立判分。只读查因、材料缺失、要求变更和复杂计算的原始表述沿用 SDK 正常收尾。对普通文档可明确给出文件名和必含原文，文件内容遗漏的生产链路另有真实 SDK 回归用例。
 
 可运行 `node --import tsx --test tests/acceptance-{criteria,stop}.test.ts tests/html-acceptance.test.ts tests/artifacts.test.ts` 检查这些边界。构建桌面后，运行 `node --import tsx scripts/smoke-run-acceptance.mts`，在独立 Electron 窗口验证「错误纸张 → 修正 → A4」、同名版本标识、刷新恢复及两次错误答复后的失败状态。可追加从 Linux 安装件解出的可执行文件路径。桌面冒烟使用真实 SDK 和脚本化回环模型，模型对照通过本地 Ollama 单独执行。
+
+## 通过运行时复跑六类任务
+
+在已安装仓库依赖的基线工作树和候选工作树上，用真实 SDK 和同一 Ollama 实例运行六个任务。候选脚本以实际工作台运行入口读取项目、调用工具并交付，再把 HTML 独立渲染和打印。准备独立的本地 Ollama，使用至少 16,384 token 的上下文并加载 `qwen3.5:9b`。较短的上下文会截断实际工具集或请求内容。
+
+```sh
+ATELIER_TASK_PLAN_OLLAMA_PORT=21437 node --import tsx scripts/task-planning-runtime-eval.mts \
+  /path/to/baseline-worktree .local/task-planning/my-run
+```
+
+每个样例保存清单、模型请求数、实际 token、端到端耗时、交付验收回执与原件。入口只连接本机 Ollama。请求来自实际执行过程，简单题的请求计数用于验证没有专用规划请求。运行时间包括执行、工具和工作台交付验收，外部评分在计时结束后执行。每个配对交替执行顺序，时间仍受模型缓存与本机负载影响。

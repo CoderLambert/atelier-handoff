@@ -27,6 +27,7 @@ const firstPrompt = 'Read evidence.txt and acknowledge completion without reveal
 const firstReply = 'SYNTHETIC_EVIDENCE_READ_WITHOUT_DISCLOSURE';
 const finalReply = 'SYNTHETIC_RESUMED_AND_WRITE_DENIED';
 const requestSchema = z.object({
+  system: z.unknown(),
   model: z.literal(model),
   messages: z.array(z.object({ role: z.string(), content: z.unknown() })),
   tools: z.array(z.object({ name: z.string() })),
@@ -211,6 +212,7 @@ for (const scenario of scenarios)
               sendModelReply(response, model, firstReply);
               break;
             case 3:
+              assert.equal(JSON.stringify(parsed.system).includes('本轮关闭进度清单工具'), true);
               // Inspect the first request after the config change, before this turn's tools.
               assert.equal(parsed.output_config.effort, 'high');
               if (scenario.resumes) {
@@ -484,6 +486,7 @@ for (const scenario of scenarios)
       const restored = app.store.get('sessions', targetSessionId);
       assert.equal(restored.sdkConfigKey, legacyKey);
       assert.equal(restored.sdkSessionId, resumeSdkSessionId);
+      await http('/api/settings/task-planning', 'PATCH', { mode: 'off' });
       const secondRun = await send(targetSessionId, 'high', false);
       const pending = await waitForRun(secondRun.id, 'awaiting_permission');
       assert.equal(pending.run.config.effort, 'high');

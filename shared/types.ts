@@ -3,6 +3,7 @@
  * @implementation 描述项目、会话、运行、消息及核心记录表结构，同时保留分域后的错误、模型、扩展和智能体兼容导出。
  * @updated 2026-11-27T21:25:00+08:00
  */
+import type { TaskPlanningPolicy } from './task-planning.js';
 import type { AgentProfile, AgentRevision, AgentRunInfo, Mode } from './agents.js';
 import type { BashExecution } from './bash-execution.js';
 import type { ContextUsage } from './context-usage.js';
@@ -99,6 +100,7 @@ export interface Usage {
 }
 
 export interface Run {
+  taskPlanning?: TaskPlanningPolicy;
   transcript?: RunTranscript;
   workspacePath?: string;
   executor?: 'native-v1' | 'project-v1';

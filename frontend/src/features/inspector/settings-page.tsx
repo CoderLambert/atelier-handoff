@@ -1,7 +1,7 @@
 /**
- * @file 提供模型、布局、快捷操作、通知和诊断设置页面。
- * @implementation 维护网关与执行偏好，将草稿表单与即点即存的账号/Magpie 卡片解耦，避免不同提交模型互相锁定。
- * @updated 2026-11-27T22:20:00+08:00
+ * @file 提供模型、任务规划、布局、快捷操作、通知和诊断设置页面。
+ * @implementation 组织设置区块与访问状态，维护网关和执行偏好，并独立管理网关草稿和账号、Magpie 保存状态。
+ * @updated 2026-11-28T21:32:37+08:00
  */
 import { useUiTranslation, getTranslator, useUiLanguage } from '@/i18n';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
@@ -15,6 +15,7 @@ import {
   CircleHelp,
   Download,
   LayoutPanelLeft,
+  ListChecks,
   Keyboard,
   LoaderCircle,
   Plug,
@@ -40,6 +41,7 @@ import { useGatewayModels } from '@/use-query/settings/use-gateway-models';
 import { useUpdateAppConfig } from '@/use-query/settings/use-update-app-config';
 import { errorMessage } from './shared';
 import { WorkspaceLayoutForm, type WorkspaceLayoutFormProps } from './workspace-layout-form';
+import { TaskPlanningSettings } from './task-planning-settings';
 import { NotificationSettings } from './notification-settings';
 import { BundledAccountCard } from './settings-account-card';
 import { MagpieToggleCard } from './settings-magpie-card';
@@ -71,6 +73,12 @@ function translatedSections() {
       label: t('settings.models'),
       description: t('settings.modelsNavDescription'),
       icon: Plug,
+    },
+    {
+      id: 'task-planning',
+      label: t('settings.taskPlanning'),
+      description: t('settings.taskPlanningNavDescription'),
+      icon: ListChecks,
     },
     {
       id: 'layout',
@@ -176,6 +184,18 @@ export default function SettingsPage({
                 <p>{t('settings.modelsDescription')}</p>
               </div>
               <GatewaySettings active={currentSection === 'models'} />
+            </section>
+          ) : null}
+          {visited.includes('task-planning') ? (
+            <section
+              hidden={currentSection !== 'task-planning'}
+              aria-labelledby="settings-task-planning-heading"
+            >
+              <div className="settings-section-intro">
+                <h2 id="settings-task-planning-heading">{t('settings.taskPlanning')}</h2>
+                <p>{t('settings.taskPlanningDescription')}</p>
+              </div>
+              <TaskPlanningSettings active={currentSection === 'task-planning'} />
             </section>
           ) : null}
           {visited.includes('layout') ? (

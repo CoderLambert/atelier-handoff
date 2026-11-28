@@ -7,11 +7,12 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { chromium, type Browser } from 'playwright-core';
 import { z } from 'zod';
 import {
-  taskPlanGuidance,
+  buildTaskPlanGuidance,
   taskPlanToolDescription,
 } from '../server/modules/runs/task-plan-guidance.js';
 import { snapshot, writeFixture } from './harness-eval.mjs';
@@ -33,7 +34,7 @@ const baseline = [
   '复杂任务用 update_plan 记录真实计划，简单问题无需计划。',
   'Record or update the real task plan. Use only for tasks that benefit from steps; status changes must reflect actual work. This does not grant permissions.',
 ].join('\n');
-const current = [taskPlanGuidance, taskPlanToolDescription].join('\n');
+const current = [buildTaskPlanGuidance({ mode: 'auto' }), taskPlanToolDescription].join('\n');
 const sampling = { temperature: 0.2, num_ctx: 4096 };
 const tokenLimits = { planning: 600, htmlDelivery: 3200, otherDelivery: 1800 };
 const planner =
@@ -105,7 +106,7 @@ async function infer<T extends z.ZodType>(
   }
 }
 
-async function verifyHtml(
+export async function verifyHtml(
   browser: Browser,
   content: string | undefined,
   folder: string,
@@ -341,7 +342,8 @@ async function main() {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url)
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

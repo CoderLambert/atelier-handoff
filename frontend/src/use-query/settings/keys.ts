@@ -8,5 +8,6 @@ export const settingsKeys = {
   models: ['models'] as const,
   updateConfig: ['config', 'update'] as const,
   gatewayLogin: ['config', 'gateway-login'] as const,
+  taskPlanning: ['settings', 'task-planning'] as const,
   shortcuts: ['settings', 'shortcuts'] as const,
 };

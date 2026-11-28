@@ -19,6 +19,7 @@ import { shortcutPreferencesRepository } from './repositories/shortcut-preferenc
 import { skillInheritanceRepository } from './repositories/skill-inheritance.js';
 import { skillToolBindingsRepository } from './repositories/skill-tool-bindings.js';
 import { githubPublicAuthRepository } from './repositories/github-public-auth.js';
+import { taskPlanningRepository } from './repositories/task-planning.js';
 import { rtkSettingsRepository } from './repositories/rtk-settings.js';
 
 import { applyGitWorktrees } from './migrations/apply-git-worktrees.js';
@@ -81,6 +82,7 @@ export function openWorkbenchDatabase(path: string) {
     shortcutPreferences: shortcutPreferencesRepository(orm),
     skillInheritance: skillInheritanceRepository(orm),
     skillToolBindings: skillToolBindingsRepository(orm),
+    taskPlanning: taskPlanningRepository(orm),
     rtkSettings: rtkSettingsRepository(orm),
     githubPublicAuth: githubPublicAuthRepository(orm),
     gitWorktrees: gitWorktreeRepository(orm),

@@ -1,7 +1,7 @@
 /**
  * @file 接收消息并创建会话运行。
- * @implementation 保存排队时的授权指纹与 Skill 范围。自动续跑比较范围，显式复核时校验待处理消息，并在短事务提交前再次复核范围后启动 runner。
- * @updated 2026-11-27T20:10:00+08:00
+ * @implementation 提交运行时解析本轮模型的任务规划策略，并重新核对授权指纹与 Skill 范围；自动续跑和显式复核沿用队列授权校验。
+ * @updated 2026-11-28T21:32:37+08:00
  */
 import { randomUUID } from 'node:crypto';
 import {
@@ -38,6 +38,7 @@ import { assertNativeExecution } from './execution-policy.js';
 import { emptyMessageContext, loadMessageContext } from './load-message-context.js';
 import { queuedIntent, sessionMessageInput } from './message-input.js';
 import { prepareRunScope } from './prepare-run-scope.js';
+import { resolveTaskPlanning } from './task-plan-guidance.js';
 import { startAcceptedRun } from './start-accepted-run.js';
 
 type InsertionMode = 'live' | 'priority';
@@ -328,6 +329,7 @@ export function createRunStarter({
         store.update('attachments', id, { status: 'used' });
       }
       if (currentScope.browserRevision) run.browserRevision = currentScope.browserRevision;
+      run.taskPlanning = resolveTaskPlanning(store.repos.taskPlanning.read(), model, run.agent);
       store.put('runs', run);
       store.put('messages', {
         id: promptMessageId,

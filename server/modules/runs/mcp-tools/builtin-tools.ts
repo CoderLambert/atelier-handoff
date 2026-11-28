@@ -18,7 +18,7 @@ import { gatewaySearchArgs, searchGateway } from '../../../gateway-search.js';
 import { canReadToolOutput } from '../../../tool-output-context.js';
 import { searchToolOutput } from '../../../tool-output-search.js';
 import { lookupWeather, weatherLocation } from '../../../weather.js';
-import { taskPlanToolDescription } from '../task-plan-guidance.js';
+import { describeTaskPlanTool, taskPlanSteps } from '../task-plan-guidance.js';
 import type { RunMcpToolHost, ToolRegistration } from './types.js';
 
 export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolRegistration) {
@@ -35,28 +35,16 @@ export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolReg
     writeProject,
     pagedOutputIds,
     updatePlan,
-    event,
     getTool,
   } = host;
   mcpTools.push(
     ...[
       custom(
         'update_plan',
-        taskPlanToolDescription,
-        {
-          steps: z
-            .array(
-              z.object({
-                content: z.string().min(1).max(1000),
-                status: z.enum(['pending', 'in_progress', 'completed']),
-              }),
-            )
-            .min(1)
-            .max(30),
-        },
+        describeTaskPlanTool(run.taskPlanning?.mode ?? 'auto'),
+        { steps: taskPlanSteps.min(1) },
         async (args) => {
           updatePlan(args.steps);
-          event('plan.updated', { plan: args.steps });
           return { recorded: true, steps: args.steps };
         },
       ),

@@ -3,6 +3,7 @@
  * @implementation 校验 JSON 字段和记录主键，保留已有可选字段，读取失败返回脱敏错误。
  * @updated 2026-11-21T01:00:00+08:00
  */
+import { taskPlanningPolicySchema } from '../../../shared/task-planning.js';
 import { z } from 'zod';
 import { contextUsageSchema } from '../../../shared/context-usage.js';
 import { runRequestTimingSchema } from '../../../shared/request-timing.js';
@@ -111,6 +112,7 @@ export const records = {
   }),
   runs: obj({
     transcript: runTranscriptSchema.optional(),
+    taskPlanning: taskPlanningPolicySchema.optional(),
     ...scoped,
     projectId: str,
     prompt: str,

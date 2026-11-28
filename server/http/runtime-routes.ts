@@ -42,6 +42,7 @@ import { createScheduleTriggerRoutes } from './schedules/trigger-routes.js';
 import { createAttachmentRoutes } from './sessions/attachment-routes.js';
 import { createSessionMessageRoutes } from './sessions/message-routes.js';
 import { createSessionRoutes } from './sessions/routes.js';
+import { createTaskPlanningRoutes } from './settings/task-planning.js';
 import { createSettingsRoutes } from './settings/routes.js';
 import { createSkillRoutes } from './skills/routes.js';
 import { createTerminalRoutes } from './terminal/routes.js';
@@ -101,6 +102,7 @@ export function buildRuntimeRoutes(deps: {
       nativeExecution: deps.nativeExecution,
       wakeQueue: deps.wakeQueue,
     }),
+    createTaskPlanningRoutes(store, deps.isShuttingDown),
     createSettingsRoutes({
       gateway: deps.gateway,
       isShuttingDown: deps.isShuttingDown,

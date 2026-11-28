@@ -20,6 +20,7 @@ export const collectionPaths = {
 
 export const settingsPaths = {
   models: '/settings/models',
+  'task-planning': '/settings/task-planning',
   layout: '/settings/layout',
   shortcuts: '/settings/shortcuts',
   notifications: '/settings/notifications',
@@ -42,6 +43,7 @@ export function sessionTab(contentPath: string, sessionId?: string): Tab {
 }
 
 export function settingsSection(pathname: string): SettingsSection {
+  if (pathname === settingsPaths['task-planning']) return 'task-planning';
   if (pathname === settingsPaths.layout) return 'layout';
   if (pathname === settingsPaths.shortcuts) return 'shortcuts';
   if (pathname === settingsPaths.notifications) return 'notifications';
