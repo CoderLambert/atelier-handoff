@@ -3,7 +3,7 @@
  * @implementation 采用 Atelier 原生工作台双栏布局与 Radix Select 筛选，左侧展示任务清单与调度摘要，右侧提供规则编辑与运行记录双页签。
  * @updated 2026-11-27T23:59:00+08:00
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowUpRight, Clock, Pause, Play, Plus, Trash2, Zap } from 'lucide-react';
 import type { Project, ScheduledTask, Session } from '@shared/types';
 import { Badge } from '@/components/ui/badge';
@@ -49,13 +49,9 @@ export default function SchedulesPage({
   onOpenSession: (sessionId: string) => void;
 }) {
   const { t, locale } = useUiTranslation('schedules');
-  const [filterProjectId, setFilterProjectId] = useState<string>(projectId ?? '');
+  const [filterProjectId, setFilterProjectId] = useState<string>('');
   const bootstrap = useBootstrap();
   const nativeExecution = bootstrap.data?.capabilities.nativeExecution === true;
-
-  useEffect(() => {
-    setFilterProjectId(projectId ?? '');
-  }, [projectId]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<'rules' | 'history'>('rules');
