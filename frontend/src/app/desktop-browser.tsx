@@ -16,13 +16,15 @@ import {
 import { translateError, useUiTranslation } from '@/i18n';
 import { useDesktopBrowserAccess } from '@/use-query/browser/use-desktop-browser-access';
 import { useUpdateDesktopBrowserAccess } from '@/use-query/browser/use-update-desktop-browser-access';
-import { ArrowLeft, ArrowRight, Bot, Globe, Plus, RotateCw, Settings, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Globe, Home, Plus, RotateCw, Settings, X } from 'lucide-react';
 import { BrowserDownloads } from './browser-downloads';
 import { deriveDesktopBrowserStatus } from './desktop-browser-status';
 import { useNativeBrowserSlot } from './use-native-browser-slot';
-import type {
-  DesktopBrowserAction as BrowserAction,
-  DesktopBrowserState as DesktopState,
+import {
+  desktopBrowserDefaultUrl,
+  resolveDesktopBrowserInput,
+  type DesktopBrowserAction as BrowserAction,
+  type DesktopBrowserState as DesktopState,
 } from '@shared/desktop-browser';
 import { Input } from '@/components/ui/input';
 
@@ -295,9 +297,8 @@ export function DesktopBrowser({
         className="desktop-browser-toolbar"
         onSubmit={(event) => {
           event.preventDefault();
-          const value = address.trim();
-          if (!disabled && activeTab && value)
-            void command('navigate', /^https?:\/\//i.test(value) ? value : `https://${value}`);
+          const destination = resolveDesktopBrowserInput(address);
+          if (!disabled && activeTab && destination) void command('navigate', destination);
         }}
       >
         <Button
@@ -332,6 +333,18 @@ export function DesktopBrowser({
           onClick={() => void command('reload')}
         >
           <RotateCw data-icon="inline-start" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          className="desktop-browser-icon"
+          aria-label={t('navigation.home')}
+          title={t('navigation.home')}
+          disabled={disabled || !activeTab}
+          onClick={() => void command('navigate', desktopBrowserDefaultUrl)}
+        >
+          <Home data-icon="inline-start" aria-hidden="true" />
         </Button>
         <Input
           aria-label={t('navigation.address')}

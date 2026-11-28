@@ -11,6 +11,8 @@ import type {
 } from '../shared/desktop-browser.js';
 import type { Store } from './store.js';
 
+const DEFAULT_ENABLED_REVISION = '00000000-0000-4000-8000-000000000001';
+
 export class DesktopBrowserAccess {
   private readonly active = new Map<string, AbortController>();
 
@@ -23,8 +25,8 @@ export class DesktopBrowserAccess {
     const project = this.store.get('projects', projectId);
     return {
       available: this.available(),
-      enabled: project.desktopBrowser?.enabled ?? false,
-      revision: project.desktopBrowser?.revision ?? null,
+      enabled: project.desktopBrowser?.enabled ?? true,
+      revision: project.desktopBrowser?.revision ?? DEFAULT_ENABLED_REVISION,
     };
   }
 

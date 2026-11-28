@@ -19,6 +19,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   desktopBrowserChannels,
   desktopBrowserCommandSchema,
+  desktopBrowserDefaultUrl,
   desktopBrowserReadDownloadSchema,
   desktopBrowserLayoutSchema,
   desktopBrowserProjectIdSchema,
@@ -181,15 +182,19 @@ export function createBrowserController(host: BrowserHost) {
     window.webContents.send(desktopBrowserChannels.state, payload);
   }
 
-  function getTab(projectId: string, target: 'visible' | 'agent' = 'visible'): BrowserTab {
+  function getTab(
+    projectId: string,
+    target: 'visible' | 'agent' = 'visible',
+    loadDefaultUrl = false,
+  ): BrowserTab {
     const pinned = target === 'agent' ? tabs.get(agentTarget.get(projectId) ?? '') : undefined;
-    const tab = pinned ?? current(projectId) ?? createTab(projectId);
+    const tab = pinned ?? current(projectId) ?? createTab(projectId, { loadDefaultUrl });
     if (target === 'agent') agentTarget.set(projectId, tab.id);
     tabContents(tab);
     return tab;
   }
 
-  function createTab(projectId: string): BrowserTab {
+  function createTab(projectId: string, options?: { loadDefaultUrl?: boolean }): BrowserTab {
     desktopBrowserProjectIdSchema.parse(projectId);
     const owner = hostWindow();
     if (tabs.size >= 16 || projectTabs(projectId).length >= 8)
@@ -306,6 +311,19 @@ export function createBrowserController(host: BrowserHost) {
       contentsOwners.delete(wc);
       removeTab(tab);
     });
+    if (options?.loadDefaultUrl) {
+      queueMicrotask(() => {
+        if (!ownsTab(tab)) return;
+        try {
+          const destination = siteUrl(desktopBrowserDefaultUrl);
+          void tabContents(tab)
+            .loadURL(destination)
+            .catch(() => state(projectId, tab));
+        } catch {
+          state(projectId, tab);
+        }
+      });
+    }
     return tab;
   }
 
@@ -332,7 +350,7 @@ export function createBrowserController(host: BrowserHost) {
       if (visible?.projectId === projectId) hideVisible();
       return;
     }
-    const tab = getTab(projectId);
+    const tab = getTab(projectId, 'visible', true);
     if (visible && visible !== tab) hideVisible();
     const [width, height] = owner.getContentSize();
     if (width === undefined || height === undefined) throw new Error('工作台窗口尺寸无效。');
@@ -496,7 +514,7 @@ export function createBrowserController(host: BrowserHost) {
         return;
       }
       if (request.action === 'new-tab') {
-        selected.set(projectId, createTab(projectId).id);
+        selected.set(projectId, createTab(projectId, { loadDefaultUrl: true }).id);
         repaint(projectId);
         return;
       }

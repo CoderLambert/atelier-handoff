@@ -6,6 +6,20 @@
 import { z } from 'zod';
 
 export const desktopBrowserProtocolVersion = 2;
+export const desktopBrowserDefaultUrl = 'https://www.google.com/';
+
+export function resolveDesktopBrowserInput(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  const looksLikeHost =
+    !/\s/.test(value) &&
+    (/^localhost(?::\d+)?(?:\/|$)/i.test(value) ||
+      /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:\/|$)/.test(value) ||
+      /^[^\s/]+\.[^\s/]+/.test(value));
+  if (looksLikeHost) return `https://${value}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+}
 export const desktopBrowserChannels = {
   layout: 'browser:layout',
   command: 'browser:command',

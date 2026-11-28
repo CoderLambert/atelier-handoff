@@ -47,12 +47,13 @@ test('browser access is versioned per project and revokes a pending browser appr
       available: true,
     });
     const access = new DesktopBrowserAccess(store, () => true);
-    assert.deepEqual(access.read(projectId), { available: true, enabled: false, revision: null });
-    const enabled = access.update(projectId, { enabled: true, revision: null });
+    const enabled = access.read(projectId);
+    assert.equal(enabled.available, true);
+    assert.equal(enabled.enabled, true);
     const originalRevision = enabled.revision;
     assert.ok(originalRevision);
     const signal = access.signal(projectId, originalRevision);
-    assert.equal(access.read(other.id).enabled, false);
+    assert.equal(access.read(other.id).enabled, true);
     assert.throws(() => access.update(projectId, { enabled: false, revision: null }), {
       code: 'BROWSER_ACCESS_CHANGED',
     });
