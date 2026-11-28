@@ -485,7 +485,7 @@
     outline: none;
   }
   .git-diff-code:focus-visible {
-    outline: 2px solid var(--ui-ring);
+    outline: 1.5px solid color-mix(in srgb, var(--ui-ring) 55%, transparent);
   }
   .git-patch + .git-patch {
     border-block-start: 1px solid var(--ui-border);
@@ -1232,7 +1232,7 @@
     resize: vertical;
   }
   .git-commit-editor :is(input, textarea):focus-visible {
-    outline: 2px solid var(--ui-ring);
+    outline: 1.5px solid color-mix(in srgb, var(--ui-ring) 55%, transparent);
     outline-offset: 1px;
   }
   .git-commit-status,

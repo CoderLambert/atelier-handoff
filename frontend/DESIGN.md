@@ -1,47 +1,84 @@
-# atelier 前端设计规范
+# Atelier 前端统一设计规范
 
-atelier 的工作区面向在同一窗口内管理项目、推进对话、核对执行结果和查看网页的人。默认面向中、大尺寸桌面，1280×800、1440×900 和 1920×1080 为验收尺寸。窄窗口继续通过抽屉与单栏访问同一内容。
+Atelier 工作区面向在同一窗口内管理项目、推进对话、核对执行结果、操作 Git/终端与配置自动化任务的桌面用户。默认面向中、大尺寸桌面（`1280×800`、`1440×900`、`1920×1080`），窄窗口通过抽屉与单栏访问同一能力。
 
-## 布局与排版
+本规范是前端视觉与组件设计的**唯一事实源**，由 `scripts/check-ui.mts` 提供静态门禁防回退。
 
-| 角色 | 用法 |
-| --- | --- |
-| 工作区 | 暖灰导航分隔项目、会话和配置。白色内容面用于聊天、列表和编辑。浏览器打开时按可用宽度并列或独占内容区。 |
-| 页面 | 标题说明当前任务，相关工具放在同一区域。优先使用边框与留白分组，弹层采用更明显的阴影。 |
-| 阅读 | 会话正文限制行宽。结果、代码、表格与网页使用可用宽度，在所属容器内处理长内容。 |
-| 字体 | 界面使用本机中英文无衬线字体，正文常用 14、16px，辅助文案用 12、13px，区块标题用 20、24px。代码与回执使用等宽字体。 |
-| 间距 | 4px 为基准。组件内部多用 4、8、12px，分组间多用 16、24、32px。 |
-| 控件 | 紧凑操作为 28、32px，常规操作为 36、40px。圆角使用 6、10、14px。 |
+---
 
-## 主题角色
+## 一、设计令牌单轨制（Tokens）
 
-主题定义在 `src/styles.css`，通过 `@theme inline` 提供语义工具类。业务样式使用角色变量。现有 CSS 别名随消费点迁移。
+主题色板与基础刻度统一定义在 `frontend/src/styles.css`（支持 Obsidian Studio、Atelier Classic、Warm Parchment、Nordic Frost、Rosé Pine Dawn、Midnight Slate 六套主题），通过 `@theme inline` 暴露为 Tailwind 语义类。
 
-| 角色 | 用法 |
-| --- | --- |
-| `background`、`card`、`sidebar`、`popover`、`muted` | 工作区画布、内容、导航、弹层、嵌入区域。各表面使用配对的前景色。 |
-| `primary` | 橄榄绿主操作，例如创建、发送或保存。主操作每个任务区优先一个。 |
-| `secondary`、`accent`、`selected` | 分别用于次要操作、悬停与当前项目、会话或配置。选中态同时在控件语义中表达。 |
-| `border`、`input`、`ring` | 分隔、表单边界、键盘焦点。控件边界和焦点达到相邻颜色 3:1。 |
-| `info`、`success`、`warning`、`destructive` | 信息、完成、需要注意、危险或失败。使用对应前景和淡底，状态同时提供文字或图标。 |
+### 1. 表面与色彩角色（禁止新增旧别名）
 
-普通正文及辅助文字与实际背景至少达到 4.5:1。使用 `:focus-visible` 呈现焦点，禁用控件保留可识别的结构。
+- 业务样式仅允许使用 `--ui-*` 变量或对应的语义类（`bg-card`、`text-muted-foreground`、`border-border` 等），**停止新增** `--fg`、`--muted`、`--surface`、`--accent`、`--border-soft` 等旧别名。
+- 业务样式表与 TSX 中**禁止硬编码色值**（`#hex`、`rgb()`、`hsl()`、`bg-slate-*` 等），统一由 `check:ui` 的 `color` 规则拦截。
+- 页面严格遵守三层表面层级：
+  1. **导航轨表面**：`--ui-sidebar`（左侧栏、辅助轨）
+  2. **画布底表面**：`--ui-background`（主内容底面）
+  3. **内容与浮层表面**：`--ui-card` / `--ui-popover`（表单容器、卡片、弹窗、下拉菜单）
+- 状态语义色（`info`、`success`、`warning`、`destructive`）均配有 `*-soft` 浅底与 `*-border` 描边，文字对比度满足 WCAG AA（≥ 4.5:1），且必须同时提供文字或图标。
 
-## 控件和图标
+### 2. 字号与排版阶梯（锁定 6 档）
 
-- `components/ui/` 管基础控件的尺寸、外观、焦点和键盘语义。`components/` 放跨功能的展示组合，`features/` 持有业务交互，`app/` 负责页面和面板组合。
-- Button 使用 `default`、`secondary`、`outline`、`ghost`、`destructive` 或 `link`。`size` 决定点击区域。链接保留链接语义，切换按钮提供当前值，危险操作与明确的确认入口对应。
-- 表单提供可见标签及关联的说明或错误。网络操作覆盖等待、空、成功、失败与重试状态。失败时保存输入，等待时阻止重复操作。
-- 弹层沿用 Radix 的标题、焦点、Esc、门户和关闭机制。内容超高时内部滚动，主要操作保持可达。
-- 使用 Lucide 具名组件。创建用 `Plus`，关闭用 `X`，搜索用 `Search`，更多操作用 `Ellipsis`，运行轨迹用 `Activity`，执行权限用 `Shield`，浏览器用 `Globe`。纯装饰图标从无障碍树隐藏，独立图标按钮使用本地化可访问名称。
-- 内嵌图标用 `data-icon` 指定前后位置。控件内图标通常为 16px，关键导航图标可为 18px。尺寸由控件定义，业务样式负责布局。
+使用系统本机中英文无衬线字体（`--font-body` / `--font-display`）与等宽字体（`--font-mono`）。业务样式仅允许使用以下 6 档字号变量，**禁止裸写 `10.5px`、`11.5px`、`12.5px` 等零散像素字号**：
 
-## 动效
+| 变量 | 尺寸 | 适用场景 |
+| --- | --- | --- |
+| `--text-xs` | `12px` (`0.75rem`) | 元信息、时间戳、副标题、辅助说明、表头 |
+| `--text-sm` | `13px` (`0.8125rem`) | 密集列表项、侧边栏会话、菜单项、标签页 |
+| `--text-ui` | `14px` (`0.875rem`) | 常规按钮、输入框、下拉选择器、表单值 |
+| `--text-base` | `15px` (`0.9375rem`) | 会话正文、文档预览、说明段落 |
+| `--text-xl` | `20px` (`1.25rem`) | 区块标题、弹窗主标题 |
+| `--text-2xl` | `24px` (`1.5rem`) | 全页管理视图主标题 |
 
-基础反馈采用统一缓动。悬停与按下约 120ms，选中与局部变化约 160ms，较大反馈约 220ms。Motion 用于局部显示反馈。系统开启减少动效时，界面状态即时呈现。
+### 3. 控件高度、间距与圆角
 
-分隔条、原生网页尺寸、输入区域和消息滚动保持即时响应。可访问名称、实时播报和焦点生命周期与动效独立。
+- **控件高度（4 档）**：`--ui-size-xs`（28px）、`--ui-size-sm`（32px）、`--ui-size-md`（36px，默认）、`--ui-size-lg`（40px）。同一行内的 `Input`、`Select`、`Button` 必须保持同档高度。
+- **间距栅格（4px 基准）**：控件内部 `4 / 8 / 12px`，表单字段间距 `16px`，区块分组间距 `24px`，管理页主容器内边距 `28px 32px`。
+- **圆角（4 档）**：`--radius-sm`（6px，小标签与列表项）、`--radius-md`（8px，输入框与按钮）、`--radius-lg`（12px，卡片、弹窗与浮层）、`--radius-pill`（9999px，徽标与滚动条滑块）。
+- **阴影（2 档）**：轻量边界使用 `1px solid var(--ui-border)` 与 `--ui-shadow`，所有浮层（Dialog / Popover / DropdownMenu / Select）统一使用 `--ui-shadow-overlay`。
 
-## 验收
+### 4. 焦点态与选中态分层规范
 
-在三种桌面视口和窄窗口核对中英文、长内容、键盘与焦点。使用隔离 Electron 验证原生页面遮挡、布局、接管和恢复。样式门禁与类型、i18n 门禁一同执行。
+- **表单输入与按钮**：聚焦时采用柔和焦点环（`border-ring` + `ring-[3px] ring-ring/20` 或 `ring-ring/25`），普通元素键盘 `:focus-visible` 由 `styles.css` 全局规则提供轻柔细焦环（`1.5px solid var(--ui-focus-outline)`）。
+- **菜单项、下拉选项与列表行**：**严禁画 `2px solid` 实线外框**；悬停/高亮使用 `bg-accent`，当前选中项使用 `bg-selected` 配合主色勾选图标或左侧指示条。
+- **门禁约束**：业务 CSS 中**禁止手写 `outline: 2px solid`**（由 `check:ui` 的 `focus-outline` 规则强制拦截）。
+
+### 5. 全局滚动条规范
+
+- 滚动条样式仅在 `frontend/src/styles.css` 单点定义（`8px` 细轨、透明轨道、圆角悬浮滑块），业务 CSS 中禁止编写 `::-webkit-scrollbar*`、`scrollbar-color` 或非 `none` 的 `scrollbar-width`（由 `check:ui` 的 `scrollbar` 规则强制拦截）。
+
+---
+
+## 二、页面骨架与容器宽度
+
+| 页面类型 | 典型页面 | 容器最大宽度 | 骨架规范 |
+| --- | --- | --- | --- |
+| **阅读流视图** | 主会话对话流 | `80ch`（居中） | 正文限宽，代码块与表格在容器内横向滚动 |
+| **管理配置页** | 自动化任务、扩展、智能体、设置、运行记录 | `1160px`（居中） | 统一使用 `PageHeader` + 统一 `Tabs` + `Field` 表单 + `EmptyState` |
+| **全宽工作台** | Git Workbench、内置浏览器、终端 | `100%` | 顶部工具条固定高度，右侧分栏统一头部与边框分隔 |
+
+---
+
+## 三、共享 UI 原语体系（`frontend/src/components/ui/`）
+
+业务模块（`features/`、`app/`）负责布局与业务状态，**不重复实现基础控件外观**：
+
+- **已有基础原语**：`Button`、`Badge`、`Input`、`Textarea`、`Select`、`Switch`、`Dialog`、`Popover`、`DropdownMenu`。
+- **骨架与表单组合原语**：
+  - `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`：提供 `underline`（页内主切换）与 `pill`（紧凑分段切换）两种变体，内置键盘左右/Home/End 导航。
+  - `Field` / `FieldLabel` / `FieldDescription` / `FieldError`：统一表单字段的标签（`13px / 500`）、辅助说明（`12px` 次级色）与错误提示（`destructive`）。
+  - `PageHeader`：统一管理页顶部标题区（可选图标徽章 + 主标题 + 一句话副标题 + 右侧筛选与主操作区）。
+  - `EmptyState`：统一空数据状态（图标 + 标题 + 说明 + 可选主操作按钮）。
+  - `Separator`：统一水平/垂直细分隔线（`bg-border-subtle`）。
+- **浮层默认值**：`DropdownMenuContent` 与 `PopoverContent` 统一 `rounded-lg`、`sideOffset={8}`、`collisionPadding={12}`、内缩 `bg-border-subtle` 分隔线与柔和悬停态。
+- **图标约定**：统一使用 Lucide 具名图标（常规 `16px`，关键导航 `18px`）；纯装饰图标标 `aria-hidden="true"`，独立图标按钮必须提供本地化 `aria-label`（由 `check:ui` 的 `icon-label` 规则强制拦截）。
+
+---
+
+## 四、动效与验收
+
+- 悬停与按下 `120ms`（`--motion-feedback`），选中与局部过渡 `160ms`（`--motion-fast`），较大反馈 `220ms`（`--motion-base`），统一缓动 `--ease-standard`。系统开启 `prefers-reduced-motion` 时立即呈现。
+- 每次 UI 变更需通过 `npm run format:check`、`npm run check`（含 `check:ui`、`check:i18n`、`tsc`）与 `npm run build`，并在 `1280×800` 与 `1440×900` 视口下核查浅/深色主题与键盘焦点。

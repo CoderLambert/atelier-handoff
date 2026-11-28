@@ -578,8 +578,8 @@
   }
 
   :where(button, a, input, textarea, select, summary):focus-visible {
-    outline: 2px solid var(--ui-ring);
-    outline-offset: 2px;
+    outline: 1.5px solid color-mix(in srgb, var(--ui-ring) 55%, transparent);
+    outline-offset: 1px;
   }
 
   :where(button) svg {

@@ -1,7 +1,7 @@
 /**
  * @file 提供工作台按钮与按钮外观的链接。
- * @implementation 通过 CVA 统一操作级别、控件尺寸、图标、焦点和反馈，保留原生按钮或 Slot 子节点语义。
- * @updated 2026-11-23T12:00:00+08:00
+ * @implementation 通过 CVA 统一操作级别、控件尺寸、图标、柔和焦点环和反馈，保留原生按钮或 Slot 子节点语义。
+ * @updated 2026-11-28T00:10:00+08:00
  */
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -11,8 +11,8 @@ import { cn } from './utils';
 const buttonVariants = cva(
   [
     'inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent text-sm font-medium leading-tight',
-    'transition-[background-color,color,border-color,transform] duration-(--motion-feedback) ease-(--ease-standard) motion-reduce:transition-none active:scale-[0.98]',
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50',
+    'transition-[background-color,color,border-color,box-shadow,transform] duration-(--motion-feedback) ease-(--ease-standard) motion-reduce:transition-none active:scale-[0.98]',
+    'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-50',
     '[&>svg]:pointer-events-none [&>svg]:size-(--ui-icon-size) [&>svg]:shrink-0',
   ],
   {
@@ -21,7 +21,8 @@ const buttonVariants = cva(
         default:
           'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-accent active:bg-selected',
-        outline: 'border-border bg-card text-card-foreground hover:bg-accent active:bg-selected',
+        outline:
+          'border-border bg-card text-card-foreground hover:bg-accent active:bg-selected focus-visible:border-ring',
         ghost:
           'text-secondary-foreground hover:bg-accent hover:text-accent-foreground active:bg-selected',
         destructive:

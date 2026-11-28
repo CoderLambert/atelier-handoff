@@ -357,7 +357,7 @@
 }
 
 .atelier-sidebar :is(button, input):focus-visible {
-  outline: 2px solid var(--ui-ring);
+  outline: 1.5px solid color-mix(in srgb, var(--ui-ring) 55%, transparent);
   outline-offset: -2px;
 }
 

@@ -12,7 +12,7 @@ import * as t from '@babel/types';
 import postcss from 'postcss';
 
 interface Violation {
-  rule: 'color' | 'legacy-control' | 'icon-label' | 'motion-import' | 'scrollbar';
+  rule: 'color' | 'legacy-control' | 'icon-label' | 'motion-import' | 'scrollbar' | 'focus-outline';
   detail: string;
   line: number;
 }
@@ -129,6 +129,17 @@ function checkCss(source: string, file: string): Violation[] {
       declaration.parent.selector === ':root'
     )
       return;
+    if (
+      file !== 'styles.css' &&
+      declaration.prop === 'outline' &&
+      /\b2px\s+solid\b/i.test(declaration.value)
+    ) {
+      violations.push({
+        rule: 'focus-outline',
+        detail: `${declaration.prop}:${declaration.value.trim()}`,
+        line: declaration.source?.start?.line ?? 1,
+      });
+    }
     if (declaration.prop === 'content') return;
     const value = declaration.value.replace(/url\([^)]*\)/gi, '');
     if (hexColor.test(value) || colorFunction.test(value)) {
@@ -157,6 +168,10 @@ if (process.argv.includes('--self-test')) {
     0,
   );
   assert.equal(checkCss('.alert { background: rgb(12 20 30 / .4); }', 'feature.css').length, 1);
+  assert.equal(
+    checkCss('.item:focus-visible { outline: 2px solid var(--ui-ring); }', 'feature.css')[0]?.rule,
+    'focus-outline',
+  );
 } else {
   const root = fileURLToPath(new URL('../frontend/src/', import.meta.url));
   const errors: string[] = [];

@@ -1,7 +1,7 @@
 /**
  * @file 提供可复用的 shadcn 风格单行文本输入框组件。
- * @implementation 沿用 shadcn new-york v4 接口与 Atelier 语义主题 token，统一高度、边框、聚焦环与禁用态。
- * @updated 2026-11-27T23:45:00+08:00
+ * @implementation 沿用 shadcn new-york v4 接口与 Atelier 语义主题 token，统一高度、边框、柔和聚焦环与禁用态。
+ * @updated 2026-11-28T00:10:00+08:00
  */
 import * as React from 'react';
 import { cn } from './utils';
@@ -12,12 +12,12 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
       type={type}
       data-slot="input"
       className={cn(
-        'flex h-(--ui-size-md) w-full min-w-0 rounded-md border border-input bg-card px-3 py-1 text-sm text-foreground',
-        'transition-colors duration-(--motion-feedback) motion-reduce:transition-none',
-        'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'flex h-(--ui-size-md) w-full min-w-0 rounded-md border border-border bg-card px-3 py-1 text-sm text-foreground',
+        'transition-[border-color,box-shadow,background-color] duration-(--motion-feedback) motion-reduce:transition-none',
+        'hover:border-input placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground',
+        'outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-        'aria-invalid:border-destructive',
+        'aria-invalid:border-destructive aria-invalid:ring-destructive/20',
         className,
       )}
       {...props}
