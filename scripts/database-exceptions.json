@@ -100,5 +100,11 @@
     "key": "driver-call:d0175072c05a074e",
     "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
     "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-channels.ts",
+    "key": "driver-call:0a07e949f8c3af3e",
+    "decision": "docs/decisions/2026-11-28-telegram-channel.md",
+    "test": "tests/channels-batch1.test.ts"
   }
 ]

@@ -4,5 +4,11 @@
  * @updated 2026-11-23T18:25:00+08:00
  */
 export type SettingsSection =
-  'models' | 'task-planning' | 'layout' | 'shortcuts' | 'notifications' | 'diagnostics';
+  | 'models'
+  | 'task-planning'
+  | 'layout'
+  | 'shortcuts'
+  | 'notifications'
+  | 'channels'
+  | 'diagnostics';
 export type SessionAction = 'rename' | 'archive' | 'restore' | 'delete';

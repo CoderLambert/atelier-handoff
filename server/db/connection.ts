@@ -36,6 +36,8 @@ import { applyScheduleTriggers } from './migrations/apply-schedule-triggers.js';
 import { applyScheduleExecutionPreference } from './migrations/apply-schedule-execution-preference.js';
 import { applyScheduleModelEffort } from './migrations/apply-schedule-model-effort.js';
 import { scheduleRepository } from './repositories/schedules.js';
+import { applyChannels } from './migrations/apply-channels.js';
+import { channelRepository } from './repositories/channels.js';
 
 // The transitional Store only uses scalar bindings and ordinary row-object statements.
 type Scalar = string | number | bigint | Uint8Array | null;
@@ -49,7 +51,7 @@ export interface LegacyDatabase {
   close(): void;
 }
 
-export const LATEST_SCHEMA_VERSION = 15;
+export const LATEST_SCHEMA_VERSION = 16;
 export type SchemaMigration = { version: number; apply: () => void };
 
 export function openWorkbenchDatabase(path: string) {
@@ -67,6 +69,7 @@ export function openWorkbenchDatabase(path: string) {
     { version: 13, apply: () => applyScheduleTriggers(db) },
     { version: 14, apply: () => applyScheduleExecutionPreference(db) },
     { version: 15, apply: () => applyScheduleModelEffort(db) },
+    { version: 16, apply: () => applyChannels(db) },
   ];
   const repos = {
     appConfig: appConfigRepository(orm),
@@ -88,6 +91,7 @@ export function openWorkbenchDatabase(path: string) {
     gitWorktrees: gitWorktreeRepository(orm),
     gitCommitOperations: gitCommitOperationRepository(orm),
     schedules: scheduleRepository(orm),
+    channels: channelRepository(orm),
   };
   return {
     db,

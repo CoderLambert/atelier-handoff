@@ -8,6 +8,7 @@ import type { DesktopFilesBridge } from '@shared/desktop-files';
 import type { DesktopUiNotificationsBridge } from '@shared/desktop-ui-notifications';
 import type { DesktopGitBridge } from '@shared/desktop-git';
 import type { DesktopShortcutsBridge } from '@shared/desktop-shortcuts';
+import type { DesktopChannelsBridge } from '@shared/channels';
 
 declare global {
   interface Window {
@@ -16,6 +17,7 @@ declare global {
     atelierUiNotifications?: DesktopUiNotificationsBridge;
     atelierGit?: DesktopGitBridge;
     atelierShortcuts?: DesktopShortcutsBridge;
+    atelierChannels?: DesktopChannelsBridge;
   }
 }
 

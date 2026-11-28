@@ -928,4 +928,47 @@ export const inspector = {
   'preview.ebookLoadFailed': ['电子书加载失败', 'Failed to load e-book'],
   'preview.tableOfContents': ['目录', 'Table of contents'],
   'preview.foundInChapters': ['在 {{chapters}} 个章节中找到', 'Found in {{chapters}} chapter(s)'],
+  'settings.channels': ['消息通道', 'Channels'],
+  'settings.channelsNavDescription': [
+    'Telegram Bot 连接与远程接入',
+    'Telegram Bot connection and remote access',
+  ],
+  'settings.channelsDescription': [
+    '配置外部消息通道，通过手机远程与本地 Atelier 对话。Token 通过系统安全存储加密保存。',
+    'Configure external messaging channels to interact with local Atelier remotely. Tokens are encrypted via OS secure storage.',
+  ],
+  'settings.channelsDesktopOnly': [
+    '消息通道仅在桌面应用中可用。',
+    'Messaging channels are only available in the desktop app.',
+  ],
+  'settings.channelsTelegramTitle': ['Telegram Bot', 'Telegram Bot'],
+  'settings.channelsTelegramDescription': [
+    '通过 Telegram Bot API Long Polling 连接本地 Atelier，无需公网域名或 Webhook。',
+    'Connect to local Atelier via Telegram Bot API Long Polling without a public domain or webhook.',
+  ],
+  'settings.channelsTelegramEnable': ['启用 Telegram 通道', 'Enable Telegram channel'],
+  'settings.channelsTelegramEnableDescription': [
+    '开启后立即监听 Bot 消息，并在应用重启后自动恢复连接状态。',
+    'Start listening for Bot messages immediately and restore automatically on restart.',
+  ],
+  'settings.channelsTelegramToken': ['Bot Token', 'Bot Token'],
+  'settings.channelsTelegramTokenDescription': [
+    '从 @BotFather 获取的密钥，仅以密文形式保存；输入框中仅展示掩码。',
+    'Token issued by @BotFather, stored encrypted; only a masked preview is shown here.',
+  ],
+  'settings.channelsTelegramTokenPlaceholder': [
+    '输入 BotFather 提供的 Token（如 123456:ABC...）',
+    'Enter token from @BotFather (e.g. 123456:ABC...)',
+  ],
+  'settings.channelsTestConnection': ['测试连接', 'Test connection'],
+  'settings.channelsTestSuccess': ['连接成功：{{bot}}', 'Connected: {{bot}}'],
+  'settings.channelsTestFailed': ['连接测试失败', 'Connection test failed'],
+  'settings.channelsConnectedBot': ['当前 Bot：{{bot}}', 'Connected Bot: {{bot}}'],
+  'settings.channelsLoadFailed': ['加载消息通道状态失败。', 'Failed to load channel state.'],
+  'settings.channelsSaveFailed': ['保存通道配置失败。', 'Failed to save channel config.'],
+  'settings.channelsToggleFailed': ['切换通道启停状态失败。', 'Failed to toggle channel state.'],
+  'settings.channelsStatus.disconnected': ['未连接', 'Disconnected'],
+  'settings.channelsStatus.connecting': ['连接中', 'Connecting'],
+  'settings.channelsStatus.connected': ['已连接', 'Connected'],
+  'settings.channelsStatus.error': ['异常', 'Error'],
 } as const;

@@ -356,3 +356,89 @@ const gitBridge: DesktopGitBridge = {
 };
 
 contextBridge.exposeInMainWorld('atelierGit', gitBridge);
+
+import {
+  channelConfigUpdateSchema,
+  channelIdSchema,
+  channelPairingActionSchema,
+  channelStateSnapshotSchema,
+  channelStatusSchema,
+  channelTestRequestSchema,
+  channelTestResultSchema,
+  channelToggleRequestSchema,
+  desktopChannelsIpc,
+  pendingPairingSchema,
+  type DesktopChannelsBridge,
+} from '../shared/channels.js';
+
+const channelsBridge: DesktopChannelsBridge = {
+  async getState(channel) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.getState,
+      channelIdSchema.parse(channel),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  async saveConfig(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.saveConfig,
+      channelConfigUpdateSchema.parse(input),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  async testConnection(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.testConnection,
+      channelTestRequestSchema.parse(input),
+    );
+    return channelTestResultSchema.parse(response);
+  },
+  async toggle(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.toggle,
+      channelToggleRequestSchema.parse(input),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  async approvePairing(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.approvePairing,
+      channelPairingActionSchema.parse(input),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  async rejectPairing(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.rejectPairing,
+      channelPairingActionSchema.parse(input),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  async unbind(input) {
+    const response: unknown = await ipcRenderer.invoke(
+      desktopChannelsIpc.unbind,
+      channelPairingActionSchema.parse(input),
+    );
+    return channelStateSnapshotSchema.parse(response);
+  },
+  onStatusChanged(callback) {
+    if (typeof callback !== 'function') throw new TypeError('A status callback is required.');
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      const parsed = channelStatusSchema.safeParse(value);
+      if (parsed.success) callback(parsed.data);
+    };
+    ipcRenderer.on(desktopChannelsIpc.statusChanged, listener);
+    return () => ipcRenderer.removeListener(desktopChannelsIpc.statusChanged, listener);
+  },
+  onPairingRequested(callback) {
+    if (typeof callback !== 'function') throw new TypeError('A pairing callback is required.');
+    const listener = (_event: IpcRendererEvent, value: unknown) => {
+      const parsed = pendingPairingSchema.safeParse(value);
+      if (parsed.success) callback(parsed.data);
+    };
+    ipcRenderer.on(desktopChannelsIpc.pairingRequested, listener);
+    return () => ipcRenderer.removeListener(desktopChannelsIpc.pairingRequested, listener);
+  },
+};
+
+contextBridge.exposeInMainWorld('atelierChannels', channelsBridge);

@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   Plug,
   RefreshCw,
+  Send,
   Settings2,
 } from 'lucide-react';
 import { magpieModelPrefix } from '@shared/types';
@@ -43,6 +44,7 @@ import { errorMessage } from './shared';
 import { WorkspaceLayoutForm, type WorkspaceLayoutFormProps } from './workspace-layout-form';
 import { TaskPlanningSettings } from './task-planning-settings';
 import { NotificationSettings } from './notification-settings';
+import { ChannelSettings } from './channel-settings';
 import { BundledAccountCard } from './settings-account-card';
 import { MagpieToggleCard } from './settings-magpie-card';
 import {
@@ -97,6 +99,12 @@ function translatedSections() {
       label: t('settings.notifications'),
       description: t('settings.notificationsNavDescription'),
       icon: Bell,
+    },
+    {
+      id: 'channels',
+      label: t('settings.channels'),
+      description: t('settings.channelsNavDescription'),
+      icon: Send,
     },
     {
       id: 'diagnostics',
@@ -222,6 +230,18 @@ export default function SettingsPage({
                 <p>{t('settings.notificationsDescription')}</p>
               </div>
               <NotificationSettings />
+            </section>
+          ) : null}
+          {visited.includes('channels') ? (
+            <section
+              hidden={currentSection !== 'channels'}
+              aria-labelledby="settings-channels-heading"
+            >
+              <div className="settings-section-intro">
+                <h2 id="settings-channels-heading">{t('settings.channels')}</h2>
+                <p>{t('settings.channelsDescription')}</p>
+              </div>
+              <ChannelSettings />
             </section>
           ) : null}
           {visited.includes('diagnostics') ? (

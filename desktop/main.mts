@@ -3,7 +3,13 @@
  * @implementation 装配可信窗口、原生操作、内置 Shunt 和运行时。开发启动时协调网页与运行时的空闲检查，正常退出后由启动器重开。
  * @updated 2026-12-08T12:00:00+00:00
  */
-import { app, powerMonitor, type BrowserWindow, type Event as ElectronEvent } from 'electron';
+import {
+  app,
+  powerMonitor,
+  safeStorage,
+  type BrowserWindow,
+  type Event as ElectronEvent,
+} from 'electron';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { importWorkspace } from './host/migration.mjs';
@@ -46,6 +52,11 @@ import {
   developmentRestartRequest,
 } from '../shared/desktop-development-restart.js';
 import { DesktopTrayController } from './host/tray.mjs';
+import { ChannelSecretStore } from './channels/secret-store.mjs';
+import { ChannelConfigStore } from './channels/config-store.mjs';
+import { ChannelManager } from './channels/channel-manager.mjs';
+import { TelegramAdapter } from './channels/telegram/telegram-adapter.mjs';
+import { bindChannelsIpc } from './channels/channels-ipc.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const developmentLauncher = !app.isPackaged && process.env.ATELIER_DEV_LAUNCH === '1';
@@ -266,6 +277,10 @@ const uiLanguage = new DesktopUiLanguagePreferences(regularProfile, (locale) => 
 });
 const uiTheme = new DesktopUiThemePreferences(regularProfile);
 const uiNotifications = new DesktopUiNotificationsPreferences(regularProfile);
+const channelSecrets = new ChannelSecretStore(regularProfile, safeStorage);
+const channelConfigs = new ChannelConfigStore(regularProfile);
+const channelManager = new ChannelManager(channelSecrets, channelConfigs);
+channelManager.registerAdapter(new TelegramAdapter());
 
 if (!app.requestSingleInstanceLock()) {
   if (developmentLauncher)
@@ -307,7 +322,12 @@ if (!app.requestSingleInstanceLock()) {
   void app
     .whenReady()
     .then(async () => {
-      await Promise.all([uiLanguage.load(), uiTheme.load(), uiNotifications.load()]);
+      await Promise.all([
+        uiLanguage.load(),
+        uiTheme.load(),
+        uiNotifications.load(),
+        channelConfigs.load(),
+      ]);
       if (!migrationMode) {
         if (!developmentLauncher) {
           desktopTray = new DesktopTrayController({
@@ -350,6 +370,15 @@ if (!app.requestSingleInstanceLock()) {
         );
         const unbindDesktopShortcutIpc = desktopShortcuts.bindIpc();
         const unbindBrowserIpc = browser.bindIpc();
+        const unbindChannelsIpc = bindChannelsIpc(channelManager, {
+          getWindow: windowHost.getWindow,
+          isTrustedSender: createTrustedSenderPredicate(
+            windowHost.getWindow,
+            windowHost.getOrigin,
+            windowHost.isStopping,
+          ),
+          isStopping: windowHost.isStopping,
+        });
         const onSystemResume = () => supervisor.notifySystemResume();
         powerMonitor.on('resume', onSystemResume);
         app.once('will-quit', () => {
@@ -362,8 +391,13 @@ if (!app.requestSingleInstanceLock()) {
           unbindDesktopGit();
           unbindDesktopShortcutIpc();
           unbindBrowserIpc();
+          unbindChannelsIpc();
         });
-        return start();
+        await start();
+        void channelManager.restoreEnabledChannels().catch((error: unknown) => {
+          console.error('[channels] Failed to restore enabled channels:', error);
+        });
+        return;
       }
       if (
         await importWorkspace({
@@ -401,8 +435,12 @@ app.on('before-quit', (event) => {
   if (developmentLauncher && window && !window.isDestroyed())
     window.webContents.session.flushStorageData();
   clearRuntimeWindow();
-  void supervisor
-    .stop()
+  void channelManager
+    .stopAll()
+    .catch((error: unknown) => {
+      console.error('[channels] Failed to stop channels cleanly:', error);
+    })
+    .finally(() => supervisor.stop())
     .finally(() => managedShunt?.stop())
     .finally(() => {
       quitting = true;

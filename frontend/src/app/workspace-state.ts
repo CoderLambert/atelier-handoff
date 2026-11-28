@@ -24,6 +24,7 @@ export const settingsPaths = {
   layout: '/settings/layout',
   shortcuts: '/settings/shortcuts',
   notifications: '/settings/notifications',
+  channels: '/settings/channels',
   diagnostics: '/settings/diagnostics',
 } as const;
 
@@ -47,6 +48,7 @@ export function settingsSection(pathname: string): SettingsSection {
   if (pathname === settingsPaths.layout) return 'layout';
   if (pathname === settingsPaths.shortcuts) return 'shortcuts';
   if (pathname === settingsPaths.notifications) return 'notifications';
+  if (pathname === settingsPaths.channels) return 'channels';
   if (pathname === settingsPaths.diagnostics) return 'diagnostics';
   return 'models';
 }
