@@ -13,7 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { Store } from '../server/store.js';
+import { LATEST_SCHEMA_VERSION, Store } from '../server/store.js';
 import { dropV11Schema } from './fixtures/downgrade-v11.js';
 import { fileIdentity } from '../server/modules/git/git-cli.js';
 import {
@@ -279,7 +279,10 @@ test('v10 empty database stores ordered OIDs, only file references, and revision
     const value = request();
     withStore(directory, (store) => {
       seed(store);
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       const claimed = store.gitCommitOperations.claim(value);
       assert.equal(claimed.outcome, 'claimed');
       first = claimed.operation;
@@ -996,7 +999,10 @@ test('v8 upgrade preserves old rows and backup bytes; interrupted v9 DDL rolls b
     );
     old.close();
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       assert.deepEqual(
         store.db
           .prepare('SELECT rowid,* FROM git_worktrees')
@@ -1048,7 +1054,10 @@ for (const variant of ['legacy', 'current'] as const) {
         assert.equal(tableSql.includes("'aborting'"), variant === 'current');
         assert.equal(rows.length, variant === 'legacy' ? 5 : 7);
         withStore(directory, (store) => {
-          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+          assert.equal(
+            store.db.prepare('PRAGMA user_version').get()?.user_version,
+            LATEST_SCHEMA_VERSION,
+          );
           assert.deepEqual(operationRows(store.db), rows);
           store.assertForeignKeyIntegrity();
           assert.equal(store.db.prepare('PRAGMA quick_check').get()?.quick_check, 'ok');
@@ -1079,10 +1088,16 @@ for (const variant of ['legacy', 'current'] as const) {
         assert.deepEqual(operationRows(reader), rows);
         assert.deepEqual(operationSchema(reader), schema);
         reader.exec('COMMIT');
-        assert.equal(reader.prepare('PRAGMA user_version').get()?.user_version, 11);
+        assert.equal(
+          reader.prepare('PRAGMA user_version').get()?.user_version,
+          LATEST_SCHEMA_VERSION,
+        );
         const upgradedSchema = operationSchema(reader);
         withStore(directory, (store) => {
-          assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+          assert.equal(
+            store.db.prepare('PRAGMA user_version').get()?.user_version,
+            LATEST_SCHEMA_VERSION,
+          );
           assert.deepEqual(operationRows(store.db), rows);
           assert.deepEqual(operationSchema(store.db), upgradedSchema);
           const prepared = store.gitCommitOperations.get(
@@ -1149,7 +1164,10 @@ test('v10 rebuild rolls back original v9 DDL, rowids and indexes after a failure
       database.close();
     }
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       assert.deepEqual(operationRows(store.db), rows);
       store.assertForeignKeyIntegrity();
     });
@@ -1187,7 +1205,10 @@ test('v10 copy rejects orphan v9 evidence and Store rollback preserves the origi
       retained.close();
     }
     withStore(directory, (store) => {
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       assert.deepEqual(operationRows(store.db), validRows);
       store.assertForeignKeyIntegrity();
     });

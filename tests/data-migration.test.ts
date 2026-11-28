@@ -26,7 +26,7 @@ import { FileRecords } from '../server/artifacts.js';
 import { fingerprint } from '../server/files.js';
 import { migrateWorkspace } from '../server/data-migration.js';
 import { acquireDataOwner } from '../server/data-owner.js';
-import { Store } from '../server/store.js';
+import { LATEST_SCHEMA_VERSION, Store } from '../server/store.js';
 import {
   CommitJournal,
   hashCommitJournalIndex,
@@ -351,7 +351,10 @@ await test('v10 migration keeps completed and aborted receipts replayable with a
             );
             assert.deepEqual(await coordinator.read(fixture.value.operationId), fixture.evidence);
             assert.deepEqual(await coordinator.unfinished(), []);
-            assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+            assert.equal(
+              store.db.prepare('PRAGMA user_version').get()?.user_version,
+              LATEST_SCHEMA_VERSION,
+            );
             assert.deepEqual(store.db.prepare('PRAGMA foreign_key_check').all(), []);
           } finally {
             store.close();
@@ -667,7 +670,10 @@ await test('versions 1 through 11 migrate real old schemas while rollback copies
       }
       const migrated = new Store(result.target);
       try {
-        assert.equal(migrated.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+        assert.equal(
+          migrated.db.prepare('PRAGMA user_version').get()?.user_version,
+          LATEST_SCHEMA_VERSION,
+        );
         assert.equal(migrated.get('sessions', fixture.sessionId).draft.text, 'retained draft');
         assert.deepEqual(migrated.db.prepare('PRAGMA foreign_key_check').all(), []);
       } finally {
@@ -710,7 +716,7 @@ await test('an original four-state v9 database upgrades only the published copy 
   assert.deepEqual(await readFile(database), originalBytes);
   for (const [directory, version] of [
     [result.backupPath, 9],
-    [result.target, 11],
+    [result.target, LATEST_SCHEMA_VERSION],
   ] as const) {
     const copy = new DatabaseSync(join(directory, 'atelier.sqlite'), { readOnly: true });
     try {
@@ -750,7 +756,7 @@ await test('an original four-state v9 database upgrades only the published copy 
 });
 
 await test('unknown database versions are refused with no destination', async (t) => {
-  for (const version of [0, 12])
+  for (const version of [0, LATEST_SCHEMA_VERSION + 1])
     await t.test('v' + version, async (t) => {
       const fixture = await migrationFixture(t);
       const database = new DatabaseSync(join(fixture.source, 'atelier.sqlite'));

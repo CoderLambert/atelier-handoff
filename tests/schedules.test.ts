@@ -30,7 +30,7 @@ import {
 } from '../server/modules/schedules/scheduler.js';
 import { createScheduleService } from '../server/modules/schedules/service.js';
 import { computeNextRunAt, normalizeTiming } from '../server/modules/schedules/timing.js';
-import { Store } from '../server/store.js';
+import { LATEST_SCHEMA_VERSION, Store } from '../server/store.js';
 
 function createFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'atelier-schedules-'));
@@ -901,7 +901,7 @@ test('migrations v13 & v14: advances user_version cleanly on reopen and self-hea
     const v1 = Number(
       (first.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
     );
-    assert.equal(v1, 14);
+    assert.equal(v1, LATEST_SCHEMA_VERSION);
     // Simulate a user DB that previously ran v13 columns while stuck at user_version=12
     first.db.exec('PRAGMA user_version=12;');
     first.close();
@@ -910,7 +910,7 @@ test('migrations v13 & v14: advances user_version cleanly on reopen and self-hea
     const v2 = Number(
       (reopened.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
     );
-    assert.equal(v2, 14);
+    assert.equal(v2, LATEST_SCHEMA_VERSION);
     reopened.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

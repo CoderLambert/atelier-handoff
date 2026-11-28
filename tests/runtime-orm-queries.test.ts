@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { MessageQueue } from '../server/message-queue.js';
-import { Store } from '../server/store.js';
+import { LATEST_SCHEMA_VERSION, Store } from '../server/store.js';
 import type { Subagent } from '../shared/subagents.js';
 import {
   emptyDraft,
@@ -198,7 +198,10 @@ test('v11 upgrades a v10 database in place, keeps rowids and rolls a failed migr
     const store = new Store(data);
     try {
       seedRuntime(store, directory);
-      assert.equal(store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       expected = tables.map((table) => rows(store.db, `SELECT rowid,id,data FROM ${table}`));
       store.db.exec(dropV11Schema);
       store.db.exec('PRAGMA user_version=10;');
@@ -225,7 +228,10 @@ test('v11 upgrades a v10 database in place, keeps rowids and rolls a failed migr
     for (let opening = 0; opening < 2; opening++) {
       const upgraded = new Store(data);
       try {
-        assert.equal(upgraded.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+        assert.equal(
+          upgraded.db.prepare('PRAGMA user_version').get()?.user_version,
+          LATEST_SCHEMA_VERSION,
+        );
         assert.deepEqual(
           tables.map((table) => rows(upgraded.db, `SELECT rowid,id,data FROM ${table}`)),
           expected,

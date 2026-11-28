@@ -1,3 +1,4 @@
+import { LATEST_SCHEMA_VERSION } from '../server/store.js';
 /**
  * @file 验证本机 Git 看板、开发会话和暂存提交。
  * @implementation 用独立 SQLite、真实 Git 和回环模型验证工作树生命周期、文件与提交操作，以及工作树和共享引用变动通知。
@@ -824,7 +825,10 @@ test('v7 databases retain old session drafts and continue reading the original c
       const saved = await request<{ session: Session; workspace?: GitSessionWorkspace }>(url);
       assert.equal(saved.session.draft.text, 'Legacy draft');
       assert.equal(saved.workspace, undefined);
-      assert.equal(app.store.db.prepare('PRAGMA user_version').get()?.user_version, 11);
+      assert.equal(
+        app.store.db.prepare('PRAGMA user_version').get()?.user_version,
+        LATEST_SCHEMA_VERSION,
+      );
       const file = await request<{ text: string }>(
         '/api/projects/' + project.id + '/file?path=same.txt&sessionId=' + session.id,
       );

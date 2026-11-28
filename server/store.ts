@@ -100,7 +100,9 @@ export class Store {
   }
   private initialize(migrations: readonly SchemaMigration[]): void {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
-    const version = Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
+    const readUserVersion = () =>
+      Number(this.db.prepare('PRAGMA user_version').get()!.user_version);
+    let version = readUserVersion();
     if (version > LATEST_SCHEMA_VERSION)
       throw new Error('Database schema is newer than this application.');
     if (version === 0)
@@ -173,8 +175,26 @@ export class Store {
         PRAGMA user_version=5;
       `),
       );
-    for (const migration of migrations)
-      if (version < migration.version) this.transaction(migration.apply);
+    for (const migration of migrations) {
+      if (version < migration.version) {
+        this.transaction(() => {
+          migration.apply();
+          const after = readUserVersion();
+          if (after !== migration.version) {
+            throw new Error(
+              `Database migration v${migration.version} did not advance PRAGMA user_version (got ${after}).`,
+            );
+          }
+        });
+        version = migration.version;
+      }
+    }
+    const finalVersion = readUserVersion();
+    if (finalVersion !== LATEST_SCHEMA_VERSION) {
+      throw new Error(
+        `Database schema version mismatch after initialization: expected ${LATEST_SCHEMA_VERSION}, got ${finalVersion}.`,
+      );
+    }
     this.events.setMaxListeners(100);
   }
   transaction<T>(work: () => T): T {
