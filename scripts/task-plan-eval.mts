@@ -21,7 +21,7 @@ import {
   failedHtml,
   gradeDelivery,
   gradePlan,
-  htmlFacts,
+  containsHtmlFacts,
   makeTrial,
   planSchema,
   taskIds,
@@ -160,9 +160,8 @@ export async function verifyHtml(
       exec('pdftotext', [pdf, '-'], { timeout: 5000 }),
     ]);
     const size = /Page size:\s+([\d.]+) x ([\d.]+) pts/u.exec(info.stdout);
-    const contains = (text: string) => htmlFacts.every((fact) => text.includes(fact));
     return {
-      containsFacts: contains(mobile.text) && contains(desktop.text),
+      containsFacts: containsHtmlFacts(mobile.text) && containsHtmlFacts(desktop.text),
       offline:
         resourceRequests === 0 &&
         !mobile.external &&
@@ -174,7 +173,7 @@ export async function verifyHtml(
         /^Pages:\s+1$/mu.test(info.stdout) &&
         Math.abs(Number(size?.[1]) - 595.28) < 2 &&
         Math.abs(Number(size?.[2]) - 841.89) < 2,
-      printFacts: contains(print.stdout.replace(/\s+/gu, ' ')),
+      printFacts: containsHtmlFacts(print.stdout),
     };
   } finally {
     await context.close();

@@ -155,8 +155,8 @@ async function runScenario(prompt: string, answers: ReplyStep[]) {
   }
 }
 
-test('real SDK Stop feeds failed acceptance back once and verifies the corrected final answer', async () => {
-  const result = await runScenario('只回复 22', ['已经完成', '22']);
+test('real SDK Stop repairs a computed answer that violates the result-only format', async () => {
+  const result = await runScenario('只回复计算结果。8 加 14 等于多少？', ['8 + 14 = 22', '22']);
   assert.equal(result.run.status, 'completed', result.run.error ?? undefined);
   assert.equal(result.requests.length, 2);
   const [first, second] = result.receipts;

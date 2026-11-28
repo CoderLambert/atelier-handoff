@@ -294,7 +294,7 @@ export function buildInitialPrompt({
   const modeInstruction = native
     ? '本机信任。按当前登录用户权限直接使用原生工具。'
     : mode === 'readonly'
-      ? '只读；不允许项目写入或执行命令。'
+      ? '只读；不允许写入项目或执行命令。当本轮提供 publish_artifact 时，可用正文发布可下载文件。按用户要求的文件名发布，以成功回执确认交付。'
       : '受控修改；可通过本轮提供的 atelier 写入/编辑/删除/命令工具请求单次审批。';
   const skillDelivery =
     mode === 'readonly' && selectedSkill

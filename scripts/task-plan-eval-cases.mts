@@ -31,7 +31,12 @@ export const taskIds = [
 export type TaskId = (typeof taskIds)[number];
 
 const codes = ['ARC-604', 'ARC-718', 'ARC-832'];
-export const htmlFacts = ['Cedar Repair Day', '09:30 UTC', ...codes];
+const htmlFacts = ['Cedar Repair Day', '09:30 UTC', ...codes];
+export function containsHtmlFacts(text: string): boolean {
+  const visibleText = text.replace(/\s+/gu, ' ');
+  return htmlFacts.every((fact) => visibleText.includes(fact));
+}
+
 const trials = {
   html: {
     request:
@@ -117,14 +122,21 @@ function reportsNumber(answer: string, label: RegExp, expected: number) {
 function markdownPathEvidence(content: string, path: string) {
   const heading = /^\s*#{1,6}\s/u;
   const lines = content.split('\n');
-  return lines
-    .flatMap((line, index) => {
-      if (!line.includes(path)) return [];
-      if (!heading.test(line)) return [line];
-      const end = lines.findIndex((next, position) => position > index && heading.test(next));
-      return lines.slice(index, end < 0 ? undefined : end);
-    })
-    .join('\n');
+  const evidence = lines.flatMap((line, index) => {
+    if (!line.includes(path)) return [];
+    const cells = line.split('|').map((cell) => cell.trim());
+    const pathCell = cells.findIndex((cell) => cell.replace(/^`|`$/gu, '') === path);
+    const stateCell = pathCell >= 0 ? cells[pathCell + 1] : undefined;
+    if (stateCell) return [{ state: stateCell, text: line }];
+    if (!heading.test(line)) return [{ state: line, text: line }];
+    const end = lines.findIndex((next, position) => position > index && heading.test(next));
+    const section = lines.slice(index, end < 0 ? undefined : end).join('\n');
+    return [{ state: section, text: section }];
+  });
+  return {
+    state: evidence.map(({ state }) => state).join('\n'),
+    text: evidence.map(({ text }) => text).join('\n'),
+  };
 }
 
 export function gradePlan(task: TaskId, plan: Plan): Checks {
@@ -153,7 +165,8 @@ export function gradePlan(task: TaskId, plan: Plan): Checks {
       return {
         checklist,
         sourceAndArtifact: uses('source/event.md', 'handout.html'),
-        singleOfflineHtml: /单文件|单一/u.test(steps) && /离线|内嵌/u.test(steps),
+        singleOfflineHtml:
+          /单文件|单一/u.test(steps) && /离线|内嵌|无需外部资源|不依赖外部资源|无外链/u.test(steps),
         verifyAndDeliver: /375/u.test(verified) && /1440/u.test(verified) && a4.test(verified),
       };
     }
@@ -177,7 +190,9 @@ export function gradePlan(task: TaskId, plan: Plan): Checks {
       return {
         checklist,
         sourceAndArtifact: uses('release/notes.md', 'handoff.md'),
-        verifyPaths: uses('/status', '/export') && /核对|检查|验证|状态记录/u.test(steps),
+        verifyPaths:
+          uses('/status', '/export') &&
+          /核对|检查|验证|状态记录|查找[^。；\n]{0,80}证据/u.test(steps),
         removePdf: !steps
           .split(/[\n，。；,;]/u)
           .some(
@@ -233,12 +248,15 @@ export function gradeDelivery(
       const markdown = output['handoff.md'] ?? '';
       const status = markdownPathEvidence(markdown, '/status');
       const exported = markdownPathEvidence(markdown, '/export');
+      const accepted = /(?<!未)(?:已(?:走)?验收|已通过|验收通过)/u;
+      const pending = /(?:尚)?未(?:通过|验收|核对|确认|验证)|待(?:核实|确认|验证)/u;
       return {
         ...files,
-        knownPath: /已(?:走)?验收|已通过|验收通过/u.test(status) && !/未通过|未验收/u.test(status),
-        unknownPath:
-          /未核对|待核实|未确认|待确认|待验证/u.test(exported) &&
-          !/已通过|已(?:走)?验收/u.test(exported),
+        knownPath:
+          status.text.includes('GREEN-712') &&
+          accepted.test(status.state) &&
+          !pending.test(status.state),
+        unknownPath: pending.test(exported.state) && !accepted.test(exported.state),
         groundedDate: !/\b(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/u.test(markdown),
       };
     }

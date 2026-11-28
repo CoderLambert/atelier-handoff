@@ -1,7 +1,7 @@
 /**
  * @file Exercises the user-text boundary for run delivery checks.
- * @implementation Checks explicit deliverables, literal replies and viewport requirements against ambiguous and quoted requests.
- * @updated 2026-11-28T19:28:41+08:00
+ * @implementation Checks explicit deliverables, required passages, exact and computed replies, and HTML requirements against ambiguous or quoted requests.
+ * @updated 2026-11-28T22:19:17+08:00
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -116,7 +116,11 @@ test('literal reply differs from the instruction to compute or translate the rep
     '只回复计算结果。8 加 14 等于多少？',
     'Compute 8+14. Reply only with the result.',
   ]) {
-    assert.deepEqual(readAcceptanceCriteria(text), { replyOnly: true, artifacts: [] });
+    assert.deepEqual(readAcceptanceCriteria(text), {
+      replyOnly: true,
+      exactReply: '22',
+      artifacts: [],
+    });
   }
   for (const text of ['只在聊天中回复。', 'Reply in chat only.']) {
     assert.deepEqual(readAcceptanceCriteria(text), { replyOnly: true, artifacts: [] });
@@ -208,4 +212,25 @@ test('literal content is bound only to an explicitly requested text artifact', (
     '只回复 22。\nnotes.md 必须包含「记录」。',
   ])
     assert.deepEqual(readAcceptanceCriteria(prompt), none);
+});
+
+test('bounded arithmetic exact replies respect the requested format and abstain on ambiguity', () => {
+  for (const [request, result] of [
+    ['只回复计算结果。43 减 27 等于多少？', '16'],
+    ['Compute -5*7. Reply only with the result.', '-35'],
+    ['计算 72/9。只回复计算结果。', '8'],
+  ] as const) {
+    assert.equal(readAcceptanceCriteria(request).exactReply, result);
+  }
+  for (const request of [
+    '只回复计算结果。8 除 3 等于多少？',
+    '只回复计算结果。8 除 0 等于多少？',
+    '只回复计算结果。计算 99999999*99999999。',
+    '只回复计算结果。计算 8+14。计算 5+6。',
+    '只回复计算结果。计算 2+3*5。',
+    '只回复答案。计算 4+5。',
+    '只回复计算结果。假设计算 43-27。',
+  ]) {
+    assert.equal(readAcceptanceCriteria(request).exactReply, undefined, request);
+  }
 });

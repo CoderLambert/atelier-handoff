@@ -66,4 +66,13 @@ ATELIER_TASK_PLAN_OLLAMA_PORT=21437 node --import tsx scripts/task-planning-runt
   /path/to/baseline-worktree .local/task-planning/my-run
 ```
 
-每个样例保存清单、模型请求数、实际 token、端到端耗时、交付验收回执与原件。入口只连接本机 Ollama。请求来自实际执行过程，简单题的请求计数用于验证没有专用规划请求。运行时间包括执行、工具和工作台交付验收，外部评分在计时结束后执行。每个配对交替执行顺序，时间仍受模型缓存与本机负载影响。
+每个样例保存清单、模型请求数、实际 token、端到端耗时、交付验收回执与原件。默认连接本机 Ollama。请求来自实际执行过程，简单题的请求计数用于验证没有专用规划请求。运行时间包括执行、工具和工作台交付验收，外部评分在计时结束后执行。每个配对交替执行顺序，时间仍受模型缓存与本机负载影响。
+
+
+如需通过已认证的回环网关使用指定模型，用 `ATELIER_TASK_PLAN_GATEWAY` 指定地址，`ATELIER_TASK_PLAN_MODEL` 指定模型 ID，`ATELIER_TASK_PLAN_EFFORT` 指定推理档位。网关凭据如有需要通过 `ATELIER_TASK_PLAN_GATEWAY_TOKEN` 传入。发往网关的输入只含合成夹具。评测逐次核对 SDK 请求中的模型和档位，以及流式回执的模型，然后按同一评分器检查两版。
+
+```sh
+ATELIER_TASK_PLAN_GATEWAY=http://127.0.0.1:PORT \
+ATELIER_TASK_PLAN_MODEL=gpt-6.1-terra ATELIER_TASK_PLAN_EFFORT=high \
+  node --import tsx scripts/task-planning-runtime-eval.mts /path/to/baseline-worktree .local/task-planning/terra-result
+```

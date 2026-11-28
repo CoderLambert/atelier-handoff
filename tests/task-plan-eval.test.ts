@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gradeDelivery, gradePlan } from '../scripts/task-plan-eval-cases.mjs';
+import { containsHtmlFacts, gradeDelivery, gradePlan } from '../scripts/task-plan-eval-cases.mjs';
 
 test('an HTML plan names checks for all required scenarios before delivery', () => {
   const plan = {
@@ -81,4 +81,65 @@ test('a Markdown heading can bind status and evidence from its own section', () 
     ).groundedDate,
     false,
   );
+});
+
+test('a conflicting Markdown status fails even with a correct release-note summary', () => {
+  const path = 'handoff.md';
+  const content =
+    '| /status | 待核实 | 文件不存在 |\n- /status 已走验收，编号 GREEN-712。\n- /export 尚未核对。';
+  const grade = gradeDelivery(
+    'revision',
+    { reply: '', files: [{ path, content }] },
+    { [path]: content },
+  );
+  assert.equal(grade.knownPath, false);
+  assert.equal(grade.unknownPath, true);
+});
+
+test('HTML facts remain visible when a heading wraps or time uses a nonbreaking space', () => {
+  const text = 'Cedar\nRepair Day\n09:30\u00a0UTC\nARC-604\nARC-718\nARC-832';
+  assert.equal(containsHtmlFacts(text), true);
+  assert.equal(containsHtmlFacts(text.replace('ARC-832', 'ARC-833')), false);
+});
+
+test('an HTML plan can describe offline layout without using the word offline', () => {
+  const plan = {
+    kind: 'plan' as const,
+    reply: '',
+    steps: [
+      '读取 source/event.md。制作为无需外部资源的单文件 handout.html。',
+      '检查 375px、1440px 布局和单页 A4 打印。',
+      '交付 HTML 原件。',
+    ],
+  };
+  assert.equal(gradePlan('html', plan).singleOfflineHtml, true);
+});
+
+test('follow-up verification in a separate table column does not contradict the recorded state', () => {
+  const path = 'handoff.md';
+  const content = [
+    '| 路径 | 记录状态 | 后续核实 |',
+    '| --- | --- | --- |',
+    '| `/status` | 已走验收 | GREEN-712；待核实当前可用性。 |',
+    '| `/export` | 尚未核对 | 待核实 |',
+  ].join('\n');
+  const grade = gradeDelivery(
+    'revision',
+    { reply: '', files: [{ path, content }] },
+    { [path]: content },
+  );
+  assert.equal(grade.knownPath, true);
+  assert.equal(grade.unknownPath, true);
+});
+
+test('a revision plan can verify paths by locating evidence in the release record', () => {
+  const checks = gradePlan('revision', {
+    kind: 'plan',
+    reply: '',
+    steps: [
+      '读取 release/notes.md，查找 /status 和 /export 的证据。',
+      '发布 handoff.md，保留已确认和待核实的状态。',
+    ],
+  });
+  assert.equal(checks.verifyPaths, true);
 });

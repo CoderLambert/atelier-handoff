@@ -203,7 +203,7 @@ test('initial prompt preserves the controlled edit and readonly mode instruction
   );
   assert.equal(
     buildInitialPrompt({ ...promptDefaults, mode: 'readonly', selectedSkill: true }),
-    '本轮运行模式：只读；不允许项目写入或执行命令。\n\n本轮按所选技能交付用户要求的结果。设计、分析与文档任务先在对话中给出可独立使用的完整版本，再按需发布交付物。只做完成该结果所需的文件检查。对于可逆的设计选择，可说明假设并直接交付初稿。\n\n用户本轮任务：\n请总结',
+    '本轮运行模式：只读；不允许写入项目或执行命令。当本轮提供 publish_artifact 时，可用正文发布可下载文件。按用户要求的文件名发布，以成功回执确认交付。\n\n本轮按所选技能交付用户要求的结果。设计、分析与文档任务先在对话中给出可独立使用的完整版本，再按需发布交付物。只做完成该结果所需的文件检查。对于可逆的设计选择，可说明假设并直接交付初稿。\n\n用户本轮任务：\n请总结',
   );
 });
 

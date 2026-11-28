@@ -1,7 +1,7 @@
 /**
  * @file Reads explicit, mechanically checkable delivery requirements from a user's own instructions.
- * @implementation Recognizes a small affirmative grammar for handoffs, replies and HTML checks and abstains on ambiguous context.
- * @updated 2026-11-28T19:28:41+08:00
+ * @implementation Recognizes unambiguous handoffs, literal passages, exact or computed replies and HTML checks.
+ * @updated 2026-11-28T22:19:17+08:00
  */
 type HtmlCriteria = {
   name: string;
@@ -45,6 +45,30 @@ const arithmetic =
   /^(?:(?:compute|calculate|计算)\s*[\d\s+*/().-]+|[\d\s加减乘除+*/=.-]+等于多少[？?]?)$/i;
 const replyForm =
   /^(?:计算结果|结果|答案|结论|译文|文本|文字|一行文字|(?:the\s+)?(?:answer|result|translation|number)|(?:plain\s+)?text)$/i;
+
+const resultOnly = /^(?:计算结果|结果|(?:the\s+)?(?:result|number))$/i;
+const integerOperation =
+  /^(?:(?:compute|calculate|计算)\s*)?([+-]?\d{1,8})\s*(加|减|乘|除|[+*/-])\s*([+-]?\d{1,8})\s*(?:等于多少[？?]?)?$/i;
+
+function exactIntegerResult(expression: string): string | undefined {
+  const match = integerOperation.exec(expression);
+  if (!match) return undefined;
+  const [, left, operator, right] = match;
+  const x = Number(left);
+  const y = Number(right);
+  const results: Record<string, number> = {
+    '+': x + y,
+    加: x + y,
+    '-': x - y,
+    减: x - y,
+    '*': x * y,
+    乘: x * y,
+    '/': x / y,
+    除: x / y,
+  };
+  const result = operator ? results[operator] : undefined;
+  return result !== undefined && Number.isSafeInteger(result) ? String(result) : undefined;
+}
 
 function exactLiteral(payload: string): string | undefined {
   if (
@@ -170,6 +194,8 @@ export function readAcceptanceCriteria(text: string): AcceptanceCriteria {
   let singlePage = false;
   let requiresHtml = false;
   let replyOnly = false;
+  let wantsResultOnly = false;
+  let computedResult: string | undefined;
   for (const clause of clauses) {
     const delivery = clause.match(handoff);
     if (delivery) {
@@ -214,11 +240,18 @@ export function readAcceptanceCriteria(text: string): AcceptanceCriteria {
       continue;
     }
     const reply = clause.match(directReply);
-    if (chatOnly.test(clause) || (reply && replyForm.test(clause.slice(reply[0].length)))) {
+    const format = reply ? clause.slice(reply[0].length) : '';
+    if (chatOnly.test(clause) || replyForm.test(format)) {
       replyOnly = true;
+      wantsResultOnly ||= resultOnly.test(format);
       continue;
     }
-    if (sourceRead.test(clause) || arithmetic.test(clause)) continue;
+    const exact = exactIntegerResult(clause);
+    if (exact !== undefined || arithmetic.test(clause)) {
+      computedResult = exact;
+      continue;
+    }
+    if (sourceRead.test(clause)) continue;
     if (created.length && /^(?:保留|包含)[\p{L}\p{N}、 ]+$/u.test(clause)) continue;
     return none;
   }
@@ -230,7 +263,13 @@ export function readAcceptanceCriteria(text: string): AcceptanceCriteria {
     artifacts.add(referencedHtml);
   }
   if (replyOnly && (artifacts.size || requiresHtml || created.length)) return none;
-  const result: AcceptanceCriteria = { replyOnly, artifacts: [...artifacts] };
+  const result: AcceptanceCriteria = {
+    replyOnly,
+    artifacts: [...artifacts],
+    ...(wantsResultOnly && clauses.length === 2 && computedResult !== undefined
+      ? { exactReply: computedResult }
+      : {}),
+  };
   if (exclusive.length) {
     for (const group of exclusive) {
       const names = group === 'html' ? [referencedHtml] : group;

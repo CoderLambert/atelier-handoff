@@ -1,6 +1,6 @@
 /**
  * @file 配对评测两份工作树上的真实任务规划运行。
- * @implementation 将同一套合成夹具提交给真实 SDK 和本机 Ollama，记录模型请求、交付物及实际验收。
+ * @implementation 将同一套合成夹具提交给真实 SDK 和指定的回环模型网关，记录模型请求、交付物及实际验收。
  * @updated 2026-11-28T21:12:24+08:00
  */
 import assert from 'node:assert/strict';
@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import { z } from 'zod';
 import { acceptanceReceipt } from '../shared/run-acceptance.js';
+import { gatewayModelSchema, reasoningEfforts } from '../shared/models.js';
 import { snapshot, writeFixture } from './harness-eval.mjs';
 import {
   gradeDelivery,
@@ -39,28 +40,80 @@ assert.notEqual(candidate, baseline);
 const out = resolve(resultsPath);
 await mkdir(out);
 const tasks = z.array(z.enum(taskIds)).parse(taskList?.split(',') ?? taskIds);
-const model = 'qwen3.5:9b';
+const routedGateway = process.env.ATELIER_TASK_PLAN_GATEWAY;
+const gatewayToken = process.env.ATELIER_TASK_PLAN_GATEWAY_TOKEN;
+const requestedEffort = process.env.ATELIER_TASK_PLAN_EFFORT;
+const effort = requestedEffort ? z.enum(reasoningEfforts).parse(requestedEffort) : undefined;
+const model = gatewayModelSchema.shape.id.parse(
+  routedGateway ? process.env.ATELIER_TASK_PLAN_MODEL : 'qwen3.5:9b',
+);
 const port = z.coerce
   .number()
   .int()
   .min(1)
   .max(65535)
   .parse(process.env.ATELIER_TASK_PLAN_OLLAMA_PORT ?? 11434);
-const ollama = 'http://127.0.0.1:' + port;
-const metadata = z
-  .object({ models: z.array(z.object({ name: z.string(), digest: z.string(), size: z.number() })) })
-  .parse(await (await fetch(ollama + '/api/tags')).json());
-const installed = metadata.models.find(({ name, size }) => name === model && size > 1_000_000);
-assert.ok(installed, 'The installed qwen3.5:9b model is required');
-const version = await (await fetch(ollama + '/api/version')).json();
+const upstream = routedGateway ?? 'http://127.0.0.1:' + port;
+assert.match(
+  upstream,
+  /^http:\/\/127\.0\.0\.1:\d{1,5}$/u,
+  'The model gateway must be on loopback.',
+);
+assert.ok(!routedGateway || effort, 'Set ATELIER_TASK_PLAN_EFFORT for routed comparisons.');
+
+const gatewayHeaders: Record<string, string> = gatewayToken
+  ? { Authorization: 'Bearer ' + gatewayToken }
+  : {};
+async function describeUpstream() {
+  if (routedGateway) return { kind: 'routed', model, effort, upstream };
+  const metadata = z
+    .object({
+      models: z.array(z.object({ name: z.string(), digest: z.string(), size: z.number() })),
+    })
+    .parse(await (await fetch(upstream + '/api/tags', { redirect: 'error' })).json());
+  const installed = metadata.models.find(({ name, size }) => name === model && size > 1_000_000);
+  assert.ok(installed, 'The installed qwen3.5:9b model is required');
+  const version: unknown = await (
+    await fetch(upstream + '/api/version', { redirect: 'error' })
+  ).json();
+  return { kind: 'ollama', model, installed, version };
+}
+const modelSource = await describeUpstream();
 const entity = z.object({ id: z.uuid() });
 
-async function* responseChunks(body: NonNullable<Response['body']>) {
+type ModelRequest = {
+  model: string;
+  tools: string[];
+  messages: number;
+  effort?: string;
+  status?: number;
+  responseModel?: string;
+};
+
+const streamStart = z.object({
+  type: z.literal('message_start'),
+  message: z.object({ model: z.string() }),
+});
+
+async function* responseChunks(body: NonNullable<Response['body']>, request: ModelRequest) {
   const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
   try {
     for (;;) {
       const chunk = await reader.read();
       if (chunk.done) return;
+      if (routedGateway && !request.responseModel) {
+        const lines = (pending + decoder.decode(chunk.value, { stream: true })).split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:') || !line.includes('"message_start"')) continue;
+          const parsed = streamStart.parse(JSON.parse(line.slice(5)));
+          request.responseModel = parsed.message.model;
+          assert.equal(request.responseModel, model, 'Gateway returned a different model');
+          break;
+        }
+      }
       yield chunk.value;
     }
   } finally {
@@ -75,7 +128,7 @@ async function trial(root: string, task: TaskId, folder: string) {
   const projectPath = join(scratch, 'project');
   const fixture = makeTrial(task);
   await writeFixture(projectPath, fixture);
-  const requests: { model: string; tools: string[]; messages: number }[] = [];
+  const requests: ModelRequest[] = [];
   const errors: string[] = [];
   const gateway = createServer(async (req, res) => {
     if (req.method !== 'POST' || req.url?.split('?')[0] !== '/v1/messages') {
@@ -94,33 +147,43 @@ async function trial(root: string, task: TaskId, folder: string) {
             )
             .optional(),
           messages: z.array(z.unknown()),
+          output_config: z.looseObject({ effort: z.string().optional() }).optional(),
         })
         .parse(JSON.parse(raw));
-      requests.push({
+      const request: ModelRequest = {
         model,
+        effort: data.output_config?.effort,
         tools: (data.tools ?? []).map(({ name }) => name),
         messages: data.messages.length,
-      });
-      const response = await fetch(ollama + '/v1/messages', {
+      };
+      requests.push(request);
+      if (effort) assert.equal(request.effort, effort, 'SDK used a different reasoning effort');
+      const response = await fetch(upstream + '/v1/messages', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'anthropic-version': '2023-06-01',
-          'x-api-key': 'ollama',
+          ...(routedGateway ? gatewayHeaders : { 'x-api-key': 'ollama' }),
         },
-        body: JSON.stringify({
-          ...data,
-          temperature: 0,
-          max_tokens: 2400,
-          thinking: { type: 'disabled' },
-        }),
+        body: JSON.stringify(
+          routedGateway
+            ? data
+            : {
+                ...data,
+                temperature: 0,
+                max_tokens: 2400,
+                thinking: { type: 'disabled' },
+              },
+        ),
+        redirect: 'error',
         signal: AbortSignal.timeout(100_000),
       });
+      request.status = response.status;
       res.writeHead(response.status, {
         'content-type': response.headers.get('content-type') ?? 'application/json',
       });
       if (!response.body) return res.end();
-      await pipeline(Readable.from(responseChunks(response.body)), res);
+      await pipeline(Readable.from(responseChunks(response.body, request)), res);
     } catch (error) {
       errors.push(String(error));
       if (!res.headersSent) res.writeHead(502);
@@ -179,6 +242,7 @@ async function trial(root: string, task: TaskId, folder: string) {
         {
           text: fixture.request,
           mode: 'readonly',
+          effort,
           executionPreference: 'project-v1',
           idempotencyKey: randomUUID(),
         },
@@ -237,11 +301,19 @@ async function trial(root: string, task: TaskId, folder: string) {
     const report = {
       task,
       root,
-      installed,
-      version,
+      modelSource,
       elapsedMs,
       requests,
       errors,
+      modelVerified:
+        !routedGateway ||
+        (requests.length > 0 &&
+          requests.every(
+            (request) =>
+              request.status === 200 &&
+              request.responseModel === model &&
+              request.effort === effort,
+          )),
       planCalls,
       status: run.status,
       error: run.error,
@@ -278,11 +350,16 @@ try {
         task,
         join(out, `${task}-${variant}`),
       );
+      assert.ok(
+        report.modelVerified,
+        `Cannot verify ${model} ${effort ?? ''} for ${task}/${variant}; see receipt.json`,
+      );
       console.log(
         JSON.stringify({
           task,
           variant,
           status: report.status,
+          modelVerified: report.modelVerified,
           error: report.error,
           plan: report.planPass,
           delivery: report.deliveryPass,
