@@ -23,6 +23,7 @@ import { reasoningEfforts } from '@shared/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useAppConfig } from '@/use-query/settings/use-app-config';
 import { useGatewayModels } from '@/use-query/settings/use-gateway-models';
 import {
   Select,
@@ -128,7 +129,8 @@ export function ScheduleForm({
       task?.executionPreference === 'native-v1' ||
       Boolean(task?.model || task?.effort),
   );
-  const modelCatalog = useGatewayModels(true);
+  const config = useAppConfig();
+  const modelCatalog = useGatewayModels(advancedOpen);
 
   useEffect(() => {
     if (mode === 'create' && defaultProjectId) setProjectId(defaultProjectId);
@@ -219,8 +221,6 @@ export function ScheduleForm({
         timeZone: timeZone.trim() || defaultTimeZone(),
         targetMode,
         targetSessionId: targetMode === 'session' ? targetSessionId || null : null,
-        ...(normalizedModel ? { model: normalizedModel } : {}),
-        ...(normalizedEffort ? { effort: normalizedEffort } : {}),
         model: normalizedModel,
         effort: normalizedEffort,
         mode: permissionMode,
@@ -246,6 +246,8 @@ export function ScheduleForm({
             : targetMode === 'new'
               ? null
               : task.targetSessionId,
+        model: normalizedModel,
+        effort: normalizedEffort,
         mode: permissionMode,
         executionPreference: effectiveExecution,
         approvalMode,
@@ -282,14 +284,32 @@ export function ScheduleForm({
         ? t('mode.edit')
         : t('mode.readonly');
   const catalogModels = modelCatalog.data?.models ?? [];
-  const workspaceDefaultModel = modelCatalog.data?.defaultModel ?? '';
-  const effectiveModelId = model || workspaceDefaultModel;
+  const inheritedSessionId =
+    targetMode === 'session'
+      ? targetSessionId
+      : targetMode === 'new_once'
+        ? task?.targetSessionId
+        : null;
+  const sessionModel = projectSessions.find((item) => item.id === inheritedSessionId)?.draft.model;
+  const workspaceDefaultModel = config.data?.config.model ?? modelCatalog.data?.defaultModel ?? '';
+  const inheritedModel = sessionModel || workspaceDefaultModel;
+  const defaultModelLabel = sessionModel
+    ? t('fields.modelSessionDefault', { model: sessionModel })
+    : workspaceDefaultModel
+      ? t('fields.modelDefault', { model: workspaceDefaultModel })
+      : t('fields.modelDefaultPlain');
+  const effectiveModelId = model || inheritedModel;
   const currentRoute = catalogModels.find((entry) => entry.id === effectiveModelId);
   const fixedEffort = currentRoute?.effort;
   const supportedEfforts = reasoningEfforts.filter(
     (level) => !currentRoute?.supportedEfforts || currentRoute.supportedEfforts.includes(level),
   );
   const effortDisabled = fixedEffort !== undefined || supportedEfforts.length === 0;
+  const fixedLevel = reasoningEfforts.find((level) => level === fixedEffort);
+  const defaultEffortLabel =
+    fixedEffort === undefined
+      ? t('fields.effortDefault')
+      : t('fields.effortFixed', { effort: fixedLevel ? t(`effort.${fixedLevel}`) : fixedEffort });
   const modelSummary = model ? (currentRoute?.displayName ?? model) : null;
   const advancedSummary = [modelSummary, modeLabel, notifyLabel].filter(Boolean).join(' · ');
 
@@ -568,7 +588,7 @@ export function ScheduleForm({
                     const nextModel = value === DEFAULT_OPTION ? '' : value;
                     setModel(nextModel);
                     const nextRoute = catalogModels.find(
-                      (entry) => entry.id === (nextModel || workspaceDefaultModel),
+                      (entry) => entry.id === (nextModel || inheritedModel),
                     );
                     if (
                       nextRoute?.effort !== undefined ||
@@ -584,11 +604,7 @@ export function ScheduleForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" align="start">
-                    <SelectItem value={DEFAULT_OPTION}>
-                      {workspaceDefaultModel
-                        ? t('fields.modelDefault', { model: workspaceDefaultModel })
-                        : t('fields.modelDefaultPlain')}
-                    </SelectItem>
+                    <SelectItem value={DEFAULT_OPTION}>{defaultModelLabel}</SelectItem>
                     {model && !catalogModels.some((entry) => entry.id === model) ? (
                       <SelectItem value={model}>{model}</SelectItem>
                     ) : null}
@@ -604,7 +620,7 @@ export function ScheduleForm({
               <div className="schedules-field">
                 <span className="schedules-label">{t('fields.effort')}</span>
                 <Select
-                  value={effort || DEFAULT_OPTION}
+                  value={fixedEffort === undefined ? effort || DEFAULT_OPTION : DEFAULT_OPTION}
                   disabled={effortDisabled}
                   onValueChange={(value) =>
                     setEffort(value === DEFAULT_OPTION ? '' : (value as ReasoningEffort))
@@ -614,11 +630,10 @@ export function ScheduleForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" align="start">
-                    <SelectItem value={DEFAULT_OPTION}>
-                      {fixedEffort !== undefined
-                        ? t('fields.effortFixed', { effort: fixedEffort })
-                        : t('fields.effortDefault')}
-                    </SelectItem>
+                    <SelectItem value={DEFAULT_OPTION}>{defaultEffortLabel}</SelectItem>
+                    {effort && !supportedEfforts.includes(effort) ? (
+                      <SelectItem value={effort}>{t(`effort.${effort}`)}</SelectItem>
+                    ) : null}
                     {supportedEfforts.map((level) => (
                       <SelectItem key={level} value={level}>
                         {t(`effort.${level}`)}

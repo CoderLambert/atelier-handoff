@@ -2,6 +2,12 @@
 
 以[路线图](roadmap.md)为阶段索引，以[设计](design.md)为范围和决策依据。每项完成记录填写阶段、变更、验收命令、工件或证据路径、已知限制和回退步骤。状态使用待实施、进行中、已验证、阻塞。完整功能验收后在该段加入简短的「开发过程 review」，记录可合并的任务、可复用的测试证据或可提前结束的排查，并写明下一轮调整。
 
+## 2026-11-28 · 自动化任务模型配置同步（已验证）
+
+- 编辑规则时提交模型和推理强度，清除覆盖时提交 `null`。表单按运行时的顺序显示任务覆盖、目标会话模型或工作台默认。推理强度显示已保存的值、路由固定值或自动模式。
+- `npm run check`、`npm run build` 与 `npm run build:desktop` 通过。隔离 Wayland Electron 使用回环目录验证中英文界面的继承、切换、保存、重载和清除覆盖。Node 24 前端测试 184 通过、1 跳过。后端 927 通过、6 跳过，HTTP 路径测试期望 403 实得 400，已在变更前的 HEAD 独立复现。验证日志在本地 `.local/schedule-model-verification/`。实际工作台已用原数据目录重新启动。
+- 回退时撤销表单及其双语词条改动，重建前端并重新打开桌面。已有任务的模型字段沿用当前数据库格式。开发过程 review：先核对表单的保存请求和运行时回退顺序，再用一次桌面流程覆盖两个界面语言及持久化。
+
 ## 2026-11-27 · 机械护栏收紧与 `query-legacy.json` 清零（已验证）
 
 - **`query-legacy.json` 彻底清零**：将最后 3 个遗留文件（`frontend/src/features/agents/{api,editor,index}.tsx`）的数据请求与强刷逻辑迁入 `frontend/src/use-query/agents/`（`keys.ts`、`use-agents.ts`、`use-agent-mutation.ts`、`use-start-agent-session.ts`），并在 `frontend/src/use-query/extensions/use-extensions.ts` 增加 `useFetchFreshExtensions`；将 `scripts/query-legacy.json` 清空为 `{}`，`npm run check:query` 确认 **0 legacy files tracked for migration**。
