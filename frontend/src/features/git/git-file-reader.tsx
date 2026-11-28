@@ -47,6 +47,7 @@ import {
 } from './git-file-search';
 import type { GitOpenFile } from './git-open-file';
 import { readGitCodeSelection, type QuoteGitCode } from './git-code-selection';
+import { Input } from '@/components/ui/input';
 
 export type GitReaderScroll = { left: number; top: number };
 
@@ -605,7 +606,7 @@ export function GitFileReader({
         <div className="git-reader-search" role="search" aria-label={t('diff.searchFile')}>
           <div className="git-reader-search-box">
             <Search className="git-reader-search-icon" aria-hidden="true" />
-            <input
+            <Input
               ref={searchInputRef}
               type="search"
               className="git-reader-search-input"

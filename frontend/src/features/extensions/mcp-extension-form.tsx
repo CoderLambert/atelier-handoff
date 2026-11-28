@@ -33,6 +33,8 @@ import { extensionDetail } from './api';
 import { ActionButton, ErrorMessage, FeatureDialog, Field } from './components';
 import { mcpChatOptions } from './mcp-sharing';
 import { parseExtensionPayload, parseJsonStringArray } from './validation';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function McpExtensionForm({
   projectId,
@@ -269,7 +271,7 @@ export function McpExtensionForm({
         <fieldset className="ext-editor-fields" disabled={busy}>
           <div className="ext-field-pair">
             <Field label={t('common.name')} help={t('extensionEditor.mcpNameHelp')}>
-              <input
+              <Input
                 autoFocus
                 required
                 maxLength={EXTENSION_NAME_MAX}
@@ -284,7 +286,7 @@ export function McpExtensionForm({
             </label>
           </div>
           <Field label={t('common.description')}>
-            <textarea
+            <Textarea
               rows={2}
               maxLength={EXTENSION_DESCRIPTION_MAX}
               value={description}
@@ -340,7 +342,7 @@ export function McpExtensionForm({
           {transportType === 'http' ? (
             <>
               <Field label={t('extensionEditor.serviceUrl')}>
-                <input
+                <Input
                   type="url"
                   required
                   maxLength={EXTENSION_URL_MAX}
@@ -351,7 +353,7 @@ export function McpExtensionForm({
                 />
               </Field>
               <Field label={t('extensionEditor.tokenEnv')} help={t('extensionEditor.tokenEnvHelp')}>
-                <input
+                <Input
                   maxLength={EXTENSION_ENV_NAME_MAX}
                   pattern="[A-Z_][A-Z0-9_]*"
                   autoComplete="off"
@@ -363,7 +365,7 @@ export function McpExtensionForm({
           ) : (
             <>
               <Field label={t('extensionEditor.command')}>
-                <input
+                <Input
                   required
                   maxLength={EXTENSION_COMMAND_MAX}
                   spellCheck={false}
@@ -373,7 +375,7 @@ export function McpExtensionForm({
                 />
               </Field>
               <Field label={t('extensionEditor.args')}>
-                <textarea
+                <Textarea
                   className="ext-code-input"
                   rows={3}
                   spellCheck={false}
@@ -394,7 +396,7 @@ export function McpExtensionForm({
                 </span>
               </label>
               <Field label={t('extensionEditor.envNames')} help={t('extensionEditor.envHelp')}>
-                <textarea
+                <Textarea
                   className="ext-code-input"
                   rows={3}
                   spellCheck={false}

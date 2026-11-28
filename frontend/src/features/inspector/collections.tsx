@@ -24,6 +24,7 @@ import {
   statusLabel,
   errorMessage,
 } from './shared';
+import { Input } from '@/components/ui/input';
 
 export type CollectionsProps = {
   view: 'runs' | 'artifacts';
@@ -175,7 +176,7 @@ function CollectionView({ view, projects, onOpenRun, sessionId }: CollectionsPro
         {!sessionId ? (
           <label className="grid min-w-40 flex-[1.5] gap-2 text-[11px] font-medium text-muted-foreground">
             {t('collections.sessionId')}
-            <input
+            <Input
               className={fieldClass}
               value={sessionInput}
               onChange={(event) => setSessionInput(event.target.value)}

@@ -30,6 +30,7 @@ import {
   type PublicEntry,
   type StartSkill,
 } from './api';
+import { Input } from '@/components/ui/input';
 
 export function PublicImport({
   projectId,
@@ -241,7 +242,7 @@ export function PublicImport({
               kind === 'mcp' ? t('publicImport.registrySource') : t('publicImport.githubSource')
             }
           >
-            <input
+            <Input
               autoFocus
               readOnly={Boolean(updating)}
               required

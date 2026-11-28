@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { useUiTranslation } from '@/i18n';
 import { getDesktopGitBridge } from '@/desktop-git';
+import { Input } from '@/components/ui/input';
 
 // Git 分支名称合法性校验规则
 const INVALID_BRANCH_CHARS = /[~^:?*\[\\ ]|@{|\.\.|\/\/|^[/.]|[/.]\z|\.lock$/;
@@ -114,7 +115,7 @@ export function GitCreateBranchModal({
               <label htmlFor="git-new-branch-name" className="block text-xs font-medium mb-1">
                 {t('branch.nameLabel')}
               </label>
-              <input
+              <Input
                 id="git-new-branch-name"
                 type="text"
                 autoFocus
@@ -234,7 +235,7 @@ export function GitRenameBranchModal({
             <label htmlFor="git-rename-branch-input" className="block text-xs font-medium mb-1">
               {t('branch.renameNewName')}
             </label>
-            <input
+            <Input
               id="git-rename-branch-input"
               type="text"
               autoFocus

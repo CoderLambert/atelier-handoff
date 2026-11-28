@@ -24,6 +24,7 @@ import {
   type CopyFeedback,
   type MessageDraftAction,
 } from './message-actions-model';
+import { Textarea } from '@/components/ui/textarea';
 
 export {
   hasMessageForkAnchor,
@@ -171,7 +172,7 @@ export function MessageActions({
       {feedback?.status === 'error' ? (
         <div className="message-copy-fallback">
           <p role="alert">{t('message.copyFailed')}</p>
-          <textarea
+          <Textarea
             aria-label={assistant ? t('message.markdownToCopy') : t('message.textToCopy')}
             readOnly
             rows={3}

@@ -29,6 +29,7 @@ import { GitBranchItem } from './git-branch-item';
 import { GitHeadCard } from './git-head-card';
 import { useHoverCard } from './use-hover-card';
 import { GitBranchHoverCard } from './git-branch-hover-card';
+import { Input } from '@/components/ui/input';
 
 interface HoveredBranchData {
   branch: GitBranch;
@@ -266,7 +267,7 @@ export function GitBranchSidebar({
       <div className="git-branch-search-box">
         <div className="git-search-input-wrapper">
           <Search className="git-search-icon" aria-hidden="true" />
-          <input
+          <Input
             type="text"
             className="git-branch-search-input"
             placeholder={t('branch.searchPlaceholder')}

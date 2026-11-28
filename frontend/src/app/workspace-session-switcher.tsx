@@ -17,6 +17,7 @@ import {
 import { useUiTranslation } from '@/i18n';
 import { sessionSwitchItems } from './session-switcher-model';
 import './workspace-shortcuts.css';
+import { Input } from '@/components/ui/input';
 
 export function WorkspaceSessionSwitcher({
   open,
@@ -102,7 +103,7 @@ export function WorkspaceSessionSwitcher({
         </DialogHeader>
         <div className="workspace-switcher-search">
           <Search aria-hidden="true" />
-          <input
+          <Input
             ref={input}
             type="search"
             role="combobox"

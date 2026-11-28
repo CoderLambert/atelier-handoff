@@ -7,6 +7,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
 import type { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
+import { Textarea } from '@/components/ui/textarea';
 
 export function GitMultiCommitConversation({
   review,
@@ -138,7 +139,7 @@ export function GitMultiCommitConversation({
         }}
       >
         <label htmlFor={field}>{t('multi.conversation.input')}</label>
-        <textarea
+        <Textarea
           id={field}
           rows={2}
           maxLength={2000}

@@ -12,7 +12,14 @@ import * as t from '@babel/types';
 import postcss from 'postcss';
 
 interface Violation {
-  rule: 'color' | 'legacy-control' | 'icon-label' | 'motion-import' | 'scrollbar' | 'focus-outline';
+  rule:
+    | 'color'
+    | 'legacy-control'
+    | 'icon-label'
+    | 'motion-import'
+    | 'scrollbar'
+    | 'focus-outline'
+    | 'raw-control';
   detail: string;
   line: number;
 }
@@ -21,6 +28,7 @@ const paletteClass =
   /(?:^|:)(?:bg|text|border(?:-[trblxyse])?|ring|outline|fill|stroke|from|via|to|accent|divide|decoration|caret)-(?:black|white|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3})(?:[/!]|$)/;
 const hexColor = /#[\da-f]{3,8}\b/i;
 const colorFunction = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(\s*[\d.+-]/i;
+const allowedNativeInputTypes = new Set(['file', 'checkbox', 'radio', 'hidden', 'range', 'color']);
 const oldControlClass = /^(?:btn(?:-(?:primary|secondary|ghost|danger))?|icon-button)$/;
 const literal = (value: t.Node | null | undefined) =>
   t.isStringLiteral(value) ? value.value : undefined;
@@ -39,7 +47,7 @@ function checkClasses(value: string, line: number, violations: Violation[]) {
   }
 }
 
-function checkTsx(source: string): Violation[] {
+function checkTsx(source: string, file = ''): Violation[] {
   const tree = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
   const buttons = new Set<string>();
   const violations: Violation[] = [];
@@ -80,6 +88,21 @@ function checkTsx(source: string): Violation[] {
         if (t.isStringLiteral(part)) checkClasses(part.value, line, violations);
         if (t.isTemplateElement(part)) checkClasses(part.value.raw, line, violations);
       });
+    }
+    if (!file.startsWith('components/ui/') && t.isJSXIdentifier(node.name)) {
+      const tag = node.name.name;
+      if (tag === 'textarea' || tag === 'select') {
+        violations.push({ rule: 'raw-control', detail: `<${tag}>`, line });
+      } else if (tag === 'input') {
+        const inputType = literal(attributes.get('type'))?.toLowerCase();
+        if (!inputType || !allowedNativeInputTypes.has(inputType)) {
+          violations.push({
+            rule: 'raw-control',
+            detail: `<input type="${inputType ?? 'text'}">`,
+            line,
+          });
+        }
+      }
     }
     const size = literal(attributes.get('size'));
     if (
@@ -172,6 +195,14 @@ if (process.argv.includes('--self-test')) {
     checkCss('.item:focus-visible { outline: 2px solid var(--ui-ring); }', 'feature.css')[0]?.rule,
     'focus-outline',
   );
+  assert.deepEqual(
+    checkTsx(
+      `const a = <input type="text" />; const b = <textarea />; const c = <input type="checkbox" />;`,
+      'features/demo.tsx',
+    ).map(({ rule }) => rule),
+    ['raw-control', 'raw-control'],
+  );
+  assert.equal(checkTsx(`const a = <input />;`, 'components/ui/input.tsx').length, 0);
 } else {
   const root = fileURLToPath(new URL('../frontend/src/', import.meta.url));
   const errors: string[] = [];
@@ -181,7 +212,7 @@ if (process.argv.includes('--self-test')) {
     const path = join(entry.parentPath, entry.name);
     const file = relative(root, path).replaceAll('\\', '/');
     const source = await readFile(path, 'utf8');
-    const violations = file.endsWith('.css') ? checkCss(source, file) : checkTsx(source);
+    const violations = file.endsWith('.css') ? checkCss(source, file) : checkTsx(source, file);
     for (const { rule, detail, line } of violations)
       errors.push(`${file}:${line} ${rule}: ${detail}`);
   }

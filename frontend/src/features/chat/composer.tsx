@@ -32,6 +32,7 @@ import {
   type AttachmentActionError,
   type DraftChange,
 } from './hooks/use-composer-attachments';
+import { Textarea } from '@/components/ui/textarea';
 
 export type { DraftChange } from './hooks/use-composer-attachments';
 type ComposerError =
@@ -321,7 +322,7 @@ export function Composer({
           disabled={archived || submitting}
           onRemoveQuote={onRemoveQuote}
         />
-        <textarea
+        <Textarea
           ref={bindInput}
           id="prompt-input"
           rows={1}

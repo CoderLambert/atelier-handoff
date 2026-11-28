@@ -25,6 +25,7 @@ import { useShortcutCommandLabels } from './commands';
 import { shortcutPlatform } from './shortcut-host';
 import { createShortcutKeyGuard } from './shortcut-interaction';
 import './shortcuts.css';
+import { Input } from '@/components/ui/input';
 
 const modifierCodes = new Set([
   'ControlLeft',
@@ -271,7 +272,7 @@ export function ShortcutSettings() {
                         </td>
                         <td>
                           {id !== 'shortcuts.navigator' ? (
-                            <input
+                            <Input
                               className="field shortcut-nav-input"
                               type="text"
                               maxLength={1}

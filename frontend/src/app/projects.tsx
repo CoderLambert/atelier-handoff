@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import type { Project } from '@shared/types';
 import { translateError, useUiTranslation } from '@/i18n';
+import { Input } from '@/components/ui/input';
 
 export function ProjectsDialog({
   open,
@@ -75,7 +76,7 @@ export function ProjectsDialog({
           }}
         >
           <label htmlFor="project-path">{t('projects.localDirectory')}</label>
-          <input
+          <Input
             id="project-path"
             className="field"
             placeholder={t('projects.pathPlaceholder')}

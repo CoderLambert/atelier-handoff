@@ -19,6 +19,7 @@ import { useRestoreWorktree } from '@/use-query/sessions/use-restore-worktree';
 import type { GitSessionWorkspace } from '@shared/git-workbench';
 import type { Session } from '@shared/types';
 import './git.css';
+import { Input } from '@/components/ui/input';
 
 export function SessionWorktree({
   session,
@@ -132,7 +133,7 @@ export function SessionWorktree({
             {requireBranch ? (
               <label className="git-field">
                 {t('create.branch')}
-                <input
+                <Input
                   className="field"
                   value={name}
                   required

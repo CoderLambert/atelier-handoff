@@ -17,6 +17,7 @@ import {
 import { useUiTranslation } from '@/i18n';
 import type { GitStashItem } from '@shared/desktop-git';
 import { getDesktopGitBridge } from '@/desktop-git';
+import { Input } from '@/components/ui/input';
 
 export interface GitStashPanelProps {
   cwd?: string;
@@ -246,7 +247,7 @@ export function GitStashPanel({ cwd, onRefreshAll, showToast }: GitStashPanelPro
           </DialogHeader>
 
           <div className="py-3">
-            <input
+            <Input
               type="text"
               autoFocus
               value={stashMsg}

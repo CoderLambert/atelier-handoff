@@ -21,6 +21,7 @@ import { useWorkspaceCache } from '@/use-query/workspace/use-workspace-cache';
 import { deleteDraft } from './drafts';
 import type { SessionAction } from './types';
 import { selectSessionAfterDelete } from './workspace-state';
+import { Input } from '@/components/ui/input';
 
 const sessionActions = {
   rename: 'session.rename',
@@ -137,7 +138,7 @@ export function SessionManagementController({
         {request?.type === 'rename' ? (
           <label className="grid gap-2">
             {t('session.name')}
-            <input
+            <Input
               className="field"
               value={title}
               maxLength={160}

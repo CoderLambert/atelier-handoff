@@ -17,6 +17,7 @@ import {
   type StartSkill,
 } from './api';
 import { ActionButton, ErrorMessage, MarketCategoryIcon, MarkdownPreview } from './components';
+import { Input } from '@/components/ui/input';
 
 const categoryLabels: Record<string, string> = {
   get 'dev-programming'() {
@@ -180,7 +181,7 @@ export function SkillHubMarket({
       <form className="skillhub-search" onSubmit={search} hidden={Boolean(selected)}>
         <label className="ext-search">
           <Search aria-hidden="true" />
-          <input
+          <Input
             type="search"
             name="q"
             autoComplete="off"

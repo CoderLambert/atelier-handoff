@@ -18,6 +18,8 @@ import {
 import { translateError, useUiTranslation } from '@/i18n';
 import { GitFileLabel } from './git-file-label';
 import type { useGitCommitReview } from './hooks/use-git-commit-review';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function GitCommitDialog({
   review,
@@ -134,7 +136,7 @@ export function GitCommitDialog({
               <div className="git-commit-editor">
                 <div className="git-field">
                   <label htmlFor={fields + '-title'}>{t('commit.title')}</label>
-                  <input
+                  <Input
                     id={fields + '-title'}
                     maxLength={240}
                     value={review.title}
@@ -146,7 +148,7 @@ export function GitCommitDialog({
                 </div>
                 <div className="git-field">
                   <label htmlFor={fields + '-body'}>{t('commit.body')}</label>
-                  <textarea
+                  <Textarea
                     id={fields + '-body'}
                     maxLength={8000}
                     rows={6}

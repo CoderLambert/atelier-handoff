@@ -639,8 +639,10 @@
   color: var(--ui-muted-foreground);
 }
 
-.chat-composer .composer-box textarea:focus {
+.chat-composer .composer-box textarea:focus,
+.chat-composer .composer-box textarea:focus-visible {
   outline: 0;
+  box-shadow: none;
 }
 
 .chat-composer textarea:disabled {

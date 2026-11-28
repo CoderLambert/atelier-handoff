@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { useUiTranslation } from '@/i18n';
 import { getDesktopGitBridge } from '@/desktop-git';
+import { Textarea } from '@/components/ui/textarea';
 
 export interface GitCommitAreaProps {
   cwd?: string;
@@ -123,7 +124,7 @@ export function GitCommitArea({
 
   return (
     <div className="shrink-0 p-3 border-t border-border bg-card/60 space-y-2">
-      <textarea
+      <Textarea
         rows={3}
         value={message}
         disabled={disabled || loading}

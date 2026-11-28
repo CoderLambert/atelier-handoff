@@ -7,6 +7,7 @@ import { memo, type RefObject } from 'react';
 import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
+import { Input } from '@/components/ui/input';
 
 export const SidebarSearchBar = memo(function SidebarSearchBar({
   inputRef,
@@ -25,7 +26,7 @@ export const SidebarSearchBar = memo(function SidebarSearchBar({
       <label className="sidebar-search">
         <span className="sr-only">{t('sidebar.search')}</span>
         <Search aria-hidden="true" />
-        <input
+        <Input
           ref={inputRef}
           className="field w-full"
           type="search"

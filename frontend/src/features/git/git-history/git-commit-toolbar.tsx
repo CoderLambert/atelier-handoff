@@ -7,6 +7,7 @@ import { OptionsSelect } from '@/components/options-select';
 import { memo } from 'react';
 import { Search, X } from 'lucide-react';
 import { useUiTranslation } from '@/i18n';
+import { Input } from '@/components/ui/input';
 
 export interface GitCommitToolbarProps {
   currentBranchName: string;
@@ -43,7 +44,7 @@ export const GitCommitToolbar = memo(function GitCommitToolbar({
         {/* 关键词搜索框 */}
         <div className="git-commit-search-wrapper">
           <Search className="git-search-icon" aria-hidden="true" />
-          <input
+          <Input
             type="text"
             className="git-commit-search-input"
             placeholder={t('history.searchPlaceholder')}

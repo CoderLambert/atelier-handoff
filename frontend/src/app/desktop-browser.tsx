@@ -24,6 +24,7 @@ import type {
   DesktopBrowserAction as BrowserAction,
   DesktopBrowserState as DesktopState,
 } from '@shared/desktop-browser';
+import { Input } from '@/components/ui/input';
 
 export function useDesktopBrowser(projectId: string | undefined) {
   const [state, setState] = useState<DesktopState>();
@@ -332,7 +333,7 @@ export function DesktopBrowser({
         >
           <RotateCw data-icon="inline-start" aria-hidden="true" />
         </Button>
-        <input
+        <Input
           aria-label={t('navigation.address')}
           title={address || undefined}
           placeholder={t('navigation.placeholder')}

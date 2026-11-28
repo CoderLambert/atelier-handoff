@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/components/ui/utils';
 import { OptionsSelect, type SelectOption } from './options-select';
+import { Input } from './ui/input';
 
 export function CatalogProjectSelect({
   label,
@@ -77,7 +78,7 @@ export function CatalogToolbar({
     >
       <label className="flex h-9 min-w-0 basis-44 grow items-center gap-2 rounded-md border border-input bg-background px-3 text-muted-foreground focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring min-[761px]:max-w-85">
         <Search className="size-4 shrink-0" aria-hidden="true" />
-        <input
+        <Input
           type="search"
           aria-label={search.label}
           placeholder={search.placeholder}

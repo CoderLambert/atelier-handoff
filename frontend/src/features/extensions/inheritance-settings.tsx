@@ -18,6 +18,7 @@ import {
   SkillPolicySelect,
 } from './inheritance-controls';
 import './inheritance.css';
+import { Input } from '@/components/ui/input';
 
 export function GlobalSkillInheritance() {
   const { t } = useUiTranslation('extensions');
@@ -76,7 +77,7 @@ export function GlobalSkillInheritance() {
               {t('inheritance.hostCatalog')}
             </h2>
             {items.length ? (
-              <input
+              <Input
                 type="search"
                 className="h-8 w-64 max-w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 aria-label={t('inheritance.hostSearch')}

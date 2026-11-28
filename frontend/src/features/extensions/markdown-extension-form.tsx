@@ -27,6 +27,8 @@ import {
 import { ActionButton, ErrorMessage, FeatureDialog, Field, MarkdownPreview } from './components';
 import { SkillToolBindingsDialog } from './tool-bindings';
 import { parseExtensionPayload } from './validation';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function deriveMarkdownExtensionName(filename: string): string {
   const stem = filename.replace(/\.(md|markdown)$/i, '').toLowerCase();
@@ -166,7 +168,7 @@ export function MarkdownExtensionForm({
         <fieldset className="ext-editor-fields" disabled={busy}>
           <div className="ext-field-pair">
             <Field label={t('common.name')} help={t('extensionEditor.markdownNameHelp')}>
-              <input
+              <Input
                 autoFocus
                 required
                 maxLength={EXTENSION_NAME_MAX}
@@ -198,7 +200,7 @@ export function MarkdownExtensionForm({
             </section>
           ) : null}
           <Field label={t('common.description')}>
-            <textarea
+            <Textarea
               rows={2}
               maxLength={EXTENSION_DESCRIPTION_MAX}
               value={description}
@@ -206,7 +208,7 @@ export function MarkdownExtensionForm({
             />
           </Field>
           <Field label={t('common.source')}>
-            <input
+            <Input
               maxLength={EXTENSION_SOURCE_MAX}
               value={source}
               onChange={(event) => setSource(event.target.value)}
@@ -229,7 +231,7 @@ export function MarkdownExtensionForm({
               />
             </label>
           </div>
-          <textarea
+          <Textarea
             className="ext-code-input ext-body-input"
             rows={12}
             required

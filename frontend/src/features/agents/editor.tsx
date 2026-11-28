@@ -23,6 +23,8 @@ import {
 } from './api';
 import { AgentDialog, AgentProblems } from './components';
 import { AgentDependencies } from './dependencies';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function AgentEditor({
   projectId,
@@ -206,7 +208,7 @@ export function AgentEditor({
                     {t('agentEditor.nameLabel') + ' '}
                     <span aria-hidden="true">*</span>
                   </span>
-                  <input
+                  <Input
                     required
                     value={config.name}
                     placeholder={t('agentEditor.namePlaceholder')}
@@ -215,7 +217,7 @@ export function AgentEditor({
                 </label>
                 <label className="agent-field">
                   <span>{t('agentEditor.introLabel')}</span>
-                  <input
+                  <Input
                     value={config.description}
                     placeholder={t('agentEditor.introPlaceholder')}
                     onChange={(event) => change({ ...config, description: event.target.value })}
@@ -227,7 +229,7 @@ export function AgentEditor({
                   {t('agentEditor.instructionsLabel') + ' '}
                   <span aria-hidden="true">*</span>
                 </span>
-                <textarea
+                <Textarea
                   required
                   rows={7}
                   value={config.instructions}
@@ -243,7 +245,7 @@ export function AgentEditor({
               <div className="agent-starters">
                 {config.starters.map((starter, index) => (
                   <div className="agent-starter" key={index}>
-                    <input
+                    <Input
                       aria-label={t('agentEditor.starterLabel', { number: index + 1 })}
                       value={starter}
                       placeholder={t('agentEditor.starterPlaceholder')}

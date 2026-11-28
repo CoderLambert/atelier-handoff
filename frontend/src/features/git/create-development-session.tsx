@@ -22,6 +22,7 @@ import {
   type GitBranch,
   type GitCheckoutMode,
 } from '@shared/git-workbench';
+import { Input } from '@/components/ui/input';
 
 export function CreateDevelopmentSession({
   projectId,
@@ -121,7 +122,7 @@ export function CreateDevelopmentSession({
         <>
           <label className="git-field">
             {t('create.branch')}
-            <input
+            <Input
               className="field"
               required
               maxLength={240}
@@ -154,7 +155,7 @@ export function CreateDevelopmentSession({
           {base === 'commit' && (
             <label className="git-field">
               {t('create.oid')}
-              <input
+              <Input
                 className="field"
                 value={commit}
                 required

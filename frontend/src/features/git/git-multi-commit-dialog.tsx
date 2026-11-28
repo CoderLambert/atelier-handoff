@@ -22,6 +22,7 @@ import { GitMultiCommitModelPicker } from './git-multi-commit-model-picker';
 import { GitMultiCommitConversation } from './git-multi-commit-conversation';
 import { GitMultiCommitEditor } from './git-multi-commit-editor';
 import type { useGitMultiCommitReview } from './hooks/use-git-multi-commit-review';
+import { Textarea } from '@/components/ui/textarea';
 
 export function GitMultiCommitDialog({
   review,
@@ -284,7 +285,7 @@ export function GitMultiCommitDialog({
                   {!review.canResume ? (
                     <label className="git-commit-conversation-input">
                       {t('multi.conversation.initial')}
-                      <textarea
+                      <Textarea
                         rows={2}
                         maxLength={2000}
                         value={review.instruction}

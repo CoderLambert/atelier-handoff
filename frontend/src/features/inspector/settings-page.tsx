@@ -51,6 +51,7 @@ import {
 import { ShortcutSettings } from '@/features/shortcuts';
 import type { SettingsSection } from '@/app/types';
 import './settings-page.css';
+import { Input } from '@/components/ui/input';
 
 export type { SettingsSection } from '@/app/types';
 
@@ -496,7 +497,7 @@ function SettingsForm({ initial, active }: { initial: ConfigInfo; active: boolea
                 <label htmlFor={`${id}-gateway`}>{t('settings.gatewayAddress')}</label>
                 <p id={`${id}-gateway-help`}>{t('settings.gatewayAddressHint')}</p>
               </div>
-              <input
+              <Input
                 id={`${id}-gateway`}
                 className="field settings-input"
                 autoComplete="url"
@@ -541,7 +542,7 @@ function SettingsForm({ initial, active }: { initial: ConfigInfo; active: boolea
             </div>
             <div className="settings-field-control">
               {manualEntry ? (
-                <input
+                <Input
                   id={`${id}-model`}
                   className="field settings-input"
                   required
@@ -692,7 +693,7 @@ function SettingsForm({ initial, active }: { initial: ConfigInfo; active: boolea
             <div className="settings-number-fields">
               <label className="settings-number-field" data-invalid={validation?.field === 'turns'}>
                 {t('settings.maxTurns')}
-                <input
+                <Input
                   type="number"
                   required
                   min={1}
@@ -717,7 +718,7 @@ function SettingsForm({ initial, active }: { initial: ConfigInfo; active: boolea
                 data-invalid={validation?.field === 'timeout'}
               >
                 {t('settings.timeout')}
-                <input
+                <Input
                   type="number"
                   required
                   min={10000}

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { useUiTranslation } from '@/i18n';
 import { MAX_MULTI_COMMIT_GROUPS } from '@shared/git-multi-commit';
 import type { GitMultiCommitGroup } from './git-multi-commit-types';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function GitMultiCommitGroupList({
   fieldsPrefix,
@@ -145,7 +147,7 @@ export function GitMultiCommitGroupList({
             data-invalid={!activeGroup.title.trim() || undefined}
           >
             <label htmlFor={fieldsPrefix + '-title'}>{t('commit.title')}</label>
-            <input
+            <Input
               id={fieldsPrefix + '-title'}
               value={activeGroup.title}
               placeholder={t('commit.titlePlaceholder')}
@@ -165,7 +167,7 @@ export function GitMultiCommitGroupList({
           </div>
           <div className="git-multi-commit-field" data-disabled={locked || undefined}>
             <label htmlFor={fieldsPrefix + '-body'}>{t('commit.body')}</label>
-            <textarea
+            <Textarea
               id={fieldsPrefix + '-body'}
               rows={5}
               value={activeGroup.body}

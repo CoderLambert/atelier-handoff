@@ -18,6 +18,7 @@ import {
   paneWidthsSchema,
   type WorkspaceLayout,
 } from '@shared/workspace-layout';
+import { Input } from '@/components/ui/input';
 
 export interface WorkspaceLayoutFormProps {
   layout: WorkspaceLayout;
@@ -70,7 +71,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
               {t('layout.navigationRange', { min: minNavigationWidth, max: maxNavigationWidth })}
             </p>
           </div>
-          <input
+          <Input
             id={`${id}-navigation`}
             type="number"
             className="field settings-input"
@@ -92,7 +93,7 @@ export function WorkspaceLayoutForm({ layout, pending, error, onApply }: Workspa
               {t('layout.rightToolRange', { min: minInspectorWidth, max: maxInspectorWidth })}
             </p>
           </div>
-          <input
+          <Input
             id={`${id}-inspector`}
             type="number"
             className="field settings-input"

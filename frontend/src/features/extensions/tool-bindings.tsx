@@ -19,6 +19,8 @@ import {
   newBinding,
   validateBindings,
 } from './tool-bindings-model';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export function SkillToolBindingsDialog({
   projectId,
@@ -201,7 +203,7 @@ export function SkillToolBindingsDialog({
                       <div className="ext-binding-fields">
                         <div className="ext-binding-pair">
                           <Field label={t('bindings.nameLabel')} help={t('bindings.nameHelp')}>
-                            <input
+                            <Input
                               ref={(element) => {
                                 nameInputs.current[index] = element;
                               }}
@@ -349,7 +351,7 @@ export function SkillToolBindingsDialog({
                         ) : binding.kind === 'http' ? (
                           <>
                             <Field label={t('bindings.fixedUrl')} help={t('bindings.urlHelp')}>
-                              <input
+                              <Input
                                 required
                                 type="url"
                                 maxLength={1000}
@@ -366,7 +368,7 @@ export function SkillToolBindingsDialog({
                               label={t('bindings.parameterLabel')}
                               help={t('bindings.parameterHelp')}
                             >
-                              <input
+                              <Input
                                 required
                                 pattern="[a-z][a-z0-9_]{0,31}"
                                 maxLength={32}
@@ -382,7 +384,7 @@ export function SkillToolBindingsDialog({
                               label={t('bindings.inputDescription')}
                               help={t('bindings.inputDescriptionHelp')}
                             >
-                              <textarea
+                              <Textarea
                                 required
                                 rows={2}
                                 maxLength={300}

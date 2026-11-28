@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useGatewayModels } from '@/use-query/settings/use-gateway-models';
+import { Input } from '@/components/ui/input';
 
 const defaultValue = 'workspace-default';
 const manualValue = 'manual-entry';
@@ -383,7 +384,7 @@ export function ModelPicker({
           </DialogHeader>
           <label className="flex flex-col gap-1" data-invalid={Boolean(manualError)}>
             <span className="text-sm">{t('model.id')}</span>
-            <input
+            <Input
               id={`${id}-manual`}
               value={manualInput}
               disabled={disabled}
