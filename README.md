@@ -23,7 +23,7 @@ Linux x64 本地样包在 `dist/linux/`。Arch/Omarchy 可在仓库根目录运�
 
 构建机安装包依赖 `makepkg`、`pacman`、`bsdtar`、`tar`、`zstd` 以及固定版本 Node 和 Shunt 的可执行文件。在项目根执行 `ATELIER_BUILD_NODE=/绝对路径/node-v24.21.0/bin/node ATELIER_BUILD_SHUNT=/绝对路径/shunt npm run package:linux`。`dist/linux/SHA256SUMS` 提供资源清单与工件校验，`release.json` 记录运行时版本。安装态验收入口为 `npm run smoke:linux -- --help`。
 
-开发版从项目根运行 `npm run desktop`。先读[项目协作规则](AGENTS.md)。[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)和[发行选型记录](docs/decisions/2026-11-20-linux-release.md)说明当前阶段的交付范围。
+开发版从项目根运行 `npm run desktop`。命令运行期间，`git pull` 或切分支更新当前提交后会自动重建。重启桌面即可加载新版本，也可以用 `npm run desktop:build` 手动构建。先读[项目协作规则](AGENTS.md)。[桌面路线图](openspec/roadmaps/build-atelier-desktop/roadmap.md)和[发行选型记录](docs/decisions/2026-11-20-linux-release.md)说明当前阶段的交付范围。
 
 ## 启动
 
