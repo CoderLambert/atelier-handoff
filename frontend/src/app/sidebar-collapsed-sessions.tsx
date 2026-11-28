@@ -70,11 +70,18 @@ export function CollapsedSessionMenuItems({
                 <DropdownMenuItem
                   key={item.session.id}
                   className="sidebar-session-menu-item sidebar-session-menu-recent"
+                  data-selected={isSelected ? '' : undefined}
                   onSelect={() => onSession(item.session.id)}
                 >
-                  {isSelected ? <Check aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}
+                  {isSelected ? (
+                    <Check className="sidebar-session-menu-check" aria-hidden="true" />
+                  ) : (
+                    <MessageSquare className="sidebar-session-menu-icon-muted" aria-hidden="true" />
+                  )}
                   <span className="sidebar-session-menu-recent-main">
-                    <span className="truncate">{item.session.title}</span>
+                    <span className="sidebar-session-menu-recent-title truncate">
+                      {item.session.title}
+                    </span>
                     {item.projectName ? (
                       <span className="sidebar-session-menu-recent-project truncate">
                         {item.projectName}
@@ -99,8 +106,11 @@ export function CollapsedSessionMenuItems({
         <>
           <DropdownMenuSeparator className="sidebar-session-menu-separator" />
           <DropdownMenuGroup>
-            <DropdownMenuItem className="sidebar-session-menu-item" onSelect={onOpenSwitcher}>
-              <Search aria-hidden="true" />
+            <DropdownMenuItem
+              className="sidebar-session-menu-item sidebar-session-menu-footer-action"
+              onSelect={onOpenSwitcher}
+            >
+              <Search className="sidebar-session-menu-icon-muted" aria-hidden="true" />
               {t('sidebar.switchAllSessions')}
             </DropdownMenuItem>
           </DropdownMenuGroup>

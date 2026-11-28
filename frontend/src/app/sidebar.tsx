@@ -231,11 +231,11 @@ export function Sidebar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="sidebar-session-menu"
+                className={cn('sidebar-session-menu', collapsed && 'sidebar-session-menu-wide')}
                 side={collapsed ? 'right' : 'bottom'}
                 align="start"
-                sideOffset={6}
-                collisionPadding={8}
+                sideOffset={collapsed ? 10 : 6}
+                collisionPadding={12}
               >
                 <DropdownMenuGroup>
                   <DropdownMenuItem
