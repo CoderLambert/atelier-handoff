@@ -48,7 +48,8 @@ test('renderer public exports load in Node without importing CSS and the body re
     createElement(ToolDetailBody, { tool: value, automaticallyApproved: false }),
   );
   assert.doesNotMatch(markup, /<details/u);
-  assert.match(markup, /printf fixture/u);
+  assert.match(markup, /tool-detail__sh-command/u);
+  assert.match(markup.replace(/<[^>]+>/gu, ''), /printf fixture/u);
   assert.match(markup, /stdout/u);
 });
 

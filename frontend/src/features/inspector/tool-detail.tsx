@@ -10,6 +10,7 @@ import type { ToolCall } from '@shared/types';
 import { ChevronRight, PanelBottom, Square } from 'lucide-react';
 import { useControlBash } from '@/use-query/runs/use-control-bash';
 import { StatusBadge, errorMessage, formatDate, formatDuration } from './shared';
+import { tokenizeShell } from './shell-highlight';
 import {
   splitCommandForDisplay,
   toolDisplayStatus,
@@ -77,6 +78,22 @@ function BashActions({ tool }: { tool: ToolCall }) {
   );
 }
 
+function HighlightedShell({ text }: { text: string }) {
+  return (
+    <>
+      {tokenizeShell(text).map((token, index) =>
+        token.kind === 'plain' ? (
+          token.value
+        ) : (
+          <span key={index} className={`tool-detail__sh-${token.kind}`}>
+            {token.value}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
 function ToolText({
   label,
   text,
@@ -104,13 +121,17 @@ function ToolText({
       <div className="tool-detail__code-panel">
         {showLabel ? <p className="tool-detail__code-label">{label}</p> : null}
         <pre id={id} aria-label={label} className="tool-detail__pre" tabIndex={0}>
-          {commandLines && commandLines.length > 1
-            ? commandLines.map((line, index) => (
-                <span key={index} className="tool-detail__command-line">
-                  {line}
-                </span>
-              ))
-            : content}
+          {commandLines && commandLines.length > 1 ? (
+            commandLines.map((line, index) => (
+              <span key={index} className="tool-detail__command-line">
+                <HighlightedShell text={line} />
+              </span>
+            ))
+          ) : format === 'shell' && text.length ? (
+            <HighlightedShell text={content} />
+          ) : (
+            content
+          )}
         </pre>
       </div>
       {long ? (
@@ -355,7 +376,7 @@ export function ToolDetail({
               data-command={input.isCommand || undefined}
               title={input.target}
             >
-              {input.target}
+              {input.isCommand ? <HighlightedShell text={input.target} /> : input.target}
             </span>
           ) : null}
         </span>

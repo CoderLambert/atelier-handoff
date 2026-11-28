@@ -338,3 +338,31 @@ details.tool-detail[open] {
     margin-inline-start: 0;
   }
 }
+
+.tool-detail__sh-command,
+.tool-detail__sh-keyword {
+  color: var(--ui-primary);
+  font-weight: 600;
+}
+
+.tool-detail__sh-string {
+  color: var(--ui-success);
+}
+
+.tool-detail__sh-flag {
+  color: var(--ui-info);
+}
+
+.tool-detail__sh-variable {
+  color: var(--ui-warning);
+}
+
+.tool-detail__sh-operator {
+  color: var(--ui-muted-foreground);
+  font-weight: 600;
+}
+
+.tool-detail__sh-comment {
+  color: var(--ui-muted-foreground);
+  font-style: italic;
+}
