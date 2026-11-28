@@ -248,12 +248,13 @@ export function Composer({
         </p>
       ) : null}
       {agent?.starters.length && !snapshot.messages.length && !archived ? (
-        <div className="mb-2 flex flex-wrap gap-2" aria-label={t('composer.starters')}>
+        <div className="composer-starters" aria-label={t('composer.starters')}>
           {agent.starters.map((starter) => (
             <Button
               key={starter}
               size="sm"
               variant="outline"
+              className="composer-starter-btn"
               onClick={() => {
                 onDraftChange((previous) => ({ ...previous, text: starter }));
                 input?.focus();
@@ -528,7 +529,7 @@ export function Composer({
             <Button
               type="submit"
               size="icon"
-              className="shrink-0"
+              className="composer-send-button shrink-0"
               disabled={!canSend}
               aria-label={sendLabel}
               title={t('composer.sendTask') + (insertRunId ? t('composer.insertShortcut') : '')}

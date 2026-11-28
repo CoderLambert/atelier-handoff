@@ -12,7 +12,7 @@ import {
   useState,
   type MouseEvent,
 } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Sparkles } from 'lucide-react';
 import type { Permission, ToolCall } from '@shared/types';
 import type { Snapshot } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -222,6 +222,9 @@ export const Conversation = memo(function Conversation(props: ConversationProps)
           })
         ) : !inheritedMessages?.length ? (
           <div className="welcome">
+            <div className="welcome-badge" aria-hidden="true">
+              <Sparkles />
+            </div>
             <h2>{t('conversation.welcomeTitle')}</h2>
             <p>{t('conversation.welcomeHelp')}</p>
           </div>

@@ -116,46 +116,56 @@ export function WorkspaceToolbar({
             {t(connected ? 'events.connectedTitle' : 'events.connectingTitle')}
           </span>
         </span>
-        {gitAction ? (
-          <Button
-            ref={gitAction.trigger}
-            size="icon-sm"
-            variant={gitAction.open ? 'secondary' : 'ghost'}
-            aria-label={git('title')}
-            aria-pressed={gitAction.open}
-            title={git('title')}
-            disabled={gitAction.busy}
-            onClick={gitAction.onToggle}
-          >
-            <GitBranch data-icon="inline-start" aria-hidden="true" />
-          </Button>
-        ) : null}
-        {sessionActions ? (
-          <>
-            <Button
-              ref={sessionActions.terminalTrigger}
-              variant={sessionActions.terminalOpen ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={terminal('title')}
-              title={terminal(sessionActions.terminalOpen ? 'hide' : 'open')}
-              aria-pressed={sessionActions.terminalOpen}
-              disabled={sessionActions.terminalDisabled}
-              onClick={sessionActions.onToggleTerminal}
-            >
-              <TerminalSquare data-icon="inline-start" aria-hidden="true" />
-            </Button>
-            <Button
-              ref={sessionActions.browserTrigger}
-              variant={sessionActions.browserOpen ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={t('browser.title')}
-              title={t(sessionActions.browserOpen ? 'browser.collapse' : 'browser.open')}
-              aria-pressed={sessionActions.browserOpen}
-              onClick={sessionActions.onToggleBrowser}
-            >
-              <Globe data-icon="inline-start" aria-hidden="true" />
-            </Button>
-          </>
+        {gitAction || sessionActions ? (
+          <div className="topbar-tool-group" role="group">
+            {gitAction ? (
+              <Button
+                ref={gitAction.trigger}
+                size="icon-sm"
+                variant="ghost"
+                className="topbar-tool-btn"
+                data-active={gitAction.open || undefined}
+                aria-label={git('title')}
+                aria-pressed={gitAction.open}
+                title={git('title')}
+                disabled={gitAction.busy}
+                onClick={gitAction.onToggle}
+              >
+                <GitBranch data-icon="inline-start" aria-hidden="true" />
+              </Button>
+            ) : null}
+            {sessionActions ? (
+              <>
+                <Button
+                  ref={sessionActions.terminalTrigger}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="topbar-tool-btn"
+                  data-active={sessionActions.terminalOpen || undefined}
+                  aria-label={terminal('title')}
+                  title={terminal(sessionActions.terminalOpen ? 'hide' : 'open')}
+                  aria-pressed={sessionActions.terminalOpen}
+                  disabled={sessionActions.terminalDisabled}
+                  onClick={sessionActions.onToggleTerminal}
+                >
+                  <TerminalSquare data-icon="inline-start" aria-hidden="true" />
+                </Button>
+                <Button
+                  ref={sessionActions.browserTrigger}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="topbar-tool-btn"
+                  data-active={sessionActions.browserOpen || undefined}
+                  aria-label={t('browser.title')}
+                  title={t(sessionActions.browserOpen ? 'browser.collapse' : 'browser.open')}
+                  aria-pressed={sessionActions.browserOpen}
+                  onClick={sessionActions.onToggleBrowser}
+                >
+                  <Globe data-icon="inline-start" aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
+          </div>
         ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
