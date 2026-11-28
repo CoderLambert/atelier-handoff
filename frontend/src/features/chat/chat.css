@@ -33,7 +33,7 @@
 
 .chat-conversation .message {
   min-width: 0;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .chat-conversation .message:last-child {
@@ -49,10 +49,12 @@
 .chat-conversation .user-message-bubble {
   min-width: 0;
   max-width: min(80%, var(--ui-reading-width));
-  padding: 8px 14px;
-  border-radius: var(--radius-lg);
-  background: var(--ui-secondary);
-  color: var(--ui-secondary-foreground);
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--ui-border) 70%, transparent);
+  border-radius: 18px 18px 4px 18px;
+  background: color-mix(in srgb, var(--ui-primary) 9%, var(--ui-card));
+  color: var(--ui-foreground);
+  box-shadow: 0 1px 2px var(--ui-shadow);
 }
 
 .chat-conversation .message-footer {
@@ -530,12 +532,14 @@
 
 .chat-composer .composer-box {
   margin: 0 auto;
-  padding: 12px 14px;
+  padding: 14px 16px 12px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
   background: var(--ui-card);
   color: var(--ui-card-foreground);
-  box-shadow: 0 1px 3px var(--ui-shadow);
+  box-shadow:
+    0 6px 24px -6px var(--ui-shadow),
+    0 1px 3px var(--ui-shadow);
   transition:
     border-color var(--motion-feedback) ease,
     box-shadow var(--motion-feedback) ease;
@@ -717,7 +721,9 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 8px;
-  margin-top: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ui-border-subtle) 75%, transparent);
 }
 
 .chat-composer .composer-toolbar-left,

@@ -114,22 +114,30 @@
 
 .workspace-separator {
   position: relative;
-  flex: 0 0 8px;
-  width: 8px;
-  background: var(--ui-background);
+  flex: 0 0 6px;
+  width: 6px;
+  margin-inline: -3px;
+  z-index: 5;
+  background: transparent;
+  cursor: col-resize;
 }
 
 .workspace-separator::after {
   content: '';
   position: absolute;
-  inset: 0 auto 0 3px;
-  width: 2px;
-  background: var(--ui-border);
+  inset: 0 auto 0 2.5px;
+  width: 1px;
+  background: var(--ui-border-subtle);
+  transition:
+    width var(--motion-feedback) ease,
+    background-color var(--motion-feedback) ease;
 }
 
 .workspace-separator:hover::after,
 .workspace-separator:focus-visible::after,
 .workspace-separator[data-separator='active']::after {
+  inset-inline-start: 2px;
+  width: 2px;
   background: var(--ui-ring);
 }
 
@@ -145,10 +153,10 @@
   justify-content: space-between;
   gap: var(--space-4);
   min-width: 0;
-  height: 48px;
-  padding-inline: var(--space-4);
-  border-block-end: 1px solid var(--ui-border);
-  background: var(--ui-card);
+  height: 50px;
+  padding-inline: 18px;
+  border-block-end: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--ui-card) 92%, var(--ui-background));
 }
 
 .breadcrumbs,
