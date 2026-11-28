@@ -20,11 +20,11 @@
   color-scheme: light;
 
   /* Obsidian Studio Palette */
-  --ui-theme-obsidian-background: #f9f9fb;
+  --ui-theme-obsidian-background: #f4f5f8;
   --ui-theme-obsidian-foreground: #141518;
   --ui-theme-obsidian-card: #ffffff;
-  --ui-theme-obsidian-sidebar: #f3f4f6;
-  --ui-theme-obsidian-muted: #f1f2f5;
+  --ui-theme-obsidian-sidebar: #ebedf2;
+  --ui-theme-obsidian-muted: #eceef3;
   --ui-theme-obsidian-muted-foreground: #595d66;
   --ui-theme-obsidian-secondary: #eef0f3;
   --ui-theme-obsidian-secondary-foreground: #1f2228;
@@ -41,16 +41,16 @@
   --ui-theme-obsidian-input: #8b8f99;
   --ui-theme-obsidian-ring: #18181b;
   --ui-theme-obsidian-scrim: rgb(0 0 0 / 0.35);
-  --ui-theme-obsidian-shadow: rgb(0 0 0 / 0.05);
+  --ui-theme-obsidian-shadow: rgb(15 18 28 / 0.07);
   --ui-theme-obsidian-shadow-overlay:
     0 16px 36px -4px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04);
 
   /* Atelier Classic Palette */
-  --ui-theme-classic-background: #fafbf8;
-  --ui-theme-classic-foreground: #222921;
+  --ui-theme-classic-background: #f3f6f0;
+  --ui-theme-classic-foreground: #1e261d;
   --ui-theme-classic-card: #ffffff;
-  --ui-theme-classic-sidebar: #f2f5ef;
-  --ui-theme-classic-muted: #f0f4ec;
+  --ui-theme-classic-sidebar: #e9eee4;
+  --ui-theme-classic-muted: #eaf0e5;
   --ui-theme-classic-muted-foreground: #566151;
   --ui-theme-classic-secondary: #ebf0e6;
   --ui-theme-classic-secondary-foreground: #323d2e;
@@ -62,12 +62,12 @@
   --ui-theme-classic-primary-foreground: #ffffff;
   --ui-theme-classic-primary-hover: #334e2a;
   --ui-theme-classic-primary-active: #283f21;
-  --ui-theme-classic-border: #dde3d7;
-  --ui-theme-classic-border-subtle: #eaeedf;
+  --ui-theme-classic-border: #d5ded0;
+  --ui-theme-classic-border-subtle: #e3eadf;
   --ui-theme-classic-input: #828d7a;
   --ui-theme-classic-ring: #3f5e34;
   --ui-theme-classic-scrim: rgb(24 32 15 / 0.35);
-  --ui-theme-classic-shadow: rgb(34 45 25 / 0.05);
+  --ui-theme-classic-shadow: rgb(28 40 20 / 0.08);
   --ui-theme-classic-shadow-overlay:
     0 16px 36px -4px rgb(34 45 25 / 0.09), 0 4px 12px -2px rgb(34 45 25 / 0.04);
   --ui-theme-classic-success: #2c6844;
@@ -78,11 +78,11 @@
   --ui-theme-classic-warning-border: #ebd1a4;
 
   /* Warm Parchment Palette */
-  --ui-theme-parchment-background: #fcfbf8;
-  --ui-theme-parchment-foreground: #24211d;
+  --ui-theme-parchment-background: #f6f3ec;
+  --ui-theme-parchment-foreground: #231f1b;
   --ui-theme-parchment-card: #ffffff;
-  --ui-theme-parchment-sidebar: #f4f1ea;
-  --ui-theme-parchment-muted: #f3efe7;
+  --ui-theme-parchment-sidebar: #ede8dd;
+  --ui-theme-parchment-muted: #efeae0;
   --ui-theme-parchment-muted-foreground: #666058;
   --ui-theme-parchment-secondary: #f1ede4;
   --ui-theme-parchment-secondary-foreground: #2d2823;
@@ -99,7 +99,7 @@
   --ui-theme-parchment-input: #94897b;
   --ui-theme-parchment-ring: #8c4e28;
   --ui-theme-parchment-scrim: rgb(36 33 29 / 0.35);
-  --ui-theme-parchment-shadow: rgb(36 33 29 / 0.05);
+  --ui-theme-parchment-shadow: rgb(36 30 22 / 0.08);
   --ui-theme-parchment-shadow-overlay:
     0 16px 36px -4px rgb(36 33 29 / 0.09), 0 4px 12px -2px rgb(36 33 29 / 0.04);
 
@@ -112,11 +112,11 @@
   --ui-theme-warm-warning-border: #ead2a8;
 
   /* Nordic Frost Palette */
-  --ui-theme-nordic-background: #f8fafd;
+  --ui-theme-nordic-background: #f3f7fc;
   --ui-theme-nordic-foreground: #0f172a;
   --ui-theme-nordic-card: #ffffff;
-  --ui-theme-nordic-sidebar: #f1f5fa;
-  --ui-theme-nordic-muted: #eef3f8;
+  --ui-theme-nordic-sidebar: #e8eff8;
+  --ui-theme-nordic-muted: #ebf1f8;
   --ui-theme-nordic-muted-foreground: #516075;
   --ui-theme-nordic-secondary: #e9f0f7;
   --ui-theme-nordic-secondary-foreground: #1e293b;
@@ -138,11 +138,11 @@
     0 16px 36px -4px rgb(15 23 42 / 0.08), 0 4px 12px -2px rgb(15 23 42 / 0.04);
 
   /* Rosé Pine Dawn Palette */
-  --ui-theme-rose-background: #fcf7f2;
+  --ui-theme-rose-background: #f8f1ea;
   --ui-theme-rose-foreground: #4a4568;
   --ui-theme-rose-card: #fffdfa;
-  --ui-theme-rose-sidebar: #f5ede5;
-  --ui-theme-rose-muted: #f1e8df;
+  --ui-theme-rose-sidebar: #efe4da;
+  --ui-theme-rose-muted: #efe5dc;
   --ui-theme-rose-muted-foreground: #635d7e;
   --ui-theme-rose-secondary: #eee4da;
   --ui-theme-rose-secondary-foreground: #464163;
@@ -175,10 +175,10 @@
   --ui-theme-rose-destructive-border: #f2c6d1;
 
   /* Midnight Slate (Dark) Palette */
-  --ui-theme-midnight-background: #0d1117;
+  --ui-theme-midnight-background: #10151e;
   --ui-theme-midnight-foreground: #e6edf3;
-  --ui-theme-midnight-card: #151b24;
-  --ui-theme-midnight-sidebar: #11161f;
+  --ui-theme-midnight-card: #171f2b;
+  --ui-theme-midnight-sidebar: #0a0e14;
   --ui-theme-midnight-muted: #1b222e;
   --ui-theme-midnight-muted-foreground: #8e9cb0;
   --ui-theme-midnight-secondary: #1f2735;

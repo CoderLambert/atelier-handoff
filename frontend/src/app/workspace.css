@@ -77,6 +77,15 @@
   display: block;
   height: 100%;
   overflow: hidden;
+  background: var(--ui-sidebar);
+  padding: 8px 8px 8px 0;
+}
+
+@media (max-width: 767px) {
+  .react-workspace.app {
+    padding: 0;
+    background: var(--ui-background);
+  }
 }
 
 .workspace-resizable,
@@ -97,13 +106,22 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ui-border) 85%, transparent);
+  border-radius: 14px;
   background: var(--ui-card);
+  box-shadow:
+    0 6px 24px -10px var(--ui-shadow),
+    0 1px 3px var(--ui-shadow);
 }
 
 .workspace-right-tool[data-expanded] {
   position: fixed;
   inset: 0;
   z-index: 40;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .workspace-tool-actions {
@@ -115,9 +133,9 @@
 
 .workspace-separator {
   position: relative;
-  flex: 0 0 6px;
-  width: 6px;
-  margin-inline: -3px;
+  flex: 0 0 8px;
+  width: 8px;
+  margin-inline: 0;
   z-index: 5;
   background: transparent;
   cursor: col-resize;
@@ -126,26 +144,42 @@
 .workspace-separator::after {
   content: '';
   position: absolute;
-  inset: 0 auto 0 2.5px;
-  width: 1px;
-  background: var(--ui-border-subtle);
+  inset-block: 42%;
+  inset-inline-start: 3px;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: transparent;
   transition:
-    width var(--motion-feedback) ease,
+    inset-block var(--motion-feedback) ease,
     background-color var(--motion-feedback) ease;
 }
 
 .workspace-separator:hover::after,
 .workspace-separator:focus-visible::after,
 .workspace-separator[data-separator='active']::after {
-  inset-inline-start: 2px;
-  width: 2px;
-  background: var(--ui-ring);
+  inset-block: 24%;
+  background: color-mix(in srgb, var(--ui-ring) 55%, transparent);
 }
 
 .react-workspace .main {
   height: 100%;
   grid-template-columns: minmax(0, 1fr);
   container-type: inline-size;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ui-border) 85%, transparent);
+  border-radius: 14px;
+  background: var(--ui-background);
+  box-shadow:
+    0 6px 24px -10px var(--ui-shadow),
+    0 1px 3px var(--ui-shadow);
+}
+
+@media (max-width: 767px) {
+  .react-workspace .main {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 
 .topbar {
@@ -155,9 +189,9 @@
   gap: var(--space-4);
   min-width: 0;
   height: 52px;
-  padding-inline: 20px;
-  border-block-end: 1px solid var(--ui-border-subtle);
-  background: color-mix(in srgb, var(--ui-background) 88%, var(--ui-card));
+  padding-inline: 18px;
+  border-block-end: 1px solid color-mix(in srgb, var(--ui-border-subtle) 85%, transparent);
+  background: color-mix(in srgb, var(--ui-card) 55%, var(--ui-background));
 }
 
 .breadcrumbs,
@@ -185,46 +219,66 @@
 .topbar .workspace-project-trigger {
   flex: 0 1 auto;
   max-width: 35%;
-  padding-inline: 8px;
-  border-radius: var(--radius-md);
-  color: var(--ui-muted-foreground);
+  height: 28px;
+  padding-inline: 9px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ui-muted) 80%, transparent);
+  color: var(--ui-secondary-foreground);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.topbar .workspace-project-trigger:hover {
+  background: var(--ui-accent);
+  color: var(--ui-foreground);
 }
 
 .topbar .workspace-session-tabs {
   flex: none;
   align-items: center;
   gap: 2px;
-  padding-inline-end: 8px;
-  border-inline-end: 1px solid var(--ui-border-subtle);
+  padding: 3px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--ui-muted);
 }
 
 .topbar .workspace-session-tabs .session-tab {
   position: relative;
   justify-content: center;
   gap: 5px;
-  min-width: 32px;
-  min-height: 32px;
-  height: 32px;
-  padding: 6px;
+  min-width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 8px;
   margin: 0;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
+  color: var(--ui-muted-foreground);
   font-size: var(--text-xs);
+  transition:
+    background-color var(--motion-feedback) ease,
+    color var(--motion-feedback) ease,
+    box-shadow var(--motion-feedback) ease;
 }
 
 .workspace-session-tabs .session-tab > svg {
   flex: none;
-  inline-size: var(--ui-icon-size);
-  block-size: var(--ui-icon-size);
+  inline-size: 14px;
+  block-size: 14px;
 }
 
 .workspace-session-tabs .session-tab[aria-selected='true'] {
-  background: var(--ui-selected);
-  color: var(--ui-selected-foreground);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  box-shadow:
+    0 1px 2px var(--ui-shadow),
+    0 0 0 1px color-mix(in srgb, var(--ui-border) 75%, transparent);
 }
 
-.workspace-session-tabs .session-tab:hover {
-  background: var(--ui-accent);
+.workspace-session-tabs .session-tab:hover:not([aria-selected='true']) {
+  background: color-mix(in srgb, var(--ui-card) 60%, transparent);
+  color: var(--ui-foreground);
 }
 
 .workspace-session-tabs .session-tab:focus-visible {
