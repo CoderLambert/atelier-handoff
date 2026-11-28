@@ -58,5 +58,29 @@
     "key": "driver-call:5d0950092deb3efe",
     "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
     "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-triggers.ts",
+    "key": "sql:580dc1599b3a834f",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-triggers.ts",
+    "key": "sql:250649ad04d8560b",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-execution-preference.ts",
+    "key": "sql:580dc1599b3a834f",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-execution-preference.ts",
+    "key": "sql:e88dbc4d0943a243",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
   }
 ]

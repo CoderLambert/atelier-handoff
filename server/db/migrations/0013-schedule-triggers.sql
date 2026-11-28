@@ -11,3 +11,5 @@ ALTER TABLE scheduled_task_runs ADD COLUMN chain_depth INTEGER NOT NULL DEFAULT 
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_task_runs_idempotency
   ON scheduled_task_runs(task_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+PRAGMA user_version=13;

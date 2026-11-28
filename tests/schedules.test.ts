@@ -893,3 +893,26 @@ test('native-v1 host project execution: validates capability & policy and forwar
     fixture.cleanup();
   }
 });
+
+test('migrations v13 & v14: advances user_version cleanly on reopen and self-heals DB stuck at v12 with existing slug column', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-schedules-migrate-'));
+  try {
+    const first = new Store(dir);
+    const v1 = Number(
+      (first.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
+    );
+    assert.equal(v1, 14);
+    // Simulate a user DB that previously ran v13 columns while stuck at user_version=12
+    first.db.exec('PRAGMA user_version=12;');
+    first.close();
+
+    const reopened = new Store(dir);
+    const v2 = Number(
+      (reopened.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
+    );
+    assert.equal(v2, 14);
+    reopened.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
