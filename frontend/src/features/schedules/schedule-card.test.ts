@@ -29,6 +29,7 @@ function sampleTool(overrides: Partial<ToolCall> = {}): ToolCall {
         timing: { kind: 'daily', time: '09:00', everyDays: 1 },
         timeZone: 'Asia/Shanghai',
         mode: 'readonly',
+        executionPreference: 'project-v1',
         approvalMode: null,
         maxSearchChargeFen: 0,
         timeoutMs: null,

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { AppError } from '../../../../shared/errors.js';
 import {
   SCHEDULE_TRIGGER_INPUT_MAX_LENGTH,
+  scheduleExecutionPreferenceSchema,
   scheduleMisfirePolicySchema,
   scheduleNotifyPolicySchema,
   scheduleOverlapPolicySchema,
@@ -45,6 +46,7 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
         targetMode: scheduleTargetModeSchema.default('new_once'),
         targetSessionId: z.string().min(1).nullable().optional(),
         mode: z.enum(['readonly', 'edit']).default('readonly'),
+        executionPreference: scheduleExecutionPreferenceSchema.default('project-v1'),
         approvalMode: z.literal('automatic').nullable().optional(),
         maxSearchChargeFen: z.number().int().min(0).max(100_000).default(0),
         misfirePolicy: scheduleMisfirePolicySchema.default('run_once'),
@@ -58,8 +60,9 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
             ? (args.targetSessionId ?? run.sessionId)
             : (args.targetSessionId ?? null);
         const requiresManual =
-          args.mode === 'edit' &&
-          (args.approvalMode === 'automatic' || args.maxSearchChargeFen > 0);
+          args.executionPreference === 'native-v1' ||
+          (args.mode === 'edit' &&
+            (args.approvalMode === 'automatic' || args.maxSearchChargeFen > 0));
         if (requiresManual) {
           await approve(
             {
@@ -85,6 +88,7 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
             targetMode: args.targetMode,
             targetSessionId,
             mode: args.mode,
+            executionPreference: args.executionPreference,
             approvalMode: args.approvalMode ?? null,
             maxSearchChargeFen: args.maxSearchChargeFen,
             misfirePolicy: args.misfirePolicy,
@@ -108,6 +112,7 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
         timing: scheduleTimingSchema.optional(),
         timeZone: z.string().trim().min(1).max(100).optional(),
         mode: z.enum(['readonly', 'edit']).optional(),
+        executionPreference: scheduleExecutionPreferenceSchema.optional(),
         approvalMode: z.literal('automatic').nullable().optional(),
         maxSearchChargeFen: z.number().int().min(0).max(100_000).optional(),
         status: z.enum(['active', 'paused']).optional(),
@@ -125,13 +130,16 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
             : nextMode === 'readonly'
               ? null
               : current.approvalMode;
+        const nextExec = args.executionPreference ?? current.executionPreference;
         const escalatesPrivilege =
-          nextMode === 'edit' &&
-          nextApproval === 'automatic' &&
-          (current.approvalMode !== 'automatic' ||
-            args.prompt !== undefined ||
-            (args.maxSearchChargeFen !== undefined &&
-              args.maxSearchChargeFen > current.maxSearchChargeFen));
+          (nextExec === 'native-v1' &&
+            (current.executionPreference !== 'native-v1' || args.prompt !== undefined)) ||
+          (nextMode === 'edit' &&
+            nextApproval === 'automatic' &&
+            (current.approvalMode !== 'automatic' ||
+              args.prompt !== undefined ||
+              (args.maxSearchChargeFen !== undefined &&
+                args.maxSearchChargeFen > current.maxSearchChargeFen)));
         if (escalatesPrivilege) {
           await approve(
             {
@@ -178,9 +186,10 @@ export function registerScheduleTools(host: RunMcpToolHost, registration: ToolRe
       async (args, toolCallId) => {
         const targetTask = schedules.resolve(args.target, projectId);
         const requiresManual =
-          targetTask.mode === 'edit' &&
-          targetTask.approvalMode === 'automatic' &&
-          !automaticApproval;
+          (targetTask.executionPreference === 'native-v1' && !host.native) ||
+          (targetTask.mode === 'edit' &&
+            targetTask.approvalMode === 'automatic' &&
+            !automaticApproval);
         if (requiresManual) {
           await approve(
             {

@@ -3,7 +3,7 @@
  * @implementation 采用 Atelier 原生工作台双栏布局与 Radix Select 筛选，左侧展示任务清单与调度摘要，右侧提供规则编辑与运行记录双页签。
  * @updated 2026-11-27T23:59:00+08:00
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, Clock, Pause, Play, Plus, Trash2, Zap } from 'lucide-react';
 import type { Project, ScheduledTask, Session } from '@shared/types';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import { useDeleteSchedule } from '@/use-query/schedules/use-delete-schedule';
 import { useRunScheduleNow } from '@/use-query/schedules/use-run-schedule-now';
 import { useUpdateSchedule } from '@/use-query/schedules/use-update-schedule';
 import { useSchedules } from '@/use-query/schedules/use-schedules';
+import { useBootstrap } from '@/use-query/workspace/use-bootstrap';
 import { formatScheduleSummary } from './schedule-card';
 import { ScheduleForm } from './schedule-form';
 import { ScheduleHistory } from './schedule-history';
@@ -49,6 +50,12 @@ export default function SchedulesPage({
 }) {
   const { t, locale } = useUiTranslation('schedules');
   const [filterProjectId, setFilterProjectId] = useState<string>(projectId ?? '');
+  const bootstrap = useBootstrap();
+  const nativeExecution = bootstrap.data?.capabilities.nativeExecution === true;
+
+  useEffect(() => {
+    setFilterProjectId(projectId ?? '');
+  }, [projectId]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<'rules' | 'history'>('rules');
@@ -216,6 +223,7 @@ export default function SchedulesPage({
                   projects={projects}
                   sessions={sessions}
                   defaultProjectId={filterProjectId || projectId || projects[0]?.id}
+                  nativeExecution={nativeExecution}
                   pending={createMutation.isPending}
                   error={createMutation.error?.message}
                   onCancel={() => setCreating(false)}
@@ -344,6 +352,7 @@ export default function SchedulesPage({
                       task={activeTask}
                       projects={projects}
                       sessions={sessions}
+                      nativeExecution={nativeExecution}
                       pending={updateMutation.isPending}
                       error={mutationError}
                       onUpdate={(id, patch) => updateMutation.mutate({ id, patch })}

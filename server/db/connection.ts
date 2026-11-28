@@ -32,6 +32,7 @@ import { gitCommitOperationRepository } from './repositories/git-commit-operatio
 import { assertForeignKeyIntegrity } from './maintenance/foreign-key-integrity.js';
 import { applyScheduledTasks } from './migrations/apply-scheduled-tasks.js';
 import { applyScheduleTriggers } from './migrations/apply-schedule-triggers.js';
+import { applyScheduleExecutionPreference } from './migrations/apply-schedule-execution-preference.js';
 import { scheduleRepository } from './repositories/schedules.js';
 
 // The transitional Store only uses scalar bindings and ordinary row-object statements.
@@ -46,7 +47,7 @@ export interface LegacyDatabase {
   close(): void;
 }
 
-export const LATEST_SCHEMA_VERSION = 13;
+export const LATEST_SCHEMA_VERSION = 14;
 export type SchemaMigration = { version: number; apply: () => void };
 
 export function openWorkbenchDatabase(path: string) {
@@ -62,6 +63,7 @@ export function openWorkbenchDatabase(path: string) {
     { version: 11, apply: () => applyRuntimeHotpathIndexes(db) },
     { version: 12, apply: () => applyScheduledTasks(db) },
     { version: 13, apply: () => applyScheduleTriggers(db) },
+    { version: 14, apply: () => applyScheduleExecutionPreference(db) },
   ];
   const repos = {
     appConfig: appConfigRepository(orm),

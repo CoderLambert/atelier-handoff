@@ -14,6 +14,7 @@ import { createScheduleService } from './service.js';
 export function createSchedulesRuntime(options: {
   store: Pick<Store, 'get' | 'list' | 'update' | 'transaction' | 'event' | 'events' | 'repos'>;
   agents: Pick<AgentProfiles, 'requireReady'>;
+  nativeExecution?: boolean;
   sameSessionRunning(sessionId: string): boolean;
   isShuttingDown(): boolean;
 }) {
@@ -21,6 +22,7 @@ export function createSchedulesRuntime(options: {
   const service = createScheduleService({
     store: options.store,
     agents: options.agents,
+    nativeExecution: options.nativeExecution,
     onChanged: () => rescheduleTasks?.(),
   });
   let scheduler: ReturnType<typeof createScheduleScheduler> | undefined;

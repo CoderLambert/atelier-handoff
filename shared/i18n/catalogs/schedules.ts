@@ -78,7 +78,12 @@ export const schedules = {
   'timing.once': ['一次性', 'One-time'],
   'timing.cron': ['自定义 Cron', 'Custom Cron'],
   'mode.readonly': ['仅分析与只读检查', 'Read-only / Ask'],
-  'mode.edit': ['受控修改（可改文件与执行命令）', 'Controlled edit'],
+  'mode.edit': ['受控修改（隔离沙箱，无网络）', 'Controlled edit (sandbox, offline)'],
+  'mode.native': [
+    '本机项目环境（完整 Git、网络与本地工具链）',
+    'Host project environment (Git, network & local tools)',
+  ],
+  'approval.nativeAuto': ['本机信任（免逐次审批）', 'Host-trusted (no per-step prompts)'],
   'approval.manual': ['需要人工审批', 'Require manual approval'],
   'approval.automatic': ['全工具自动化（无人值守）', 'Full-tool automatic'],
   'misfire.runOnce': ['唤醒后最多补跑一次', 'Catch up once on wake'],

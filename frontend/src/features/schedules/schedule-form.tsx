@@ -9,6 +9,7 @@ import type {
   CreateScheduledTaskInput,
   Project,
   ScheduledTask,
+  ScheduleExecutionPreference,
   ScheduleMisfirePolicy,
   ScheduleNotifyPolicy,
   ScheduleOverlapPolicy,
@@ -46,6 +47,7 @@ export function ScheduleForm({
   projects,
   sessions,
   defaultProjectId,
+  nativeExecution = false,
   pending,
   error,
   onCreate,
@@ -57,6 +59,7 @@ export function ScheduleForm({
   projects: readonly Project[];
   sessions: readonly Session[];
   defaultProjectId?: string;
+  nativeExecution?: boolean;
   pending: boolean;
   error?: string;
   onCreate?: (input: CreateScheduledTaskInput) => void;
@@ -99,6 +102,9 @@ export function ScheduleForm({
   const [permissionMode, setPermissionMode] = useState<'readonly' | 'edit'>(
     task?.mode ?? 'readonly',
   );
+  const [executionPreference, setExecutionPreference] = useState<ScheduleExecutionPreference>(
+    task?.executionPreference ?? 'project-v1',
+  );
   const [automaticApproval, setAutomaticApproval] = useState(task?.approvalMode === 'automatic');
   const [misfirePolicy, setMisfirePolicy] = useState<ScheduleMisfirePolicy>(
     task?.misfirePolicy ?? 'run_once',
@@ -109,7 +115,13 @@ export function ScheduleForm({
   const [notifyPolicy, setNotifyPolicy] = useState<ScheduleNotifyPolicy>(
     task?.notifyPolicy ?? 'on_error',
   );
-  const [advancedOpen, setAdvancedOpen] = useState(task?.mode === 'edit');
+  const [advancedOpen, setAdvancedOpen] = useState(
+    task?.mode === 'edit' || task?.executionPreference === 'native-v1',
+  );
+
+  useEffect(() => {
+    if (mode === 'create' && defaultProjectId) setProjectId(defaultProjectId);
+  }, [mode, defaultProjectId]);
 
   useEffect(() => {
     if (!task) return;
@@ -135,11 +147,12 @@ export function ScheduleForm({
     }
     setTimeZone(task.timeZone);
     setPermissionMode(task.mode);
+    setExecutionPreference(task.executionPreference);
     setAutomaticApproval(task.approvalMode === 'automatic');
     setMisfirePolicy(task.misfirePolicy);
     setOverlapPolicy(task.overlapPolicy);
     setNotifyPolicy(task.notifyPolicy);
-    setAdvancedOpen(task.mode === 'edit');
+    setAdvancedOpen(task.mode === 'edit' || task.executionPreference === 'native-v1');
   }, [task]);
 
   const projectSessions = sessions.filter(
@@ -170,7 +183,12 @@ export function ScheduleForm({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const timing = buildTiming();
-    const approvalMode = permissionMode === 'edit' && automaticApproval ? 'automatic' : null;
+    const effectiveExecution: ScheduleExecutionPreference =
+      permissionMode === 'edit' ? executionPreference : 'project-v1';
+    const approvalMode =
+      permissionMode === 'edit' && effectiveExecution === 'project-v1' && automaticApproval
+        ? 'automatic'
+        : null;
     const normalizedSlug = slug.trim() || null;
     if (mode === 'create' && onCreate) {
       onCreate({
@@ -183,6 +201,7 @@ export function ScheduleForm({
         targetMode,
         targetSessionId: targetMode === 'session' ? targetSessionId || null : null,
         mode: permissionMode,
+        executionPreference: effectiveExecution,
         approvalMode,
         maxSearchChargeFen: 0,
         misfirePolicy,
@@ -205,6 +224,7 @@ export function ScheduleForm({
               ? null
               : task.targetSessionId,
         mode: permissionMode,
+        executionPreference: effectiveExecution,
         approvalMode,
         misfirePolicy,
         overlapPolicy,
@@ -232,7 +252,13 @@ export function ScheduleForm({
           ? t('notify.never')
           : t('notify.onError');
 
-  const advancedSummary = `${permissionMode === 'edit' ? t('mode.edit') : t('mode.readonly')} · ${notifyLabel}`;
+  const modeLabel =
+    permissionMode === 'edit' && executionPreference === 'native-v1'
+      ? t('mode.native')
+      : permissionMode === 'edit'
+        ? t('mode.edit')
+        : t('mode.readonly');
+  const advancedSummary = `${modeLabel} · ${notifyLabel}`;
 
   return (
     <form className="schedules-form" onSubmit={handleSubmit}>
@@ -506,11 +532,24 @@ export function ScheduleForm({
               <div className="schedules-field">
                 <span className="schedules-label">{t('fields.mode')}</span>
                 <Select
-                  value={permissionMode}
+                  value={
+                    permissionMode === 'edit' && executionPreference === 'native-v1'
+                      ? 'native'
+                      : permissionMode
+                  }
                   onValueChange={(value) => {
-                    const next = value as 'readonly' | 'edit';
-                    setPermissionMode(next);
-                    if (next === 'readonly') setAutomaticApproval(false);
+                    if (value === 'native') {
+                      setPermissionMode('edit');
+                      setExecutionPreference('native-v1');
+                      setAutomaticApproval(false);
+                    } else if (value === 'edit') {
+                      setPermissionMode('edit');
+                      setExecutionPreference('project-v1');
+                    } else {
+                      setPermissionMode('readonly');
+                      setExecutionPreference('project-v1');
+                      setAutomaticApproval(false);
+                    }
                   }}
                 >
                   <SelectTrigger className="w-full" aria-label={t('fields.mode')}>
@@ -519,6 +558,9 @@ export function ScheduleForm({
                   <SelectContent position="popper" align="start">
                     <SelectItem value="readonly">{t('mode.readonly')}</SelectItem>
                     <SelectItem value="edit">{t('mode.edit')}</SelectItem>
+                    {nativeExecution || executionPreference === 'native-v1' ? (
+                      <SelectItem value="native">{t('mode.native')}</SelectItem>
+                    ) : null}
                   </SelectContent>
                 </Select>
               </div>
@@ -526,16 +568,28 @@ export function ScheduleForm({
               <div className="schedules-field">
                 <span className="schedules-label">{t('fields.approval')}</span>
                 <Select
-                  value={automaticApproval ? 'automatic' : 'manual'}
-                  disabled={permissionMode !== 'edit'}
+                  value={
+                    executionPreference === 'native-v1'
+                      ? 'nativeAuto'
+                      : automaticApproval
+                        ? 'automatic'
+                        : 'manual'
+                  }
+                  disabled={permissionMode !== 'edit' || executionPreference === 'native-v1'}
                   onValueChange={(value) => setAutomaticApproval(value === 'automatic')}
                 >
                   <SelectTrigger className="w-full" aria-label={t('fields.approval')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" align="start">
-                    <SelectItem value="manual">{t('approval.manual')}</SelectItem>
-                    <SelectItem value="automatic">{t('approval.automatic')}</SelectItem>
+                    {executionPreference === 'native-v1' ? (
+                      <SelectItem value="nativeAuto">{t('approval.nativeAuto')}</SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="manual">{t('approval.manual')}</SelectItem>
+                        <SelectItem value="automatic">{t('approval.automatic')}</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

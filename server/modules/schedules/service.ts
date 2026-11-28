@@ -9,6 +9,7 @@ import {
   createScheduledTaskInputSchema,
   updateScheduledTaskInputSchema,
   type ScheduleCreatedBy,
+  type ScheduleExecutionPreference,
   type ScheduledTask,
   type ScheduledTaskRun,
   type ScheduleStatus,
@@ -36,6 +37,7 @@ function safeHashEqual(leftHex: string, rightHex: string): boolean {
 export interface ScheduleServiceOptions {
   store: Pick<Store, 'get' | 'transaction' | 'event' | 'repos'>;
   agents: Pick<AgentProfiles, 'requireReady'>;
+  nativeExecution?: boolean;
   clock?: () => Date;
   onChanged?: () => void;
 }
@@ -43,6 +45,7 @@ export interface ScheduleServiceOptions {
 export function createScheduleService({
   store,
   agents,
+  nativeExecution = false,
   clock = () => new Date(),
   onChanged,
 }: ScheduleServiceOptions) {
@@ -59,9 +62,31 @@ export function createScheduleService({
 
   function validatePolicyCombination(
     mode: 'readonly' | 'edit',
+    executionPreference: ScheduleExecutionPreference,
     approvalMode: 'automatic' | null,
     maxSearchChargeFen: number,
+    agentRevisionId: string | null,
   ): void {
+    if (executionPreference === 'native-v1') {
+      if (!nativeExecution) {
+        throw new AppError(
+          'NATIVE_EXECUTION_UNAVAILABLE',
+          '本机项目环境执行仅在已配对的 Linux 桌面端可用。',
+          403,
+        );
+      }
+      if (agentRevisionId) {
+        throw new AppError('AGENT_MODE_DENIED', '绑定智能体的任务不支持本机项目环境执行。', 403);
+      }
+      if (mode !== 'edit' || approvalMode !== null || maxSearchChargeFen > 0) {
+        throw new AppError(
+          'NATIVE_EXECUTION_INVALID',
+          '本机项目环境执行需使用修改权限，且不能与全工具自动审批组合。',
+          400,
+        );
+      }
+      return;
+    }
     if (approvalMode === 'automatic' && mode !== 'edit') {
       throw new AppError(
         'AUTOMATION_MODE_INVALID',
@@ -162,7 +187,13 @@ export function createScheduleService({
     validateSlugUnique(project.id, slug);
     const timeZone = validateTimeZone(input.timeZone ?? resolveSystemTimeZone());
     const approvalMode = input.approvalMode ?? null;
-    validatePolicyCombination(input.mode, approvalMode, input.maxSearchChargeFen);
+    validatePolicyCombination(
+      input.mode,
+      input.executionPreference,
+      approvalMode,
+      input.maxSearchChargeFen,
+      input.agentRevisionId ?? null,
+    );
     const targetSessionId = validateTargetSession(
       project.id,
       input.targetMode,
@@ -186,6 +217,7 @@ export function createScheduleService({
       timing,
       timeZone,
       mode: input.mode,
+      executionPreference: input.executionPreference,
       approvalMode,
       maxSearchChargeFen: input.maxSearchChargeFen,
       timeoutMs: input.timeoutMs ?? null,
@@ -234,10 +266,16 @@ export function createScheduleService({
         rawTargetSessionId,
       );
       const nextMode = patch.mode ?? current.mode;
+      const nextExecutionPreference: ScheduleExecutionPreference =
+        patch.executionPreference !== undefined
+          ? patch.executionPreference
+          : nextMode === 'readonly'
+            ? 'project-v1'
+            : current.executionPreference;
       const nextApprovalMode =
         patch.approvalMode !== undefined
           ? patch.approvalMode
-          : nextMode === 'readonly'
+          : nextMode === 'readonly' || nextExecutionPreference === 'native-v1'
             ? null
             : current.approvalMode;
       const nextMaxSearchChargeFen =
@@ -246,10 +284,16 @@ export function createScheduleService({
           : nextApprovalMode !== 'automatic'
             ? 0
             : current.maxSearchChargeFen;
-      validatePolicyCombination(nextMode, nextApprovalMode, nextMaxSearchChargeFen);
-
       const nextAgentRevisionId =
         patch.agentRevisionId !== undefined ? patch.agentRevisionId : current.agentRevisionId;
+      validatePolicyCombination(
+        nextMode,
+        nextExecutionPreference,
+        nextApprovalMode,
+        nextMaxSearchChargeFen,
+        nextAgentRevisionId,
+      );
+
       if (nextAgentRevisionId) agents.requireReady(current.projectId, nextAgentRevisionId);
 
       const nextTimeZone = validateTimeZone(patch.timeZone ?? current.timeZone);
@@ -296,6 +340,7 @@ export function createScheduleService({
         targetSessionId,
         agentRevisionId: nextAgentRevisionId,
         mode: nextMode,
+        executionPreference: nextExecutionPreference,
         approvalMode: nextApprovalMode,
         maxSearchChargeFen: nextMaxSearchChargeFen,
         timeoutMs: patch.timeoutMs !== undefined ? patch.timeoutMs : current.timeoutMs,

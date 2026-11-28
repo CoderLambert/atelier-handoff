@@ -23,6 +23,7 @@ export const scheduledTasks = sqliteTable('scheduled_tasks', {
   timingJson: text('timing_json').notNull(),
   timeZone: text('time_zone').notNull(),
   mode: text('mode').notNull(),
+  executionPreference: text('execution_preference').notNull().default('project-v1'),
   approvalMode: text('approval_mode'),
   maxSearchChargeFen: integer('max_search_charge_fen').notNull().default(0),
   timeoutMs: integer('timeout_ms'),

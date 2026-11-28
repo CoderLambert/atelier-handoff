@@ -345,6 +345,7 @@ export function createScheduleScheduler({
         text: effectivePrompt,
         idempotencyKey: runIdempotencyKey,
         mode: task.mode,
+        executionPreference: task.executionPreference,
         ...(task.approvalMode ? { approvalMode: task.approvalMode } : {}),
         ...(task.maxSearchChargeFen > 0 ? { maxSearchChargeFen: task.maxSearchChargeFen } : {}),
         scheduleMeta: {

@@ -23,6 +23,7 @@ import { useRunScheduleNow } from '@/use-query/schedules/use-run-schedule-now';
 import { useScheduleRuns } from '@/use-query/schedules/use-schedule-runs';
 import { useSchedules } from '@/use-query/schedules/use-schedules';
 import { useUpdateSchedule } from '@/use-query/schedules/use-update-schedule';
+import { useBootstrap } from '@/use-query/workspace/use-bootstrap';
 import { ScheduleForm } from './schedule-form';
 import { ScheduleHistory } from './schedule-history';
 import { ScheduleTriggerSection } from './schedule-trigger-section';
@@ -53,6 +54,8 @@ export function ScheduleInspectorPanel({
     if (initialTaskId) setSelectedId(initialTaskId);
   }, [initialTaskId]);
 
+  const bootstrap = useBootstrap();
+  const nativeExecution = bootstrap.data?.capabilities.nativeExecution === true;
   const schedulesQuery = useSchedules(projectId);
   const tasks = schedulesQuery.data ?? [];
   const activeTask = useMemo(
@@ -226,6 +229,7 @@ export function ScheduleInspectorPanel({
                   task={activeTask}
                   projects={projects}
                   sessions={sessions}
+                  nativeExecution={nativeExecution}
                   pending={updateMutation.isPending}
                   error={
                     updateMutation.error?.message ??

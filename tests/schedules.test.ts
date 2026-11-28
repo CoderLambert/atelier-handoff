@@ -795,3 +795,101 @@ test('http remote trigger narrow endpoint: Bearer token auth, idempotency, cross
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('native-v1 host project execution: validates capability & policy and forwards executionPreference to createRun', async () => {
+  const fixture = createFixture();
+  try {
+    const sandboxOnly = createScheduleService({
+      store: fixture.store,
+      agents: { requireReady: () => ({}) as never },
+      nativeExecution: false,
+    });
+    assert.throws(
+      () =>
+        sandboxOnly.create({
+          projectId: fixture.project.id,
+          title: 'Git sync',
+          prompt: 'git fetch && git status',
+          timing: { kind: 'manual' },
+          mode: 'edit',
+          executionPreference: 'native-v1',
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'NATIVE_EXECUTION_UNAVAILABLE',
+    );
+
+    const nativeService = createScheduleService({
+      store: fixture.store,
+      agents: { requireReady: () => ({}) as never },
+      nativeExecution: true,
+    });
+    assert.throws(
+      () =>
+        nativeService.create({
+          projectId: fixture.project.id,
+          title: 'Invalid combo',
+          prompt: 'git status',
+          timing: { kind: 'manual' },
+          mode: 'edit',
+          executionPreference: 'native-v1',
+          approvalMode: 'automatic',
+        }),
+      (error: unknown) => (error as { code?: string }).code === 'NATIVE_EXECUTION_INVALID',
+    );
+
+    const task = nativeService.create({
+      projectId: fixture.project.id,
+      slug: 'git-sync-native',
+      title: 'Git sync native',
+      prompt: 'git fetch && git status',
+      timing: { kind: 'manual' },
+      mode: 'edit',
+      executionPreference: 'native-v1',
+    });
+    assert.equal(task.executionPreference, 'native-v1');
+    assert.equal(task.approvalMode, null);
+
+    let capturedExecutionPreference: string | undefined;
+    const scheduler = createScheduleScheduler({
+      store: fixture.store,
+      createSession: async ({ projectId, title }) =>
+        fixture.store.put('sessions', {
+          id: 'sess-native-1',
+          projectId,
+          title: title ?? 'Automation',
+          status: 'active',
+          origin: 'schedule',
+          sdkSessionId: null,
+          draft: { text: '', contextPaths: [], attachmentIds: [], mode: 'edit' },
+          createdAt: now(),
+          updatedAt: now(),
+        }),
+      createRun: (async (
+        sessionId: string,
+        request: { text: string; executionPreference?: string },
+      ) => {
+        capturedExecutionPreference = request.executionPreference;
+        const run = fixture.store.put('runs', {
+          id: 'run-native-1',
+          sessionId,
+          status: 'completed',
+          mode: 'edit',
+          executor: 'native-v1',
+          prompt: request.text,
+          createdAt: now(),
+          startedAt: now(),
+          endedAt: now(),
+          error: null,
+          plan: [],
+        } as never);
+        return { run };
+      }) as never,
+      sameSessionRunning: () => false,
+      isShuttingDown: () => false,
+    });
+
+    await scheduler.runNow('git-sync-native');
+    assert.equal(capturedExecutionPreference, 'native-v1');
+  } finally {
+    fixture.cleanup();
+  }
+});

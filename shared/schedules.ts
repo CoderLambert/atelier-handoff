@@ -6,6 +6,9 @@
 import { z } from 'zod';
 
 export const scheduleTargetModeSchema = z.enum(['session', 'new_once', 'new']);
+
+export const scheduleExecutionPreferenceSchema = z.enum(['project-v1', 'native-v1']);
+export type ScheduleExecutionPreference = z.infer<typeof scheduleExecutionPreferenceSchema>;
 export type ScheduleTargetMode = z.infer<typeof scheduleTargetModeSchema>;
 
 export const scheduleMisfirePolicySchema = z.enum(['run_once', 'skip']);
@@ -129,6 +132,7 @@ export const scheduledTaskSchema = z
     timing: scheduleTimingSchema,
     timeZone: z.string().min(1).max(100),
     mode: z.enum(['readonly', 'edit']),
+    executionPreference: scheduleExecutionPreferenceSchema,
     approvalMode: z.literal('automatic').nullable(),
     maxSearchChargeFen: z.number().int().min(0).max(100_000),
     timeoutMs: z.number().int().min(10_000).max(3_600_000).nullable(),
@@ -183,6 +187,7 @@ export const createScheduledTaskInputSchema = z
     targetSessionId: z.string().min(1).nullable().optional(),
     agentRevisionId: z.string().min(1).nullable().optional(),
     mode: z.enum(['readonly', 'edit']).default('readonly'),
+    executionPreference: scheduleExecutionPreferenceSchema.default('project-v1'),
     approvalMode: z.literal('automatic').nullable().optional(),
     maxSearchChargeFen: z.number().int().min(0).max(100_000).default(0),
     timeoutMs: z.number().int().min(10_000).max(3_600_000).nullable().optional(),
@@ -205,6 +210,7 @@ export const updateScheduledTaskInputSchema = z
     targetSessionId: z.string().min(1).nullable().optional(),
     agentRevisionId: z.string().min(1).nullable().optional(),
     mode: z.enum(['readonly', 'edit']).optional(),
+    executionPreference: scheduleExecutionPreferenceSchema.optional(),
     approvalMode: z.literal('automatic').nullable().optional(),
     maxSearchChargeFen: z.number().int().min(0).max(100_000).optional(),
     timeoutMs: z.number().int().min(10_000).max(3_600_000).nullable().optional(),

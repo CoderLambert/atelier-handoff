@@ -100,6 +100,7 @@ export async function createApp(options: CreateAppOptions) {
   const schedulesRuntime = createSchedulesRuntime({
     store,
     agents,
+    nativeExecution,
     sameSessionRunning: execution.sameSessionRunning,
     isShuttingDown,
   });
