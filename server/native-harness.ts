@@ -1,12 +1,13 @@
 /**
  * @file 配置桌面本机执行所用的 SDK 工具、环境和项目指令。
- * @implementation 定义原生工具策略，过滤子进程环境，并有界读取项目协作指令。
- * @updated 2026-11-26T00:06:59+08:00
+ * @implementation 在 Claude 原生预设追加工作台指令，保留原生工具策略并有界读取项目协作指令。
+ * @updated 2026-11-28T18:50:22+08:00
  */
 import { closeSync, constants, openSync, readSync, fstatSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import { taskPlanGuidance } from './modules/runs/task-plan-guidance.js';
 
 export const nativeReadTools = ['Read', 'Glob', 'Grep', 'WebFetch'];
 export const nativeWorkTools = [
@@ -28,7 +29,11 @@ export function nativeSdkOptions(): Pick<
   return {
     permissionMode: 'default',
     allowedTools: [...nativeWorkTools],
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: nativeInstructions },
+    systemPrompt: {
+      type: 'preset',
+      preset: 'claude_code',
+      append: nativeInstructions + '\n\n' + taskPlanGuidance,
+    },
   };
 }
 

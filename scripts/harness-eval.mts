@@ -97,7 +97,7 @@ export function makeFixture(task: TaskId, seed: string): Fixture {
   };
 }
 
-export async function writeFixture(project: string, fixture: Fixture): Promise<void> {
+export async function writeFixture(project: string, fixture: Pick<Fixture, 'files'>): Promise<void> {
   await mkdir(project, { recursive: true });
   for (const [name, content] of Object.entries(fixture.files)) {
     await mkdir(dirname(join(project, name)), { recursive: true });

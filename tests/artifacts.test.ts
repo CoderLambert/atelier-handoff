@@ -1,3 +1,8 @@
+/**
+ * @file 验证成果文件发布、原件读取和交付范围。
+ * @implementation 用隔离存储检验发布边界、原件指纹和最新版本中的指定原文。
+ * @updated 2026-11-28T19:47:32+08:00
+ */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import {
@@ -19,6 +24,10 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { FileRecords } from '../server/artifacts.js';
 import { fingerprint } from '../server/files.js';
+import {
+  assertAcceptancePublication,
+  checkRunAcceptance,
+} from '../server/modules/runs/acceptance-check.js';
 import { Store } from '../server/store.js';
 import { emptyDraft, now, type Run } from '../shared/types.js';
 
@@ -227,4 +236,87 @@ test('file artifacts enforce PDF/text types, encoding and bounded sizes before s
     const text = await files.publishFile(run, output, 'limit.txt');
     assert.equal(text.size, 1024 * 1024);
     assert.equal((await readFile(join(store.directory, 'artifacts', text.id))).length, text.size);
+  }));
+
+test('reply-only publication preflight leaves no artifact bytes or receipt', async () =>
+  fixture(async ({ files, run, store, base }) => {
+    const checked = files.withPublicationCheck(() => {
+      throw new Error('reply only');
+    });
+    await assert.rejects(checked.publish(run, 'source.csv', 'copied input'), /reply only/);
+    assert.deepEqual(store.repos.artifacts.listByRun(run.id), []);
+    assert.equal(
+      await lstat(join(base, 'data/artifacts')).then(
+        () => true,
+        () => false,
+      ),
+      false,
+    );
+  }));
+
+test('delivery checks use the newest immutable version in this run and fail closed if unreadable', async () =>
+  fixture(async ({ files, run, store }) => {
+    const text = '请交付 report.md';
+    const check = () =>
+      checkRunAcceptance({
+        text,
+        answer: '已完成',
+        run,
+        store,
+        files,
+        signal: new AbortController().signal,
+      });
+    const previousRun = store.put('runs', { ...run, id: randomUUID() });
+    await files.publish(previousRun, 'report.md', 'old session output');
+    assert.equal((await check())[0]?.status, 'failed');
+    const empty = await files.publish(run, 'report.md', '');
+    assert.equal((await check())[0]?.status, 'failed');
+    const corrected = await files.publish(run, 'report.md', '# corrected');
+    const [ok] = await check();
+    assert.equal(ok?.artifactId, corrected.id);
+    assert.equal(ok?.fingerprint, corrected.fingerprint);
+    assert.equal(ok?.status, 'passed');
+    await writeFile(join(store.directory, 'artifacts', corrected.id), 'damaged');
+    const [bad] = await check();
+    assert.equal(bad?.status, 'unverified');
+    assert.notEqual(bad?.artifactId, empty.id);
+  }));
+
+test('publication respects the current exclusive handoff, including a change during the write', async () =>
+  fixture(async ({ files, run, store }) => {
+    assert.doesNotThrow(() => assertAcceptancePublication('交付 report.md', 'notes.txt'));
+    assert.throws(() => assertAcceptancePublication('只交付 report.md', 'notes.txt'), {
+      code: 'ARTIFACT_OUT_OF_SCOPE',
+    });
+    let checks = 0;
+    const scoped = files.withPublicationCheck((name) => {
+      assertAcceptancePublication(++checks === 1 ? '交付 report.md' : '只回复 22', name);
+    });
+    await assert.rejects(scoped.publish(run, 'report.md', 'draft'), { code: 'REPLY_ONLY' });
+    assert.deepEqual(store.repos.artifacts.listByRun(run.id), []);
+    assert.deepEqual(await readdir(join(store.directory, 'artifacts')), []);
+  }));
+
+test('an explicitly required passage must be in the requested original, even when the answer quotes it', async () =>
+  fixture(async ({ files, run, store }) => {
+    const text = '只交付 handoff.md。\nhandoff.md 必须包含「/export 待核实」。';
+    const check = async () =>
+      (
+        await checkRunAcceptance({
+          text,
+          answer: '/export 待核实',
+          files,
+          run,
+          store,
+          signal: new AbortController().signal,
+        })
+      ).find((c) => c.criterion === 'artifact_contains');
+    const draft = await files.publish(run, 'handoff.md', '/status 已通过');
+    const missing = await check();
+    assert.equal(missing?.artifactId, draft.id);
+    assert.equal(missing?.status, 'failed');
+    const fixed = await files.publish(run, 'handoff.md', '/status 已通过\n/export 待核实');
+    const verified = await check();
+    assert.equal(verified?.artifactId, fixed.id);
+    assert.equal(verified?.status, 'passed');
   }));

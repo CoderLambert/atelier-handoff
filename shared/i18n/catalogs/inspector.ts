@@ -826,6 +826,12 @@ export const inspector = {
   'event.createRun': ['创建运行', 'Run created'],
   'event.runStatus': ['运行状态更新', 'Run status updated'],
   'event.runFinished': ['运行结束', 'Run finished'],
+  'event.acceptanceChecked': ['交付验收', 'Delivery check'],
+  'event.acceptanceCorrection': [
+    '验收失败，已要求修正',
+    'Delivery check failed, correction requested',
+  ],
+  'event.acceptanceRecheck': ['修正后复验', 'Delivery recheck'],
   'event.processSpawned': ['启动执行进程', 'Execution process started'],
   'event.processExited': ['执行进程退出', 'Execution process exited'],
   'event.sdkInitialized': ['SDK 初始化', 'SDK initialized'],

@@ -1,7 +1,7 @@
 /**
  * @file 注册运行的计划、项目文件、交付物、工具输出和检索工具。
- * @implementation 按执行模式及智能体能力装配工具，委托审批、工作区写入、输出分页和命令在途登记。
- * @updated 2026-11-27T22:35:00+08:00
+ * @implementation 按执行模式及智能体能力装配工具和计划说明，委托审批、工作区写入、输出分页和命令在途登记。
+ * @updated 2026-11-28T18:50:22+08:00
  */
 import { z } from 'zod';
 import { AppError } from '../../../../shared/errors.js';
@@ -18,6 +18,7 @@ import { gatewaySearchArgs, searchGateway } from '../../../gateway-search.js';
 import { canReadToolOutput } from '../../../tool-output-context.js';
 import { searchToolOutput } from '../../../tool-output-search.js';
 import { lookupWeather, weatherLocation } from '../../../weather.js';
+import { taskPlanToolDescription } from '../task-plan-guidance.js';
 import type { RunMcpToolHost, ToolRegistration } from './types.js';
 
 export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolRegistration) {
@@ -41,7 +42,7 @@ export function registerBuiltinTools(host: RunMcpToolHost, registration: ToolReg
     ...[
       custom(
         'update_plan',
-        'Record or update the real task plan. Use only for tasks that benefit from steps; status changes must reflect actual work. This does not grant permissions.',
+        taskPlanToolDescription,
         {
           steps: z
             .array(

@@ -1,9 +1,9 @@
 /**
  * @file 提供对话内嵌的定时任务卡片与定时触发标识组件。
  * @implementation 解析 create/update_scheduled_task 工具输出并渲染可点击打开右侧详情面板的任务卡片，同时为带 scheduleMeta 的运行渲染触发头。
- * @updated 2026-11-27T15:15:00+08:00
+ * @updated 2026-11-28T16:45:44+08:00
  */
-import { Clock } from 'lucide-react';
+import { ChevronRight, Clock } from 'lucide-react';
 import {
   scheduledTaskSchema,
   type RunScheduleMeta,
@@ -67,23 +67,22 @@ export function ScheduledTaskCard({
   const summary = formatScheduleSummary(task, (key) => t(key as never));
   return (
     <div className="schedule-chat-card" data-schedule-task-id={task.id}>
-      <div className="schedule-chat-card-main">
-        <span className="schedule-chat-card-icon" aria-hidden="true">
-          <Clock className="size-4" />
-        </span>
-        <div className="schedule-chat-card-text">
-          <div className="schedule-chat-card-title">
-            <span>{task.title}</span>
-            <Badge variant={task.status === 'active' ? 'default' : 'secondary'}>
-              {t(`status.${task.status}`)}
-            </Badge>
-          </div>
-          <p className="schedule-chat-card-meta">{summary}</p>
+      <span className="schedule-chat-card-icon" aria-hidden="true">
+        <Clock className="size-4" />
+      </span>
+      <div>
+        <div className="schedule-chat-card-title">
+          <span className="min-w-0">{task.title}</span>
+          <Badge variant={task.status === 'active' ? 'success' : 'secondary'}>
+            {t(`status.${task.status}`)}
+          </Badge>
         </div>
+        <p className="schedule-chat-card-meta">{summary}</p>
       </div>
       {onOpen ? (
-        <Button type="button" variant="outline" size="sm" onClick={() => onOpen(task.id)}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onOpen(task.id)}>
           {t('actions.open')}
+          <ChevronRight data-icon="inline-end" aria-hidden="true" />
         </Button>
       ) : null}
     </div>

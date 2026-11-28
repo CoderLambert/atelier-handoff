@@ -64,6 +64,10 @@ const RUNTIME_MIGRATIONS = [
   'server/db/migrations/0009-git-commit-operations.sql',
   'server/db/migrations/0010-git-commit-operation-lifecycle.sql',
   'server/db/migrations/0011-runtime-hotpath-indexes.sql',
+  'server/db/migrations/0012-scheduled-tasks.sql',
+  'server/db/migrations/0013-schedule-triggers.sql',
+  'server/db/migrations/0014-schedule-execution-preference.sql',
+  'server/db/migrations/0015-schedule-model-effort.sql',
 ];
 // LICENSE from the official Node 24.21.0 distribution, never host /usr/share.
 const NODE_LICENSE_SHA256 = '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace';
@@ -115,10 +119,12 @@ const runtimeRoots = [
   '@modelcontextprotocol/sdk',
   'better-sqlite3',
   'chokidar',
+  'croner',
   'diff',
   'drizzle-orm',
   'mammoth',
   'pdfjs-dist',
+  'playwright-core',
   'xlsx',
   'yaml',
   'yauzl',
@@ -143,6 +149,7 @@ const forbiddenDirectories = new Set([
   '.data',
 ]);
 const licenseName = /^(?:licen[cs]e|copying|notice|copyright)(?:[.-].*)?$/i;
+const playwrightNotice = /^(?:ThirdPartyNotices\.txt|lib\/[^/]+\.LICENSE)$/;
 const configName =
   /^(?:tsconfig|eslint|prettier|rollup|webpack|vite|vitest|jest|gulp|grunt|babel)(?:[.-]|$)/i;
 const releaseExtensions = new Set(['.js', '.mjs', '.cjs', '.json', '.node', '.wasm']);
@@ -498,6 +505,7 @@ async function packageFiles(directory: string, value: Manifest, prefix = ''): Pr
     else if (entry.isFile()) {
       const legal =
         licenseName.test(entry.name) ||
+        (value.name === 'playwright-core' && playwrightNotice.test(name)) ||
         (value.name.startsWith('@anthropic-ai/claude-agent-sdk') && name === 'README.md');
       const code =
         releaseExtensions.has(extname(entry.name)) &&
@@ -840,6 +848,8 @@ async function packageRelease(work: string): Promise<string[]> {
           (item.manifest.name.startsWith('@anthropic-ai/claude-agent-sdk') && name === 'README.md'),
       )
       .sort();
+    if (item.manifest.name === 'playwright-core')
+      names.push(...(await files(source)).filter((name) => playwrightNotice.test(name)).sort());
     const texts: LicenseText[] = [];
     for (const name of names) {
       if (!(await lstat(join(source, name))).isFile()) continue;
@@ -1071,7 +1081,21 @@ async function packageRelease(work: string): Promise<string[]> {
             '--input-type=module',
             '-e',
             `
+              const { registerHooks } = await import('node:module');
+              const stagedRoot = new URL('./', import.meta.url).href;
+              registerHooks({
+                resolve(specifier, context, next) {
+                  const result = next(specifier, context);
+                  if (result.url.startsWith('file:') && !result.url.startsWith(stagedRoot))
+                    throw new Error('Runtime dependency resolved outside the staged package: ' + specifier);
+                  return result;
+                }
+              });
               await import('./server/app.js');
+              const { Store } = await import('./server/store.js');
+              const fresh = new Store(process.argv[1]);
+              fresh.close();
+              await import('playwright-core');
               await import('@anthropic-ai/claude-agent-sdk');
               await import('@anthropic-ai/sdk');
               const {DatabaseSync}=await import('node:sqlite');
@@ -1092,6 +1116,7 @@ async function packageRelease(work: string): Promise<string[]> {
               console.log(JSON.stringify({node:process.versions.node,sqlite:row?.ok===1,
                 betterSqlite3:nativeRow?.ok===1,drizzle:ormRow?.ok===1}));
             `,
+            join(work, 'store-probe'),
           ],
           { cwd: runtime },
         ),

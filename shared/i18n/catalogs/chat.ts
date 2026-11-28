@@ -286,6 +286,16 @@ export const chat = {
   'conversation.resumeReadOnly': ['只读续接', 'Resume read-only'],
   'conversation.context': ['本轮已读取的上下文', 'Context read for this turn'],
   'conversation.deliverables': ['本轮交付物', 'Deliverables for this turn'],
+  'conversation.acceptancePassed': [
+    '已核验 {{count}} 项交付条件',
+    'Verified delivery conditions ({{count}})',
+  ],
+  'conversation.acceptanceFailed': ['交付验收未通过', 'Delivery checks failed'],
+  'conversation.acceptanceUnverified': [
+    '交付条件未能核验',
+    'Delivery conditions could not be verified',
+  ],
+  'conversation.acceptanceVersion': ['已核验此版本', 'Checked version'],
   'conversation.executionResult': ['本轮执行结果', 'Execution result for this turn'],
   'conversation.extension': ['{{kind}} · {{name}}', '{{kind}} · {{name}}'],
   'conversation.incompleteReply': ['回复未完成', 'Reply incomplete'],

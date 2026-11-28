@@ -191,6 +191,7 @@ export function eventName(type: string) {
     'run.created': t('event.createRun'),
     'run.status_changed': t('event.runStatus'),
     'run.finished': t('event.runFinished'),
+    'run.acceptance_checked': t('event.acceptanceChecked'),
     'process.spawned': t('event.processSpawned'),
     'process.exited': t('event.processExited'),
     'sdk.initialized': t('event.sdkInitialized'),

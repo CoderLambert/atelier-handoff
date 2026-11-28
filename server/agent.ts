@@ -1,7 +1,7 @@
 /**
  * @file 编排智能体运行、SDK 会话续接、工具生命周期与取消。
- * @implementation 协调 SDK 流、工具、子任务和会话续接，委托运行模块管理进程、启动资源、任务帧协调、票据门禁、实时输入和转录。将请求计时及运行终态写入本地存储。
- * @updated 2026-11-27T20:10:00+08:00
+ * @implementation 协调 SDK 流、工具、子任务和会话续接，按本轮能力装配清单，关联主会话 Stop 验收、发布范围检查与最终运行状态。
+ * @updated 2026-11-28T19:47:32+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -43,8 +43,11 @@ import {
 import { finalizeUnfinishedRunTools } from './modules/runs/recovery.js';
 import { RunTranscriptLedger } from './modules/runs/run-transcript-ledger.js';
 import { buildInitialPrompt, RunEnvironment } from './modules/runs/run-environment.js';
+import { taskPlanGuidance } from './modules/runs/task-plan-guidance.js';
 import { createRunProcessOwner } from './modules/runs/run-process-owner.js';
 import { resolveRunOutcome } from './modules/runs/run-outcome.js';
+import { RunAcceptanceStop } from './modules/runs/acceptance-stop.js';
+import { assertAcceptancePublication } from './modules/runs/acceptance-check.js';
 import { consumeSdkStream } from './modules/runs/sdk-stream-consumer.js';
 import { SdkTaskCoordinator } from './modules/runs/sdk-task-coordinator.js';
 import { createToolCallRecorder } from './modules/runs/tool-call-recorder.js';
@@ -312,13 +315,23 @@ export class AgentRunner implements Runner {
       }
       return messages.length ? messages.join('\n') : undefined;
     };
-    let observedModel = modelId;
     let failure: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const commands = new Set<Promise<unknown>>();
     const toolWork = new Map<Promise<unknown>, string | undefined>();
     const delegate = process.env.ATELIER_DISABLE_SUBAGENTS !== '1';
     const sdkSessionId = (resumeExisting && session.sdkSessionId) || randomUUID();
+    const acceptance = new RunAcceptanceStop(
+      run,
+      this.store,
+      this.files,
+      signal,
+      sdkSessionId,
+      promptMessageId,
+    );
+    const runFiles = this.files.withPublicationCheck((name) =>
+      assertAcceptancePublication(acceptance.text, name),
+    );
     const subagents = new SubagentRun(
       run,
       sdkSessionId,
@@ -368,7 +381,6 @@ export class AgentRunner implements Runner {
     });
     let assistantId = ledger.initialize(promptMessageId, createAssistant);
     let assistantAnchor: string | undefined;
-    let previousCost = resumeExisting ? (session.sdkCostTotal ?? null) : 0;
     const turn = new LiveTurnCoordinator({
       native,
       sdkSessionId,
@@ -395,6 +407,7 @@ export class AgentRunner implements Runner {
           return createAssistant();
         });
         assistantAnchor = undefined;
+        acceptance.replaceInput(message.text, message.id);
       },
       publishInput: (messageId) =>
         this.store.event(run.id, session.id, 'message.delta', { messageId }),
@@ -461,7 +474,7 @@ export class AgentRunner implements Runner {
       approve: (operation, scope) =>
         this.permissions.request(run, workingDirectory, operation, scope),
       writeProject,
-      artifacts: this.files,
+      artifacts: runFiles,
       browserAccess: this.browserAccess,
       mcp,
       mcpSessions: this.mcpSessions,
@@ -471,7 +484,7 @@ export class AgentRunner implements Runner {
       packages,
       storage: this.store.directory,
       executePackage: (options) =>
-        executeSkillPackage({ ...options, run, storage: this.store.directory, files: this.files }),
+        executeSkillPackage({ ...options, run, storage: this.store.directory, files: runFiles }),
       schedules: this.schedules,
     });
     if (bindingGuidance.length)
@@ -624,9 +637,10 @@ export class AgentRunner implements Runner {
             (delegate
               ? '遇到能独立完成的多部分任务时，主动通过 Agent 分工。用 atelier-explore 调查、用 atelier-worker 执行授权内的本地操作。明确每项任务的目标、范围和验收证据，独立任务尽量同批派发。用户指定子任务数时按该数量分工。遇到 SDK 调度限制时明确报告并保留待派发任务。子任务拿不到聊天历史，brief 只带完成任务所需的信息。收齐结果后用实际证据给出一个答复，简单任务直接处理。已知来源可由主会话直接打开核实。需要发现来源时按需搜索；重复结果可交付已有发现。共享浏览器、成果发布、整轮计划及其他外部服务由主会话操作。'
               : '') +
-            '仅使用工作台提供的工具访问本轮选定的外部服务。拒绝后不要绕过或重复操作。复杂任务用 update_plan 记录真实计划，简单问题无需计划。用户需要文档交付物时调用 publish_artifact 保存真实内容；不要把所有项目源文件自动当成果。只有工具返回成功才宣称文件已修改。继续会话时以当前文件为准，不自动重做之前的副作用。',
+            '仅使用工作台提供的工具访问本轮选定的外部服务。拒绝后不要绕过或重复操作。用户需要文档交付物时调用 publish_artifact 保存真实内容；不要把所有项目源文件自动当成果。只有工具返回成功才宣称文件已修改。继续会话时以当前文件为准，不自动重做之前的副作用。' +
+            (allowed('plan') ? '\n\n' + taskPlanGuidance : ''),
           ...(native ? nativeSdkOptions() : {}),
-          hooks,
+          hooks: { ...hooks, ...acceptance.hooks },
           spawnClaudeCodeProcess: processOwner.spawnClaudeCodeProcess,
         },
       });
@@ -657,8 +671,8 @@ export class AgentRunner implements Runner {
         sessionId: session.id,
         configKey,
         resumeExisting,
-        initialModel: observedModel,
-        initialCost: previousCost,
+        initialModel: modelId,
+        initialCost: resumeExisting ? (session.sdkCostTotal ?? null) : 0,
         signal,
         live,
         store: this.store,
@@ -679,6 +693,10 @@ export class AgentRunner implements Runner {
         },
         cleanError: (error, maxChars) => this.clean(error, maxChars),
       }));
+      turn.onClosing();
+      const result = turn.result;
+      if (!failure && !signal.aborted && result?.subtype === 'success' && !result.is_error)
+        failure = await acceptance.finalFailure(result.result);
     } catch (error) {
       failure = this.clean(error);
       if (!signal.aborted) {
@@ -701,6 +719,7 @@ export class AgentRunner implements Runner {
       live.canInsertNow = undefined;
       // Block new approvals and queued writes whenever the SDK can no longer consume their results.
       turn.onClosing();
+      acceptance.close();
       const finalResult = turn.result;
       if (
         !finalResult ||

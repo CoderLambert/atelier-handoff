@@ -220,6 +220,10 @@ async function verifyResources(
     'resources/runtime/server/db/migrations/0009-git-commit-operations.sql',
     'resources/runtime/server/db/migrations/0010-git-commit-operation-lifecycle.sql',
     'resources/runtime/server/db/migrations/0011-runtime-hotpath-indexes.sql',
+    'resources/runtime/server/db/migrations/0012-scheduled-tasks.sql',
+    'resources/runtime/server/db/migrations/0013-schedule-triggers.sql',
+    'resources/runtime/server/db/migrations/0014-schedule-execution-preference.sql',
+    'resources/runtime/server/db/migrations/0015-schedule-model-effort.sql',
   ];
   assert.deepEqual(
     [...seen].filter(

@@ -496,6 +496,10 @@ function TraceEvent({
     label = `${name} · ${event.payload.tool}`;
   else if (event.type === 'run.finished' && typeof event.payload.reason === 'string')
     label = `${name} · ${event.payload.reason}`;
+  else if (event.type === 'run.acceptance_checked' && event.payload.correctionRequested === true)
+    label = t('event.acceptanceCorrection');
+  else if (event.type === 'run.acceptance_checked' && event.payload.phase === 'recheck')
+    label = t('event.acceptanceRecheck');
   return (
     <details
       className="group"

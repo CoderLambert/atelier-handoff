@@ -1,7 +1,7 @@
 /**
  * @file 管理会话附件、交付物与工具结果的本地原件。
- * @implementation 流式接收文档并核对归属，保存工具回执和 SDK 提供的 Bash 日志，按会话读取与清理。
- * @updated 2026-11-22T21:17:02+08:00
+ * @implementation 限定文件类型、大小和路径，在写入前后核对发布范围，读取时复核原件指纹，同时管理附件、工具回执和 SDK Bash 日志。
+ * @updated 2026-11-28T19:47:32+08:00
  */
 import { randomUUID } from 'node:crypto';
 import { constants, mkdirSync, writeFileSync } from 'node:fs';
@@ -107,7 +107,13 @@ async function readOutputFile(root: string, path: string, limit: number): Promis
 }
 
 export class FileRecords {
-  constructor(private readonly store: Store) {}
+  constructor(
+    private readonly store: Store,
+    private readonly checkPublication?: (name: string) => void,
+  ) {}
+  withPublicationCheck(check: (name: string) => void) {
+    return new FileRecords(this.store, check);
+  }
   private path(kind: 'artifacts' | 'attachments', id: string): string {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new AppError('NOT_FOUND', '文件记录不存在。', 404);
     return join(this.store.directory, kind, id);
@@ -329,6 +335,7 @@ export class FileRecords {
     bytes: Buffer,
     mime: string,
   ): Promise<Artifact> {
+    this.checkPublication?.(name);
     const artifact: Artifact = {
       id: randomUUID(),
       runId: run.id,
@@ -349,7 +356,14 @@ export class FileRecords {
       mode: 0o600,
       flag: 'wx',
     });
-    this.store.put('artifacts', artifact);
+    try {
+      // An inserted user message may have changed the requested delivery during the write.
+      this.checkPublication?.(name);
+      this.store.put('artifacts', artifact);
+    } catch (error) {
+      await unlink(this.path('artifacts', artifact.id));
+      throw error;
+    }
     this.store.event(run.id, run.sessionId, 'artifact.created', {
       artifactId: artifact.id,
     });

@@ -240,9 +240,13 @@ export const OrderedRun = memo(function OrderedRun(props: OrderedTurnProps) {
         .map((permission) => (
           <div key={permission.id}>{renderPermission(permission)}</div>
         ))}
-      {scheduleCards.map((task) => (
-        <ScheduledTaskCard key={task.id} task={task} onOpen={onOpenSchedule} />
-      ))}
+      {scheduleCards.length > 0 && (
+        <div className="schedule-chat-cards">
+          {scheduleCards.map((task) => (
+            <ScheduledTaskCard key={task.id} task={task} onOpen={onOpenSchedule} />
+          ))}
+        </div>
+      )}
       <RunEndSummary slice={slice} state={props} />
     </section>
   );

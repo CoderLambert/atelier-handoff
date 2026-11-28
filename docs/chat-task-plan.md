@@ -2,9 +2,13 @@
 
 会话输入框上方的任务看板展示当前这轮的计划和完成进度，例如 `任务 2/3`。标题可用鼠标、Enter 或空格展开和收起。当前这轮的清单位于上下文和权限控件上方。最多三项且有未完成项时默认展开，用户手动切换后保留选择。旧计划从对应的助手消息中查看。
 
+## 任务内容如何生成
+
+受控执行和本机信任模式使用同一份任务清单指令。指令要求 Agent 先核对影响拆解的材料，再按依赖排序写出动作、对象和可检查的结果。提交前对照用户原话检查漏项和额外范围。只读任务安排调查和汇报。用户修正要求时更新受影响的步骤，完成状态以实际检查为依据。[生成规则](../server/modules/runs/task-plan-guidance.ts) · [设计与验证](decisions/2026-11-28-task-plan-generation.md)
+
 ## 计划从哪里来
 
-1. **运行时写入计划。** 模型调用工作台的 `update_plan` 时，运行时校验任务文本和状态，将整份列表写入当前 `Run.plan`，然后记录 `plan.updated` 事件。可用的 SDK `TodoWrite` 在工具完成后也会转换成同一份 `Step[]`。每项任务有 `content` 和 `status`，状态为 `pending`、`in_progress` 或 `completed`。[工作台工具](../server/agent.ts#L649) · [SDK 回执处理](../server/agent.ts#L1790) · [运行记录写入](../server/store.ts#L163)
+1. **运行时写入计划。** 模型调用工作台的 `update_plan` 时，运行时校验任务文本和状态，将整份列表写入当前 `Run.plan`，然后记录 `plan.updated` 事件。可用的 SDK `TodoWrite` 在工具完成后也会转换成同一份 `Step[]`。每项任务有 `content` 和 `status`，状态为 `pending`、`in_progress` 或 `completed`。[工作台工具](../server/modules/runs/mcp-tools/builtin-tools.ts#L42) · [SDK 回执处理](../server/modules/runs/tool-hooks.ts#L298) · [运行记录写入](../server/agent.ts#L458)
 2. **事件通知前端刷新。** 全局 SSE 把事件送到 `useRunEvents`。前端按 `sessionId` 合并刷新请求，使 TanStack Query 中对应的会话快照失效，并通过 `GET /api/sessions/:id` 读取最新记录。连接重开时会刷新可见数据，活动会话也有已有的快照轮询兜底。计划数据随运行持久化，重新打开会话时可以从同一个接口恢复。[事件订阅](../frontend/src/app/events.ts#L16) · [快照查询](../frontend/src/app/workspace.tsx#L160) · [快照读取](../server/db/repositories/session-snapshot.ts#L24)
 3. **组件派生完成数。** `TaskPlan` 用 `completed` 条目数和列表总长度生成标题。三个状态分别使用空心圆、圆点和勾选图标，已完成文字加删除线。读屏软件可获取完整的完成数、折叠状态及每项的状态。停止、出错或收到最终回复时，界面继续展示实际保存的任务状态。[清单组件](../frontend/src/features/chat/task-plan.tsx#L12) · [双语词条](../shared/i18n/catalogs/chat.ts#L553)
 
@@ -33,4 +37,21 @@
 
 仓库的 Chromium 回归用例覆盖键盘折叠、完成数更新、历史消息归属和会话隔离。桌面验收使用隔离 Electron、真实 SDK 和本地回环模型，验证计划从 `0/2` 更新到 `2/2`、中英文界面和四档窗口宽度。验收环境与结果见执行日志。[浏览器回归](../frontend/src/features/chat/message-actions.test.ts#L906) · [桌面验收记录](../openspec/roadmaps/build-atelier-desktop/task-log.md#2026-11-23--输入框上方的任务清单)
 
+要比较新旧提示生成的清单及后续交付物，可以运行[本地任务质量评测](task-plan-eval.md)。
+
 回退时可恢复消息内的原有计划展示。改动范围是聊天组件、样式和词条，运行记录沿用原有 `Run.plan` 字段，已保存的计划继续可读。
+
+## 怎样看出交付已经实测
+
+任务看板的勾选来自 Agent。对能独立检查的明确要求，工作台还会在运行结束前检查最终回复和本轮可下载的原件。聊天结果列出通过的条件数，并在对应的文件版本旁显示「已核验此版本」。同名文件经过修正时，两个版本都保留，可以从执行轨迹看到各自的指纹和结果。
+
+| 用户请求示例 | 工作台实际核对的内容 |
+| --- | --- |
+| `只回复 22` | SDK 最终答复去除首尾空白后为指定文字，本次请求没有发布文件。 |
+| `请交付 report.md` | 本轮确实发布了这个名称的非空原件，读取的字节与已存指纹一致。 |
+| 第一行写 `只交付 report.md。`，下一行写 `report.md 必须包含「/export 待核实」。` | 发布范围、原件指纹，以及最新版本中是否有这段原文。回复里引用同样的文字不能满足文件条件。支持 Markdown、TXT、CSV、JSON、YAML 和日志的原文匹配。 |
+| `只交付 handout.html。检查 375px、1440px 布局和单页 A4 打印。` | 在两个指定宽度渲染静态原件，检查文档横向溢出。打印成 PDF 后检查页数、纸张尺寸和首页是否有可见内容。 |
+
+首次发现可修正的错误时，运行时将实测原因发回同一 Agent，本轮最多修正一次，再用同样的条件检查新版。原件不可读、依赖不可用或隔离渲染不足以作判断时，轨迹记录未能核验。复验还有失败时，聊天显示「交付验收未通过」。可以在结果旁打开执行轨迹查看每项条件、实测值与文件指纹。
+
+HTML 实测目前需要非 root Linux x64、系统 Chromium、bubblewrap、prlimit、timeout 和 Poppler。页面脚本不执行，依赖外部资源或动态生成正文的页面可能无法核验布局。运行时只对能够从用户本人指令中无歧义识别的条件自动检查。来源是否权威、结论是否正确、履历是否贴合岗位，以及界面是否美观等内容仍需要相应的证据或人工评阅。

@@ -1,11 +1,12 @@
 /**
  * @file 有序对话与旧历史共用的气泡、消息页脚、审批及运行结果。
- * @implementation 保留两类消息的操作显示条件与时间格式，复用运行结果和交付物的 DOM。
- * @updated 2026-11-27T19:30:00+08:00
+ * @implementation 保留消息操作与时间格式，校验最近用户消息对应的验收回执，按成果 ID 和指纹展示已核对的版本。
+ * @updated 2026-11-28T19:47:32+08:00
  */
 import { useMemo } from 'react';
 import { Activity, File, Folder, RotateCcw, Shield } from 'lucide-react';
 import type { Message, Permission, Run, ToolCall } from '@shared/types';
+import { acceptanceReceipt } from '@shared/run-acceptance';
 import { useUiTranslation } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { ArtifactAction } from '@/features/inspector';
@@ -67,12 +68,14 @@ function BrowserToolNotice({
 function RunResult({
   run,
   hasText,
+  acceptanceLabel,
   retryDisabled,
   onRetry,
   onTrace,
 }: {
   run: Run;
   hasText: boolean;
+  acceptanceLabel?: string;
   retryDisabled: boolean;
   onRetry: (id: string) => void;
   onTrace: (id: string) => void;
@@ -82,7 +85,7 @@ function RunResult({
   const canRetry = recoverable(run);
   const detail =
     run.status === 'stopped' ? t('conversation.stoppedReason') : run.error || run.reason;
-  if (!canRetry && !run.error && !run.reason) return null;
+  if (!acceptanceLabel && !canRetry && !run.error && !run.reason) return null;
   const title = canRetry
     ? hasText
       ? t('conversation.partialReply')
@@ -95,7 +98,7 @@ function RunResult({
       aria-label={t('conversation.runResult')}
     >
       <div className="run-recovery-heading">
-        <strong>{title}</strong>
+        <strong>{acceptanceLabel ?? title}</strong>
         <div className="run-recovery-actions">
           <Button type="button" variant="outline" size="sm" onClick={() => onTrace(run.id)}>
             <Activity data-icon="inline-start" aria-hidden="true" />
@@ -333,7 +336,7 @@ type EndState = Pick<TurnState, 'retryDisabled' | 'actions'>;
 type EndSlice = RunSlice & { run: Run };
 
 export function RunEndExtras({
-  slice: { run, tools, artifacts },
+  slice: { run, tools, artifacts, messages, events },
   state: { retryDisabled, actions },
   hasText,
   showSummary,
@@ -346,6 +349,27 @@ export function RunEndExtras({
   const { t } = useUiTranslation('chat');
   const active = isActive(run);
   const onTrace = () => actions.onTrace(run.id);
+  const finalReceipt = useMemo(() => {
+    if (run.status !== 'completed' && run.status !== 'failed') return;
+    const payload = events.findLast((event) => event.type === 'run.acceptance_checked')?.payload;
+    if (!payload) return;
+    const receipt = acceptanceReceipt.safeParse(payload);
+    if (!receipt.success || receipt.data.correctionRequested) return;
+    const latestUser = messages.findLast((message) => message.role === 'user');
+    if (!latestUser || receipt.data.messageId !== latestUser.id) return;
+    return receipt.data;
+  }, [events, messages, run.status]);
+  const checked = finalReceipt?.checks;
+  const passed = Boolean(checked?.every((check) => check.status === 'passed'));
+  let acceptanceLabel: string | undefined;
+  if (checked) {
+    if (passed && run.status === 'completed')
+      acceptanceLabel = t('conversation.acceptancePassed', { count: checked.length });
+    else if (!passed)
+      acceptanceLabel = checked.some((check) => check.status === 'failed')
+        ? t('conversation.acceptanceFailed')
+        : t('conversation.acceptanceUnverified');
+  }
   return (
     <>
       <BrowserToolNotice tools={tools} onTrace={onTrace} />
@@ -353,6 +377,7 @@ export function RunEndExtras({
       <RunResult
         run={run}
         hasText={hasText}
+        acceptanceLabel={acceptanceLabel}
         retryDisabled={retryDisabled}
         onRetry={actions.onRetry}
         onTrace={actions.onTrace}
@@ -364,6 +389,16 @@ export function RunEndExtras({
             {artifacts.map((artifact) => (
               <li key={artifact.id}>
                 <ArtifactAction artifact={artifact} showDownload variant="compact" />
+                {passed &&
+                run.status === 'completed' &&
+                checked?.some(
+                  (check) =>
+                    check.artifactId === artifact.id && check.fingerprint === artifact.fingerprint,
+                ) ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t('conversation.acceptanceVersion')}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
