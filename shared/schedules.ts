@@ -4,10 +4,13 @@
  * @updated 2026-11-27T15:00:00+08:00
  */
 import { z } from 'zod';
+import { reasoningEfforts } from './models.js';
 
 export const scheduleTargetModeSchema = z.enum(['session', 'new_once', 'new']);
 
 export const scheduleExecutionPreferenceSchema = z.enum(['project-v1', 'native-v1']);
+export const scheduleModelSchema = z.string().trim().min(1).max(200).regex(/^\S+$/u);
+export const scheduleEffortSchema = z.enum(reasoningEfforts);
 export type ScheduleExecutionPreference = z.infer<typeof scheduleExecutionPreferenceSchema>;
 export type ScheduleTargetMode = z.infer<typeof scheduleTargetModeSchema>;
 
@@ -127,6 +130,8 @@ export const scheduledTaskSchema = z
     targetMode: scheduleTargetModeSchema,
     targetSessionId: z.string().min(1).nullable(),
     agentRevisionId: z.string().min(1).nullable(),
+    model: scheduleModelSchema.nullable(),
+    effort: scheduleEffortSchema.nullable(),
     title: z.string().min(1).max(160),
     prompt: z.string().min(1).max(32_000),
     timing: scheduleTimingSchema,
@@ -186,6 +191,8 @@ export const createScheduledTaskInputSchema = z
     targetMode: scheduleTargetModeSchema.default('new_once'),
     targetSessionId: z.string().min(1).nullable().optional(),
     agentRevisionId: z.string().min(1).nullable().optional(),
+    model: scheduleModelSchema.nullable().optional(),
+    effort: scheduleEffortSchema.nullable().optional(),
     mode: z.enum(['readonly', 'edit']).default('readonly'),
     executionPreference: scheduleExecutionPreferenceSchema.default('project-v1'),
     approvalMode: z.literal('automatic').nullable().optional(),
@@ -209,6 +216,8 @@ export const updateScheduledTaskInputSchema = z
     targetMode: scheduleTargetModeSchema.optional(),
     targetSessionId: z.string().min(1).nullable().optional(),
     agentRevisionId: z.string().min(1).nullable().optional(),
+    model: scheduleModelSchema.nullable().optional(),
+    effort: scheduleEffortSchema.nullable().optional(),
     mode: z.enum(['readonly', 'edit']).optional(),
     executionPreference: scheduleExecutionPreferenceSchema.optional(),
     approvalMode: z.literal('automatic').nullable().optional(),

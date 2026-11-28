@@ -104,8 +104,6 @@
   flex: 1;
   min-height: 80px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
 .history-item {
   position: relative;

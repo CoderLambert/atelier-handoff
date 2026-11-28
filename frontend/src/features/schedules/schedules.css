@@ -326,45 +326,6 @@
   color: var(--muted);
 }
 
-.schedules-input,
-.schedules-textarea {
-  width: 100%;
-  min-width: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--input, var(--border));
-  background: var(--card, var(--surface));
-  color: var(--fg);
-  font-size: var(--text-sm);
-  transition:
-    border-color var(--motion-feedback, 140ms) ease,
-    background-color var(--motion-feedback, 140ms) ease;
-}
-
-.schedules-input {
-  height: var(--ui-size-md, 36px);
-  padding: 0 12px;
-}
-
-.schedules-textarea {
-  padding: 10px 12px;
-  line-height: 1.6;
-  resize: vertical;
-  min-height: 108px;
-}
-
-.schedules-input:focus-visible,
-.schedules-textarea:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-  border-color: var(--ring);
-}
-
-.schedules-input::placeholder,
-.schedules-textarea::placeholder {
-  color: var(--muted);
-  opacity: 0.75;
-}
-
 .schedules-mono {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }

@@ -17,6 +17,8 @@ export const scheduledTasks = sqliteTable('scheduled_tasks', {
     onDelete: 'set null',
   }),
   agentRevisionId: text('agent_revision_id'),
+  model: text('model'),
+  effort: text('effort'),
   title: text('title').notNull(),
   prompt: text('prompt').notNull(),
   timingKind: text('timing_kind').notNull(),

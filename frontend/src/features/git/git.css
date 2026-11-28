@@ -310,25 +310,9 @@
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    scrollbar-color: auto;
     scrollbar-gutter: stable;
     padding: 6px;
     outline-offset: -2px;
-  }
-  .git-file-scroll::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
-  }
-  .git-file-scroll::-webkit-scrollbar-thumb {
-    border-radius: var(--radius-sm);
-    background: var(--ui-border);
-  }
-  .git-file-scroll:hover::-webkit-scrollbar-thumb,
-  .git-file-scroll:focus-within::-webkit-scrollbar-thumb {
-    background: var(--ui-muted-foreground);
-  }
-  .git-file-scroll::-webkit-scrollbar-button {
-    display: none;
   }
   .git-file-discard {
     opacity: 0;
@@ -503,57 +487,6 @@
   .git-diff-code:focus-visible {
     outline: 2px solid var(--ui-ring);
   }
-  .git-panel,
-  .git-list,
-  .git-tree-details,
-  .git-history-list,
-  .git-diff-code,
-  .git-commit-inventory-list {
-    scrollbar-width: thin;
-    scrollbar-color: var(--ui-border) transparent;
-  }
-  .git-panel:hover,
-  .git-list:hover,
-  .git-tree-details:hover,
-  .git-history-list:hover,
-  .git-diff-code:hover,
-  .git-commit-inventory-list:hover {
-    scrollbar-color: var(--ui-muted-foreground) transparent;
-  }
-  .git-panel::-webkit-scrollbar,
-  .git-list::-webkit-scrollbar,
-  .git-tree-details::-webkit-scrollbar,
-  .git-history-list::-webkit-scrollbar,
-  .git-diff-code::-webkit-scrollbar,
-  .git-commit-inventory-list::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  .git-panel::-webkit-scrollbar-track,
-  .git-list::-webkit-scrollbar-track,
-  .git-tree-details::-webkit-scrollbar-track,
-  .git-history-list::-webkit-scrollbar-track,
-  .git-diff-code::-webkit-scrollbar-track,
-  .git-commit-inventory-list::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .git-panel::-webkit-scrollbar-thumb,
-  .git-list::-webkit-scrollbar-thumb,
-  .git-tree-details::-webkit-scrollbar-thumb,
-  .git-history-list::-webkit-scrollbar-thumb,
-  .git-diff-code::-webkit-scrollbar-thumb,
-  .git-commit-inventory-list::-webkit-scrollbar-thumb {
-    background: var(--ui-border);
-    border-radius: var(--radius-sm);
-  }
-  .git-panel::-webkit-scrollbar-thumb:hover,
-  .git-list::-webkit-scrollbar-thumb:hover,
-  .git-tree-details::-webkit-scrollbar-thumb:hover,
-  .git-history-list::-webkit-scrollbar-thumb:hover,
-  .git-diff-code::-webkit-scrollbar-thumb:hover,
-  .git-commit-inventory-list::-webkit-scrollbar-thumb:hover {
-    background: var(--ui-muted-foreground);
-  }
   .git-patch + .git-patch {
     border-block-start: 1px solid var(--ui-border);
   }
@@ -637,8 +570,6 @@
     min-width: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: var(--ui-border) transparent;
     outline-offset: -2px;
   }
   .git-reader-source {

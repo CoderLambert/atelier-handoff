@@ -21,8 +21,6 @@
   overflow-y: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-border) transparent;
   color: var(--ui-card-foreground);
 }
 
@@ -576,7 +574,6 @@
   max-height: 220px;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  scrollbar-color: auto;
   border: 0;
   padding: 0;
   padding-inline-end: 4px;
@@ -588,27 +585,6 @@
 }
 
 @media (forced-colors: none) {
-  .chat-composer .composer-box textarea::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .chat-composer .composer-box textarea::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb {
-    border-radius: var(--radius-sm);
-    background: var(--ui-muted-foreground);
-  }
-
-  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb:hover,
-  .chat-composer .composer-box textarea::-webkit-scrollbar-thumb:active {
-    background: var(--ui-foreground);
-  }
-
-  .chat-composer .composer-box textarea::-webkit-scrollbar-button {
-    display: none;
-  }
 }
 
 .chat-composer .composer-mode-trigger:is([data-mode='readonly'], [data-mode='edit']) {

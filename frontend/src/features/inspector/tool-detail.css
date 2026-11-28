@@ -205,8 +205,6 @@ details.tool-detail {
   max-height: 288px;
   margin: 0;
   overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-border) transparent;
   padding: 9px 12px;
   color: var(--ui-card-foreground);
   font: var(--text-sm)/1.6 var(--font-mono);

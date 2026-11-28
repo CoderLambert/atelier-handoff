@@ -8,6 +8,7 @@ import { ChevronDown, SlidersHorizontal } from 'lucide-react';
 import type {
   CreateScheduledTaskInput,
   Project,
+  ReasoningEffort,
   ScheduledTask,
   ScheduleExecutionPreference,
   ScheduleMisfirePolicy,
@@ -18,7 +19,11 @@ import type {
   Session,
   UpdateScheduledTaskInput,
 } from '@shared/types';
+import { reasoningEfforts } from '@shared/types';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useGatewayModels } from '@/use-query/settings/use-gateway-models';
 import {
   Select,
   SelectContent,
@@ -29,6 +34,7 @@ import {
 import { useUiTranslation } from '@/i18n';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+const DEFAULT_OPTION = '__default__';
 
 function defaultTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -99,6 +105,8 @@ export function ScheduleForm({
     task?.timing.kind === 'cron' ? task.timing.expression : '0 9 * * 1-5',
   );
   const [timeZone, setTimeZone] = useState(task?.timeZone ?? defaultTimeZone());
+  const [model, setModel] = useState<string>(task?.model ?? '');
+  const [effort, setEffort] = useState<ReasoningEffort | ''>(task?.effort ?? '');
   const [permissionMode, setPermissionMode] = useState<'readonly' | 'edit'>(
     task?.mode ?? 'readonly',
   );
@@ -116,8 +124,11 @@ export function ScheduleForm({
     task?.notifyPolicy ?? 'on_error',
   );
   const [advancedOpen, setAdvancedOpen] = useState(
-    task?.mode === 'edit' || task?.executionPreference === 'native-v1',
+    task?.mode === 'edit' ||
+      task?.executionPreference === 'native-v1' ||
+      Boolean(task?.model || task?.effort),
   );
+  const modelCatalog = useGatewayModels(true);
 
   useEffect(() => {
     if (mode === 'create' && defaultProjectId) setProjectId(defaultProjectId);
@@ -146,13 +157,19 @@ export function ScheduleForm({
       setCronExpression(task.timing.expression);
     }
     setTimeZone(task.timeZone);
+    setModel(task.model ?? '');
+    setEffort(task.effort ?? '');
     setPermissionMode(task.mode);
     setExecutionPreference(task.executionPreference);
     setAutomaticApproval(task.approvalMode === 'automatic');
     setMisfirePolicy(task.misfirePolicy);
     setOverlapPolicy(task.overlapPolicy);
     setNotifyPolicy(task.notifyPolicy);
-    setAdvancedOpen(task.mode === 'edit' || task.executionPreference === 'native-v1');
+    setAdvancedOpen(
+      task.mode === 'edit' ||
+        task.executionPreference === 'native-v1' ||
+        Boolean(task.model || task.effort),
+    );
   }, [task]);
 
   const projectSessions = sessions.filter(
@@ -190,6 +207,8 @@ export function ScheduleForm({
         ? 'automatic'
         : null;
     const normalizedSlug = slug.trim() || null;
+    const normalizedModel = model.trim() || null;
+    const normalizedEffort = effort || null;
     if (mode === 'create' && onCreate) {
       onCreate({
         projectId,
@@ -200,6 +219,10 @@ export function ScheduleForm({
         timeZone: timeZone.trim() || defaultTimeZone(),
         targetMode,
         targetSessionId: targetMode === 'session' ? targetSessionId || null : null,
+        ...(normalizedModel ? { model: normalizedModel } : {}),
+        ...(normalizedEffort ? { effort: normalizedEffort } : {}),
+        model: normalizedModel,
+        effort: normalizedEffort,
         mode: permissionMode,
         executionPreference: effectiveExecution,
         approvalMode,
@@ -258,7 +281,17 @@ export function ScheduleForm({
       : permissionMode === 'edit'
         ? t('mode.edit')
         : t('mode.readonly');
-  const advancedSummary = `${modeLabel} · ${notifyLabel}`;
+  const catalogModels = modelCatalog.data?.models ?? [];
+  const workspaceDefaultModel = modelCatalog.data?.defaultModel ?? '';
+  const effectiveModelId = model || workspaceDefaultModel;
+  const currentRoute = catalogModels.find((entry) => entry.id === effectiveModelId);
+  const fixedEffort = currentRoute?.effort;
+  const supportedEfforts = reasoningEfforts.filter(
+    (level) => !currentRoute?.supportedEfforts || currentRoute.supportedEfforts.includes(level),
+  );
+  const effortDisabled = fixedEffort !== undefined || supportedEfforts.length === 0;
+  const modelSummary = model ? (currentRoute?.displayName ?? model) : null;
+  const advancedSummary = [modelSummary, modeLabel, notifyLabel].filter(Boolean).join(' · ');
 
   return (
     <form className="schedules-form" onSubmit={handleSubmit}>
@@ -272,9 +305,8 @@ export function ScheduleForm({
         <div className={mode === 'create' ? 'schedules-row-title-project' : undefined}>
           <label className="schedules-field">
             <span className="schedules-label">{t('fields.title')}</span>
-            <input
+            <Input
               type="text"
-              className="schedules-input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('fields.titlePlaceholder')}
@@ -304,8 +336,7 @@ export function ScheduleForm({
 
         <label className="schedules-field">
           <span className="schedules-label">{t('fields.prompt')}</span>
-          <textarea
-            className="schedules-textarea"
+          <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={t('fields.promptPlaceholder')}
@@ -379,9 +410,9 @@ export function ScheduleForm({
           {timingKind !== 'manual' ? (
             <label className="schedules-field">
               <span className="schedules-label">{t('fields.timeZone')}</span>
-              <input
+              <Input
                 type="text"
-                className="schedules-input schedules-mono"
+                className="schedules-mono"
                 value={timeZone}
                 onChange={(e) => setTimeZone(e.target.value)}
                 required
@@ -394,9 +425,9 @@ export function ScheduleForm({
           <div className="schedules-grid-2">
             <label className="schedules-field">
               <span className="schedules-label">{t('fields.time')}</span>
-              <input
+              <Input
                 type="time"
-                className="schedules-input schedules-mono"
+                className="schedules-mono"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 required
@@ -404,9 +435,9 @@ export function ScheduleForm({
             </label>
             <label className="schedules-field">
               <span className="schedules-label">{t('fields.everyDays')}</span>
-              <input
+              <Input
                 type="number"
-                className="schedules-input schedules-mono"
+                className="schedules-mono"
                 min={1}
                 max={365}
                 value={everyDays}
@@ -420,9 +451,9 @@ export function ScheduleForm({
           <div className="schedules-weekly-group">
             <label className="schedules-field">
               <span className="schedules-label">{t('fields.time')}</span>
-              <input
+              <Input
                 type="time"
-                className="schedules-input schedules-mono"
+                className="schedules-mono"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 required
@@ -453,9 +484,9 @@ export function ScheduleForm({
         {timingKind === 'interval' ? (
           <label className="schedules-field">
             <span className="schedules-label">{t('fields.everyMinutes')}</span>
-            <input
+            <Input
               type="number"
-              className="schedules-input schedules-mono"
+              className="schedules-mono"
               min={targetMode === 'new' ? 5 : 1}
               max={525_600}
               value={everyMinutes}
@@ -468,9 +499,9 @@ export function ScheduleForm({
         {timingKind === 'once' ? (
           <label className="schedules-field">
             <span className="schedules-label">{t('fields.runAt')}</span>
-            <input
+            <Input
               type="datetime-local"
-              className="schedules-input schedules-mono"
+              className="schedules-mono"
               value={runAtLocal}
               onChange={(e) => setRunAtLocal(e.target.value)}
               required
@@ -481,9 +512,9 @@ export function ScheduleForm({
         {timingKind === 'cron' ? (
           <label className="schedules-field">
             <span className="schedules-label">{t('fields.cron')}</span>
-            <input
+            <Input
               type="text"
-              className="schedules-input schedules-mono"
+              className="schedules-mono"
               value={cronExpression}
               onChange={(e) => setCronExpression(e.target.value)}
               placeholder="0 9 * * 1-5"
@@ -519,15 +550,85 @@ export function ScheduleForm({
           <div className="schedules-advanced-body">
             <label className="schedules-field">
               <span className="schedules-label">{t('fields.slug')}</span>
-              <input
+              <Input
                 type="text"
-                className="schedules-input schedules-mono"
+                className="schedules-mono"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 placeholder={t('fields.slugPlaceholder')}
                 maxLength={64}
               />
             </label>
+            <div className="schedules-grid-2">
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.model')}</span>
+                <Select
+                  value={model || DEFAULT_OPTION}
+                  onValueChange={(value) => {
+                    const nextModel = value === DEFAULT_OPTION ? '' : value;
+                    setModel(nextModel);
+                    const nextRoute = catalogModels.find(
+                      (entry) => entry.id === (nextModel || workspaceDefaultModel),
+                    );
+                    if (
+                      nextRoute?.effort !== undefined ||
+                      (effort &&
+                        nextRoute?.supportedEfforts &&
+                        !nextRoute.supportedEfforts.includes(effort))
+                    ) {
+                      setEffort('');
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.model')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value={DEFAULT_OPTION}>
+                      {workspaceDefaultModel
+                        ? t('fields.modelDefault', { model: workspaceDefaultModel })
+                        : t('fields.modelDefaultPlain')}
+                    </SelectItem>
+                    {model && !catalogModels.some((entry) => entry.id === model) ? (
+                      <SelectItem value={model}>{model}</SelectItem>
+                    ) : null}
+                    {catalogModels.map((entry) => (
+                      <SelectItem key={entry.id} value={entry.id}>
+                        {entry.displayName ?? entry.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="schedules-field">
+                <span className="schedules-label">{t('fields.effort')}</span>
+                <Select
+                  value={effort || DEFAULT_OPTION}
+                  disabled={effortDisabled}
+                  onValueChange={(value) =>
+                    setEffort(value === DEFAULT_OPTION ? '' : (value as ReasoningEffort))
+                  }
+                >
+                  <SelectTrigger className="w-full" aria-label={t('fields.effort')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="start">
+                    <SelectItem value={DEFAULT_OPTION}>
+                      {fixedEffort !== undefined
+                        ? t('fields.effortFixed', { effort: fixedEffort })
+                        : t('fields.effortDefault')}
+                    </SelectItem>
+                    {supportedEfforts.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {t(`effort.${level}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="schedules-grid-2">
               <div className="schedules-field">
                 <span className="schedules-label">{t('fields.mode')}</span>

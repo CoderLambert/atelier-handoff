@@ -916,3 +916,71 @@ test('migrations v13 & v14: advances user_version cleanly on reopen and self-hea
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('model and reasoning effort: persists on task and forwards to createRun', async () => {
+  const fixture = createFixture();
+  try {
+    const service = createScheduleService({
+      store: fixture.store,
+      agents: { requireReady: () => ({}) as never },
+    });
+    const task = service.create({
+      projectId: fixture.project.id,
+      slug: 'deep-audit',
+      title: 'Deep audit',
+      prompt: 'Audit codebase',
+      timing: { kind: 'manual' },
+      model: 'claude-sonnet-4-5',
+      effort: 'high',
+    });
+    assert.equal(task.model, 'claude-sonnet-4-5');
+    assert.equal(task.effort, 'high');
+
+    let captured: { model?: string; effort?: string } = {};
+    const scheduler = createScheduleScheduler({
+      store: fixture.store,
+      createSession: async ({ projectId, title }) =>
+        fixture.store.put('sessions', {
+          id: 'sess-model-1',
+          projectId,
+          title: title ?? 'Automation',
+          status: 'active',
+          origin: 'schedule',
+          sdkSessionId: null,
+          draft: { text: '', contextPaths: [], attachmentIds: [], mode: 'readonly' },
+          createdAt: now(),
+          updatedAt: now(),
+        }),
+      createRun: (async (
+        sessionId: string,
+        request: { text: string; model?: string; effort?: string },
+      ) => {
+        captured = { model: request.model, effort: request.effort };
+        const run = fixture.store.put('runs', {
+          id: 'run-model-1',
+          sessionId,
+          status: 'completed',
+          mode: 'readonly',
+          prompt: request.text,
+          createdAt: now(),
+          startedAt: now(),
+          endedAt: now(),
+          error: null,
+          plan: [],
+        } as never);
+        return { run };
+      }) as never,
+      sameSessionRunning: () => false,
+      isShuttingDown: () => false,
+    });
+
+    await scheduler.runNow('deep-audit');
+    assert.deepEqual(captured, { model: 'claude-sonnet-4-5', effort: 'high' });
+
+    const cleared = service.update(task.id, { model: null, effort: null });
+    assert.equal(cleared.model, null);
+    assert.equal(cleared.effort, null);
+  } finally {
+    fixture.cleanup();
+  }
+});

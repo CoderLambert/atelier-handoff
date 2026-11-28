@@ -24,6 +24,8 @@ function sampleTool(overrides: Partial<ToolCall> = {}): ToolCall {
         targetMode: 'new_once',
         targetSessionId: null,
         agentRevisionId: null,
+        model: null,
+        effort: null,
         title: '定时检查分支同步',
         prompt: 'git fetch && git status',
         timing: { kind: 'daily', time: '09:00', everyDays: 1 },

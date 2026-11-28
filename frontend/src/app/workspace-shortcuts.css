@@ -47,8 +47,6 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ui-border) transparent;
 }
 .workspace-switcher-list .workspace-switcher-item {
   flex: none;

@@ -346,6 +346,8 @@ export function createScheduleScheduler({
         idempotencyKey: runIdempotencyKey,
         mode: task.mode,
         executionPreference: task.executionPreference,
+        ...(task.model ? { model: task.model } : {}),
+        ...(task.effort ? { effort: task.effort } : {}),
         ...(task.approvalMode ? { approvalMode: task.approvalMode } : {}),
         ...(task.maxSearchChargeFen > 0 ? { maxSearchChargeFen: task.maxSearchChargeFen } : {}),
         scheduleMeta: {

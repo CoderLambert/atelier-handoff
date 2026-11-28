@@ -12,7 +12,7 @@ import * as t from '@babel/types';
 import postcss from 'postcss';
 
 interface Violation {
-  rule: 'color' | 'legacy-control' | 'icon-label' | 'motion-import';
+  rule: 'color' | 'legacy-control' | 'icon-label' | 'motion-import' | 'scrollbar';
   detail: string;
   line: number;
 }
@@ -98,7 +98,30 @@ function checkTsx(source: string): Violation[] {
 
 function checkCss(source: string, file: string): Violation[] {
   const violations: Violation[] = [];
-  postcss.parse(source, { from: file }).walkDecls((declaration) => {
+  const root = postcss.parse(source, { from: file });
+  if (file !== 'styles.css') {
+    root.walkRules((rule) => {
+      if (/::-webkit-scrollbar/.test(rule.selector)) {
+        violations.push({
+          rule: 'scrollbar',
+          detail: rule.selector.trim(),
+          line: rule.source?.start?.line ?? 1,
+        });
+      }
+    });
+  }
+  root.walkDecls((declaration) => {
+    if (
+      file !== 'styles.css' &&
+      (declaration.prop === 'scrollbar-color' ||
+        (declaration.prop === 'scrollbar-width' && declaration.value.trim() !== 'none'))
+    ) {
+      violations.push({
+        rule: 'scrollbar',
+        detail: `${declaration.prop}:${declaration.value.trim()}`,
+        line: declaration.source?.start?.line ?? 1,
+      });
+    }
     if (
       file === 'styles.css' &&
       declaration.prop.startsWith('--ui-') &&

@@ -82,5 +82,23 @@
     "key": "sql:e88dbc4d0943a243",
     "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
     "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-model-effort.ts",
+    "key": "sql:580dc1599b3a834f",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-model-effort.ts",
+    "key": "sql:4c0ee3a6a9255d88",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
+  },
+  {
+    "file": "server/db/migrations/apply-schedule-model-effort.ts",
+    "key": "driver-call:d0175072c05a074e",
+    "decision": "docs/decisions/2026-11-27-schedule-triggers.md",
+    "test": "tests/schedules.test.ts"
   }
 ]
