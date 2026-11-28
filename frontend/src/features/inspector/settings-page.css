@@ -10,8 +10,8 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 36px clamp(24px, 4vw, 64px) 0;
-  background: var(--ui-card);
+  padding: 36px clamp(24px, 4vw, 64px) 32px;
+  background: var(--ui-background);
   color: var(--ui-foreground);
 }
 .settings-page-header,
@@ -38,12 +38,13 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 48px;
-  height: 48px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--radius-lg);
-  background: var(--ui-muted);
+  width: 46px;
+  height: 46px;
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 20%, var(--ui-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ui-primary) 9%, var(--ui-card));
   color: var(--ui-primary);
+  box-shadow: 0 3px 10px -4px var(--ui-shadow);
 }
 .settings-page-mark svg,
 .settings-diagnostics-icon svg {
@@ -77,20 +78,41 @@
   gap: 6px;
 }
 .settings-page-nav .settings-page-nav-item {
+  position: relative;
   display: flex;
   width: 100%;
   height: auto;
-  min-height: 64px;
+  min-height: 60px;
   justify-content: flex-start;
   gap: 12px;
-  padding: 13px 12px;
-  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   white-space: normal;
   text-align: start;
+  transition:
+    background-color var(--motion-feedback) ease,
+    border-color var(--motion-feedback) ease,
+    box-shadow var(--motion-feedback) ease;
+}
+.settings-page-nav .settings-page-nav-item:hover:not([aria-current='page']) {
+  background: color-mix(in srgb, var(--ui-card) 70%, transparent);
+  border-color: var(--ui-border-subtle);
 }
 .settings-page-nav-item[aria-current='page'] {
-  background: var(--ui-selected);
-  color: var(--ui-selected-foreground);
+  background: var(--ui-card);
+  border-color: var(--ui-border);
+  color: var(--ui-foreground);
+  box-shadow: 0 3px 10px -4px var(--ui-shadow);
+}
+.settings-page-nav-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  inset-block: 11px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-primary);
 }
 .settings-page-nav-copy {
   display: flex;
@@ -127,32 +149,38 @@
 .settings-form {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
   min-width: 0;
 }
 .settings-form-section {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   margin: 0;
-  padding: 0 0 28px;
-  border: 0;
-  border-bottom: 1px solid var(--ui-border-subtle);
+  padding: 22px 26px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  box-shadow:
+    0 4px 16px -8px var(--ui-shadow),
+    0 1px 2px var(--ui-shadow);
 }
-.settings-form-section legend {
+.settings-form-section > legend {
+  float: left;
   width: 100%;
-  margin: 0 0 20px;
+  margin: 0 0 4px;
   padding: 0;
   color: var(--ui-foreground);
-  font-size: var(--text-ui);
+  font-size: var(--text-base);
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .settings-section-description {
-  margin: -12px 0 0;
+  margin: -10px 0 0;
   color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
-  line-height: 1.7;
+  line-height: 1.65;
 }
 .settings-field-row {
   display: grid;
@@ -189,10 +217,14 @@
   height: var(--ui-size-md);
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border-color: var(--ui-input);
+  border-color: var(--ui-border);
+  background: var(--ui-background);
   font-size: var(--text-sm);
   font-weight: 400;
   line-height: 1.5;
+}
+.settings-page .settings-input:focus-visible {
+  background: var(--ui-card);
 }
 .settings-input:disabled {
   opacity: 0.55;
@@ -206,9 +238,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
-  background: var(--ui-muted);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ui-background) 65%, var(--ui-card));
 }
 .settings-connection > svg {
   flex: none;
@@ -234,9 +266,10 @@
   overflow-wrap: anywhere;
 }
 .settings-account {
-  padding: 16px;
+  padding: 16px 18px;
   border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ui-background) 55%, var(--ui-card));
 }
 .settings-account-summary {
   display: flex;
@@ -326,13 +359,16 @@
 }
 .settings-save-bar {
   position: sticky;
-  bottom: 0;
+  bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 0;
-  background: var(--ui-card);
+  padding: 14px 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ui-card) 94%, var(--ui-background));
+  box-shadow: 0 8px 24px -8px var(--ui-shadow);
 }
 .settings-save-bar > [data-slot='button'] {
   flex: none;
@@ -367,11 +403,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px;
+  padding: 20px 24px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-md);
+  border-radius: 16px;
+  background: var(--ui-card);
   color: var(--ui-muted-foreground);
   font-size: var(--text-sm);
+  box-shadow: 0 4px 14px -8px var(--ui-shadow);
 }
 .settings-notice-error {
   color: var(--ui-destructive);
@@ -386,9 +424,13 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 16px;
-  padding: 28px;
+  padding: 26px 28px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
+  background: var(--ui-card);
+  box-shadow:
+    0 4px 16px -8px var(--ui-shadow),
+    0 1px 2px var(--ui-shadow);
 }
 .settings-diagnostics h3 {
   margin: 0;
